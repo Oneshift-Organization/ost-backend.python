@@ -1,0 +1,47 @@
+# ── Secrets e ambiente ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+.secrets.baseline
+
+# ── Sistema operacional ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDEs e editores ───────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Stack: Frontend (Next.js) ─────────────────────────────────────────────
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+.eslintcache
+
+# ── Stack: Python ─────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# ── Stack: IaC (Terraform) ────────────────────────────────────────────────
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+override.tf
+override.tf.json
+crash.log
+
+# ── Logs e temporários ────────────────────────────────────────────────────
+*.log
+tmp/
+temp/
