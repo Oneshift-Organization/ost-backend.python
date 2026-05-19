@@ -1,0 +1,32 @@
+from dataclasses import dataclass
+from pathlib import Path
+from uuid import UUID
+
+from app.domain.entities.billing_report import BillingReport, JobStatus
+from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
+
+
+@dataclass(frozen=True)
+class UploadBillingFileInput:
+    user_id: UUID
+    file_path: Path
+    source_filename: str
+
+
+class UploadBillingFileUseCase:
+    """Persists the parent BillingReport row.
+
+    Heavy parsing/normalization happens in `IngestBillingFileUseCase`, dispatched
+    asynchronously by the HTTP route.
+    """
+
+    def __init__(self, report_repo: IBillingReportRepository) -> None:
+        self._repo = report_repo
+
+    async def execute(self, payload: UploadBillingFileInput) -> BillingReport:
+        report = BillingReport(
+            user_id=payload.user_id,
+            source_filename=payload.source_filename,
+            status=JobStatus.QUEUED,
+        )
+        return await self._repo.save(report)

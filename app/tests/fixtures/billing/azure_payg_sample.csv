@@ -1,0 +1,4 @@
+SubscriptionGuid,SubscriptionName,Date,ServiceName,MeterCategory,MeterSubCategory,ResourceId,ResourceLocation,Quantity,UnitOfMeasure,CostInBillingCurrency,BillingCurrency,Tags
+00000000-0000-0000-0000-aaaaaaaaaaaa,Prod-Sub,2026-05-01,Virtual Machines,Virtual Machines,Dv3 Series,/subscriptions/xx/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1,vm-east,24,Hours,18.240000,USD,{"env":"prod"}
+00000000-0000-0000-0000-aaaaaaaaaaaa,Prod-Sub,2026-05-02,Storage,Storage,Block Blob,/subscriptions/xx/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/sa1,eastus,100,GB,2.300000,USD,{}
+00000000-0000-0000-0000-aaaaaaaaaaaa,Prod-Sub,2026-05-03,SQL Database,SQL Database,Single/Elastic Pool General Purpose,/subscriptions/xx/resourceGroups/rg/providers/Microsoft.Sql/servers/srv/databases/db1,eastus,24,Hours,12.000000,USD,{"team":"data"}
