@@ -14,3 +14,14 @@ class IBillingItemRepository(Protocol):
         ...
 
     async def count_by_report(self, report_id: UUID, user_id: UUID) -> int: ...
+
+    async def list_by_report(
+        self,
+        report_id: UUID,
+        user_id: UUID,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[BillingItem]:
+        """Return items for a report. MUST filter by user_id for isolation."""
+        ...
