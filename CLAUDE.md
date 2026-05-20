@@ -1,21 +1,49 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guia rápido para Claude Code neste repo. **Para qualquer tarefa de produto,
+arquitetura, API ou parsers, consulte primeiro [`docs/`](docs/README.md)** —
+fonte de verdade versionada, otimizada para leitura por IA.
 
 ## Projeto
 
-Backend Python do **Cloud Intelligence Platform** (Challenge Quave + OCI + FIAP 2026) — plataforma que extrai billing de AWS/GCP/Azure/OCI, calcula cotações cross-cloud e score de portabilidade, e gera recomendações de migração para CFOs/controllers.
+Backend Python do **Cloud Intelligence Platform** (Challenge Quave + OCI +
+FIAP 2026). Plataforma que extrai billing multi-cloud (AWS/GCP/Azure/OCI),
+cota infra equivalente em cada provedor, calcula score de portabilidade e
+gera recomendações de migração para CFOs/controllers.
 
-Stack: Python 3.12 · FastAPI 0.111 · SQLAlchemy 2.0 async · asyncpg · Pydantic v2 · Alembic · Pandas 2.2 + Pandera · Supabase Auth (JWT RS256) · structlog. PostgreSQL 16 fica em OCI compartilhado (não rodar local).
+Stack resumida: Python 3.12+ · FastAPI 0.111 · SQLAlchemy 2.0 async · asyncpg ·
+Pydantic v2 · Alembic · Pandas 2.2 + Pandera · Supabase Auth (JWT RS256) ·
+structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 
-> **Decisão MVP (2026-05-18):** Celery + RabbitMQ + `cloud_clients/*` **diferidos**. Async no caminho crítico via **FastAPI BackgroundTasks** (parsing CSV típico < 30s). Isolamento por **`user_id` apenas** — `tenant_id` adiado. Ver `ost-docs.backend.plan/workflow_master.md` para o estado vivo.
+> **Decisão MVP (2026-05-18):** Celery + RabbitMQ + `cloud_clients/*` **diferidos**.
+> Async no caminho crítico via **FastAPI BackgroundTasks** (parsing CSV típico
+> < 30s). Isolamento por **`user_id` apenas** — `tenant_id` adiado. Estado vivo
+> em `ost-docs.backend.plan/workflow_master.md` (gitignored).
+
+## Onde achar cada coisa
+
+| Tarefa | Documento canônico |
+|---|---|
+| Entender produto / 5 módulos / cronograma | [`docs/product.md`](docs/product.md) |
+| Regras de arquitetura / Clean Arch / proibições | [`docs/architecture.md`](docs/architecture.md) |
+| Schema do banco / DDL / `raw_payload` conventions | [`docs/data-model.md`](docs/data-model.md) |
+| Parsers de cloud / adicionar novo / política `global_zero` | [`docs/parsers.md`](docs/parsers.md) |
+| Convenções de rota / paginação / serialização | [`docs/api-conventions.md`](docs/api-conventions.md) |
+| Catálogo `/v1/billing-files` | [`docs/endpoints/billing.md`](docs/endpoints/billing.md) |
+| Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
+| Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
+
+**Foundations externas** (raiz do workspace, **não** editar):
+[`cloud_billing_analyzer_prompt.md`](../cloud_billing_analyzer_prompt.md) (visão
+completa do produto) + [`fase1_parser_prompt.md`](../fase1_parser_prompt.md)
+(spec original do Módulo 1). Sintetizados nos docs versionados acima.
 
 ## Comandos
 
-Setup (venv usa Python 3.12, **não** 3.14 — `pyvenv.cfg` aponta para `/usr/bin/python3.12`):
+Setup completo em [`docs/dev-setup.md`](docs/dev-setup.md). Atalhos:
 
 ```bash
-python3.12 -m venv .venv
+python3.14 -m venv .venv     # ou 3.12 — pyproject exige >=3.12
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 cp .env.example .env.dev   # config.py lê .env.dev por default
@@ -51,58 +79,96 @@ pytest app/tests/unit/domain/test_money.py::test_<nome>   # teste único
 pytest -k "billing and not integration"    # filtro
 ```
 
-## Arquitetura
+## Arquitetura (resumo)
 
-**Clean Architecture com regra de dependência unidirecional:**
-`api/` + `infrastructure/` → `use_cases/` → `domain/`
+**Clean Architecture** com regra de dependência unidirecional:
 
-- `domain/` é **puro**: zero imports de FastAPI, SQLAlchemy ou Pydantic (exceto VOs). Define entidades, value objects (`Money`, `CloudProvider`) e interfaces (`IBillingRepository`, etc.).
-- `use_cases/` orquestra regras de negócio; recebe dependências via DI no `__init__`, nunca instancia ORM/SDK direto. Input em dataclass frozen (`UploadBillingFileInput`).
-- `infrastructure/repositories/` implementa as interfaces `domain/repositories/I*`. Pattern `Pg<Entity>Repository(session)`.
-- `infrastructure/file_ingestion/parsers/` implementa um parser por provedor (`aws_parser.py`, `azure_parser.py`, `gcp_parser.py`, `oci_parser.py`) que herda de `BaseParser`. Detecção é por **conteúdo** (não extensão) via `detector.detect_parser`. Adicionar nova cloud = novo parser + entrada em `detector.PARSERS`.
-- `infrastructure/cloud_clients/` (DIFERIDO no MVP) implementaria `IBillingClient` (Protocol) por provedor — reativar pós-MVP junto com Celery + cloud-credentials Fernet.
-- `schemas/` (Pydantic) é a borda HTTP — **nunca** cruza para `domain/`; converter no use case ou na rota.
-- `api/deps.py` monta os use cases via `Annotated[..., Depends(...)]` e expõe `DbSession`, `UploadBillingFileUC`, etc. Rotas declaram `use_case: UploadBillingFileUC` direto.
+```
+api/ + infrastructure/ → use_cases/ → domain/
+```
 
-**Fluxo Fase 1 implementado (billing — MVP):**
-1. `POST /v1/billing-files` (autenticado, multipart): grava `BillingReport(QUEUED)` e dispara `IngestBillingFileUseCase` em **BackgroundTask**. Retorna 202 + `job_id`.
-2. Pipeline async: `detect_and_parse` (4 parsers, decisão por conteúdo) → `deduplicate(line_hash)` → `validate_normalized_df` (Pandera) → `PgBillingItemRepository.bulk_insert` em chunks de 1000 (idempotente: `delete_by_report` + INSERT). Atualiza status `PROCESSING → DONE | FAILED`.
-3. `GET /v1/billing-files/{job_id}` faz polling do status (filtrado por `user_id` — usuário A nunca vê job do usuário B).
-4. Próximas fases: F1G dashboard + F2 cotação cross-cloud + F3 score portabilidade + F5 IA (regras calculam, LLM narra).
+- `domain/` é **puro** (zero framework).
+- `use_cases/` orquestra; recebe deps via DI.
+- `infrastructure/repositories/` implementa interfaces `I*`.
+- `infrastructure/file_ingestion/parsers/` tem **5 parsers** (AWS CUR, AWS Cost
+  Explorer, Azure, GCP, OCI), detecção por **conteúdo**.
+- `schemas/` Pydantic na borda HTTP; **nunca** cruza para `domain/`.
+- `api/deps.py` monta UCs via DI; rotas declaram `use_case: UploadBillingFileUC`.
 
-**DB / sessão:**
-- `get_db_session()` (`infrastructure/database/session.py`) é a única forma autorizada de obter `AsyncSession`. Faz `commit` no sucesso, `rollback` na exceção, `close` no finally. `pool_size=10`, `expire_on_commit=False`.
-- Modelos SQLAlchemy herdam de `Base` (`infrastructure/database/base.py`). Para Alembic detectar mudanças, todo novo modelo precisa ser importado em `infrastructure/database/models/__init__.py`.
-- Tipos obrigatórios: `UUID` PK, `JSONB` para payloads brutos, **`NUMERIC(18,6)`** para todo valor monetário (decisão MVP — uniformizado em `billing_items`) — **nunca `FLOAT`**.
+**Detalhes completos:** [`docs/architecture.md`](docs/architecture.md) (folder
+layout, stack versions, regras inegociáveis, proibições, "por que cada regra
+existe").
 
-**Mensageria (DIFERIDA no MVP):**
-- MVP usa `BackgroundTasks` do FastAPI. A task cria sua própria `AsyncSession` via `get_sessionmaker()` (a request session já fechou).
-- Pós-MVP: reativar Celery + RabbitMQ AMQP. DLX nativa por queue: `billing.ingest` → `billing.ingest.dlq`. Tasks idempotentes, `acks_late=True`, retry com backoff exponencial.
+## Fluxo Fase 1 (estado atual)
 
-**Auth:**
-- Supabase emite JWT RS256; backend só **valida** via `app/core/security.py` (`PyJWKClient` com cache JWKS). Audience: `authenticated`. Backend não emite token nem armazena senha.
+1. `POST /v1/billing-files` → grava `BillingReport(QUEUED)` + dispara
+   `IngestBillingFileUseCase` em **BackgroundTask**. Retorna 202 + `job_id`.
+2. Pipeline: `detect_and_parse` (5 parsers, por conteúdo) → `deduplicate(line_hash)`
+   → `validate_normalized_df` (Pandera) → `bulk_insert` em chunks de 1000
+   (idempotente: `delete_by_report` + INSERT). Status `PROCESSING → DONE | FAILED`.
+   Falha grava em **session limpa**.
+3. `GET /v1/billing-files` (lista) + `GET /v1/billing-files/{job_id}` (status) +
+   `GET /v1/billing-files/{job_id}/items` (drill-down paginado, `cost DESC`).
+4. Isolamento por `user_id` em **todas** queries → 404 esconde existência.
+5. Próximas fases: F1G dashboard · F2 cotação cross-cloud · F3 score
+   portabilidade · F5 IA (regras calculam, LLM narra).
 
-## Regras Inegociáveis (de `ost-docs.backend.plan/architecture_rules.md`)
+**Detalhes por endpoint:** [`docs/endpoints/billing.md`](docs/endpoints/billing.md).
+**Como cada parser funciona + política `global_zero` do Cost Explorer:**
+[`docs/parsers.md`](docs/parsers.md).
 
-- Valores monetários: `Decimal(str(valor))` em Python, `NUMERIC` no PG. Nunca `float`.
+## Pontos críticos (cheat-sheet)
+
+- **DB / sessão:** [`docs/architecture.md#banco-de-dados`](docs/architecture.md#banco-de-dados).
+  Resumo: `get_db_session()` é a única forma de obter `AsyncSession`;
+  `NUMERIC(18,6)` em monetário; `JSONB` em raw payload; nunca `FLOAT`.
+- **Auth:** Supabase emite JWT RS256; backend só valida via
+  [`app/core/security.py`](app/core/security.py). Dev bypass via
+  `AUTH_ENABLED=false`. Hard-blocked em produção.
+- **Mensageria (diferida):** MVP usa `BackgroundTasks`; pós-MVP Celery+RabbitMQ.
+  Ver [`docs/architecture.md#mensageria`](docs/architecture.md#mensageria).
+- **Política `cost=0`** no parser Cost Explorer: ativos emitem zeros pontuais
+  (drift); global-zeros viram 1 summary por mês com `raw_payload.scope =
+  "global_zero"`. Spec completa em
+  [`docs/parsers.md#política-de-emissão-de-cost0-cost-explorer`](docs/parsers.md#política-de-emissão-de-cost0-cost-explorer).
+
+## Regras Inegociáveis (resumo)
+
+Lista completa + justificativa em [`docs/architecture.md`](docs/architecture.md#proibições-absolutas).
+Cheat-sheet:
+
+- Valores monetários: `Decimal(str(valor))` em Python, `NUMERIC(18,6)` no PG. **Nunca `float`**.
 - IA narra resultados já calculados; **nunca** invocar LLM para fazer matemática.
 - `domain/` zero framework imports.
 - `AsyncSession` só via `get_db_session()` — nunca instanciar em use case.
 - `allow_origins=["*"]` proibido em qualquer ambiente.
-- REST sem verbo na URL; rotas em `kebab-case` plural (`/v1/billing-files`, `/v1/cloud-credentials`).
-- Nunca commitar direto em `main`/`develop` (pre-commit `no-commit-to-branch` bloqueia). Branches: `feat/<card>`, `fix/<card>`, `hotfix/<card>`.
-- Nunca bypassar pre-commit com `--no-verify` (inclui `detect-secrets`).
-- Toda nova cloud vai como parser isolado em `infrastructure/file_ingestion/parsers/<provider>_parser.py` herdando de `BaseParser`, registrado em `detector.PARSERS`. (Pós-MVP: também um subpacote em `infrastructure/cloud_clients/<provider>/` implementando `IBillingClient`.)
-- Não excluir arquivos em `ost-docs.backend.plan/` sem autorização explícita.
+- REST sem verbo na URL; rotas em `kebab-case` plural.
+- Nunca commitar direto em `main`/`develop`. Branches: `feat/<card>`, `fix/<card>`, `hotfix/<card>`.
+- Nunca bypassar pre-commit com `--no-verify`.
+- Toda nova cloud = novo parser herdando de `BaseParser`, registrado em
+  `detector.PARSERS`. Checklist completo em
+  [`docs/parsers.md#como-adicionar-um-parser-novo`](docs/parsers.md#como-adicionar-um-parser-novo).
+- Não editar arquivos em `ost-docs.backend.plan/` (brain local-only do arquiteto)
+  nem `ost-docs.mkdocs/` (repo separado, read-only).
 
-## Convenções
+## Convenções (resumo)
 
-- `snake_case` para arquivos/módulos/funções; `PascalCase` para classes; `I`-prefix para interfaces (`IBillingClient`).
-- Use cases: `<Verbo>UseCase` com método `execute()` assíncrono recebendo dataclass `<Verbo>Input`.
+Detalhes em [`docs/architecture.md#convenções-de-nomenclatura`](docs/architecture.md#convenções-de-nomenclatura).
+
+- `snake_case` para arquivos/módulos/funções; `PascalCase` para classes; `I`-prefix para interfaces.
+- Use cases: `<Verbo>UseCase` com `execute()` async recebendo dataclass `<Verbo>Input`.
 - Schemas: `<Acao>Request` / `<Recurso>Response`.
-- Migrations: `<verbo>_<contexto>` em snake_case (`add_billing_reports_table`). `post_write_hooks` formata com ruff automaticamente.
-- Cobertura ≥80% em `domain/` e `use_cases/` é gate de merge. TDD obrigatório para cálculos de billing, equivalências cross-cloud, regras de recomendação e normalização.
+- Migrations: `<verbo>_<contexto>` em snake_case.
+- Cobertura ≥80% em `domain/` e `use_cases/` é gate de merge.
 
-## Documentação interna
+## Camadas de documentação
 
-Plano arquitetural vivo e contexto de produto: `ost-docs.backend.plan/` (`architecture_rules.md`, `fluxo-BETA.md`, `workflow_master.md`, `error_ledger.md`). Consultar antes de mudanças estruturais.
+| Camada | Localização | Editável daqui? |
+|---|---|---|
+| **Versionada (fonte de verdade pública)** | [`docs/`](docs/README.md) | ✅ sim — editar junto com o código |
+| **Brain local-only do arquiteto** | `ost-docs.backend.plan/` (gitignored) | ❌ não — apenas consultar |
+| **Docs corporativos (PRD/TRD)** | `ost-docs.mkdocs/` (repo separado) | ❌ não — apenas consultar |
+| **Prompts foundation** | `../cloud_billing_analyzer_prompt.md`, `../fase1_parser_prompt.md` (raiz workspace) | ❌ não — apenas consultar |
+
+Para qualquer dúvida sobre **o que** está implementado e **como** funciona,
+começar por [`docs/README.md`](docs/README.md) (índice + fluxo de leitura).
