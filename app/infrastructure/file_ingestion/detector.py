@@ -15,6 +15,7 @@ from app.infrastructure.file_ingestion.loaders import (
     read_xlsx_headers_as_csv_bytes,
 )
 from app.infrastructure.file_ingestion.parsers import (
+    AWSCostExplorerParser,
     AWSParser,
     AzureParser,
     GCPParser,
@@ -23,7 +24,17 @@ from app.infrastructure.file_ingestion.parsers import (
 
 _log = get_logger(__name__)
 
-PARSERS: list[type[BaseParser]] = [AWSParser, AzureParser, GCPParser, OCIParser]
+# Order matters when signatures overlap. AWS CUR is checked before Cost
+# Explorer because CUR's signature (`line_item_unblended_cost`) is more
+# specific. Cost Explorer's signature is generic (any "Service" + "Total
+# costs($)" header).
+PARSERS: list[type[BaseParser]] = [
+    AWSParser,
+    AWSCostExplorerParser,
+    AzureParser,
+    GCPParser,
+    OCIParser,
+]
 
 
 def detect_and_parse(
