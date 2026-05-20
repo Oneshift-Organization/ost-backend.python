@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.billing_item import BillingItem
+from app.domain.value_objects.cloud_provider import CloudProvider
 from app.infrastructure.database.models.billing_items import BillingItemModel
 
 _BATCH_SIZE = 1000
@@ -46,6 +47,52 @@ class PgBillingItemRepository:
         )
         result = await self._session.execute(stmt)
         return int(result.scalar_one())
+
+    async def list_by_report(
+        self,
+        report_id: UUID,
+        user_id: UUID,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[BillingItem]:
+        stmt = (
+            select(BillingItemModel)
+            .where(
+                BillingItemModel.report_id == report_id,
+                BillingItemModel.user_id == user_id,
+            )
+            .order_by(BillingItemModel.cost.desc(), BillingItemModel.service)
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_entity(m) for m in result.scalars().all()]
+
+    @staticmethod
+    def _to_entity(model: BillingItemModel) -> BillingItem:
+        return BillingItem(
+            id=model.id,
+            report_id=model.report_id,
+            user_id=model.user_id,
+            provider=CloudProvider(model.provider),
+            account_id=model.account_id,
+            service=model.service,
+            resource_id=model.resource_id,
+            region=model.region,
+            cost=model.cost,
+            cost_discounted=model.cost_discounted,
+            currency=model.currency,
+            usage_amount=model.usage_amount,
+            usage_unit=model.usage_unit,
+            usage_start=model.usage_start,
+            usage_end=model.usage_end,
+            billing_period=model.billing_period,
+            tags=model.tags or {},
+            is_correction=model.is_correction,
+            is_estimate=model.is_estimate,
+            line_hash=model.line_hash,
+        )
 
     @staticmethod
     def _to_row(item: BillingItem) -> dict:
