@@ -15,6 +15,8 @@ from app.infrastructure.repositories.pg_billing_report_repo import (
 from app.schemas.auth import UserClaims
 from app.use_cases.billing.get_billing_job_status import GetBillingJobStatusUseCase
 from app.use_cases.billing.ingest_billing_file import IngestBillingFileUseCase
+from app.use_cases.billing.list_billing_items import ListBillingItemsUseCase
+from app.use_cases.billing.list_billing_reports import ListBillingReportsUseCase
 from app.use_cases.billing.upload_billing_file import UploadBillingFileUseCase
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
@@ -84,6 +86,19 @@ def _get_billing_job_status_uc(session: DbSession) -> GetBillingJobStatusUseCase
     return GetBillingJobStatusUseCase(PgBillingReportRepository(session))
 
 
+def _list_billing_reports_uc(session: DbSession) -> ListBillingReportsUseCase:
+    return ListBillingReportsUseCase(PgBillingReportRepository(session))
+
+
+def _list_billing_items_uc(session: DbSession) -> ListBillingItemsUseCase:
+    return ListBillingItemsUseCase(
+        PgBillingReportRepository(session),
+        PgBillingItemRepository(session),
+    )
+
+
 UploadBillingFileUC = Annotated[UploadBillingFileUseCase, Depends(_upload_billing_file_uc)]
 IngestBillingFileUC = Annotated[IngestBillingFileUseCase, Depends(_ingest_billing_file_uc)]
 GetBillingJobStatusUC = Annotated[GetBillingJobStatusUseCase, Depends(_get_billing_job_status_uc)]
+ListBillingReportsUC = Annotated[ListBillingReportsUseCase, Depends(_list_billing_reports_uc)]
+ListBillingItemsUC = Annotated[ListBillingItemsUseCase, Depends(_list_billing_items_uc)]
