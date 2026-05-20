@@ -46,6 +46,24 @@ def oci_cost_csv() -> Path:
 
 
 @pytest.fixture
+def aws_ce_tsv() -> Path:
+    """AWS Cost Explorer 'Daily costs by service' TSV (BOM + comma-decimal pt-BR)."""
+    return FIXTURES_DIR / "aws_ce_daily_by_service.tsv"
+
+
+@pytest.fixture
+def aws_ce_with_zeros_tsv() -> Path:
+    """Cost Explorer TSV exercising the zero-cost policy:
+
+    - RDS: cost=0 on 2026-04-01, cost>0 on 2026-04-02 → 'active' service,
+      per-period zero must be emitted.
+    - CloudWatch: cost=0 on every date → 'global zero' service, emitted as a
+      single summary row per billing_period with scope='global_zero'.
+    """
+    return FIXTURES_DIR / "aws_ce_with_zeros.tsv"
+
+
+@pytest.fixture
 def aws_cur2_xlsx(tmp_path: Path, aws_cur2_csv: Path) -> Path:
     return _csv_to_xlsx(aws_cur2_csv, tmp_path / "aws_cur2_sample.xlsx")
 
