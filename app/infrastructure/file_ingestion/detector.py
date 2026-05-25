@@ -16,8 +16,10 @@ from app.infrastructure.file_ingestion.loaders import (
 )
 from app.infrastructure.file_ingestion.parsers import (
     AWSCostExplorerParser,
+    AwsDetailedBillingParser,
     AWSParser,
     AzureParser,
+    GcpCostTableParser,
     GCPParser,
     OCIParser,
 )
@@ -27,13 +29,16 @@ _log = get_logger(__name__)
 # Order matters when signatures overlap. AWS CUR is checked before Cost
 # Explorer because CUR's signature (`line_item_unblended_cost`) is more
 # specific. Cost Explorer's signature is generic (any "Service" + "Total
-# costs($)" header).
+# costs($)" header).  AwsDetailedBilling and GcpCostTable are checked last
+# — their signatures are unique and won't conflict.
 PARSERS: list[type[BaseParser]] = [
     AWSParser,
     AWSCostExplorerParser,
     AzureParser,
     GCPParser,
+    GcpCostTableParser,
     OCIParser,
+    AwsDetailedBillingParser,
 ]
 
 

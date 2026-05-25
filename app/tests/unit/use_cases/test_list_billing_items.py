@@ -24,7 +24,8 @@ class _FakeReportRepo:
 
     async def save(self, r): ...
     async def update(self, r): ...
-    async def list_by_user(self, user_id, limit=50): return []
+    async def list_by_user(self, user_id, limit=50):
+        return []
 
     async def get_by_id(self, report_id, user_id):
         return self._reports.get((report_id, user_id))
@@ -36,8 +37,11 @@ class _FakeItemRepo:
         self._total = total if total is not None else len(items)
         self.last_call: dict | None = None
 
-    async def bulk_insert(self, items): return len(items)
-    async def delete_by_report(self, report_id, user_id): return 0
+    async def bulk_insert(self, items):
+        return len(items)
+
+    async def delete_by_report(self, report_id, user_id):
+        return 0
 
     async def count_by_report(self, report_id, user_id):
         return self._total

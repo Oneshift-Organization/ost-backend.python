@@ -178,9 +178,7 @@ async def list_billing_items(
 
     try:
         result = await uc.execute(
-            ListBillingItemsInput(
-                user_id=user_uuid, report_id=job_id, limit=limit, offset=offset
-            )
+            ListBillingItemsInput(user_id=user_uuid, report_id=job_id, limit=limit, offset=offset)
         )
     except NotFoundError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e

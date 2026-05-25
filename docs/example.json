@@ -1,0 +1,66 @@
+{
+  "migration_context": {
+    "source_environment": [
+        "Provider: AWS",
+      {
+        "id": "app_server_01",
+        "category": "compute",
+        "service_type": "virtual_server",
+        "provider_service_name": "Amazon EC2",
+        "dependencies": ["database_01"],
+        "current_cost_data": {
+          "estimated_monthly_spend_usd": 1200.00
+        },
+        "technical_metadata": {
+          "isolation_level": "shared",
+          "requires_refactoring": false
+        }
+      },
+      {
+        "id": "network_core",
+        "category": "networking",
+        "service_type": "virtual_network",
+        "provider_service_name": "Amazon VPC",
+        "dependencies": [],
+        "current_cost_data": {
+          "estimated_monthly_spend_usd": 50.00
+        },
+        "technical_metadata": {
+          "topology": "hub_and_spoke"
+        }
+      }
+    ],
+    "target_options_catalog": {
+      "compute": {
+        "virtual_server": [
+          {
+            "provider": "azure",
+            "provider_service_name": "Azure Virtual Machine",
+            "pricing_metadata": { "price_per_hour_usd": 0.085 }
+          },
+          {
+            "provider": "gcp",
+            "provider_service_name": "Compute Engine",
+            "pricing_metadata": { "price_per_hour_usd": 0.082 }
+          }
+        ],
+        "bare_metal_server": [
+          {
+            "provider": "oci",
+            "provider_service_name": "Oracle Bare Metal Servers",
+            "pricing_metadata": { "price_per_hour_usd": 0.450 }
+          }
+        ]
+      },
+      "networking": {
+        "virtual_network": [
+          {
+            "provider": "azure",
+            "provider_service_name": "Azure Virtual Network (VNet)",
+            "pricing_metadata": { "price_per_gb_egress": 0.087 }
+          }
+        ]
+      }
+    }
+  }
+}
