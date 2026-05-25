@@ -32,9 +32,11 @@ agentes de IA.
 ### Implementação
 
 | Arquivo | Para quê |
-|---|---|
+|---|---|---|
 | [`data-model.md`](data-model.md) | DDL das tabelas (`billing_reports`, `billing_items`), schema canônico do parser, convenções de `raw_payload`, queries comuns. |
 | [`parsers.md`](parsers.md) | Guia por provider (AWS CUR/CE, Azure, GCP, OCI) + política `global_zero` do Cost Explorer + como adicionar parser novo. |
+| [`billing-ingestion-pipeline.md`](billing-ingestion-pipeline.md) | Pipeline completa: detecção, 7 parsers, schema canônico, edge cases (NaN, locale, correções). |
+| [`refactor/Refactor-plan.md`](refactor/Refactor-plan.md) | Plano de refatoração (SDD), fases, metas e critérios de aceitação. |
 
 ### Operação
 
@@ -42,6 +44,7 @@ agentes de IA.
 |---|---|
 | [`api-conventions.md`](api-conventions.md) | Convenções transversais: paginação, envelopes, serialização Decimal/datetime, status codes, ordenação. **Leia antes de adicionar rota nova.** |
 | [`endpoints/billing.md`](endpoints/billing.md) | Catálogo `/v1/billing-files`: contratos request/response, status codes, exemplos copy-paste. |
+| [`endpoints/reports.md`](endpoints/reports.md) | Catálogo `/v1/reports`: dashboard de billing agregado por provedor/serviço/período. |
 | [`dev-setup.md`](dev-setup.md) | Rodar local: venv, Postgres via podman, alembic, bypass de auth, troubleshooting. |
 
 ## Fluxo de leitura recomendado
@@ -58,9 +61,11 @@ agentes de IA.
 **Agente de IA** (consulta dirigida):
 
 | Tarefa | Comece por |
-|---|---|
+|---|---|---|
 | Adicionar rota nova | [`api-conventions.md`](api-conventions.md) |
 | Adicionar parser de cloud | [`parsers.md`](parsers.md#como-adicionar-um-parser-novo) |
+| Refatoração SDD | [`refactor/Refactor-plan.md`](refactor/Refactor-plan.md) |
+| Entender pipeline de ingestão | [`billing-ingestion-pipeline.md`](billing-ingestion-pipeline.md) |
 | Alterar schema/migration | [`data-model.md`](data-model.md) |
 | Entender regra de negócio | [`product.md`](product.md) |
 | Debug de detecção de formato | [`parsers.md`](parsers.md#como-debugar-uma-detecção-que-falha) |

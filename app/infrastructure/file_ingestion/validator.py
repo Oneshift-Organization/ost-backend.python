@@ -25,8 +25,8 @@ def _is_uuid_str(s: str) -> bool:
     return bool(_UUID_RE.match(s)) if isinstance(s, str) else False
 
 
-def _is_decimal_nonneg(v: object) -> bool:
-    return isinstance(v, Decimal) and v >= 0
+def _is_decimal(v: object) -> bool:
+    return isinstance(v, Decimal)
 
 
 def _is_period(s: str) -> bool:
@@ -42,7 +42,7 @@ BillingNormalizedSchema = DataFrameSchema(
         "account_id": Column(str, nullable=True, coerce=True),
         "service": Column(str, nullable=False),
         "service_raw": Column(str, nullable=False),
-        "cost": Column(object, Check(lambda s: s.apply(_is_decimal_nonneg))),
+        "cost": Column(object, Check(lambda s: s.apply(_is_decimal))),
         "currency": Column(str, Check(lambda s: s.str.len() == _CURRENCY_LEN)),
         "billing_period": Column(str, Check(lambda s: s.apply(_is_period))),
         "is_correction": Column(bool),
