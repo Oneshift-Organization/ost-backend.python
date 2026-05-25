@@ -31,6 +31,17 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# ── Uploads / arquivos temporários gerados em runtime ─────────────────────
+uploads/
+*.xlsx.tmp
+*.csv.tmp
 
 # ── Stack: IaC (Terraform) ────────────────────────────────────────────────
 .terraform/
@@ -45,3 +56,6 @@ crash.log
 *.log
 tmp/
 temp/
+
+# ── Brain do arquiteto (local-only, não versionado) ───────────────────────
+ost-docs.backend.plan/

@@ -1,0 +1,51 @@
+[project]
+name = "ost-backend"
+version = "0.1.0"
+description = "OneShift backend — análise de migração entre clouds"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["app"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "I", "B", "UP", "ASYNC", "RUF", "S", "T20", "SIM", "PL", "N",
+]
+ignore = [
+    "S101",   # assert ok em testes
+    "PLR0913", # número de args (use cases podem ter muitas deps)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/tests/**" = ["S", "T20", "PLR2004"]
+"app/infrastructure/database/migrations/**" = ["E501", "N806"]
+"app/infrastructure/cloud_clients/**" = ["PLC0415"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["app/infrastructure/database/migrations/versions/"]
+
+[[tool.mypy.overrides]]
+module = "app.tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["app/tests"]
+addopts = "-ra -q --cov=app --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+omit = [
+    "app/tests/*",
+    "app/infrastructure/database/migrations/*",
+    "app/main.py",
+]
