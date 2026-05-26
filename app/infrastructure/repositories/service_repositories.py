@@ -99,7 +99,7 @@ class PGServiceComparisonRepository(IServiceComparisonRepository):
             CloudServiceComparisonModel.service_name == service_name,
         )
         result = await self._session.execute(stmt)
-        row = result.scalar_one_or_none()
+        row = result.scalars().first()
         if row is None:
             return None
         return ServiceComparison(

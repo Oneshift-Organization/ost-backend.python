@@ -52,12 +52,16 @@ class GcpCostTableParser(BaseParser):
         records: list[dict] = []
         for _, row in df.iterrows():
             cost = _br_to_decimal(row.get("Cost (R$)", "0"))
+
+            cost_type = _clean_gcp(row.get("Cost type", "")).lower()
+            if cost_type == "tax":
+                continue
+
             usage_start = _parse_date_gcp(row.get("Usage start date"))
             usage_end = _parse_date_gcp(row.get("Usage end date"))
             billing_period = usage_start.strftime("%Y-%m") if usage_start else "0000-00"
 
             service = _clean_gcp(row.get("Service description", "")) or "unknown"
-            service_id = _clean_gcp(row.get("Service ID", "")) or None
             raw_payload = {
                 k: _clean_gcp(v)
                 for k, v in row.items()
@@ -72,7 +76,7 @@ class GcpCostTableParser(BaseParser):
                 "account_id": _clean_gcp(row.get("Billing account ID", "")),
                 "account_name": _clean_gcp(row.get("Project name", "")) or None,
                 "service": service,
-                "service_raw": service_id or service,
+                "service_raw": service,
                 "resource_id": None,
                 "resource_type": _clean_gcp(row.get("SKU description", "")) or None,
                 "region": None,

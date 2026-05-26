@@ -34,7 +34,7 @@ class NormalizedBillingRecord(TypedDict, total=False):
     usage_amount: Decimal | None
     usage_unit: str | None
 
-    tags: dict[str, str]
+    tags: dict
     is_correction: bool
     is_estimate: bool
 

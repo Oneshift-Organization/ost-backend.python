@@ -18,15 +18,17 @@ upload → detect_parser (por conteúdo)
        → PgBillingItemRepository.bulk_insert
 ```
 
-Hoje há **5 parsers**, todos em
+Hoje há **7 parsers**, todos em
 [`app/infrastructure/file_ingestion/parsers/`](../app/infrastructure/file_ingestion/parsers/):
 
 | Parser | Formato | `schema_version` emitido | Status |
-|---|---|---|---|
+|---|---|---|---|---|
 | `AWSParser` | AWS CUR 2.0 + Legacy CUR (.csv/.csv.gz/.csv.zip/.xlsx) | `AWS_CUR2.0` ou `AWS_CUR_LEGACY` | ✅ |
 | `AWSCostExplorerParser` | AWS Cost Explorer "Daily by service" (TSV/CSV pivotado, BOM, locale) | `AWS_CE_DAILY_BY_SERVICE` | ✅ |
+| `AwsDetailedBillingParser` | AWS Invoice / Detailed Billing Report | `AWS_DETAILED_BILLING` | ✅ |
 | `AzureParser` | Azure Cost Management Export (PAYG / EA) | `AZURE_PAYG` ou `AZURE_EA` | ✅ |
 | `GCPParser` | GCP Cloud Billing Export (NDJSON / JSON / CSV / XLSX) | `GCP_BILLING_STD` | ✅ |
+| `GcpCostTableParser` | GCP Cost Table (Console BR, semicolon, BRL) | `GCP_COST_TABLE` | ✅ |
 | `OCIParser` | OCI Cost Report (.csv.gz proprietário) | `OCI_COST_REPORT` | ✅ |
 
 > **Ordem de detecção importa.** Em [`detector.PARSERS`](../app/infrastructure/file_ingestion/detector.py),
@@ -405,6 +407,11 @@ Cenário: nova cloud (digamos, **DigitalOcean**) ou novo formato (digamos,
 - ❌ Persistir `Decimal(float(value))` — perde precisão.
 - ❌ Esquecer `_hash_row` — quebra o `deduplicate`.
 - ❌ Registrar antes do parser cuja assinatura é menos específica.
+- ❌ **Deixar linhas de resumo contábil passarem** — linhas como
+  `RecordType = StatementTotal/InvoiceTotal` (AWS Invoice) e
+  `Cost type = "tax"` (GCP Cost Table) devem ser filtradas no parser e
+  no enriquecimento, sob pena de **duplicar custos na agregação**.
+  Ex: AWS InvoiceTotal duplica custo real, Tax GCP não é custo de infra.
 
 ## Como debugar uma detecção que falha
 

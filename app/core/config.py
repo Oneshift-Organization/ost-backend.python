@@ -42,6 +42,16 @@ class Settings(BaseSettings):
     # by `get_current_user` even if this is set to False by mistake.
     auth_enabled: bool = True
 
+    llm_provider: Literal["gemini", "openrouter", "mock"] = "gemini"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    openrouter_api_key: str = ""
+    openrouter_model: str = "deepseek/deepseek-v4-flash:free"
+
+    gcp_service_account_path: str = Field(
+        default="", alias="GOOGLE_APPLICATION_CREDENTIALS"
+    )
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"

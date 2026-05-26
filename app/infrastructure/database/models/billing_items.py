@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, func
@@ -26,6 +29,7 @@ class BillingItemModel(Base):
     provider: Mapped[str] = mapped_column(String(10), nullable=False)
     account_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     service: Mapped[str] = mapped_column(String(200), nullable=False)
+    service_raw: Mapped[str | None] = mapped_column(String(200), nullable=True)
     resource_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
     region: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
@@ -39,7 +43,7 @@ class BillingItemModel(Base):
     usage_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     billing_period: Mapped[str] = mapped_column(String(7), nullable=False)
 
-    tags: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    tags: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     is_correction: Mapped[bool] = mapped_column(default=False, nullable=False)
     is_estimate: Mapped[bool] = mapped_column(default=False, nullable=False)
     line_hash: Mapped[str] = mapped_column(String(64), nullable=False)

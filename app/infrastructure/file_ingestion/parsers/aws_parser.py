@@ -43,6 +43,10 @@ class AWSParser(BaseParser):
 
         records: list[dict] = []
         for _, row in df.iterrows():
+            # Belt-and-suspenders: skip financial metadata / summary rows
+            if str(row.get("RecordType", "")) in ("StatementTotal", "InvoiceTotal", "Tax"):
+                continue
+
             raw = {k: v for k, v in row.to_dict().items() if v != ""}
             cost = self._cost_to_decimal(row.get(cols["cost"]))
             cost_disc = self._cost_to_decimal(row.get(cols["cost_net"]) or row.get(cols["cost"]))

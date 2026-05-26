@@ -19,6 +19,10 @@ from app.infrastructure.file_ingestion.normalizer import (
     deduplicate,
 )
 from app.infrastructure.file_ingestion.validator import validate_normalized_df
+from app.use_cases.analysis.build_billing_enriched import (
+    BuildBillingEnrichedInput,
+    BuildBillingEnrichedUseCase,
+)
 
 _log = get_logger(__name__)
 
@@ -35,9 +39,11 @@ class IngestBillingFileUseCase:
         self,
         report_repo: IBillingReportRepository,
         item_repo: IBillingItemRepository,
+        enriched_uc: "BuildBillingEnrichedUseCase",
     ) -> None:
         self._reports = report_repo
         self._items = item_repo
+        self._enriched_uc = enriched_uc
 
     async def execute(self, payload: IngestBillingFileInput) -> None:
         report = await self._reports.get_by_id(payload.report_id, payload.user_id)
@@ -56,6 +62,10 @@ class IngestBillingFileUseCase:
 
             await self._items.delete_by_report(report.id, payload.user_id)
             inserted = await self._items.bulk_insert(items)
+
+            await self._enriched_uc.execute(
+                BuildBillingEnrichedInput(user_id=payload.user_id, report_id=report.id)
+            )
 
             report.mark_done(
                 row_count=inserted,
