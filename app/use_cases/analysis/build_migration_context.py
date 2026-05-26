@@ -9,16 +9,23 @@ from app.core.exceptions import NotFoundError
 from app.domain.analysis import (
     BillingItemSummary,
     EquivalentService,
+    FinancialEstimate,
     MigrationContext,
     ServiceCategoryGroup,
     ServiceComparison,
+    SourceUsage,
+    TechnicalMatch,
+    WorkloadSummary,
 )
 from app.domain.interfaces.i_service_repositories import (
     IServiceComparisonRepository,
     IServiceMetadataRepository,
 )
-from app.domain.repositories.i_billing_item_repo import IBillingItemRepository
+from app.domain.repositories.i_billing_enriched_repo import IBillingEnrichedRepository
 from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
+from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
+from app.domain.services.equivalence_matcher import EquivalenceMatcher
+from app.services.billing_aggregator import BillingAggregator
 
 
 @dataclass(frozen=True)
@@ -54,20 +61,27 @@ def _normalize(name: str) -> str:
     return " ".join(name.lower().split())
 
 
+# service types that require vCPU/RAM specs for equivalence matching
+_COMPUTE_SERVICE_TYPES = frozenset({"virtual_server", "relational_database", "compute"})
+
+
 class BuildMigrationContextUseCase:
     def __init__(
         self,
         report_repo: IBillingReportRepository,
-        item_repo: IBillingItemRepository,
+        item_repo: IBillingEnrichedRepository,
         metadata_repo: IServiceMetadataRepository,
         comparison_repo: IServiceComparisonRepository,
+        sku_repo: ICloudSkuRepository | None = None,
     ) -> None:
         self._report_repo = report_repo
         self._item_repo = item_repo
         self._metadata_repo = metadata_repo
         self._comparison_repo = comparison_repo
+        self._matcher = EquivalenceMatcher(sku_repo) if sku_repo else None
+        self._aggregator = BillingAggregator(sku_repo) if sku_repo else None
 
-    async def execute(self, payload: BuildMigrationContextInput) -> MigrationContext:  # noqa: PLR0915
+    async def execute(self, payload: BuildMigrationContextInput) -> MigrationContext:  # noqa: PLR0912, PLR0915
         report = await self._report_repo.get_by_id(payload.report_id, payload.user_id)
         if report is None:
             raise NotFoundError(f"report {payload.report_id} not found")
@@ -87,29 +101,33 @@ class BuildMigrationContextUseCase:
         billing_period = items[0].billing_period
         total_spend = Decimal("0")
 
-        # ── 1. Aggregate billing items by service ──────────────
+        # ── 1. Aggregate by service ──────────────────────────────
         service_agg: dict[str, dict[str, Any]] = {}
         for item in items:
             total_spend += item.cost
-            key = item.service
+            key = item.service_name
             if key not in service_agg:
                 service_agg[key] = {
-                    "service_name": item.service,
-                    "provider": item.provider.value,
+                    "service_name": item.service_name,
+                    "provider": item.provider,
                     "total_cost": Decimal("0"),
                     "currency": item.currency,
                     "line_count": 0,
+                    "category": item.category,
+                    "service_type": item.service_type,
+                    "items": [],
                 }
             service_agg[key]["total_cost"] += item.cost
             service_agg[key]["line_count"] += 1
+            service_agg[key]["items"].append(item)
 
-        # ── 2. Load source provider catalog ─────────────────────
+        # ── 2. Load source catalog ───────────────────────────────
         source_comparisons = await self._comparison_repo.list_by_provider(source_provider)
         source_metadata = await self._metadata_repo.list_by_providers([source_provider])
         canonicals = {_normalize(c.service_name): c for c in source_comparisons}
         meta_map = {_normalize(m.service_name): m for m in source_metadata}
 
-        # ── 3. Load target provider metadata ────────────────────
+        # ── 3. Load target provider metadata ─────────────────────
         target_providers = list(
             {c.provider for c in await self._comparison_repo.list_all()
              if c.provider != source_provider}
@@ -121,8 +139,8 @@ class BuildMigrationContextUseCase:
         target_docs_map: dict[tuple[str, str], str | None] = {
             (m.provider, m.service_name): m.docs_costs for m in target_metadata_all
         }
-        # Build cache: (category, service_type) → list of equivalents from all other providers
         equivalents_cache: dict[tuple[str, str], list[EquivalentService]] = {}
+
         async def _get_equivalents(category: str, service_type: str) -> list[EquivalentService]:
             key = (category, service_type)
             if key not in equivalents_cache:
@@ -141,7 +159,7 @@ class BuildMigrationContextUseCase:
                 ]
             return equivalents_cache[key]
 
-        # ── 4. Match & build enriched summaries ─────────────────
+        # ── 4. Match helpers ─────────────────────────────────────
         def _canonical_name(name: str) -> str:
             aliases = PROVIDER_SERVICE_ALIASES.get(source_provider, {})
             return aliases.get(name, name)
@@ -161,7 +179,11 @@ class BuildMigrationContextUseCase:
                     return None
             return None
 
-        # Sort by cost desc first, then build summaries with equivalents
+        def _meta_category(name: str) -> str | None:
+            meta = meta_map.get(_normalize(name))
+            return meta.category if meta else None
+
+        # ── 5. Build old-style (categories) structure ────────────
         sorted_services = sorted(
             service_agg.values(),
             key=lambda x: x["total_cost"],
@@ -171,14 +193,16 @@ class BuildMigrationContextUseCase:
         categories: dict[str, dict[str, Any]] = {}
         for raw in sorted_services:
             comp = _match(raw["service_name"])
-            meta = meta_map.get(_normalize(raw["service_name"]))
-            category_name = comp.category if comp else (meta.category if meta else "unknown")
-            service_type = comp.service_type if comp else "unknown"
-
-            equivalents = (
-                await _get_equivalents(comp.category, comp.service_type)
-                if comp else []
+            category_name = comp.category if comp else (
+                raw.get("category") or _meta_category(raw["service_name"]) or "unknown"
             )
+            service_type = comp.service_type if comp else (
+                raw.get("service_type") or "unknown"
+            )
+
+            equivs: list[EquivalentService] = []
+            if category_name != "unknown" and service_type != "unknown":
+                equivs = await _get_equivalents(category_name, service_type)
 
             svc = BillingItemSummary(
                 service_name=raw["service_name"],
@@ -187,7 +211,7 @@ class BuildMigrationContextUseCase:
                 service_type=service_type,
                 currency=raw["currency"],
                 line_count=raw["line_count"],
-                equivalents=equivalents,
+                equivalents=equivs,
             )
 
             if category_name not in categories:
@@ -198,6 +222,93 @@ class BuildMigrationContextUseCase:
                 }
             categories[category_name]["services"].append(svc)
             categories[category_name]["billing_total"] += svc.total_cost
+
+        # ── 6. Build new-style (workloads) structure ─────────────
+        workloads: list[WorkloadSummary] = []
+        missing_sku_set: set[str] = set()
+        if self._matcher is not None:
+            sku_agg: dict[str, dict[str, Any]] = {}
+            for item in items:
+                sku_key = item.sku_id or item.service_name
+                if sku_key not in sku_agg:
+                    sku_agg[sku_key] = {
+                        "sku_id": item.sku_id or item.service_name,
+                        "usage_quantity": Decimal("0"),
+                        "billed_cost": Decimal("0"),
+                        "currency": item.currency,
+                        "canonical_service": item.service_type or item.service_name,
+                        "line_count": 0,
+                    }
+                sku_agg[sku_key]["usage_quantity"] += item.usage_amount or Decimal("0")
+                sku_agg[sku_key]["billed_cost"] += item.cost
+                sku_agg[sku_key]["line_count"] += 1
+
+            for _sku_key, agg in sku_agg.items():
+                matched = await self._matcher.match(
+                    source_provider=source_provider,
+                    sku_id=agg["sku_id"],
+                    usage_quantity=agg["usage_quantity"],
+                    billed_cost=agg["billed_cost"],
+                    currency=agg["currency"],
+                    canonical_service=agg["canonical_service"],
+                    target_providers=target_providers,
+                )
+
+                has_specs = (
+                    matched.source_specs is not None
+                    and (matched.source_specs.vcpus is not None or matched.source_specs.ram_gb is not None)
+                )
+                if not has_specs and matched.canonical_service in _COMPUTE_SERVICE_TYPES:
+                    missing_sku_set.add(agg["sku_id"])
+
+                source_usage = SourceUsage(
+                    sku_id=matched.sku_id,
+                    usage_quantity=matched.usage_quantity,
+                    billed_cost=matched.billed_cost,
+                    currency=matched.currency,
+                )
+
+                equiv_items = []
+                for eq in matched.equivalents:
+                    _t = eq.technical_match
+                    tm = TechnicalMatch(
+                        vcpus=_t.vcpus,
+                        ram_gb=_t.ram_gb,
+                    ) if _t else None
+                    _f = eq.financials
+                    fin = None
+                    if _f is not None:
+                        fin = FinancialEstimate(
+                            unit_price=_f.unit_price,
+                            estimated_monthly_cost=_f.estimated_monthly_cost,
+                            cost_delta=_f.cost_delta,
+                            pricing_confidence=_f.pricing_confidence,
+                        )
+                    equiv_items.append(
+                        EquivalentService(
+                            provider=eq.provider,
+                            service_name=eq.service_name,
+                            category=eq.category,
+                            service_type=eq.service_type,
+                            technical_match=tm,
+                            financials=fin,
+                        )
+                    )
+                workloads.append(
+                    WorkloadSummary(
+                        canonical_service=matched.canonical_service,
+                        source_usage=source_usage,
+                        equivalents=equiv_items,
+                    )
+                )
+
+        # ── 7. Aggregate into capacity pools ──────────────────────
+        pools: tuple[WorkloadPool, ...] = ()
+        auxiliary: AuxiliaryCosts | None = None
+        if self._aggregator is not None:
+            agg_result = await self._aggregator.aggregate(items, source_provider)
+            pools = agg_result.pools
+            auxiliary = agg_result.auxiliary
 
         return MigrationContext(
             source_provider=source_provider,
@@ -212,4 +323,8 @@ class BuildMigrationContextUseCase:
                 )
                 for c in categories.values()
             ],
+            workloads=workloads,
+            pools=pools,
+            auxiliary=auxiliary,
+            missing_sku_ids=tuple(sorted(missing_sku_set)),
         )

@@ -46,6 +46,12 @@ api/  +  infrastructure/   →   use_cases/   →   domain/
 - [`domain/`](../app/domain/) é **puro**: zero imports de FastAPI, SQLAlchemy
   ou Pydantic (exceto Value Objects internos). Define entidades, VOs (`Money`,
   `CloudProvider`) e interfaces (`I*Repository`).
+  - **Entidades de análise:** `BuildingEnriched`, `UnmappedBillingLine`,
+    `WorkloadPool` (`PoolKey`, `PoolCapacity`, `PoolCosts`, `AuxiliaryCosts`),
+    `AnalysisJob`.
+  - **Entidades de catálogo:** `CloudSku`, `ServiceOntology`.
+  - **Interface LLM:** `ILLMClient` — abstrato para `GeminiLLMClient`,
+    `OpenRouterLLMClient`, `MockLLMClient`.
 - [`use_cases/`](../app/use_cases/) orquestra regras de negócio. Recebe deps
   via DI no `__init__`, **nunca instancia ORM/SDK direto**. Input em dataclass
   frozen (`UploadBillingFileInput`).
@@ -81,9 +87,10 @@ app/
 │   ├── exceptions.py       # DomainError + subclasses
 │   └── logging.py          # structlog JSON
 ├── domain/                 # PURO — zero framework imports
-│   ├── entities/           # BillingReport, BillingItem
+│   ├── entities/           # BillingReport, BillingItem, CloudSku
 │   ├── value_objects/      # Money, CloudProvider, BillingRecord
-│   └── repositories/       # IBillingReportRepository, IBillingItemRepository
+│   ├── services/           # EquivalenceMatcher (matching cross-cloud por hardware)
+│   └── repositories/       # IBillingReportRepository, IBillingItemRepository, ICloudSkuRepository
 ├── use_cases/billing/
 │   ├── upload_billing_file.py
 │   ├── ingest_billing_file.py
@@ -124,6 +131,9 @@ Pós-MVP, ressuscitar `infrastructure/cloud_clients/<provider>/` e
 - **Tipos obrigatórios:** `UUID` PK, `JSONB` para payloads brutos,
   **`NUMERIC(18,6)`** para todo valor monetário. **Nunca `FLOAT`** em
   monetários.
+- **`vcpus` e `ram_gb`** no `cloud_sku_catalog` usam `NUMERIC(6,2)` e
+  `NUMERIC(8,2)`, com índice composto `(provider, service_type, vcpus, ram_gb)`
+  para queries de matching ge >=.
 - Modelos SQLAlchemy herdam de `Base` ([`infrastructure/database/base.py`](../app/infrastructure/database/base.py)).
   Para Alembic detectar mudanças, todo modelo novo precisa ser importado em
   [`infrastructure/database/models/__init__.py`](../app/infrastructure/database/models/__init__.py).
@@ -191,6 +201,8 @@ Pós-MVP, ressuscitar `infrastructure/cloud_clients/<provider>/` e
 - **Ruff** (lint + format) — config em [`pyproject.toml`](../pyproject.toml).
 - **mypy strict** em `app/` (exceto migrations).
 - **Cobertura ≥ 80%** em `domain/` e `use_cases/` é gate de merge.
+- **EquivalenceMatcher** (domain service) com 100% de cobertura — testes unitários
+  em `app/tests/unit/domain/services/`.
 - **TDD obrigatório** para: cálculo de billing, equivalências cross-cloud,
   regras de recomendação, normalização de payloads.
 - **Test-after** aceitável para: CRUD, configs, wrappers de SDK (mockados).

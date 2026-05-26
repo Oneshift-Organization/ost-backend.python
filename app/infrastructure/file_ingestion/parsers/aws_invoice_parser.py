@@ -58,6 +58,10 @@ class AwsDetailedBillingParser(BaseParser):
     def _normalize(self, df: pd.DataFrame, source_file: str) -> pd.DataFrame:
         records: list[dict] = []
         for _, row in df.iterrows():
+            record_type = _clean(row.get("RecordType", ""))
+            if record_type in ("StatementTotal", "InvoiceTotal"):
+                continue
+
             cost = self._cost_to_decimal(_clean(row.get("CostBeforeTax", "0")))
             usage_start = _parse_dt_invoice(row.get("BillingPeriodStartDate"))
             usage_end = _parse_dt_invoice(row.get("BillingPeriodEndDate"))

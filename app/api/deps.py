@@ -11,11 +11,24 @@ from app.infrastructure.database.session import get_db_session
 from app.infrastructure.repositories.pg_billing_dashboard_repo import (
     PgBillingDashboardRepository,
 )
+from app.infrastructure.repositories.pg_billing_enriched_repo import (
+    PgBillingEnrichedRepository,
+)
 from app.infrastructure.repositories.pg_billing_item_repo import PgBillingItemRepository
 from app.infrastructure.repositories.pg_billing_report_repo import (
     PgBillingReportRepository,
 )
+from app.infrastructure.repositories.pg_service_ontology_repo import (
+    PgServiceOntologyRepository,
+)
+from app.infrastructure.repositories.pg_unmapped_billing_repo import (
+    PgUnmappedBillingRepository,
+)
+from app.infrastructure.repositories.service_repositories import (
+    PGServiceComparisonRepository,
+)
 from app.schemas.auth import UserClaims
+from app.use_cases.analysis.build_billing_enriched import BuildBillingEnrichedUseCase
 from app.use_cases.billing.get_billing_job_status import GetBillingJobStatusUseCase
 from app.use_cases.billing.ingest_billing_file import IngestBillingFileUseCase
 from app.use_cases.billing.list_billing_items import ListBillingItemsUseCase
@@ -85,6 +98,14 @@ def _ingest_billing_file_uc(session: DbSession) -> IngestBillingFileUseCase:
     return IngestBillingFileUseCase(
         PgBillingReportRepository(session),
         PgBillingItemRepository(session),
+        BuildBillingEnrichedUseCase(
+            PgBillingReportRepository(session),
+            PgBillingItemRepository(session),
+            PgBillingEnrichedRepository(session),
+            PgServiceOntologyRepository(session),
+            PgUnmappedBillingRepository(session),
+            PGServiceComparisonRepository(session),
+        ),
     )
 
 

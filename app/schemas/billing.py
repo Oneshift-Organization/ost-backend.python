@@ -13,6 +13,7 @@ class BillingFileUploadResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     job_id: UUID = Field(..., description="Use this id to poll job status.")
+    external_id: UUID | None = None
     status: JobStatus
     source_filename: str
     created_at: datetime
@@ -22,6 +23,7 @@ class BillingJobStatusResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     job_id: UUID
+    external_id: UUID | None = None
     status: JobStatus
     provider: CloudProvider | None = None
     schema_version: str | None = None
@@ -37,6 +39,7 @@ class BillingReportSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     job_id: UUID
+    external_id: UUID | None = None
     status: JobStatus
     provider: CloudProvider | None = None
     schema_version: str | None = None
@@ -50,6 +53,7 @@ class BillingReportSummary(BaseModel):
     def from_entity(cls, r: BillingReport) -> "BillingReportSummary":
         return cls(
             job_id=r.id,
+            external_id=r.external_id,
             status=r.status,
             provider=r.provider,
             schema_version=r.schema_version,
@@ -104,11 +108,17 @@ class BillingItemResponse(BaseModel):
             usage_start=i.usage_start,
             usage_end=i.usage_end,
             billing_period=i.billing_period,
-            tags=i.tags,
+            tags=_filter_tags(i.tags),
             is_correction=i.is_correction,
             is_estimate=i.is_estimate,
             line_hash=i.line_hash,
         )
+
+
+def _filter_tags(tags: dict) -> dict[str, str]:
+    if not isinstance(tags, dict):
+        return {}
+    return {k: v for k, v in tags.items() if isinstance(v, str) and k != "raw_payload"}
 
 
 class BillingItemsPage(BaseModel):

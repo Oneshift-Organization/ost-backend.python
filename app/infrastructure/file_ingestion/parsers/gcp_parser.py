@@ -51,6 +51,10 @@ class GCPParser(BaseParser):
 
         records: list[dict] = []
         for raw in rows:
+            # Belt-and-suspenders: skip financial metadata / summary rows
+            if str(raw.get("RecordType", "")) in ("StatementTotal", "InvoiceTotal", "Tax"):
+                continue
+
             cost = self._cost_to_decimal(raw.get("cost"))
             # GCP delivers credits as an array of {name, amount, type}.
             credits_total = _sum_credits(raw.get("credits"))

@@ -52,13 +52,26 @@ def dataframe_to_items(df: pd.DataFrame, report_id: UUID) -> list[BillingItem]:
                 cost_discounted=_nan_to_none(record.get("cost_discounted")),
                 usage_amount=_nan_to_none(record.get("usage_amount")),
                 usage_unit=_nan_to_none(record.get("usage_unit")),
-                tags=record.get("tags") or {},
+                tags=_build_tags(record),
+                service_raw=_nan_to_none(record.get("service_raw")),
                 is_correction=bool(record.get("is_correction", False)),
                 is_estimate=bool(record.get("is_estimate", False)),
                 line_hash=cast(str, record.get("line_hash", "")),
             )
         )
     return items
+
+
+def _build_tags(record: dict) -> dict:
+    tags = record.get("tags") or {}
+    raw_payload = record.get("raw_payload") or {}
+    if not isinstance(tags, dict):
+        tags = {"_tags_raw": tags}
+    if isinstance(raw_payload, dict):
+        tags = {**tags, "raw_payload": raw_payload}
+    else:
+        tags = {**tags, "raw_payload": {}}
+    return tags
 
 
 def deduplicate(df: pd.DataFrame) -> pd.DataFrame:

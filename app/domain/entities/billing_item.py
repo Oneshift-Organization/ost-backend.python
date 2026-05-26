@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 from app.core.exceptions import ValidationError
@@ -29,7 +32,8 @@ class BillingItem:
     cost_discounted: Decimal | None = None
     usage_amount: Decimal | None = None
     usage_unit: str | None = None
-    tags: dict[str, str] = field(default_factory=dict)
+    tags: dict[str, Any] = field(default_factory=dict)
+    service_raw: str | None = None
     is_correction: bool = False
     is_estimate: bool = False
     line_hash: str = ""
@@ -38,8 +42,6 @@ class BillingItem:
     def __post_init__(self) -> None:
         if not isinstance(self.cost, Decimal):
             raise ValidationError("cost must be Decimal")
-        if self.cost < 0 and not self.is_correction:
-            raise ValidationError("cost cannot be negative outside corrections")
         if not self.currency or len(self.currency) != _CURRENCY_LEN:
             raise ValidationError("currency must be ISO-4217 (3 chars)")
         if not self.billing_period or len(self.billing_period) != _PERIOD_LEN:

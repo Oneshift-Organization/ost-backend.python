@@ -30,17 +30,37 @@ We must refactor to a **data-driven** system with:
 3. **Cloud-agnostic pipeline** — normalize all providers to a single schema.
 4. **Graceful degradation** — when metadata is missing, set confidence low,
    but do not fail the pipeline.
+5. **JSON validation** — all LLM outputs must pass schema validation.
 
 ## 3. Phased Plan
 
-### Phase 1 — Canonical Billing Ingestion (FOCUS-like normalization)
+### Phase 0 — FOCUS Alignment (schema dictionary)
+
+**Objective**: Align the canonical schema with a FOCUS-like field dictionary
+so cross-cloud normalization is explicit and testable.
+
+**Deliverables**:
+- FOCUS-like field dictionary for canonical billing columns.
+- Mapping table for AWS/Azure/GCP/OCI → canonical fields.
+
+**Key tasks**:
+1. Define required FOCUS-like fields (provider, service, usage, cost, time).
+2. Document provider-specific quirks and mapping overrides.
+
+**Acceptance criteria**:
+- Each provider has a mapping table to the canonical schema.
+- Any non-FOCUS fields are explicitly documented with rationale.
+
+---
+
+### Phase 1 — Canonical Billing Ingestion
 
 **Objective**: Preserve line-item granularity and standardize raw inputs.
 
 **Deliverables**:
 - Update parser flow to maintain line-item data for AWS CUR and equivalent
   detail formats (Azure EA, GCP export, OCI report).
-- Introduce `billing_enriched` intermediate contract (see SDD spec).
+- Introduce `billing_enriched` **persisted table** (see SDD spec).
 
 **Key tasks**:
 1. Enforce line-level ingestion (no pre-aggregation by service).
@@ -65,6 +85,8 @@ We must refactor to a **data-driven** system with:
 **Key tasks**:
 1. Build mapping rules for known usage_type patterns.
 2. Persist unmapped usage_type rows to `unmapped_billing_lines`.
+3. LLM classifier fallback only for unmapped usage_type and unknown SKU
+   (never override known catalog data).
 
 **Acceptance criteria**:
 - >90% of EC2, RDS, S3 usage_type lines mapped to service_type.
@@ -104,6 +126,7 @@ We must refactor to a **data-driven** system with:
 1. For `simple_unit_price` services: cost = usage_amount * price_per_unit.
 2. For `composite_service` (Kubernetes, DB clusters): break into subcomponents
    or mark confidence as medium.
+3. Set `pricing_source` and `pricing_confidence` for every estimate.
 
 **Acceptance criteria**:
 - Each equivalent includes estimated_monthly_cost or pricing_confidence=low.
@@ -122,20 +145,55 @@ We must refactor to a **data-driven** system with:
 **Key tasks**:
 1. Populate metadata blocks per agent (economist/architect/strategist).
 2. Add scoring (financial/technical/enterprise) and assumptions.
+3. Validate agent responses against JSON schema (Pydantic) and apply
+   deterministic fallback on invalid output (confidence low + error note).
+4. Aggregate agent outputs in backend into a final recommendation.
 
 **Acceptance criteria**:
 - Agents receive JSON-only payload with no null metadata for mapped services.
+- Invalid LLM outputs never reach clients (validated + fallback applied).
+- Aggregated recommendation is deterministic for the same input payload.
 
-## 4. Data Model Changes
+---
+
+### Phase Dependencies
+
+| Phase | Depends on | Why |
+|---|---|---|
+| 0 | — | Canonical field dictionary first. |
+| 1 | 0 | Ingestion needs canonical mapping. |
+| 2 | 1 | Ontology mapping requires normalized line items. |
+| 3 | 0 | Pricing catalogs depend on canonical field dictionary. |
+| 4 | 2, 3 | Estimation needs ontology + pricing data. |
+| 5 | 4 | Agent payload requires enriched estimates. |
+
+---
+
+## 4. Agent Output Aggregation (Backend)
+
+Agent outputs are aggregated in the backend into a deterministic final
+recommendation:
+
+- Inputs: Economist, Architect, Strategist JSON outputs.
+- Validation: each output must pass JSON schema; invalid → fallback response
+  with `confidence="low"` and error note.
+- Aggregation: weighted scoring on `scores.final` with tie-break by
+  `confidence` (high > medium > low). If still tied, choose lowest
+  `estimated_monthly_cost` when available.
+
+---
+
+## 5. Data Model Changes
 
 See `docs/refactor/SDD-spec.md` for schemas. Core additions:
 
+- `billing_enriched`
 - `cloud_sku_catalog`
 - `service_ontology`
 - `service_equivalence`
 - `unmapped_billing_lines`
 
-## 5. Endpoint Contracts
+## 6. Endpoint Contracts
 
 ### POST `/v1/billing-files`
 - unchanged (ingest + job_id)
@@ -145,8 +203,9 @@ See `docs/refactor/SDD-spec.md` for schemas. Core additions:
 
 ### GET `/v1/analyses/{job_id}/agents-payload`
 - returns AI-ready JSON with assumptions + confidence.
+- validates LLM outputs using JSON schema and applies fallback if invalid.
 
-## 6. Prompt Engineering Checklist
+## 7. Prompt Engineering Checklist
 
 See `docs/refactor/Prompt-engineering.md`.
 
@@ -154,18 +213,19 @@ See `docs/refactor/Prompt-engineering.md`.
 - No calculations by LLM.
 - Explain missing data explicitly.
 
-## 7. Risks & Mitigations
+## 8. Risks & Mitigations
 
 | Risk | Mitigation |
 |---|---|
 | Missing usage metrics in billing export | Lower confidence + request CUR in UI |
 | Pricing API changes | Worker versioning + schema validation |
 | OCI pricing gaps | Manual fallback + confidence low |
+| LLM classifier mislabels service | Only fallback on missing SKUs + human review queue |
 | High latency | Async jobs + cached catalogs |
 
-## 8. Next Actions
+## 9. Next Actions
 
-1. Implement `service_ontology` table and ingestion of unmapped usage types.
+1. Implement `billing_enriched` persisted table + `service_ontology` mappings.
 2. Add pricing collectors for AWS + Azure (minimum viable coverage).
 3. Build estimation engine for `simple_unit_price` services.
-4. Wire enriched metadata into `migration_context` output.
+4. Wire enriched metadata + schema validation into `migration_context` output.

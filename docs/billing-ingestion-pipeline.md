@@ -51,6 +51,11 @@ POST /v1/billing-files  (rota billing.py:56-114)
             ├── dataframe_to_items(df)  ← NaN→None, BillingItem entities
             ├── delete_by_report()      ← idempotência (limpa dados velhos)
             ├── bulk_insert()           ← chunks de 1000, ON CONFLICT DO NOTHING
+            ├── BuildBillingEnrichedUseCase  ← enriquecimento pós-parse
+            │   ├── filtra linhas financeiras (StatementTotal, InvoiceTotal, Tax)
+            │   ├── cruza com service_ontology (781+ registros)
+            │   ├── cruza com cloud_sku_catalog (vcpus/ram_gb)
+            │   └── persiste billing_enriched + unmapped_billing_lines
             └── report.mark_done(row_count, provider, schema_version)
 ```
 
@@ -240,6 +245,13 @@ CostBeforeTax, Credits, TaxAmount, TotalCost
 **Limpeza de NaN:** Usa `_clean()` helper que trata `pd.isna()`, `None`,
 string `"nan"`, `"none"`, `"null"` e string vazia → retorna `""`.
 
+**Filtro de linhas financeiras:** Linhas com `RecordType = "StatementTotal"`
+ou `"InvoiceTotal"` são **excluídas** tanto no parser quanto no enriquecimento
+(`build_billing_enriched.py`). Essas linhas somam custos totais da invoice e,
+se mantidas, **duplicam** o custo real na agregação (ex: InvoiceTotal de
+$208k duplica custo total de $104k). O parser filtra na origem; o
+enriquecimento filtra como fallback para re-processamento sem re-upload.
+
 ### 3.4 Azure Cost Management Export
 
 **Arquivo:** `parsers/azure_parser.py`
@@ -333,6 +345,12 @@ trata comma como possível decimal europeu).
    de custo negativo com `Cost type = Usage`)
 
 **Moeda:** fixo `"BRL"` — este formato só exporta em Reais.
+
+**Filtro de linhas de imposto:** Linhas com `Cost type == "tax"` são
+**excluídas** tanto no parser quanto no enriquecimento. Impostos são
+categorias contábeis (repassados ao fisco), não custos de infraestrutura.
+A exclusão no parser impede a entrada no banco; a exclusão no enriquecimento
+permite corrigir batches já processados.
 
 ### 3.7 OCI Cost Report
 
@@ -522,6 +540,46 @@ async def bulk_insert(self, items: list[BillingItem]) -> int:
 `delete_by_report(report_id, user_id)` — se o mesmo job for reprocessado,
 os dados antigos são limpos. O `ON CONFLICT DO NOTHING` pelo `id` previne
 duplicatas em caso de re-execução parcial.
+
+### 6.5 Enriquecimento (`build_billing_enriched.py`)
+
+Após persistir os `billing_items`, o pipeline executa o
+`BuildBillingEnrichedUseCase` que:
+
+1. **Filtra linhas financeiras:** Remove `RecordType` = `StatementTotal` /
+   `InvoiceTotal` (AWS) e `Cost type` = `"tax"` (GCP). Essas linhas
+   representam totais contábeis que inflam a agregação de custos de
+   infraestrutura.
+2. **Classifica por ontologia:** Cruza cada linha com `service_ontology`
+   via `(provider, usage_type)` → adiciona `category`, `service_type`.
+3. **Match de SKU:** Cruza com `cloud_sku_catalog` via `(provider, usage_type)`
+   para obter `sku_id`, `sku_metadata`, `pricing_source`, `pricing_confidence`.
+4. **Dead-letter:** Linhas sem match de ontologia vão para
+   `unmapped_billing_lines` para human-in-the-loop futuro.
+5. **Persiste:** Tudo em `billing_enriched` (idempotente: `delete_by_report`
+   + bulk insert em chunks de 1000).
+
+A lógica extrai `raw_payload` **uma vez** no topo do loop principal,
+reutilizando-o para exclusão, unmapped e `sku_id` — evitando extrações
+duplicadas que poderiam causar `KeyError` no bloco unmapped.
+
+```python
+# Pseudocódigo do loop principal:
+for _, row in df.iterrows():
+    raw_payload = row.get("raw_payload", {})  # ← extraído 1x
+    if _is_financial_line(row, raw_payload):  # ← usa raw_payload
+        continue
+    ontology = _classify(row, raw_payload)    # ← usa raw_payload
+    if ontology is None:
+        _persist_unmapped(row, raw_payload)   # ← usa raw_payload
+        continue
+    sku = _match_sku(row)
+    _persist_enriched(row, ontology, sku, raw_payload)
+```
+
+O enrichment também faz **case-insensitive matching** de provider no
+`cloud_sku_catalog` (`.ilike()`), resolvendo o mismatch entre seed data
+(`'AWS'`, `'GCP'`) e `report.provider.value` (`'aws'`, `'gcp'`).
 
 ---
 

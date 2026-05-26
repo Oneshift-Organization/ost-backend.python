@@ -180,6 +180,9 @@ class AWSCostExplorerParser(BaseParser):
         """Return the parsed date for a CE row, or None if it is the summary
         rollup, empty, or any other non-date label."""
         label = str(row[_ROW_LABEL_COL]).strip()
+        # Belt-and-suspenders: skip financial metadata rows
+        if str(row.get("RecordType", "")) in ("StatementTotal", "InvoiceTotal", "Tax"):
+            return None
         if not label or label == _SUMMARY_ROW_LABEL:
             return None
         return _parse_date(label)

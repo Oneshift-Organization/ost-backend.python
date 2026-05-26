@@ -59,3 +59,5 @@ temp/
 
 # ── Brain do arquiteto (local-only, não versionado) ───────────────────────
 ost-docs.backend.plan/
+oneshift-catalogsync-0da82f3d2977.json/
+gcp-service-account.json/
