@@ -41,6 +41,7 @@ agentes de IA.
 | [`refactor/capacity-pool-model-implementation.md`](refactor/capacity-pool-model-implementation.md) | Plano de implementação do Capacity Pool Model: agregação por pool, novos domínios WorkloadPool. |
 | [`refactor/focus-alignment.md`](refactor/focus-alignment.md) | Alinhamento FOCUS: taxonomia universal, buckets de capacidade, agregação por (Project, Family, Region). |
 | [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) | Spec SDD de assertividade do SKU matching: Matching Ladder (L0–L5), `component_type`, `sku_classification_rules`, gate `sku_coverage_ratio ≥ 95%`. |
+| [`refactor/pool-equivalence-spec.md`](refactor/pool-equivalence-spec.md) | Spec SDD de equivalência cross-cloud por Capacity Pool (DE-PARA): `match_pool`, `equivalents` aninhados, alinhamento FOCUS, LLM seleciona em vez de inventar. |
 
 ### Operação
 
