@@ -134,6 +134,12 @@ CREATE TABLE billing_enriched (
     pricing_source      VARCHAR(50),
     pricing_confidence  VARCHAR(20),
 
+    -- Rastreabilidade do matching (ver refactor/sku-accuracy-spec.md §3.2):
+    -- mapping_confidence = certeza da CLASSIFICAÇÃO (role/family);
+    -- match_layer = qual rung da Matching Ladder (L0–L5) casou.
+    mapping_confidence  VARCHAR(10),
+    match_layer         VARCHAR(2),
+
     scope               VARCHAR(20)     NOT NULL DEFAULT 'line_item',
     source_line_hash    VARCHAR(64)     NOT NULL,
 
@@ -169,6 +175,12 @@ CREATE TABLE cloud_sku_catalog (
     currency          VARCHAR(3)      NOT NULL DEFAULT 'USD',
     vcpus             NUMERIC(6, 2),
     ram_gb            NUMERIC(8, 2),
+
+    -- Papel do SKU (role), consumido pelo aggregator no lugar de regex sobre
+    -- description. Enum em refactor/sku-accuracy-spec.md §3.1. Coluna dedicada
+    -- (indexável) preferida a guardar em attributes JSONB.
+    component_type    VARCHAR(30)     NOT NULL DEFAULT 'unclassified',
+
     attributes        JSONB,
     effective_date    TIMESTAMPTZ,
     collected_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
@@ -199,6 +211,31 @@ CREATE TABLE service_ontology (
 
     UNIQUE (provider, usage_type)
 );
+```
+
+### `sku_classification_rules`
+
+Regras data-driven da **Matching Ladder** (rungs L2/L3): casam a `description`
+livre do SKU a um `component_type` (role) sem `if/else` por cloud em Python.
+Versionada e avaliada por `priority ASC` (primeira regra que casa vence). Spec
+completa em [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md#41-sku_classification_rules-new-table).
+
+```sql
+CREATE TABLE sku_classification_rules (
+    id                UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider          VARCHAR(10)     NOT NULL,
+    pattern           TEXT            NOT NULL,   -- glob ou regex
+    kind              VARCHAR(10)     NOT NULL,   -- 'glob' | 'regex'
+    component_type    VARCHAR(30)     NOT NULL,
+    family            VARCHAR(30),                -- nullable; extraído se NULL
+    confidence        VARCHAR(10)     NOT NULL DEFAULT 'medium',
+    priority          INTEGER         NOT NULL DEFAULT 100,  -- menor = primeiro
+    active            BOOLEAN         NOT NULL DEFAULT true,
+    created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX ix_sku_rules_provider_priority
+  ON sku_classification_rules (provider, priority) WHERE active;
 ```
 
 ### `unmapped_billing_lines`
@@ -388,3 +425,4 @@ HAVING MAX(m_cost) > 0 AND MIN(m_cost) = 0;
 - [`parsers.md`](parsers.md) — como cada provider produz o schema canônico.
 - [`endpoints/billing.md`](endpoints/billing.md) — serialização Decimal→string no JSON.
 - [`api-conventions.md`](api-conventions.md) — paginação, envelopes, status codes.
+- [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) — `component_type`, `mapping_confidence`, `match_layer`, `sku_classification_rules` e a Matching Ladder.

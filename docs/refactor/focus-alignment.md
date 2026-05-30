@@ -46,7 +46,8 @@ The LLM no longer receives raw SKUs. It receives structured `WorkloadPool` objec
 | `ResourceType` | `service_type` | virtual_server, infrastructure_component, etc. |
 | `SubAccountId` | `project_id` (new) | `raw_payload["Project ID"]` (GCP) |
 | `SubAccountName` | — | `raw_payload["Project name"]` (GCP) |
-| `SkuId` | `sku_id` | Provider-specific SKU ID |
+| `SkuId` | `sku_id` | Provider-specific SKU ID (structured key, post-match) |
+| `ResourceType` (role) | `component_type` | core, ram, os_license, storage_*, network_egress, gke_control_plane, database |
 | `RegionId` | `region` | Provider region field |
 | `BilledCost` | `cost` | Decimal from parser |
 | `EffectiveCost` | `cost` (post-discount) | `cost_discounted` when available |
@@ -79,8 +80,22 @@ The LLM no longer receives raw SKUs. It receives structured `WorkloadPool` objec
 - **LLM output**: Migrate to AWS with ~$705/month savings estimate (directional, low confidence)
 
 ### Next Steps
-1. Expand catalog coverage to reduce orphan rate below 5% threshold
-2. Properly detect GKE control plane in classification
-3. Implement `usage_start`/`usage_end` based hours window calculation  
-4. Add subscription/commitment discount handling (SUD/CUD) 
-5. Replace mock pricing with real pricing workers
+
+The orphan rate (51.9%) is now treated as a **matching accuracy** problem with its
+own spec: [`sku-accuracy-spec.md`](sku-accuracy-spec.md). The accuracy levers
+replace the old "expand coverage / detect GKE" bullets:
+
+1. **Matching Ladder (L0–L5)** — deterministic, data-driven cascade
+   (exact → normalized → regex/glob → token/family → fuzzy → dead-letter) so the
+   aggregator receives a populated `component_type` instead of regex over an empty
+   `description`. See `sku-accuracy-spec.md` §4.
+2. **`sku_classification_rules` + `component_type`** — classification by data, zero
+   `if/else` per cloud; fixes the `sku_id` key mismatch and the `attributes="{}"`
+   empty-description bug.
+3. **Accuracy gate** — `sku_coverage_ratio ≥ 95%` (orphan ≤ 5%) enforced by a golden
+   `5d9bc55e` test (`sku-accuracy-spec.md` §8).
+
+Still pending (orthogonal to accuracy):
+4. Implement `usage_start`/`usage_end` based hours window calculation.
+5. Add subscription/commitment discount handling (SUD/CUD).
+6. Replace mock pricing with real pricing workers.

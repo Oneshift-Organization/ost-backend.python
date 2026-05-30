@@ -40,6 +40,7 @@ agentes de IA.
 | [`refactor/mvp-mock-engine.md`](refactor/mvp-mock-engine.md) | Contrato arquitetural do Mock Engine MVP: matching por hardware (vCPU/RAM), troubleshooting de 0 equivalents, dead-letter com IA. |
 | [`refactor/capacity-pool-model-implementation.md`](refactor/capacity-pool-model-implementation.md) | Plano de implementação do Capacity Pool Model: agregação por pool, novos domínios WorkloadPool. |
 | [`refactor/focus-alignment.md`](refactor/focus-alignment.md) | Alinhamento FOCUS: taxonomia universal, buckets de capacidade, agregação por (Project, Family, Region). |
+| [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) | Spec SDD de assertividade do SKU matching: Matching Ladder (L0–L5), `component_type`, `sku_classification_rules`, gate `sku_coverage_ratio ≥ 95%`. |
 
 ### Operação
 
@@ -70,6 +71,7 @@ agentes de IA.
 | Refatoração SDD | [`refactor/Refactor-plan.md`](refactor/Refactor-plan.md) |
 | Entender pipeline de ingestão | [`billing-ingestion-pipeline.md`](billing-ingestion-pipeline.md) |
 | Mock Engine MVP / matching | [`refactor/mvp-mock-engine.md`](refactor/mvp-mock-engine.md) |
+| Acurácia do SKU matching / orphan rate | [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) |
 | Alterar schema/migration | [`data-model.md`](data-model.md) |
 | Entender regra de negócio | [`product.md`](product.md) |
 | Debug de detecção de formato | [`parsers.md`](parsers.md#como-debugar-uma-detecção-que-falha) |
