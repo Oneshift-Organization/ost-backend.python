@@ -125,6 +125,7 @@ BASE_DEFAULTS: dict = {
     "region": "global",
     "usage_unit": "Hrs",
     "currency": "USD",
+    "component_type": "unclassified",
     "attributes": {},
 }
 
@@ -144,11 +145,13 @@ async def main() -> None:
             result = await session.execute(
                 text("""
                     INSERT INTO cloud_sku_catalog
-                        (sku_id, provider, service_name, service_type, category, region, usage_unit,
-                         price_per_unit, currency, vcpus, ram_gb, attributes, effective_date)
+                        (sku_id, provider, service_name, service_type, category,
+                         region, usage_unit, price_per_unit, currency, vcpus,
+                         ram_gb, component_type, attributes, effective_date)
                     VALUES
-                        (:sku_id, :provider, :service_name, :service_type, :category, :region, :usage_unit,
-                         :price_per_unit, :currency, :vcpus, :ram_gb, CAST(:attributes AS jsonb), :effective_date)
+                        (:sku_id, :provider, :service_name, :service_type, :category,
+                         :region, :usage_unit, :price_per_unit, :currency, :vcpus,
+                         :ram_gb, :component_type, CAST(:attributes AS jsonb), :effective_date)
                     ON CONFLICT (sku_id) DO NOTHING
                 """),
                 {
@@ -163,6 +166,7 @@ async def main() -> None:
                     "currency": merged["currency"],
                     "vcpus": Decimal(str(merged["vcpus"])),
                     "ram_gb": Decimal(str(merged["ram_gb"])),
+                    "component_type": merged["component_type"],
                     "attributes": json.dumps(merged["attributes"]),
                     "effective_date": now,
                 },

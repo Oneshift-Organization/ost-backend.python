@@ -27,6 +27,9 @@ class CloudSkuCatalogModel(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     vcpus: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)
     ram_gb: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
+    component_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default="unclassified"
+    )
     attributes: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     effective_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     collected_at: Mapped[datetime] = mapped_column(
