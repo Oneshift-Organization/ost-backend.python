@@ -12,6 +12,9 @@ from app.infrastructure.database.models.cloud_services_metadata import (
 )
 from app.infrastructure.database.models.cloud_sku_catalog import CloudSkuCatalogModel
 from app.infrastructure.database.models.service_ontology import ServiceOntologyModel
+from app.infrastructure.database.models.sku_classification_rules import (
+    SkuClassificationRuleModel,
+)
 from app.infrastructure.database.models.unmapped_billing_lines import UnmappedBillingLineModel
 
 __all__ = [
@@ -23,5 +26,6 @@ __all__ = [
     "CloudServiceMetadataModel",
     "CloudSkuCatalogModel",
     "ServiceOntologyModel",
+    "SkuClassificationRuleModel",
     "UnmappedBillingLineModel",
 ]
