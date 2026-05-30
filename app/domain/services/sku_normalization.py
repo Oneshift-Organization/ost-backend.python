@@ -32,7 +32,7 @@ def match_key(raw: str | None) -> str:
     collapse internal whitespace runs to a single space. Applied to both the
     billing descriptor and the catalog key/description before comparison.
     """
-    if not raw:
+    if not raw or not isinstance(raw, str):
         return ""
     folded = raw.casefold().strip()
     return _WHITESPACE.sub(" ", folded).strip()

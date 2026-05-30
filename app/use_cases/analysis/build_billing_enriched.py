@@ -95,14 +95,24 @@ class BuildBillingEnrichedUseCase:
             # ── Skip financial metadata / summary lines ──────────
             record_type = raw_payload.get("RecordType", "")
             cost_type = raw_payload.get("Cost type", "").lower()
-            if record_type in ("StatementTotal", "InvoiceTotal") or cost_type in (
-                "tax",
-                "total",
-                "rounding error",
+            if (
+                record_type in ("StatementTotal", "InvoiceTotal")
+                or raw_payload.get("ProductCode") == "Tax"
+                or cost_type in ("tax", "total", "rounding error")
             ):
                 continue
 
-            descriptor = getattr(item, "service_raw", None) or item.service
+            # The discriminating descriptor is the per-SKU text in raw_payload
+            # (GCP "SKU description" / AWS "UsageType"), not the coarse service
+            # name in service_raw/service.
+            descriptor = (
+                raw_payload.get("SKU description")
+                or raw_payload.get("UsageType")
+                or raw_payload.get("sku_description")
+                or raw_payload.get("usage_type")
+                or getattr(item, "service_raw", None)
+                or item.service
+            )
             match = matcher.match(descriptor, usage_unit=item.usage_unit)
 
             category, service_type = self._resolve_taxonomy(match)
