@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from asyncio import run
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -162,7 +163,7 @@ async def main() -> None:
                     "currency": merged["currency"],
                     "vcpus": Decimal(str(merged["vcpus"])),
                     "ram_gb": Decimal(str(merged["ram_gb"])),
-                    "attributes": "{}",
+                    "attributes": json.dumps(merged["attributes"]),
                     "effective_date": now,
                 },
             )

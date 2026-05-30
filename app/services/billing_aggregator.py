@@ -14,6 +14,7 @@ from app.domain.entities.workload_pool import (
     PoolKey,
     WorkloadPool,
 )
+from app.domain.services.sku_normalization import normalize_provider
 
 if TYPE_CHECKING:
     from app.domain.entities.billing_enriched import BillingEnriched
@@ -214,7 +215,7 @@ class BillingAggregator:
             return {}
         if self._catalog_cache is not None:
             return self._catalog_cache
-        entries = await self._sku_repo.list_by_provider(provider)
+        entries = await self._sku_repo.list_by_provider(normalize_provider(provider))
         catalog: dict[str, dict[str, Any]] = {}
         for entry in entries:
             desc = (entry.attributes or {}).get("description", "") if entry.attributes else ""
