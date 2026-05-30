@@ -32,14 +32,12 @@ from app.infrastructure.repositories.pg_billing_item_repo import PgBillingItemRe
 from app.infrastructure.repositories.pg_billing_report_repo import (
     PgBillingReportRepository,
 )
-from app.infrastructure.repositories.pg_service_ontology_repo import (
-    PgServiceOntologyRepository,
+from app.infrastructure.repositories.pg_cloud_sku_repo import PgCloudSkuRepository
+from app.infrastructure.repositories.pg_sku_classification_rule_repo import (
+    PgSkuClassificationRuleRepository,
 )
 from app.infrastructure.repositories.pg_unmapped_billing_repo import (
     PgUnmappedBillingRepository,
-)
-from app.infrastructure.repositories.service_repositories import (
-    PGServiceComparisonRepository,
 )
 from app.schemas.billing import (
     BillingFileUploadResponse,
@@ -262,9 +260,9 @@ async def _run_ingest_isolated(user_id: UUID, report_id: UUID, file_path: Path) 
                     PgBillingReportRepository(session),
                     PgBillingItemRepository(session),
                     PgBillingEnrichedRepository(session),
-                    PgServiceOntologyRepository(session),
+                    PgCloudSkuRepository(session),
+                    PgSkuClassificationRuleRepository(session),
                     PgUnmappedBillingRepository(session),
-                    PGServiceComparisonRepository(session),
                 ),
             )
             try:
