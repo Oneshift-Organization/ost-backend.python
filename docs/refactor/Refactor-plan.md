@@ -89,7 +89,10 @@ so cross-cloud normalization is explicit and testable.
    (never override known catalog data).
 
 **Acceptance criteria**:
-- >90% of EC2, RDS, S3 usage_type lines mapped to service_type.
+- `sku_coverage_ratio = mapped_cost / total_cost ≥ 0.95` (orphan ≤ 5%), measured
+  by a golden report (`5d9bc55e`). This replaces the old qualitative ">90% of EC2,
+  RDS, S3 lines mapped" criterion. Mapping is data-driven via the **Matching
+  Ladder** — see [`sku-accuracy-spec.md`](sku-accuracy-spec.md).
 - Unmapped lines are logged without breaking ingestion.
 
 ---

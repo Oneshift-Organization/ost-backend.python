@@ -437,9 +437,28 @@ print(pd.read_csv('seu_arquivo.csv', nrows=0).columns.tolist())
 "
 ```
 
+## Normalização de `usage_type` → `match_key` (downstream)
+
+O parser emite `usage_type` **cru** (ex.: GCP `"E2 Instance Core running in
+Americas"`, AWS `"BoxUsage:m7g.medium"`). A classificação acontece depois, no
+enriquecimento, via **Matching Ladder** — o parser **não** classifica nem
+normaliza role. Para que as camadas L1+ casem apesar de variação textual trivial,
+deriva-se um `match_key` determinístico:
+
+```
+match_key = collapse_whitespace(trim(lowercase(casefold(usage_type))))
+```
+
+O `provider` é normalizado por `normalize_provider()` (caso-insensível: `'GCP'` ↔
+`'gcp'`) nos dois lados da comparação. Importante: o `sku_id` armazenado em
+`billing_enriched` é a **chave estruturada do SKU casado** (ex.: `e2-standard-2`),
+**não** a descrição crua — separar os dois é o fix do root-cause #3. Spec completa
+em [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md#3-data-contracts).
+
 ## Documentação relacionada
 
 - [`data-model.md`](data-model.md) — schema canônico e DDL.
+- [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) — Matching Ladder e normalização de matching.
 - [`endpoints/billing.md`](endpoints/billing.md) — como o frontend consome o
   resultado.
 - [`architecture.md`](architecture.md) — regras de Clean Architecture (parser

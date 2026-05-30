@@ -145,6 +145,10 @@ existe").
 - **Provider case-insensitive:** `cloud_sku_catalog` usa `'AWS'`, `'GCP'`;
   `report.provider.value` usa `'aws'`, `'gcp'`. Buscas usam `.ilike()` no
   `PgCloudSkuRepository` para evitar mismatch.
+- **Assertividade do SKU matching:** classificação linha→SKU usa a **Matching
+  Ladder** (L0–L5, data-driven via `sku_classification_rules`, sem `if/else` por
+  cloud). Gate de acurácia: `sku_coverage_ratio ≥ 95%` (orphan ≤ 5%). Spec em
+  [`docs/refactor/sku-accuracy-spec.md`](docs/refactor/sku-accuracy-spec.md).
 
 ## Regras Inegociáveis (resumo)
 
