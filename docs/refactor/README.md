@@ -12,5 +12,8 @@ Files:
 - sku-accuracy-spec.md
   - Matching Ladder (L0–L5), `component_type`, `sku_classification_rules`, and the
     `sku_coverage_ratio ≥ 95%` accuracy gate.
+- pool-equivalence-spec.md
+  - Cross-cloud DE-PARA per Capacity Pool: `match_pool`, nested `equivalents`,
+    FOCUS alignment, LLM selects-not-invents.
 - Prompt-engineering.md
   - Prompt templates, guardrails, and JSON schemas for agent calls.
