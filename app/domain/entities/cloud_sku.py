@@ -19,6 +19,7 @@ class CloudSku:
     price_per_unit: Decimal | None = None
     vcpus: Decimal | None = None
     ram_gb: Decimal | None = None
+    component_type: str = "unclassified"
     attributes: dict[str, Any] | None = None
     effective_date: datetime | None = None
     collected_at: datetime | None = None
