@@ -34,6 +34,9 @@ class BillingEnriched:
     project_id: str | None = None
     sku_id: str | None = None
     sku_metadata: dict[str, Any] | None = None
+    component_type: str = "unclassified"
+    mapping_confidence: str | None = None
+    match_layer: str | None = None
     created_at: datetime | None = None
     id: UUID = field(default_factory=uuid4)
 

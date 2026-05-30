@@ -6,12 +6,29 @@ from uuid import UUID
 from app.core.exceptions import NotFoundError
 from app.domain.entities.billing_enriched import BillingEnriched
 from app.domain.entities.unmapped_billing_line import UnmappedBillingLine
-from app.domain.interfaces.i_service_repositories import IServiceComparisonRepository
 from app.domain.repositories.i_billing_enriched_repo import IBillingEnrichedRepository
 from app.domain.repositories.i_billing_item_repo import IBillingItemRepository
 from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
-from app.domain.repositories.i_service_ontology_repo import IServiceOntologyRepository
+from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
+from app.domain.repositories.i_sku_classification_rule_repo import (
+    ISkuClassificationRuleRepository,
+)
 from app.domain.repositories.i_unmapped_billing_repo import IUnmappedBillingRepository
+from app.domain.services.sku_matcher import SkuMatch, SkuMatcher
+from app.domain.services.sku_normalization import normalize_provider
+
+# component_type -> (category, service_type) for the migration context.
+_CATEGORY_BY_COMPONENT: dict[str, tuple[str | None, str | None]] = {
+    "core": ("compute", "virtual_server"),
+    "ram": ("compute", "virtual_server"),
+    "os_license": ("compute", "os_license"),
+    "gke_control_plane": ("containers", "managed_kubernetes"),
+    "network_egress": ("networking", "network"),
+    "storage_ssd": ("storage", "block_storage"),
+    "storage_hdd": ("storage", "block_storage"),
+    "database": ("database", "relational_database"),
+    "unclassified": (None, None),
+}
 
 
 @dataclass(frozen=True)
@@ -21,21 +38,30 @@ class BuildBillingEnrichedInput:
 
 
 class BuildBillingEnrichedUseCase:
+    """Enrich billing items via the Matching Ladder (SkuMatcher).
+
+    Replaces the previous exact-string ontology lookup. Each line is classified
+    into a ``component_type`` with a traceable ``match_layer`` /
+    ``mapping_confidence``, and the structured SKU id (when matched) is stored
+    in ``sku_id`` (no longer the raw descriptor). See
+    ``docs/refactor/sku-accuracy-spec.md`` §5.
+    """
+
     def __init__(
         self,
         report_repo: IBillingReportRepository,
         item_repo: IBillingItemRepository,
         enriched_repo: IBillingEnrichedRepository,
-        ontology_repo: IServiceOntologyRepository,
+        sku_repo: ICloudSkuRepository,
+        rule_repo: ISkuClassificationRuleRepository,
         unmapped_repo: IUnmappedBillingRepository,
-        comparison_repo: IServiceComparisonRepository,
     ) -> None:
         self._reports = report_repo
         self._items = item_repo
         self._enriched = enriched_repo
-        self._ontology = ontology_repo
+        self._sku = sku_repo
+        self._rules = rule_repo
         self._unmapped = unmapped_repo
-        self._comparison = comparison_repo
 
     async def execute(self, payload: BuildBillingEnrichedInput) -> int:
         report = await self._reports.get_by_id(payload.report_id, payload.user_id)
@@ -51,6 +77,11 @@ class BuildBillingEnrichedUseCase:
         if not items:
             raise ValueError(f"report {payload.report_id} has no billing items")
 
+        provider = normalize_provider(report.provider.value)
+        catalog = await self._sku.list_by_provider(provider)
+        rules = await self._rules.list_active_by_provider(provider)
+        matcher = SkuMatcher(catalog, rules)
+
         enriched_items: list[BillingEnriched] = []
         unmapped_items: list[UnmappedBillingLine] = []
 
@@ -64,65 +95,39 @@ class BuildBillingEnrichedUseCase:
             # ── Skip financial metadata / summary lines ──────────
             record_type = raw_payload.get("RecordType", "")
             cost_type = raw_payload.get("Cost type", "").lower()
-            if record_type in ("StatementTotal", "InvoiceTotal") or cost_type in ("tax", "total", "rounding error"):
+            if record_type in ("StatementTotal", "InvoiceTotal") or cost_type in (
+                "tax",
+                "total",
+                "rounding error",
+            ):
                 continue
 
-            usage_type = getattr(item, "service_raw", None) or item.service
-            provider = item.provider.value
+            descriptor = getattr(item, "service_raw", None) or item.service
+            match = matcher.match(descriptor, usage_unit=item.usage_unit)
 
-            ontology = await self._ontology.find_by_provider_and_usage_type(
-                provider, usage_type
-            )
-
-            if ontology is None:
-                ontology = await self._ontology.find_by_provider_and_usage_type(
-                    provider, item.service
-                )
-
-            category = ontology.category if ontology else None
-            service_type = ontology.service_type if ontology else None
-
-            if ontology is None:
-                fallback_name = _canonical_service_name(provider, item.service)
-                fallback = await self._comparison.find_by_provider_and_service(
-                    provider, fallback_name
-                )
-                if fallback is not None:
-                    category = fallback.category
-                    service_type = fallback.service_type
-
-                unmapped_items.append(
-                    UnmappedBillingLine(
-                        user_id=item.user_id,
-                        report_id=item.report_id,
-                        provider=provider,
-                        billing_period=item.billing_period,
-                        usage_type=usage_type,
-                        service_name=item.service,
-                        region=item.region,
-                        reason="ontology_not_found",
-                        raw_payload=raw_payload,
-                        source_line_hash=item.line_hash,
-                    )
-                )
-
-            scope = "line_item"
-            if raw_payload.get("scope") == "global_zero":
-                scope = "global_zero"
-
-            sku_id = (
-                raw_payload.get("UsageType")
-                or raw_payload.get("sku_id")
-                or raw_payload.get("SKU ID")
-                or raw_payload.get("usage_type")
-                or item.service_raw
-            )
-
+            category, service_type = self._resolve_taxonomy(match)
+            scope = "global_zero" if raw_payload.get("scope") == "global_zero" else "line_item"
             project_id = (
                 raw_payload.get("Project ID")
                 or raw_payload.get("project", {}).get("id")
                 or raw_payload.get("project_id")
             )
+
+            if match.match_layer == "L5":
+                unmapped_items.append(
+                    UnmappedBillingLine(
+                        user_id=item.user_id,
+                        report_id=item.report_id,
+                        provider=item.provider.value,
+                        billing_period=item.billing_period,
+                        usage_type=descriptor,
+                        service_name=item.service,
+                        region=item.region,
+                        reason="no_match_ladder",
+                        raw_payload=raw_payload,
+                        source_line_hash=item.line_hash,
+                    )
+                )
 
             enriched_items.append(
                 BillingEnriched(
@@ -133,16 +138,19 @@ class BuildBillingEnrichedUseCase:
                     service_name=item.service,
                     service_type=service_type,
                     category=category,
-                    usage_type=usage_type,
+                    usage_type=descriptor,
                     region=item.region,
                     project_id=project_id,
                     usage_amount=item.usage_amount,
                     usage_unit=item.usage_unit,
                     cost=item.cost,
                     currency=item.currency,
-                    sku_id=sku_id,
-                    sku_metadata=None,
-                    pricing_source="missing",
+                    sku_id=match.sku_id,
+                    sku_metadata=_build_metadata(match),
+                    component_type=match.component_type,
+                    mapping_confidence=match.mapping_confidence,
+                    match_layer=match.match_layer,
+                    pricing_source=_pricing_source(match),
                     pricing_confidence="low",
                     scope=scope,
                     source_line_hash=item.line_hash,
@@ -154,29 +162,27 @@ class BuildBillingEnrichedUseCase:
         await self._unmapped.bulk_insert(unmapped_items)
         return inserted
 
+    @staticmethod
+    def _resolve_taxonomy(match: SkuMatch) -> tuple[str | None, str | None]:
+        if match.category is not None or match.service_type is not None:
+            return match.category, match.service_type
+        return _CATEGORY_BY_COMPONENT.get(match.component_type, (None, None))
 
-def _canonical_service_name(provider: str, name: str) -> str:
-    aliases = {
-        "aws": {
-            "EC2-Instances": "Amazon EC2",
-            "EC2-Other": "Amazon EC2",
-            "Elastic Container Service for Kubernetes": "Amazon EKS",
-            "Elastic Container Service": "Amazon ECS",
-            "Relational Database Service": "Amazon RDS",
-            "Elastic File System": "Amazon EFS",
-            "Key Management Service": "AWS KMS",
-            "AmazonEC2": "Amazon EC2",
-            "AmazonRDS": "Amazon RDS",
-            "AmazonS3": "Amazon S3",
-            "AmazonVPC": "Amazon VPC",
-            "AmazonCloudWatch": "Amazon CloudWatch",
-            "AmazonEFS": "Amazon EFS",
-            "AmazonElastiCache": "Amazon ElastiCache",
-            "AmazonECR": "Amazon ECR",
-        },
-        "gcp": {
-            "Compute Engine": "Compute Engine",
-        },
-    }
-    provider_aliases = aliases.get(provider, {})
-    return provider_aliases.get(name, name)
+
+def _build_metadata(match: SkuMatch) -> dict[str, object] | None:
+    metadata: dict[str, object] = {"component_type": match.component_type}
+    if match.family is not None:
+        metadata["family"] = match.family
+    if match.vcpus is not None:
+        metadata["vcpus"] = str(match.vcpus)
+    if match.ram_gb is not None:
+        metadata["ram_gb"] = str(match.ram_gb)
+    return metadata
+
+
+def _pricing_source(match: SkuMatch) -> str:
+    if match.sku_id is not None:
+        return "sku_catalog"
+    if match.component_type != "unclassified":
+        return "fallback"
+    return "missing"

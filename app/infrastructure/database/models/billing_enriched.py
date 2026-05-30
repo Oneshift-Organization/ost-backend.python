@@ -42,6 +42,11 @@ class BillingEnrichedModel(Base):
 
     sku_id: Mapped[str | None] = mapped_column(String, nullable=True)
     sku_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    component_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default="unclassified"
+    )
+    mapping_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    match_layer: Mapped[str | None] = mapped_column(String(2), nullable=True)
     pricing_source: Mapped[str] = mapped_column(String(20), nullable=False)
     pricing_confidence: Mapped[str] = mapped_column(String(10), nullable=False)
     scope: Mapped[str] = mapped_column(String(20), nullable=False, default="line_item")
