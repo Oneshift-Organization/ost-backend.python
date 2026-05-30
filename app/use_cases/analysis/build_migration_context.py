@@ -305,10 +305,12 @@ class BuildMigrationContextUseCase:
         # ── 7. Aggregate into capacity pools ──────────────────────
         pools: tuple[WorkloadPool, ...] = ()
         auxiliary: AuxiliaryCosts | None = None
+        mapping_confidence: dict[str, Decimal] = {}
         if self._aggregator is not None:
             agg_result = await self._aggregator.aggregate(items, source_provider)
             pools = agg_result.pools
             auxiliary = agg_result.auxiliary
+            mapping_confidence = agg_result.confidence_breakdown
 
         return MigrationContext(
             source_provider=source_provider,
@@ -327,4 +329,5 @@ class BuildMigrationContextUseCase:
             pools=pools,
             auxiliary=auxiliary,
             missing_sku_ids=tuple(sorted(missing_sku_set)),
+            mapping_confidence=mapping_confidence,
         )

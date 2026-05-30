@@ -21,7 +21,9 @@ from app.infrastructure.database.session import get_sessionmaker
 GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     # ── Specific services first (low priority number = first) ──
     ("*cluster management fee*", "glob", "gke_control_plane", None, "high", 10),
-    ("*kubernetes engine*", "glob", "gke_control_plane", None, "medium", 11),
+    ("*kubernetes*management*", "glob", "gke_control_plane", None, "high", 11),
+    ("*kubernetes engine*", "glob", "gke_control_plane", None, "medium", 12),
+    ("*gke*", "glob", "gke_control_plane", None, "medium", 13),
     ("*cloud sql*", "glob", "database", None, "high", 20),
     ("*db-custom*", "glob", "database", None, "high", 21),
     ("*bigquery*", "glob", "database", None, "medium", 22),

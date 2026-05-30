@@ -97,3 +97,4 @@ class MigrationContext:
     auxiliary: AuxiliaryCosts | None = None
     currency: str = "USD"
     missing_sku_ids: tuple[str, ...] = ()
+    mapping_confidence: dict[str, Decimal] = field(default_factory=dict)
