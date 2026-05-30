@@ -44,6 +44,7 @@ class AuxiliaryCosts:
     storage_ssd: Decimal = Decimal("0")
     storage_hdd: Decimal = Decimal("0")
     network_egress: Decimal = Decimal("0")
+    database: Decimal = Decimal("0")
     orphan: Decimal = Decimal("0")
     orphan_skus: tuple[str, ...] = ()
 
@@ -54,5 +55,6 @@ class AuxiliaryCosts:
             self.storage_ssd > 0,
             self.storage_hdd > 0,
             self.network_egress > 0,
+            self.database > 0,
             self.orphan > 0,
         ))

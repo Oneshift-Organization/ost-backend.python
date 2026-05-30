@@ -62,12 +62,20 @@ def _serialize_pools(ctx) -> str:
             aux_payload["storage_hdd"] = round(float(auxiliary.storage_hdd), 2)
         if auxiliary.network_egress > 0:
             aux_payload["network_egress"] = round(float(auxiliary.network_egress), 2)
+        if auxiliary.database > 0:
+            aux_payload["database"] = round(float(auxiliary.database), 2)
         if auxiliary.orphan > 0:
             aux_payload["unmapped"] = {
                 "cost": round(float(auxiliary.orphan), 2),
                 "skus": list(auxiliary.orphan_skus),
             }
         payload["auxiliary_costs"] = aux_payload
+
+    mapping_confidence = getattr(ctx, "mapping_confidence", None)
+    if mapping_confidence:
+        payload["mapping_confidence"] = {
+            level: round(float(cost), 2) for level, cost in mapping_confidence.items()
+        }
 
     return json.dumps(payload, default=str)
 
