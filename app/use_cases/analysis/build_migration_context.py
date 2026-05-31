@@ -312,6 +312,83 @@ class BuildMigrationContextUseCase:
             auxiliary = agg_result.auxiliary
             mapping_confidence = agg_result.confidence_breakdown
 
+        # ── 8. Pool-level equivalents (L2 hardware + L3 curated) ──
+        pool_equivalents: dict[str, list[EquivalentService]] = {}
+        database_equivalents: list[EquivalentService] = []
+
+        if self._matcher is not None and target_providers:
+            for pool in pools:
+                if pool.capacity.vcpus <= 0 and pool.capacity.ram_gib <= 0:
+                    continue
+                pool_key_str = (
+                    f"{pool.pool_key.project_id}/"
+                    f"{pool.pool_key.machine_family}/"
+                    f"{pool.pool_key.region}"
+                )
+                l2_options = await self._matcher.match_pool(
+                    vcpus=pool.capacity.vcpus,
+                    ram_gib=pool.capacity.ram_gib,
+                    monthly_cost=pool.monthly_cost,
+                    service_type="virtual_server",
+                    target_providers=target_providers,
+                )
+                providers_with_l2: set[str] = set()
+                equivs: list[EquivalentService] = []
+
+                for opt in l2_options:
+                    providers_with_l2.add(opt.provider.lower())
+                    # L3: enrich with curated metadata
+                    meta = target_meta_map.get((opt.provider, opt.service_name))
+                    docs = target_docs_map.get((opt.provider, opt.service_name))
+                    fin = None
+                    if opt.financials is not None:
+                        fin = FinancialEstimate(
+                            unit_price=opt.financials.unit_price,
+                            estimated_monthly_cost=opt.financials.estimated_monthly_cost,
+                            cost_delta=opt.financials.cost_delta,
+                            pricing_confidence=opt.financials.pricing_confidence,
+                        )
+                    tm = None
+                    if opt.technical_match is not None:
+                        tm = TechnicalMatch(
+                            vcpus=opt.technical_match.vcpus,
+                            ram_gb=opt.technical_match.ram_gb,
+                        )
+                    equivs.append(EquivalentService(
+                        provider=opt.provider,
+                        service_name=opt.service_name,
+                        category=opt.category,
+                        service_type=opt.service_type,
+                        match_basis="pool_capacity",
+                        instances=opt.instances,
+                        metadata=meta,
+                        docs_costs=docs,
+                        technical_match=tm,
+                        financials=fin,
+                    ))
+
+                # L3-only curated fallback for providers without hardware match
+                curated_compute = await _get_equivalents("compute", "virtual_server")
+                for ce in curated_compute:
+                    if ce.provider.lower() in providers_with_l2:
+                        continue
+                    equivs.append(EquivalentService(
+                        provider=ce.provider,
+                        service_name=ce.service_name,
+                        category=ce.category,
+                        service_type=ce.service_type,
+                        match_basis="curated_only",
+                        metadata=ce.metadata,
+                        docs_costs=ce.docs_costs,
+                    ))
+
+                pool_equivalents[pool_key_str] = equivs
+
+            # Database aux: L3 curated (no hardware sizing available at pool level)
+            if auxiliary and auxiliary.database > 0:
+                db_curated = await _get_equivalents("database", "relational_database")
+                database_equivalents = list(db_curated)
+
         return MigrationContext(
             source_provider=source_provider,
             billing_period=billing_period,
@@ -330,4 +407,6 @@ class BuildMigrationContextUseCase:
             auxiliary=auxiliary,
             missing_sku_ids=tuple(sorted(missing_sku_set)),
             mapping_confidence=mapping_confidence,
+            pool_equivalents=pool_equivalents,
+            database_equivalents=database_equivalents,
         )

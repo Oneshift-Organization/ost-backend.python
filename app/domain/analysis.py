@@ -47,6 +47,9 @@ class EquivalentService:
     service_name: str
     category: str
     service_type: str
+    # match_basis: "pool_capacity" (L2 hardware) or "curated_only" (L3 only)
+    match_basis: str = "pool_capacity"
+    instances: int = 1
     metadata: dict[str, Any] | None = None
     docs_costs: str | None = None
     technical_match: TechnicalMatch | None = None
@@ -98,3 +101,7 @@ class MigrationContext:
     currency: str = "USD"
     missing_sku_ids: tuple[str, ...] = ()
     mapping_confidence: dict[str, Decimal] = field(default_factory=dict)
+    # keyed by "{project_id}/{family}/{region}" — equivalents per compute pool
+    pool_equivalents: dict[str, list[EquivalentService]] = field(default_factory=dict)
+    # equivalents for the database auxiliary bucket
+    database_equivalents: list[EquivalentService] = field(default_factory=list)

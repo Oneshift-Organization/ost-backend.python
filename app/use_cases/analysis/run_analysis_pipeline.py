@@ -28,29 +28,42 @@ class RunAnalysisPipelineInput:
 
 
 def _serialize_pools(ctx) -> str:
-    """Serialize capacity pools into a compact prompt payload."""
+    """Serialize capacity pools + cross-cloud equivalents into the LLM payload."""
     pools = getattr(ctx, "pools", ())
     auxiliary = getattr(ctx, "auxiliary", None)
+    pool_equivalents: dict = getattr(ctx, "pool_equivalents", {})
+    database_equivalents: list = getattr(ctx, "database_equivalents", [])
 
-    payload: dict[str, object] = {
-        "compute_pools": [
-            {
-                "project_id": p.pool_key.project_id,
-                "family": p.pool_key.machine_family,
-                "region": p.pool_key.region,
-                "capacity": {
-                    "vcpus": round(float(p.capacity.vcpus), 2),
-                    "ram_gib": round(float(p.capacity.ram_gib), 2),
-                },
-                "costs": {
-                    "compute_base": round(float(p.costs.compute_base), 2),
-                    "os_licensing": round(float(p.costs.os_licensing), 2),
-                },
-            }
-            for p in pools
-            if p.capacity.vcpus > 0 or p.capacity.ram_gib > 0
-        ],
-    }
+    compute_pools = []
+    missing_equiv_pool_ids: list[str] = []
+
+    for p in pools:
+        if p.capacity.vcpus <= 0 and p.capacity.ram_gib <= 0:
+            continue
+        pool_key_str = (
+            f"{p.pool_key.project_id}/{p.pool_key.machine_family}/{p.pool_key.region}"
+        )
+        equivs = pool_equivalents.get(pool_key_str, [])
+        if not equivs:
+            missing_equiv_pool_ids.append(pool_key_str)
+
+        pool_dict: dict[str, object] = {
+            "project_id": p.pool_key.project_id,
+            "family": p.pool_key.machine_family,
+            "region": p.pool_key.region,
+            "capacity": {
+                "vcpus": round(float(p.capacity.vcpus), 2),
+                "ram_gib": round(float(p.capacity.ram_gib), 2),
+            },
+            "costs": {
+                "compute_base": round(float(p.costs.compute_base), 2),
+                "os_licensing": round(float(p.costs.os_licensing), 2),
+            },
+            "equivalents": [_serialize_equivalent(e) for e in equivs],
+        }
+        compute_pools.append(pool_dict)
+
+    payload: dict[str, object] = {"compute_pools": compute_pools}
 
     if auxiliary is not None and auxiliary.any_positive:
         aux_payload: dict[str, object] = {}
@@ -64,6 +77,10 @@ def _serialize_pools(ctx) -> str:
             aux_payload["network_egress"] = round(float(auxiliary.network_egress), 2)
         if auxiliary.database > 0:
             aux_payload["database"] = round(float(auxiliary.database), 2)
+            if database_equivalents:
+                aux_payload["database_equivalents"] = [
+                    _serialize_equivalent(e) for e in database_equivalents
+                ]
         if auxiliary.orphan > 0:
             aux_payload["unmapped"] = {
                 "cost": round(float(auxiliary.orphan), 2),
@@ -77,7 +94,47 @@ def _serialize_pools(ctx) -> str:
             level: round(float(cost), 2) for level, cost in mapping_confidence.items()
         }
 
-    return json.dumps(payload, default=str)
+    return json.dumps(payload, default=str), missing_equiv_pool_ids
+
+
+def _serialize_equivalent(equiv) -> dict:
+    """Serialize a single EquivalentService to a JSON-safe dict."""
+    d: dict[str, object] = {
+        "provider": equiv.provider,
+        "service_name": equiv.service_name,
+        "category": equiv.category,
+        "service_type": equiv.service_type,
+        "match_basis": getattr(equiv, "match_basis", "pool_capacity"),
+    }
+    instances = getattr(equiv, "instances", 1)
+    if instances > 1:
+        d["instances"] = instances
+
+    tm = getattr(equiv, "technical_match", None)
+    if tm is not None:
+        d["technical_match"] = {
+            k: str(v) for k, v in [("vcpus", tm.vcpus), ("ram_gb", tm.ram_gb)] if v is not None
+        }
+
+    fin = getattr(equiv, "financials", None)
+    if fin is not None:
+        fin_dict: dict[str, object] = {}
+        if fin.estimated_monthly_cost is not None:
+            fin_dict["estimated_monthly_cost"] = str(fin.estimated_monthly_cost)
+        if fin.cost_delta is not None:
+            fin_dict["cost_delta"] = str(fin.cost_delta)
+        fin_dict["pricing_confidence"] = fin.pricing_confidence
+        d["financials"] = fin_dict
+
+    meta = getattr(equiv, "metadata", None)
+    if meta:
+        d["metadata"] = meta
+
+    docs = getattr(equiv, "docs_costs", None)
+    if docs:
+        d["docs_costs"] = docs
+
+    return d
 
 
 class RunAnalysisPipelineUseCase:
@@ -127,7 +184,7 @@ class RunAnalysisPipelineUseCase:
                 )
             )
 
-            pools_json = _serialize_pools(ctx)
+            pools_json, missing_equiv_ids = _serialize_pools(ctx)
 
             ui_report = await self._orchestrator.generate_report(
                 context=ctx,
@@ -145,6 +202,17 @@ class RunAnalysisPipelineUseCase:
                         Flag(
                             code="MISSING_SKU_DEFINITION",
                             message=f"SKU '{sku_id}' without vCPU/RAM definition in catalog; no equivalents computed",
+                            impact_area="catalog",
+                        )
+                    )
+
+            if missing_equiv_ids:
+                equiv_flags = ui_report.flags.setdefault("equivalents", [])
+                for pool_id in missing_equiv_ids:
+                    equiv_flags.append(
+                        Flag(
+                            code="MISSING_EQUIVALENT",
+                            message=f"Pool '{pool_id}' has no cross-cloud equivalent in catalog",
                             impact_area="catalog",
                         )
                     )

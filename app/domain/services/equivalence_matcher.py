@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from decimal import Decimal
 
 from app.domain.entities.cloud_sku import CloudSku
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
+
+_HOURS_PER_MONTH = Decimal("730")
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,7 @@ class EquivalentOption:
     service_name: str
     service_type: str
     category: str
+    instances: int = 1
     technical_match: TechnicalMatch | None = None
     financials: FinancialEstimate | None = None
 
@@ -148,3 +152,88 @@ class EquivalenceMatcher:
             source_specs=source_specs,
             equivalents=equivalents,
         )
+
+    async def match_pool(
+        self,
+        *,
+        vcpus: Decimal,
+        ram_gib: Decimal,
+        monthly_cost: Decimal,
+        service_type: str,
+        target_providers: list[str],
+    ) -> list[EquivalentOption]:
+        """Return the cheapest covering equivalent per target provider for a pool.
+
+        Unlike get_equivalents, this does NOT require a source sku_id — it
+        matches directly against pool capacity (spec §5 E1). For each provider:
+        1. Query candidates with specs >= pool capacity.
+        2. Pick the cheapest single SKU that covers the pool.
+        3. If one SKU does not cover, scale with instances = ceil(max ratio).
+        4. Compute estimated_monthly_cost and cost_delta deterministically.
+        """
+        options: list[EquivalentOption] = []
+
+        min_vcpus = vcpus if vcpus > 0 else None
+        min_ram_gb = ram_gib if ram_gib > 0 else None
+
+        for provider in target_providers:
+            candidates = await self._sku_repo.find_equivalents(
+                provider=provider,
+                service_type=service_type,
+                min_vcpus=min_vcpus,
+                min_ram_gb=min_ram_gb,
+                limit=10,
+            )
+
+            if not candidates:
+                # Relax constraints: take cheapest of that service_type
+                candidates = await self._sku_repo.find_equivalents(
+                    provider=provider,
+                    service_type=service_type,
+                    limit=10,
+                )
+
+            best = min(
+                candidates,
+                key=lambda x: x.price_per_unit or Decimal("999999"),
+                default=None,
+            )
+            if best is None or best.price_per_unit is None:
+                continue
+
+            instances = _instances_needed(vcpus, ram_gib, best)
+            estimated_monthly = best.price_per_unit * _HOURS_PER_MONTH * instances
+            cost_delta = estimated_monthly - monthly_cost
+
+            options.append(
+                EquivalentOption(
+                    provider=best.provider,
+                    sku_id=best.sku_id,
+                    service_name=best.service_name,
+                    service_type=best.service_type or service_type,
+                    category=best.category or "",
+                    instances=instances,
+                    technical_match=TechnicalMatch(
+                        vcpus=(best.vcpus or Decimal("0")) * instances,
+                        ram_gb=(best.ram_gb or Decimal("0")) * instances,
+                    ),
+                    financials=FinancialEstimate(
+                        unit_price=best.price_per_unit,
+                        estimated_monthly_cost=estimated_monthly,
+                        cost_delta=cost_delta,
+                        pricing_confidence="low",
+                    ),
+                )
+            )
+
+        return options
+
+
+def _instances_needed(vcpus: Decimal, ram_gib: Decimal, cand: CloudSku) -> int:
+    """How many candidate instances are needed to cover pool capacity."""
+    ratios: list[float] = []
+    if cand.vcpus and cand.vcpus > 0 and vcpus > 0:
+        ratios.append(float(vcpus / cand.vcpus))
+    if cand.ram_gb and cand.ram_gb > 0 and ram_gib > 0:
+        ratios.append(float(ram_gib / cand.ram_gb))
+    return max(1, math.ceil(max(ratios))) if ratios else 1
