@@ -11,6 +11,7 @@ from app.core.exceptions import NotFoundError
 from app.domain.analysis import MigrationContext
 from app.domain.entities.analysis_job import AnalysisJob
 from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.llm.claude_client import ClaudeLLMClient
 from app.infrastructure.llm.gemini_client import GeminiLLMClient
 from app.infrastructure.llm.mock_client import MockLLMClient
 from app.infrastructure.llm.openrouter_client import OpenRouterLLMClient
@@ -192,7 +193,7 @@ async def _run_analysis_pipeline(
         logger.info("pipeline_job_loaded job_id=%s status=%s", job_id, job.status)
 
         settings = get_settings()
-        llm_client: MockLLMClient | GeminiLLMClient | OpenRouterLLMClient
+        llm_client: MockLLMClient | GeminiLLMClient | OpenRouterLLMClient | ClaudeLLMClient
         match settings.llm_provider:
             case "openrouter":
                 llm_client = OpenRouterLLMClient(
@@ -203,6 +204,11 @@ async def _run_analysis_pipeline(
                 llm_client = GeminiLLMClient(
                     api_key=settings.gemini_api_key,
                     model=settings.gemini_model,
+                )
+            case "anthropic":
+                llm_client = ClaudeLLMClient(
+                    api_key=settings.anthropic_api_key,
+                    model=settings.anthropic_model,
                 )
             case _:
                 llm_client = MockLLMClient()
