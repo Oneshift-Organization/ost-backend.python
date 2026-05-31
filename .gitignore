@@ -64,5 +64,11 @@ temp/
 
 # ── Brain do arquiteto (local-only, não versionado) ───────────────────────
 ost-docs.backend.plan/
-oneshift-catalogsync-0da82f3d2977.json/
-gcp-service-account.json/
+
+# ── Credenciais e binários que não pertencem ao repo ──────────────────────
+gcp-service-account.json
+oneshift-catalogsync-*.json
+*.zip
+Description
+SKU ID
+.~lock.*
