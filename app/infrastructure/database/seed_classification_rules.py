@@ -57,11 +57,12 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*sles*", "glob", "os_license", None, "high", 62),
     ("*ubuntu pro*", "glob", "os_license", None, "high", 63),
     ("*licensing*", "glob", "os_license", None, "medium", 64),
-    # ── Cloud Run / request-based compute ──
-    ("*min instance cpu*", "glob", "core", None, "medium", 66),
-    ("*min instance memory*", "glob", "ram", None, "medium", 67),
-    ("*instance cpu*", "glob", "core", None, "low", 68),
-    ("*instance memory*", "glob", "ram", None, "low", 69),
+    # ── Cloud Run / serverless (second-billed, NOT in VM capacity pools) ──
+    ("*services min instance*", "glob", "network_egress", None, "medium", 64),
+    ("*cloud run*", "glob", "network_egress", None, "medium", 65),
+    # ── Cloud Run / request-based compute (serverless — keep out of pools) ──
+    ("*min instance cpu*", "glob", "unclassified", None, "low", 66),
+    ("*min instance memory*", "glob", "unclassified", None, "low", 67),
     # ── Generic compute (family extracted by the matcher) ──
     ("*instance core running in*", "glob", "core", None, "high", 70),
     ("*instance ram running in*", "glob", "ram", None, "high", 71),
