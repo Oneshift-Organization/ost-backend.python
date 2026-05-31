@@ -236,3 +236,105 @@ async def test_match_falls_back_to_list_providers():
     assert workload is not None
     assert len(workload.equivalents) == 1
     assert workload.equivalents[0].provider == "gcp"
+
+
+# ── match_pool tests (E1) ──────────────────────────────────────────────────
+
+
+async def test_match_pool_single_instance_covering_capacity():
+    aws_sku = _source_sku(
+        sku_id="m7g.2xlarge", provider="aws",
+        vcpus=Decimal("8"), ram_gb=Decimal("32"),
+        price_per_unit=Decimal("0.272"),
+    )
+    repo = _MockSkuRepo(equivalents_by_provider={"aws": [aws_sku]})
+    matcher = EquivalenceMatcher(sku_repo=repo)
+
+    # pool: 6 vCPU / 24 GiB → one m7g.2xlarge (8/32) covers it → instances = 1
+    opts = await matcher.match_pool(
+        vcpus=Decimal("6"),
+        ram_gib=Decimal("24"),
+        monthly_cost=Decimal("1971.00"),
+        service_type="virtual_server",
+        target_providers=["aws"],
+    )
+
+    assert len(opts) == 1
+    o = opts[0]
+    assert o.provider == "aws"
+    assert o.sku_id == "m7g.2xlarge"
+    assert o.instances == 1
+    assert o.technical_match is not None
+    assert o.technical_match.vcpus == Decimal("8")
+    assert o.technical_match.ram_gb == Decimal("32")
+    assert o.financials is not None
+    # 0.272 * 730 * 1 = 198.56
+    assert o.financials.estimated_monthly_cost == Decimal("0.272") * Decimal("730")
+    assert o.financials.cost_delta is not None
+    assert o.financials.cost_delta < 0  # cheaper than source
+
+
+async def test_match_pool_multiple_instances_when_pool_exceeds_sku():
+    small_sku = _source_sku(
+        sku_id="e2-standard-4", provider="gcp",
+        vcpus=Decimal("4"), ram_gb=Decimal("16"),
+        price_per_unit=Decimal("0.134"),
+    )
+    repo = _MockSkuRepo(equivalents_by_provider={"gcp": [small_sku]})
+    matcher = EquivalenceMatcher(sku_repo=repo)
+
+    # pool: 13 vCPU / 52 GiB → 4-vCPU SKU needs ceil(13/4) = 4 instances
+    opts = await matcher.match_pool(
+        vcpus=Decimal("13"),
+        ram_gib=Decimal("52"),
+        monthly_cost=Decimal("2000"),
+        service_type="virtual_server",
+        target_providers=["gcp"],
+    )
+
+    assert len(opts) == 1
+    o = opts[0]
+    assert o.instances == 4
+    assert o.technical_match is not None
+    assert o.technical_match.vcpus == Decimal("16")  # 4 vcpus * 4 instances
+    assert o.financials is not None
+    expected = Decimal("0.134") * Decimal("730") * 4
+    assert o.financials.estimated_monthly_cost == expected
+
+
+async def test_match_pool_no_candidates_returns_empty():
+    repo = _MockSkuRepo(equivalents_by_provider={"oci": []})
+    matcher = EquivalenceMatcher(sku_repo=repo)
+
+    opts = await matcher.match_pool(
+        vcpus=Decimal("8"),
+        ram_gib=Decimal("32"),
+        monthly_cost=Decimal("500"),
+        service_type="virtual_server",
+        target_providers=["oci"],
+    )
+
+    assert len(opts) == 0
+
+
+async def test_match_pool_cost_delta_sign():
+    cheap = _source_sku(
+        sku_id="cheap", provider="oci",
+        vcpus=Decimal("8"), ram_gb=Decimal("32"),
+        price_per_unit=Decimal("0.10"),  # 73/month
+    )
+    repo = _MockSkuRepo(equivalents_by_provider={"oci": [cheap]})
+    matcher = EquivalenceMatcher(sku_repo=repo)
+
+    opts = await matcher.match_pool(
+        vcpus=Decimal("8"),
+        ram_gib=Decimal("32"),
+        monthly_cost=Decimal("200"),
+        service_type="virtual_server",
+        target_providers=["oci"],
+    )
+
+    assert len(opts) == 1
+    assert opts[0].financials is not None
+    assert opts[0].financials.cost_delta < 0  # saving
+    assert opts[0].financials.cost_delta == Decimal("0.10") * 730 - Decimal("200")
