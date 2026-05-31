@@ -117,8 +117,18 @@ class OpenRouterLLMClient:
         stripped = text.strip()
         if stripped.startswith("{"):
             return cast("dict[str, object]", json.loads(stripped))
-        match = re.search(r"```(?:json)?\s*\n({.*?})\s*\n```", stripped, re.DOTALL)
+        match = re.search(r"```(?:json)?\s*\n?({.*?})\s*\n?```", stripped, re.DOTALL)
         if match:
             return cast("dict[str, object]", json.loads(match.group(1)))
+        start = stripped.find("{")
+        if start != -1:
+            depth = 0
+            for i, ch in enumerate(stripped[start:], start):
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return cast("dict[str, object]", json.loads(stripped[start : i + 1]))
         msg = f"Could not extract JSON from OpenRouter response:\n{text[:500]}"
         raise ValueError(msg)

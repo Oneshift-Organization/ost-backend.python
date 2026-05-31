@@ -137,6 +137,100 @@ def _serialize_equivalent(equiv) -> dict:
     return d
 
 
+def serialize_as_legacy(ctx) -> dict:
+    """Serialize MigrationContext into the legacy workload JSON format.
+
+    Converts capacity pools + pool_equivalents into the ``workloads[]`` schema
+    that was the original LLM input format, so the legacy pipeline sends a
+    familiar payload to the model. See docs/refactor/analysis-v2-spec.md §5.
+    """
+    workloads: list[dict] = []
+    pool_equivalents: dict = getattr(ctx, "pool_equivalents", {})
+    pools = getattr(ctx, "pools", ())
+    auxiliary = getattr(ctx, "auxiliary", None)
+    db_equivalents: list = getattr(ctx, "database_equivalents", [])
+
+    for pool in pools:
+        if pool.capacity.vcpus <= 0 and pool.capacity.ram_gib <= 0:
+            continue
+        pool_key = (
+            f"{pool.pool_key.project_id}/"
+            f"{pool.pool_key.machine_family}/"
+            f"{pool.pool_key.region}"
+        )
+        equivs = pool_equivalents.get(pool_key, [])
+        workloads.append({
+            "canonical_service": "virtual_server",
+            "category": "compute",
+            "service_name": (
+                f"{pool.pool_key.machine_family} Compute ({pool.pool_key.project_id})"
+            ),
+            "service_type": "virtual_server",
+            "source_usage": {
+                "sku_id": pool_key,
+                "billed_cost": round(float(pool.monthly_cost), 6),
+                "usage_quantity": round(float(pool.capacity.vcpus), 2),
+                "currency": ctx.currency,
+            },
+            "equivalents": [_equiv_to_legacy(e) for e in equivs],
+        })
+
+    if auxiliary and auxiliary.database > 0 and db_equivalents:
+        workloads.append({
+            "canonical_service": "relational_database",
+            "category": "database",
+            "service_name": "Database Services",
+            "service_type": "relational_database",
+            "source_usage": {
+                "sku_id": "database",
+                "billed_cost": round(float(auxiliary.database), 6),
+                "currency": ctx.currency,
+            },
+            "equivalents": [_equiv_to_legacy(e) for e in db_equivalents],
+        })
+
+    return {
+        "source_provider": ctx.source_provider,
+        "billing_period": ctx.billing_period,
+        "currency": ctx.currency,
+        "total_spend": float(ctx.total_spend),
+        "company_context": {
+            "company_size": "unknown",
+            "industry": "",
+            "regulated_environment": False,
+            "critical_workloads": False,
+            "global_operations": False,
+            "high_availability_required": False,
+            "disaster_recovery_required": False,
+            "security_sensitive": False,
+            "cloud_maturity": "unknown",
+            "migration_goal": "unknown",
+        },
+        "workloads": workloads,
+    }
+
+
+def _equiv_to_legacy(e) -> dict:
+    tm = getattr(e, "technical_match", None)
+    fin = getattr(e, "financials", None)
+    return {
+        "provider": e.provider,
+        "service_name": e.service_name,
+        "technical_match": {
+            "vcpus": float(tm.vcpus) if tm and tm.vcpus is not None else None,
+            "ram_gb": float(tm.ram_gb) if tm and tm.ram_gb is not None else None,
+        } if tm else None,
+        "financials": {
+            "estimated_monthly_cost": float(fin.estimated_monthly_cost)
+            if fin and fin.estimated_monthly_cost is not None else None,
+            "cost_delta": float(fin.cost_delta)
+            if fin and fin.cost_delta is not None else None,
+            "pricing_confidence": fin.pricing_confidence if fin else "low",
+        } if fin else None,
+        "metadata": getattr(e, "metadata", None),
+    }
+
+
 class RunAnalysisPipelineUseCase:
     """Orquestra a pipeline de análise em background.
 
