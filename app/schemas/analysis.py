@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.analysis_ui import AnalysisUIResponse
+from app.schemas.analysis_v2 import AnalysisV2Response
 
 
 class TechnicalMatchItem(BaseModel):
@@ -83,5 +83,5 @@ class AnalysisJobResponse(BaseModel):
     status: str
     llm_output: str | None = None
     error: str | None = None
-    result: AnalysisUIResponse | None = None
+    result: AnalysisV2Response | None = None
     created_at: datetime
