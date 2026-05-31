@@ -56,6 +56,12 @@ DATABASE_URL=postgresql+asyncpg://ost:ost@127.0.0.1:5432/ost_dev
 `AUTH_ENABLED=false` é **hard-blocked em produção** pelo `get_current_user` — não dá pra deixar
 ligado por engano no prod (retorna 500 se `APP_ENV=production`).
 
+Para análise de migração com IA real (em vez do mock), adicionar no `.env.dev`:
+```bash
+GEMINI_API_KEY=AIzaSy...
+```
+Sem a chave o sistema usa `MockLLMClient` — não faz nenhuma requisição externa.
+
 ## 4. Aplicar migrations
 
 ```bash

@@ -19,6 +19,10 @@ from app.infrastructure.file_ingestion.normalizer import (
     deduplicate,
 )
 from app.infrastructure.file_ingestion.validator import validate_normalized_df
+from app.use_cases.analysis.build_billing_enriched import (
+    BuildBillingEnrichedInput,
+    BuildBillingEnrichedUseCase,
+)
 
 _log = get_logger(__name__)
 
@@ -35,9 +39,11 @@ class IngestBillingFileUseCase:
         self,
         report_repo: IBillingReportRepository,
         item_repo: IBillingItemRepository,
+        enriched_uc: "BuildBillingEnrichedUseCase",
     ) -> None:
         self._reports = report_repo
         self._items = item_repo
+        self._enriched_uc = enriched_uc
 
     async def execute(self, payload: IngestBillingFileInput) -> None:
         report = await self._reports.get_by_id(payload.report_id, payload.user_id)
@@ -57,6 +63,10 @@ class IngestBillingFileUseCase:
             await self._items.delete_by_report(report.id, payload.user_id)
             inserted = await self._items.bulk_insert(items)
 
+            await self._enriched_uc.execute(
+                BuildBillingEnrichedInput(user_id=payload.user_id, report_id=report.id)
+            )
+
             report.mark_done(
                 row_count=inserted,
                 provider=CloudProvider(df.iloc[0]["provider"]),
@@ -69,8 +79,10 @@ class IngestBillingFileUseCase:
                 rows=inserted,
                 provider=report.provider.value if report.provider else None,
             )
-        except Exception as e:
+        except Exception:
             _log.exception("billing_ingest_failed", report_id=str(report.id))
-            report.mark_failed(str(e))
-            await self._reports.update(report)
+            # Do NOT touch the DB here — the transaction is aborted from the
+            # inner error; writing would raise InFailedSQLTransactionError and
+            # hide the root cause. The caller (_run_ingest_isolated) persists
+            # the failure in a fresh session via _persist_failure.
             raise

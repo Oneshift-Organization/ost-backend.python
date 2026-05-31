@@ -120,9 +120,13 @@ def _read_csv_sniffed(source, *, encoding: str = "utf-8") -> pd.DataFrame:
     `sep=None` + `engine="python"` uses `csv.Sniffer` to detect `,` vs `\\t` vs `;`.
     Strips UTF-8 BOM via `utf-8-sig`. Falls back to `latin-1` for legacy exports.
     """
-    encodings_to_try = ("utf-8-sig", encoding, "latin-1") if encoding != "utf-8-sig" else (
-        "utf-8-sig",
-        "latin-1",
+    encodings_to_try = (
+        ("utf-8-sig", encoding, "latin-1")
+        if encoding != "utf-8-sig"
+        else (
+            "utf-8-sig",
+            "latin-1",
+        )
     )
     last_error: Exception | None = None
     for enc in encodings_to_try:
@@ -131,13 +135,11 @@ def _read_csv_sniffed(source, *, encoding: str = "utf-8") -> pd.DataFrame:
                 # File-like; rewind if possible
                 if hasattr(source, "seek"):
                     source.seek(0)
-                return (
-                    pd.read_csv(source, dtype=str, sep=None, engine="python", encoding=enc)
-                    .fillna("")
-                )
-            return (
-                pd.read_csv(source, dtype=str, sep=None, engine="python", encoding=enc)
-                .fillna("")
+                return pd.read_csv(
+                    source, dtype=str, sep=None, engine="python", encoding=enc
+                ).fillna("")
+            return pd.read_csv(source, dtype=str, sep=None, engine="python", encoding=enc).fillna(
+                ""
             )
         except (UnicodeDecodeError, UnicodeError) as e:
             last_error = e

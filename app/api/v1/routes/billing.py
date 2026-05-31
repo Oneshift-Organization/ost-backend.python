@@ -15,6 +15,7 @@ from fastapi import (
 
 from app.api.deps import (
     CurrentUser,
+    DbSession,
     GetBillingJobStatusUC,
     ListBillingItemsUC,
     ListBillingReportsUC,
@@ -24,9 +25,19 @@ from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.repositories.pg_billing_enriched_repo import (
+    PgBillingEnrichedRepository,
+)
 from app.infrastructure.repositories.pg_billing_item_repo import PgBillingItemRepository
 from app.infrastructure.repositories.pg_billing_report_repo import (
     PgBillingReportRepository,
+)
+from app.infrastructure.repositories.pg_cloud_sku_repo import PgCloudSkuRepository
+from app.infrastructure.repositories.pg_sku_classification_rule_repo import (
+    PgSkuClassificationRuleRepository,
+)
+from app.infrastructure.repositories.pg_unmapped_billing_repo import (
+    PgUnmappedBillingRepository,
 )
 from app.schemas.billing import (
     BillingFileUploadResponse,
@@ -35,6 +46,7 @@ from app.schemas.billing import (
     BillingJobStatusResponse,
     BillingReportSummary,
 )
+from app.use_cases.analysis.build_billing_enriched import BuildBillingEnrichedUseCase
 from app.use_cases.billing.get_billing_job_status import GetBillingJobStatusInput
 from app.use_cases.billing.ingest_billing_file import (
     IngestBillingFileInput,
@@ -63,6 +75,7 @@ async def upload_billing_file(
     upload_uc: UploadBillingFileUC,
     background: BackgroundTasks,
     file: Annotated[UploadFile, File(...)],
+    external_id: UUID | None = None,
 ) -> BillingFileUploadResponse:
     settings = get_settings()
     if file.filename is None:
@@ -96,6 +109,7 @@ async def upload_billing_file(
             user_id=user_uuid,
             file_path=Path(tmp_name),
             source_filename=file.filename,
+            external_id=external_id,
         )
     )
 
@@ -108,6 +122,7 @@ async def upload_billing_file(
 
     return BillingFileUploadResponse(
         job_id=report.id,
+        external_id=report.external_id,
         status=report.status,
         source_filename=report.source_filename or file.filename,
         created_at=report.created_at,
@@ -131,6 +146,33 @@ async def list_billing_reports(
     return [BillingReportSummary.from_entity(r) for r in reports]
 
 
+@router.get("/by-external-id/{external_id}", response_model=BillingJobStatusResponse)
+async def get_billing_by_external_id(
+    external_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+) -> BillingJobStatusResponse:
+    from app.infrastructure.repositories.pg_billing_report_repo import (
+        PgBillingReportRepository,
+    )
+
+    repo = PgBillingReportRepository(session)
+    report = await repo.get_by_external_id(external_id, UUID(user.sub))
+    if report is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "billing report not found")
+    return BillingJobStatusResponse(
+        job_id=report.id,
+        external_id=report.external_id,
+        status=report.status,
+        provider=report.provider,
+        schema_version=report.schema_version,
+        row_count=report.row_count,
+        error_message=report.error_message,
+        created_at=report.created_at,
+        updated_at=report.updated_at,
+    )
+
+
 @router.get("/{job_id}", response_model=BillingJobStatusResponse)
 async def get_billing_job_status(
     job_id: UUID,
@@ -145,6 +187,7 @@ async def get_billing_job_status(
 
     return BillingJobStatusResponse(
         job_id=report.id,
+        external_id=report.external_id,
         status=report.status,
         provider=report.provider,
         schema_version=report.schema_version,
@@ -178,9 +221,7 @@ async def list_billing_items(
 
     try:
         result = await uc.execute(
-            ListBillingItemsInput(
-                user_id=user_uuid, report_id=job_id, limit=limit, offset=offset
-            )
+            ListBillingItemsInput(user_id=user_uuid, report_id=job_id, limit=limit, offset=offset)
         )
     except NotFoundError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
@@ -215,6 +256,14 @@ async def _run_ingest_isolated(user_id: UUID, report_id: UUID, file_path: Path) 
             uc = IngestBillingFileUseCase(
                 PgBillingReportRepository(session),
                 PgBillingItemRepository(session),
+                BuildBillingEnrichedUseCase(
+                    PgBillingReportRepository(session),
+                    PgBillingItemRepository(session),
+                    PgBillingEnrichedRepository(session),
+                    PgCloudSkuRepository(session),
+                    PgSkuClassificationRuleRepository(session),
+                    PgUnmappedBillingRepository(session),
+                ),
             )
             try:
                 await uc.execute(

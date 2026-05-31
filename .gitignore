@@ -43,6 +43,11 @@ uploads/
 *.xlsx.tmp
 *.csv.tmp
 
+# ── Artefatos de debug / sessões de IA (gerados localmente, nunca commitados) ──
+llm_payload_*.json
+session-ses_*.md
+session-*.md
+
 # ── Stack: IaC (Terraform) ────────────────────────────────────────────────
 .terraform/
 *.tfstate
@@ -59,3 +64,5 @@ temp/
 
 # ── Brain do arquiteto (local-only, não versionado) ───────────────────────
 ost-docs.backend.plan/
+oneshift-catalogsync-0da82f3d2977.json/
+gcp-service-account.json/

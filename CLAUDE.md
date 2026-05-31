@@ -28,6 +28,9 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Regras de arquitetura / Clean Arch / proibições | [`docs/architecture.md`](docs/architecture.md) |
 | Schema do banco / DDL / `raw_payload` conventions | [`docs/data-model.md`](docs/data-model.md) |
 | Parsers de cloud / adicionar novo / política `global_zero` | [`docs/parsers.md`](docs/parsers.md) |
+| Mock Engine MVP / matching hardware / troubleshooting | [`docs/refactor/mvp-mock-engine.md`](docs/refactor/mvp-mock-engine.md) |
+| Capacity Pool Model / FOCUS alignment | [`docs/refactor/focus-alignment.md`](docs/refactor/focus-alignment.md) |
+| WorkloadPool entities / aggregator / pool design | [`docs/refactor/focus-alignment.md`](docs/refactor/focus-alignment.md#2-the-solution-capacity-pool-model) |
 | Convenções de rota / paginação / serialização | [`docs/api-conventions.md`](docs/api-conventions.md) |
 | Catálogo `/v1/billing-files` | [`docs/endpoints/billing.md`](docs/endpoints/billing.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
@@ -90,8 +93,11 @@ api/ + infrastructure/ → use_cases/ → domain/
 - `domain/` é **puro** (zero framework).
 - `use_cases/` orquestra; recebe deps via DI.
 - `infrastructure/repositories/` implementa interfaces `I*`.
-- `infrastructure/file_ingestion/parsers/` tem **5 parsers** (AWS CUR, AWS Cost
-  Explorer, Azure, GCP, OCI), detecção por **conteúdo**.
+- `infrastructure/file_ingestion/parsers/` tem **7 parsers** (AWS CUR, AWS Cost
+  Explorer, AWS Invoice, Azure, GCP BigQuery, GCP Cost Table, OCI), detecção
+  por **conteúdo**.
+- `domain/services/equivalence_matcher.py` — matching cross-cloud por hardware
+  (vcpus/ram_gb), sem if/else em Python. Cobertura 100%.
 - `schemas/` Pydantic na borda HTTP; **nunca** cruza para `domain/`.
 - `api/deps.py` monta UCs via DI; rotas declaram `use_case: UploadBillingFileUC`.
 
@@ -103,10 +109,12 @@ existe").
 
 1. `POST /v1/billing-files` → grava `BillingReport(QUEUED)` + dispara
    `IngestBillingFileUseCase` em **BackgroundTask**. Retorna 202 + `job_id`.
-2. Pipeline: `detect_and_parse` (5 parsers, por conteúdo) → `deduplicate(line_hash)`
+2. Pipeline: `detect_and_parse` (7 parsers, por conteúdo) → `deduplicate(line_hash)`
    → `validate_normalized_df` (Pandera) → `bulk_insert` em chunks de 1000
-   (idempotente: `delete_by_report` + INSERT). Status `PROCESSING → DONE | FAILED`.
-   Falha grava em **session limpa**.
+   (idempotente: `delete_by_report` + INSERT) → `BuildBillingEnrichedUseCase`
+   (filtra StatementTotal/InvoiceTotal/Tax, cruza com ontologia + catálogo de SKUs,
+   persiste `billing_enriched` + `unmapped_billing_lines`).
+   Status `PROCESSING → DONE | FAILED`. Falha grava em **session limpa**.
 3. `GET /v1/billing-files` (lista) + `GET /v1/billing-files/{job_id}` (status) +
    `GET /v1/billing-files/{job_id}/items` (drill-down paginado, `cost DESC`).
 4. Isolamento por `user_id` em **todas** queries → 404 esconde existência.
@@ -131,6 +139,16 @@ existe").
   (drift); global-zeros viram 1 summary por mês com `raw_payload.scope =
   "global_zero"`. Spec completa em
   [`docs/parsers.md#política-de-emissão-de-cost0-cost-explorer`](docs/parsers.md#política-de-emissão-de-cost0-cost-explorer).
+- **Exclusão de linhas financeiras:** `StatementTotal` / `InvoiceTotal` (AWS
+  Invoice) e `Cost type = "tax"` (GCP Cost Table) são filtrados no parser e
+  no enriquecimento. Não excluir duplica custos totais (ex: $208k → $104k).
+- **Provider case-insensitive:** `cloud_sku_catalog` usa `'AWS'`, `'GCP'`;
+  `report.provider.value` usa `'aws'`, `'gcp'`. Buscas usam `.ilike()` no
+  `PgCloudSkuRepository` para evitar mismatch.
+- **Assertividade do SKU matching:** classificação linha→SKU usa a **Matching
+  Ladder** (L0–L5, data-driven via `sku_classification_rules`, sem `if/else` por
+  cloud). Gate de acurácia: `sku_coverage_ratio ≥ 95%` (orphan ≤ 5%). Spec em
+  [`docs/refactor/sku-accuracy-spec.md`](docs/refactor/sku-accuracy-spec.md).
 
 ## Regras Inegociáveis (resumo)
 

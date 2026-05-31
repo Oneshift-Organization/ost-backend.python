@@ -31,6 +31,7 @@ class BillingReport:
     status: JobStatus = JobStatus.QUEUED
     error_message: str | None = None
     row_count: int = 0
+    external_id: UUID | None = None
     id: UUID = field(default_factory=uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))

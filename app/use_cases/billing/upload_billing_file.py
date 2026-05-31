@@ -11,6 +11,7 @@ class UploadBillingFileInput:
     user_id: UUID
     file_path: Path
     source_filename: str
+    external_id: UUID | None = None
 
 
 class UploadBillingFileUseCase:
@@ -28,5 +29,6 @@ class UploadBillingFileUseCase:
             user_id=payload.user_id,
             source_filename=payload.source_filename,
             status=JobStatus.QUEUED,
+            external_id=payload.external_id,
         )
         return await self._repo.save(report)

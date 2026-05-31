@@ -21,7 +21,8 @@ class _FakeReportRepo:
 
     async def save(self, r): ...
     async def update(self, r): ...
-    async def get_by_id(self, report_id, user_id): return None
+    async def get_by_id(self, report_id, user_id):
+        return None
 
     async def list_by_user(self, user_id, limit=50):
         self.last_limit = limit

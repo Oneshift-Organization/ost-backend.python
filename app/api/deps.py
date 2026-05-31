@@ -8,16 +8,33 @@ from app.core.exceptions import UnauthorizedError
 from app.core.logging import get_logger
 from app.core.security import verify_jwt
 from app.infrastructure.database.session import get_db_session
+from app.infrastructure.repositories.pg_billing_dashboard_repo import (
+    PgBillingDashboardRepository,
+)
+from app.infrastructure.repositories.pg_billing_enriched_repo import (
+    PgBillingEnrichedRepository,
+)
 from app.infrastructure.repositories.pg_billing_item_repo import PgBillingItemRepository
 from app.infrastructure.repositories.pg_billing_report_repo import (
     PgBillingReportRepository,
 )
+from app.infrastructure.repositories.pg_cloud_sku_repo import PgCloudSkuRepository
+from app.infrastructure.repositories.pg_sku_classification_rule_repo import (
+    PgSkuClassificationRuleRepository,
+)
+from app.infrastructure.repositories.pg_unmapped_billing_repo import (
+    PgUnmappedBillingRepository,
+)
 from app.schemas.auth import UserClaims
+from app.use_cases.analysis.build_billing_enriched import BuildBillingEnrichedUseCase
 from app.use_cases.billing.get_billing_job_status import GetBillingJobStatusUseCase
 from app.use_cases.billing.ingest_billing_file import IngestBillingFileUseCase
 from app.use_cases.billing.list_billing_items import ListBillingItemsUseCase
 from app.use_cases.billing.list_billing_reports import ListBillingReportsUseCase
 from app.use_cases.billing.upload_billing_file import UploadBillingFileUseCase
+from app.use_cases.reports.generate_billing_dashboard import (
+    GenerateBillingDashboardUseCase,
+)
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 
@@ -79,6 +96,14 @@ def _ingest_billing_file_uc(session: DbSession) -> IngestBillingFileUseCase:
     return IngestBillingFileUseCase(
         PgBillingReportRepository(session),
         PgBillingItemRepository(session),
+        BuildBillingEnrichedUseCase(
+            PgBillingReportRepository(session),
+            PgBillingItemRepository(session),
+            PgBillingEnrichedRepository(session),
+            PgCloudSkuRepository(session),
+            PgSkuClassificationRuleRepository(session),
+            PgUnmappedBillingRepository(session),
+        ),
     )
 
 
@@ -97,8 +122,16 @@ def _list_billing_items_uc(session: DbSession) -> ListBillingItemsUseCase:
     )
 
 
+def _generate_billing_dashboard_uc(session: DbSession) -> GenerateBillingDashboardUseCase:
+    return GenerateBillingDashboardUseCase(PgBillingDashboardRepository(session))
+
+
 UploadBillingFileUC = Annotated[UploadBillingFileUseCase, Depends(_upload_billing_file_uc)]
 IngestBillingFileUC = Annotated[IngestBillingFileUseCase, Depends(_ingest_billing_file_uc)]
 GetBillingJobStatusUC = Annotated[GetBillingJobStatusUseCase, Depends(_get_billing_job_status_uc)]
 ListBillingReportsUC = Annotated[ListBillingReportsUseCase, Depends(_list_billing_reports_uc)]
 ListBillingItemsUC = Annotated[ListBillingItemsUseCase, Depends(_list_billing_items_uc)]
+GenerateBillingDashboardUC = Annotated[
+    GenerateBillingDashboardUseCase,
+    Depends(_generate_billing_dashboard_uc),
+]

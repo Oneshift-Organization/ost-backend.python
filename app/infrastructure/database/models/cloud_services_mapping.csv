@@ -1,0 +1,817 @@
+id,category,service_type,provider,service_name,created_at,doc_origin
+,compute,virtual_server,aws,Amazon EC2,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,virtual_server,azure,Azure Virtual Machines,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,virtual_server,gcp,Compute Engine,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,virtual_server,oci,Oracle Cloud Infrastructure Compute,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,bare_metal_server,aws,Amazon EC2 Bare Metal Instance,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,bare_metal_server,azure,Azure Bare Metal Servers,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,bare_metal_server,gcp,Bare Metal Solution,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,bare_metal_server,oci,Oracle Bare Metal Servers,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,vmware_solution,aws,VMware Cloud on AWS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,vmware_solution,azure,Azure VMware Solution,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,vmware_solution,gcp,Google Cloud VMware Engine,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,vmware_solution,oci,Oracle Cloud VMware Solution,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,dedicated_host,aws,Amazon EC2 Dedicated Hosts,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,compute,dedicated_host,azure,Azure Dedicated Host,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,compute,dedicated_host,gcp,Sole-tenant Nodes,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,compute,dedicated_host,oci,Dedicated Virtual Machine Hosts,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,compute,burstable_compute,aws,Amazon EC2 Burstable performance instances,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,burstable_compute,azure,Azure B-Series Burstable VMs,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,burstable_compute,gcp,Shared-core Machine Types,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,burstable_compute,oci,OCI Burstable Instances,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,gpu_compute,aws,Amazon EC2 Accelerated Computing,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,gpu_compute,azure,Azure GPU Optimized VMs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,gpu_compute,gcp,Cloud GPUs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,gpu_compute,oci,OCI GPU Shapes,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,ml_accelerator,aws,AWS Trainium,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,ml_accelerator,aws,AWS Inferentia,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,ml_accelerator,azure,Azure ND-series VMs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,ml_accelerator,gcp,Cloud TPU,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,high_performance_computing,aws,AWS ParallelCluster,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,high_performance_computing,aws,AWS Elastic Fabric Adapter,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,high_performance_computing,azure,Azure HPC,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,high_performance_computing,gcp,Google Cloud HPC,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,high_performance_computing,oci,OCI HPC Bare Metal,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,confidential_compute,aws,AWS Nitro Enclaves,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,confidential_compute,azure,Azure Confidential Computing,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,confidential_compute,gcp,Confidential VM,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,confidential_compute,oci,OCI Confidential Computing,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,hardened_compute,azure,Trusted Launch for Azure VMs,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,hardened_compute,gcp,Shielded VMs,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,hardened_compute,oci,OCI Shielded Instances,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,auto_scaling,aws,Amazon EC2 Auto Scaling,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,auto_scaling,aws,AWS Auto Scaling,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,auto_scaling,azure,Azure Autoscale,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,auto_scaling,azure,Virtual Machine Scale Sets,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,auto_scaling,gcp,Compute Engine Autoscaler,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,auto_scaling,oci,OCI Autoscaling,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,compute,reserved_capacity,aws,AWS On-Demand Capacity Reservation,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,reserved_capacity,azure,Azure Reserved Virtual Machine Instances,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,reserved_capacity,gcp,Compute Engine Reservations,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,reserved_capacity,oci,OCI Reserved Capacity,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,compute,batch_jobs,aws,AWS Batch,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,batch_jobs,azure,Azure Batch,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,batch_jobs,gcp,Batch,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,managed_application_environment,aws,AWS Elastic Beanstalk,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,compute,managed_application_environment,aws,Amazon Lightsail,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,compute,managed_application_environment,azure,Azure Web Apps,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,compute,managed_application_environment,azure,Azure App Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,compute,managed_application_environment,gcp,Google App Engine,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,compute,managed_application_environment,oci,WebLogic Server for OCI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,containers,container_registry,aws,Amazon Elastic Container Registry (ECR),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,container_registry,azure,Azure Container Registry,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,container_registry,gcp,Artifact Registry,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,container_registry,oci,Oracle Cloud Infrastructure Registry,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,managed_kubernetes,aws,Amazon Elastic Kubernetes Service (EKS),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,managed_kubernetes,azure,Azure Kubernetes Service (AKS),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,managed_kubernetes,gcp,Google Kubernetes Engine (GKE),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,managed_kubernetes,oci,Container Engine for Kubernetes (OKE),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,container_instances,aws,Amazon Elastic Container Service (ECS),2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,containers,container_instances,azure,Azure Container Instances,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,containers,container_instances,gcp,Cloud Run,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,containers,serverless_containers,aws,AWS Fargate,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,serverless_containers,azure,Azure Container Apps,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,serverless_containers,gcp,Cloud Run,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,service_mesh,aws,AWS App Mesh,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,service_mesh,gcp,Cloud Service Mesh,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,container_security_scanning,aws,Amazon ECR Image Scanning,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,container_security_scanning,azure,Azure Defender for container registries,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,container_security_scanning,gcp,Artifact Analysis,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,binary_authorization,gcp,Binary Authorization,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,container_optimized_os,aws,AWS Bottlerocket,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,containers,container_optimized_os,gcp,Container-Optimized OS,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,function_as_a_service,aws,AWS Lambda,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,function_as_a_service,azure,Azure Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,function_as_a_service,gcp,Cloud Run functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,function_as_a_service,oci,Oracle Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,event_driven_integration,aws,Amazon EventBridge,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,event_driven_integration,azure,Azure Event Grid,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,event_driven_integration,gcp,Eventarc,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,workflow_orchestration,aws,AWS Step Functions,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,workflow_orchestration,azure,Azure Logic Apps,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,workflow_orchestration,gcp,Workflows,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,async_task_processing,aws,Amazon Simple Queue Service (SQS),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,async_task_processing,azure,Azure Service Bus,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,async_task_processing,gcp,Cloud Tasks,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,cron_scheduler,aws,Amazon EventBridge Scheduler,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,cron_scheduler,azure,Azure Logic Apps,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,cron_scheduler,gcp,Cloud Scheduler,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,low_code_no_code,azure,Microsoft Power Platform,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,serverless,low_code_no_code,gcp,AppSheet,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,object_storage,aws,Amazon S3,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,storage,object_storage,azure,Azure Blob Storage,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,storage,object_storage,gcp,Cloud Storage,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,storage,object_storage,oci,Oracle Cloud Infrastructure Object Storage,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,storage,block_storage,aws,Amazon Elastic Block Store (EBS),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,block_storage,azure,Azure Managed Disks,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,block_storage,gcp,Google Cloud Hyperdisk,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,block_storage,gcp,Persistent Disk,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,block_storage,oci,OCI Block Volumes,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,file_storage,aws,Amazon Elastic File System (EFS),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,file_storage,azure,Azure Files,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,file_storage,gcp,Filestore,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,file_storage,oci,OCI File Storage,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,high_performance_file_storage,aws,Amazon FSx for Lustre,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,high_performance_file_storage,azure,Azure Managed Lustre,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,high_performance_file_storage,gcp,Parallelstore,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,netapp_storage,aws,Amazon FSx for NetApp ONTAP,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,netapp_storage,azure,Azure NetApp Files,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,netapp_storage,gcp,Google Cloud NetApp Volumes,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,smb_file_storage,aws,Amazon FSx for Windows File Server,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,storage,smb_file_storage,azure,Azure Files,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,storage,archive_cold_storage,aws,Amazon S3 Glacier,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,storage,archive_cold_storage,azure,Azure Archive Storage,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,storage,archive_cold_storage,gcp,Cloud Storage Archive,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,storage,archive_cold_storage,oci,OCI Archive Storage,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,storage,hybrid_storage_gateway,aws,AWS Storage Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,storage,hybrid_storage_gateway,azure,Azure StorSimple,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,storage,hybrid_storage_gateway,oci,OCI Storage Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,storage,local_ssd,aws,AWS Nitro SSD,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,local_ssd,azure,Azure NVMe Disks,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,local_ssd,gcp,Local SSD,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,backup_for_kubernetes,azure,AKS Backup,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,storage,backup_for_kubernetes,gcp,Backup for GKE,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,aws,Amazon RDS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,aws,Amazon Aurora,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,azure,Azure SQL Database,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,azure,Azure Database for MySQL,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,azure,Azure Database for PostgreSQL,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,gcp,Cloud SQL,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,oci,Oracle Database Cloud Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,oci,MySQL Database Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,postgresql_compatible_db,aws,Amazon Aurora PostgreSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,postgresql_compatible_db,azure,Azure Cosmos DB for PostgreSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,postgresql_compatible_db,gcp,AlloyDB for PostgreSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,distributed_sql_database,aws,Amazon Aurora DSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,distributed_sql_database,azure,Azure Cosmos DB,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,distributed_sql_database,gcp,Spanner,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,key_value_nosql,aws,Amazon DynamoDB,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,key_value_nosql,azure,Azure Cosmos DB,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,key_value_nosql,gcp,Bigtable,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,document_nosql,aws,Amazon DocumentDB,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,document_nosql,azure,Azure Cosmos DB,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,document_nosql,gcp,Firestore,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,document_nosql,gcp,Datastore,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,document_nosql,oci,Oracle NoSQL Database Cloud Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,document_nosql,oci,Oracle Autonomous JSON Database,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,in_memory_database,aws,Amazon ElastiCache,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,in_memory_database,aws,Amazon MemoryDB for Redis,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,in_memory_database,azure,Azure Cache for Redis,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,in_memory_database,gcp,Memorystore,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,graph_database,aws,Amazon Neptune,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,database,graph_database,oci,Oracle Graph Database,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,database,timeseries_database,aws,Amazon Timestream,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,database,timeseries_database,azure,Azure Time Series Insights,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,database,timeseries_database,gcp,Cloud Bigtable,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,database,data_warehouse,aws,Amazon Redshift,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,data_warehouse,azure,Azure Synapse Analytics,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,data_warehouse,gcp,BigQuery,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,data_warehouse,oci,Oracle Autonomous Data Warehouse,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,data_warehouse,oci,Exadata Cloud Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,wide_column_nosql,aws,Amazon Keyspaces (Apache Cassandra),2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,database,wide_column_nosql,gcp,Bigtable,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,database,ledger_database,aws,Amazon Quantum Ledger Database (QLDB),2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,database,oracle_database_on_bare_metal,aws,Amazon RDS for Oracle,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,oracle_database_on_bare_metal,azure,Azure Oracle Database Enterprise Edition,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,oracle_database_on_bare_metal,gcp,Bare Metal Solution,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,virtual_private_cloud,aws,Amazon VPC,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,virtual_private_cloud,azure,Azure Virtual Network (VNet),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,virtual_private_cloud,gcp,Virtual Private Cloud (VPC),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,virtual_private_cloud,oci,Oracle Virtual Cloud Network,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,vpc_peering,aws,AWS VPC peering,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,networking,vpc_peering,aws,AWS Transit Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,networking,vpc_peering,azure,Azure VNet Peering,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,networking,vpc_peering,gcp,Google VPC Peering,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,networking,vpc_peering,oci,Oracle Dynamic Routing Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,networking,private_connectivity,aws,AWS Direct Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,private_connectivity,aws,AWS PrivateLink,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,private_connectivity,azure,Azure ExpressRoute,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,private_connectivity,azure,Azure Private Link,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,private_connectivity,gcp,Cloud Interconnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,private_connectivity,gcp,Private Service Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,private_connectivity,oci,OCI FastConnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,vpn_gateway,aws,AWS Site-to-Site VPN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,vpn_gateway,aws,AWS Client VPN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,vpn_gateway,azure,Azure VPN Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,vpn_gateway,gcp,Cloud VPN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,vpn_gateway,oci,Oracle VPN Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dns,aws,Amazon Route 53,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dns,azure,Azure DNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dns,gcp,Cloud DNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dns,oci,Oracle DNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,global_traffic_management,aws,AWS Global Accelerator,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,networking,global_traffic_management,aws,Amazon Route 53 Traffic Flow,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,networking,global_traffic_management,azure,Azure Traffic Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,networking,global_traffic_management,oci,OCI Traffic Management,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,networking,content_delivery_network,aws,Amazon CloudFront,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,content_delivery_network,azure,Azure CDN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,content_delivery_network,azure,Azure Front Door,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,content_delivery_network,gcp,Cloud CDN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,content_delivery_network,gcp,Media CDN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,load_balancer,aws,Elastic Load Balancing,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,load_balancer,azure,Azure Load Balancer,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,load_balancer,gcp,Cloud Load Balancing,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,load_balancer,oci,OCI Load Balancing,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,nat_gateway,aws,AWS NAT Gateways,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,nat_gateway,azure,Azure NAT Gateway,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,nat_gateway,gcp,Cloud NAT,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,service_discovery,aws,AWS Cloud Map,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,service_discovery,gcp,Service Directory,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dynamic_routing,aws,AWS Transit Gateway,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dynamic_routing,aws,AWS Direct Connect,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dynamic_routing,azure,Azure Route Server,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dynamic_routing,azure,Azure VPN Gateway,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dynamic_routing,gcp,Cloud Router,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,network_connectivity_hub,aws,Amazon Cloud WAN,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,network_connectivity_hub,aws,AWS Transit Gateway,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,network_connectivity_hub,azure,Azure Virtual WAN,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,network_connectivity_hub,gcp,Network Connectivity Center,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,network_monitoring,aws,AWS Network Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,network_monitoring,azure,Azure Network Watcher,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,network_monitoring,gcp,Network Intelligence Center,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,premium_global_network,aws,AWS Global Accelerator,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,premium_global_network,gcp,Network Service Tiers - Premium,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,secure_web_proxy,azure,Azure Firewall Explicit Proxy,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,secure_web_proxy,gcp,Secure Web Proxy,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,private_5g,aws,AWS Private 5G,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,private_5g,gcp,Spectrum Access System (SAS),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,identity_access_management,aws,AWS Identity and Access Management (IAM),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,identity_access_management,azure,Azure Active Directory,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,identity_access_management,azure,Microsoft Entra ID,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,identity_access_management,gcp,Cloud IAM,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,identity_access_management,gcp,Cloud Identity,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,identity_access_management,oci,Oracle Identity and Access Management (IAM),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,consumer_identity,aws,Amazon Cognito,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,consumer_identity,azure,Azure Active Directory B2C,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,consumer_identity,gcp,Identity Platform,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,directory_services,aws,AWS Directory Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,directory_services,aws,AWS Managed Microsoft AD,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,directory_services,azure,Azure Active Directory Domain Services,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,directory_services,gcp,Managed Service for Microsoft Active Directory,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,directory_services,oci,Oracle Directory Services,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,key_management,aws,AWS Key Management Service (KMS),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,key_management,azure,Azure Key Vault,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,key_management,gcp,Cloud KMS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,key_management,gcp,Cloud HSM,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,key_management,oci,OCI Vault,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,external_key_manager,aws,AWS KMS XKS,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,external_key_manager,aws,AWS CloudHSM,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,external_key_manager,azure,Azure Managed HSM,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,external_key_manager,gcp,Cloud External Key Manager (EKM),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,secrets_management,aws,AWS Secrets Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,secrets_management,aws,AWS Systems Manager Parameter Store,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,secrets_management,azure,Azure Key Vault,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,secrets_management,gcp,Secret Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,certificate_management,aws,AWS Certificate Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,certificate_management,aws,AWS Private CA,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,certificate_management,azure,Azure App Service Certificate,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,certificate_management,gcp,Certificate Authority Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,data_loss_prevention,aws,Amazon Macie,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,data_loss_prevention,aws,Amazon Bedrock Guardrails,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,data_loss_prevention,azure,Microsoft Purview,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,data_loss_prevention,gcp,Sensitive Data Protection,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,ddos_protection,aws,AWS Shield,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,ddos_protection,aws,AWS Shield Advanced,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,ddos_protection,azure,Azure DDoS Protection,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,ddos_protection,gcp,Google Cloud Armor,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,ddos_protection,gcp,Cloud Armor Enterprise,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,ddos_protection,oci,OCI DDoS Protection,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,web_application_firewall,aws,AWS WAF,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,web_application_firewall,azure,Azure Web Application Firewall,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,web_application_firewall,gcp,Google Cloud Armor,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,web_application_firewall,oci,OCI Web Application Firewall,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,next_generation_firewall,aws,AWS Network Firewall,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,next_generation_firewall,azure,Azure Firewall Premium,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,next_generation_firewall,gcp,Cloud Next Generation Firewall (NGFW),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,intrusion_detection,aws,Amazon GuardDuty,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,intrusion_detection,gcp,Cloud Intrusion Detection System (Cloud IDS),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,siem,aws,Amazon Security Lake,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,siem,azure,Microsoft Sentinel,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,siem,gcp,Google Security Operations SIEM,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,soar,azure,Microsoft Sentinel,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,soar,gcp,Google Security Operations SOAR,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,security_command_center,aws,AWS Security Hub,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,security_identity,security_command_center,aws,Amazon GuardDuty,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,security_identity,security_command_center,azure,Microsoft Defender for Cloud,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,security_identity,security_command_center,gcp,Security Command Center,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,security_identity,security_command_center,oci,Oracle Cloud Guard,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,security_identity,vulnerability_scanning,aws,Amazon Inspector,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,security_identity,vulnerability_scanning,azure,Microsoft Defender for Cloud,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,security_identity,vulnerability_scanning,oci,Oracle Vulnerability Scanning Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,security_identity,compliance_reports,aws,AWS Artifact,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,security_identity,compliance_reports,azure,Azure Security & Compliance,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,security_identity,compliance_reports,gcp,Cloud Security Command Center,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,security_identity,compliance_reports,oci,OCI Compliance Documents,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,security_identity,regulated_workloads,aws,AWS GovCloud,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,regulated_workloads,azure,Azure Government,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,regulated_workloads,gcp,Assured Workloads,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,access_transparency,aws,AWS CloudTrail,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,access_transparency,azure,Customer Lockbox for Microsoft Azure,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,access_transparency,gcp,Access Transparency,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,access_transparency,gcp,Access Approval,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,iap_zero_trust,aws,AWS Application Load Balancer with Cognito,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,iap_zero_trust,azure,Azure Application Gateway with Entra ID,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,iap_zero_trust,gcp,Identity-Aware Proxy (IAP),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,workload_identity_federation,aws,AWS IAM Roles Anywhere,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,workload_identity_federation,azure,Microsoft Entra Workload ID,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,workload_identity_federation,gcp,Workload Identity Federation,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,vpc_service_controls,gcp,VPC Service Controls,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,confidential_collaboration,aws,AWS Nitro Enclaves,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,confidential_collaboration,azure,Confidential Containers in AKS,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,confidential_collaboration,gcp,Confidential Space,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,captcha_abuse_prevention,aws,AWS WAF CAPTCHA,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,captcha_abuse_prevention,aws,AWS Fraud Detector,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,captcha_abuse_prevention,azure,Microsoft Dynamics Fraud,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,captcha_abuse_prevention,gcp,reCAPTCHA Enterprise,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,supply_chain_security,gcp,Assured Open Source Software,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,attack_surface_management,azure,Microsoft Defender External Attack Surface Management,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,attack_surface_management,gcp,Mandiant Attack Surface Management,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,managed_threat_hunting,azure,Microsoft Defender Experts for Hunting,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,managed_threat_hunting,gcp,Mandiant Threat Defense,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,security_identity,user_protection_services,gcp,Web Risk,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,managed_ml_platform,aws,Amazon SageMaker,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,managed_ml_platform,azure,Azure Machine Learning,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,managed_ml_platform,gcp,Vertex AI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,managed_ml_platform,oci,OCI Data Science,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,ml_notebooks,aws,Amazon SageMaker Notebook Instances,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,ml_notebooks,azure,Azure Notebooks,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,ml_notebooks,gcp,Vertex AI Workbench,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,ml_notebooks,gcp,Colab Enterprise,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,ml_notebooks,oci,OCI Data Flow Notebooks,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,deep_learning_vm,aws,AWS Deep Learning AMIs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,deep_learning_vm,azure,Azure Data Science VMs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,deep_learning_vm,gcp,Deep Learning VM Images,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,deep_learning_containers,aws,AWS Deep Learning Containers,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,deep_learning_containers,azure,Azure Machine Learning Curated Environments,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,deep_learning_containers,gcp,Deep Learning Containers,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,speech_to_text,aws,Amazon Transcribe,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,speech_to_text,azure,Azure Speech to Text,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,speech_to_text,gcp,Speech-to-Text,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,speech_to_text,oci,OCI Speech,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,text_to_speech,aws,Amazon Polly,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,text_to_speech,azure,Azure Text to Speech,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,text_to_speech,gcp,Text-to-Speech,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,translation,aws,Amazon Translate,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,translation,azure,Azure Translator,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,translation,gcp,Translation AI,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,natural_language_processing,aws,Amazon Comprehend,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,natural_language_processing,azure,Azure Text Analytics,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,natural_language_processing,azure,Cognitive Service for Language,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,natural_language_processing,gcp,Natural Language AI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,natural_language_processing,oci,OCI Language,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,natural_language_processing,oci,Document Understanding,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,conversational_ai,aws,Amazon Lex,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,conversational_ai,azure,Azure Bot Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,conversational_ai,azure,Azure Conversational AI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,conversational_ai,gcp,Dialogflow,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,conversational_ai,oci,Oracle Digital Assistant,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,image_recognition,aws,Amazon Rekognition,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,image_recognition,azure,Azure Computer Vision,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,image_recognition,azure,Custom Vision,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,image_recognition,azure,Face API,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,image_recognition,gcp,Vision AI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,image_recognition,oci,OCI Vision,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,video_intelligence,aws,Amazon Rekognition Video,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,video_intelligence,azure,Azure Video Indexer,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,video_intelligence,gcp,Video Intelligence API,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,document_understanding,aws,Amazon Textract,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,document_understanding,azure,Azure AI Document Intelligence,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,document_understanding,azure,Azure Form Recognizer,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,document_understanding,gcp,Document AI,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,document_understanding,oci,OCI Vision (OCR),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,ai_ml,personalization,aws,Amazon Personalize,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,personalization,azure,Azure Personalizer,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,personalization,gcp,Recommendations,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,time_series_forecasting,aws,Amazon Forecast,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,time_series_forecasting,oci,OCI Forecasting,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,fraud_detection,aws,Amazon Fraud Detector,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,fraud_detection,gcp,Anti Money Laundering AI,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,data_labeling,aws,Amazon SageMaker Ground Truth,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,data_labeling,aws,AWS Entity Resolution,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,data_labeling,azure,Azure Data Factory,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,data_labeling,gcp,Vertex AI Data Labeling,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,data_labeling,gcp,Dataprep,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,data_labeling,oci,OCI Data Labeling,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,intelligent_search,aws,Amazon Kendra,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,intelligent_search,aws,Amazon Bedrock Knowledge Bases,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,intelligent_search,azure,Azure AI Search,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,intelligent_search,azure,Azure Cognitive Search,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,intelligent_search,gcp,Vertex AI Search,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,intelligent_search,gcp,Agent Search,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,ml_inference,aws,Amazon Elastic Inference,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,ai_ml,ml_inference,gcp,Vertex AI Predictions,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,ai_ml,contact_center_ai,aws,Amazon Connect,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,contact_center_ai,aws,Amazon Q in Connect,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,contact_center_ai,azure,Microsoft Dynamics Contact Center,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,contact_center_ai,gcp,Contact Center AI Platform (CCaaS),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,contact_center_ai,gcp,Agent Assist,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,ai_ml,open_dataset,aws,Open Data on AWS,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,open_dataset,azure,Azure Open Datasets,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,open_dataset,gcp,Google Datasets,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,open_dataset,oci,Oracle Open Data,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,generative_ai,generative_ai_platform,aws,AWS Bedrock,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,generative_ai,generative_ai_platform,azure,Azure OpenAI Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,generative_ai,generative_ai_platform,gcp,Vertex AI Studio,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,generative_ai,generative_ai_platform,oci,OCI Generative AI,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,generative_ai,ai_coding_assistant,aws,Amazon Q Developer,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,ai_coding_assistant,azure,GitHub Copilot,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,ai_coding_assistant,gcp,Gemini Code Assist,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,ai_business_assistant,aws,Amazon Q Business,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,ai_business_assistant,azure,Copilot in Azure,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,ai_business_assistant,gcp,Gemini for Google Cloud,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,image_generation,aws,Amazon Titan,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,image_generation,azure,Azure OpenAI Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,image_generation,gcp,Imagen,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,video_generation,azure,Azure OpenAI Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,video_generation,gcp,Veo,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,music_generation,azure,Azure OpenAI Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,music_generation,gcp,Lyria,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,model_catalog,aws,AWS JumpStart with Amazon Bedrock,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,model_catalog,azure,Azure AI Model Catalog,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,model_catalog,gcp,Vertex AI Model Garden,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,rag_engine,aws,Amazon Bedrock Knowledge Bases,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,rag_engine,azure,Azure AI Language,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,rag_engine,gcp,Vertex AI RAG Engine,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,generative_ai,generative_ai_agents,oci,OCI Generative AI Agents,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,analytics,business_intelligence,aws,Amazon QuickSight,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,analytics,business_intelligence,azure,Microsoft Power BI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,analytics,business_intelligence,azure,Microsoft Fabric,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,analytics,business_intelligence,gcp,Looker,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,analytics,business_intelligence,oci,Oracle Analytics Cloud,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,analytics,data_catalog,aws,Amazon DataZone,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,data_catalog,azure,Microsoft Purview,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,data_catalog,gcp,Dataplex Knowledge Catalog,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,etl_data_integration,aws,AWS Glue,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,etl_data_integration,aws,AWS Data Pipeline,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,etl_data_integration,azure,Azure Data Factory,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,etl_data_integration,gcp,Cloud Data Fusion,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,etl_data_integration,oci,Oracle Cloud Infrastructure Data Flow,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,etl_data_integration,oci,Oracle Integration,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,managed_hadoop_spark,aws,Amazon EMR,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,managed_hadoop_spark,azure,Azure HDInsight,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,managed_hadoop_spark,azure,Azure Databricks,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,managed_hadoop_spark,gcp,Dataproc,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,managed_hadoop_spark,oci,Oracle Big Data Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,interactive_query,aws,Amazon Athena,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,interactive_query,azure,Azure Data Lake Analytics,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,interactive_query,azure,Microsoft Fabric,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,interactive_query,gcp,BigQuery,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,interactive_query,oci,Oracle Big Data SQL Cloud Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,data_lake,aws,AWS Lake Formation,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,analytics,data_lake,azure,Azure Data Lake,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,analytics,data_lake,gcp,BigQuery,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,analytics,stream_processing,aws,Amazon Kinesis Data Streams,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_processing,aws,AWS Managed Service for Apache Flink,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_processing,azure,Azure Stream Analytics,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_processing,gcp,Dataflow,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_processing,oci,OCI Streaming,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_ingestion,aws,Amazon Kinesis Data Streams,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_ingestion,azure,Azure Event Hubs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_ingestion,gcp,Pub/Sub,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,messaging,aws,Amazon Kinesis Data Streams,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,messaging,aws,Amazon MQ,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,messaging,azure,Azure Service Bus Messaging,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,messaging,gcp,Pub/Sub,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,change_data_capture,aws,AWS Database Migration Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,change_data_capture,azure,Azure Data Factory,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,change_data_capture,gcp,Datastream,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,managed_airflow,aws,Amazon Managed Workflows for Apache Airflow (MWAA),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,managed_airflow,azure,Azure Data Factory Workflow Orchestration Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,managed_airflow,gcp,Cloud Composer,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,data_share,aws,AWS Data Exchange,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,analytics,data_share,azure,Azure Data Share,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,analytics,data_share,gcp,Analytics Hub,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,analytics,data_exploration,aws,Amazon OpenSearch Service,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,analytics,data_exploration,aws,Amazon OpenSearch Serverless,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,analytics,data_exploration,azure,Azure Data Explorer,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,analytics,data_exploration,gcp,Colab Enterprise,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,analytics,data_exploration,oci,OCI Search with OpenSearch,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,analytics,hive_metastore,aws,AWS Glue Catalog,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,hive_metastore,gcp,Dataproc Metastore,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,sql_data_transformation,gcp,Dataform,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cicd_build,aws,AWS CodeBuild,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cicd_build,aws,AWS CodeDeploy,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cicd_build,aws,AWS CodePipeline,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cicd_build,azure,Azure DevOps,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cicd_build,azure,GitHub Enterprise,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cicd_build,gcp,Cloud Build,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,continuous_delivery,aws,AWS CodePipeline,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,continuous_delivery,aws,AWS CodeDeploy,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,continuous_delivery,azure,Azure DevOps,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,continuous_delivery,azure,GitHub Enterprise,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,continuous_delivery,gcp,Cloud Deploy,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,source_repositories,aws,AWS CodeCommit,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,source_repositories,azure,Azure Repos,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,source_repositories,gcp,Cloud Source Repositories,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,source_repositories,gcp,Secure Source Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_cli,aws,AWS CLI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_cli,azure,Azure CLI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_cli,azure,Azure PowerShell,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_cli,gcp,Google Cloud SDK,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_cli,gcp,gcloud CLI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_cli,oci,OCI CLI,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_shell,aws,AWS CloudShell,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_shell,azure,Azure Cloud Shell,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_shell,gcp,Cloud Shell,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_shell,oci,Oracle Cloud Shell,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,sdk_libraries,aws,AWS SDKs,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,sdk_libraries,aws,AWS Cloud Development Kit,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,sdk_libraries,azure,Azure SDKs,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,sdk_libraries,gcp,Google Cloud SDK,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,sdk_libraries,oci,Oracle API Catalog,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,ide_plugin_intellij,aws,AWS Toolkit for IntelliJ,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,ide_plugin_intellij,azure,Azure Toolkit for IntelliJ,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,ide_plugin_intellij,gcp,Cloud Code for IntelliJ,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,ide_plugin_intellij,oci,Oracle Toolkit for Eclipse,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,ide_plugin_vscode,aws,AWS Toolkit for Visual Studio Code,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,ide_plugin_vscode,azure,Azure Tools for Visual Studio Code,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,ide_plugin_vscode,gcp,Cloud Code for VS Code,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,ide_plugin_vscode,oci,Oracle Developer Tools for Visual Studio,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_workstations,aws,AWS Cloud9,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_workstations,azure,GitHub Codespaces,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,cloud_workstations,gcp,Cloud Workstations,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,error_reporting,gcp,Error Reporting,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,sap_abap_sdk,aws,AWS SDK for SAP ABAP,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,sap_abap_sdk,azure,ABAP SDK for Azure,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,developer_tools,sap_abap_sdk,gcp,ABAP SDK for Google Cloud,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_gateway,aws,Amazon API Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_gateway,azure,Azure API Management,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_gateway,gcp,API Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_gateway,gcp,Cloud Endpoints,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_gateway,oci,Oracle API Platform,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_platform,aws,Amazon Publisher Services,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_platform,azure,Azure API Management,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_platform,gcp,Apigee,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_monetization,azure,Azure API Management,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_monetization,gcp,Apigee API Monetization,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_portal,aws,Amazon API Gateway,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_portal,azure,Azure API Management,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_portal,gcp,Apigee Integrated Portals,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_security,azure,Azure Defender,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_security,gcp,Apigee Advanced API Security,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_hub,azure,Azure API Center,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,api_management,api_hub,gcp,Apigee API Hub,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,infrastructure_as_code,aws,AWS CloudFormation,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,infrastructure_as_code,aws,AWS OpsWorks,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,infrastructure_as_code,azure,Azure Resource Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,infrastructure_as_code,gcp,Cloud Deployment Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,infrastructure_as_code,gcp,Cloud Resource Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,infrastructure_as_code,oci,Oracle Resource Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,audit_logging,aws,AWS CloudTrail,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,audit_logging,azure,Azure Activity Logs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,audit_logging,gcp,Cloud Audit Logs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,monitoring,aws,Amazon CloudWatch,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,monitoring,azure,Azure Monitor,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,monitoring,gcp,Cloud Monitoring,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,monitoring,oci,OCI Monitoring,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,monitoring,oci,Application Performance Monitoring,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,logging,aws,Amazon CloudWatch Logs,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,logging,azure,Azure Monitor Logs,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,logging,gcp,Cloud Logging,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,logging,oci,OCI Logging,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,logging,oci,OCI Logging Analytics,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,performance_tracing,aws,AWS X-Ray,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,performance_tracing,aws,AWS Application Signals,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,performance_tracing,azure,Azure Application Insights,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,performance_tracing,gcp,Cloud Trace,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,code_profiler,aws,Amazon CodeGuru Profiler,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,code_profiler,azure,Azure Monitor Application Insights Profiler,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,code_profiler,gcp,Cloud Profiler,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,resource_inventory,aws,AWS Config,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,resource_inventory,azure,Azure Resource Graph,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,resource_inventory,gcp,Cloud Asset Inventory,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,resource_hierarchy,aws,AWS Organizations,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,resource_hierarchy,azure,Azure Resource Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,resource_hierarchy,azure,Azure Management Groups,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,resource_hierarchy,gcp,Resource Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,policy_enforcement,aws,AWS Config,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,policy_enforcement,azure,Azure Policy,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,policy_enforcement,gcp,Organization Policy Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,cost_management,aws,AWS Cost Management,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,management_tools,cost_management,aws,AWS Cost Explorer,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,management_tools,cost_management,azure,Azure Cost Management,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,management_tools,cost_management,gcp,Recommender,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,management_tools,cost_management,oci,Oracle Cloud Advisor,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,management_tools,trusted_advisor,aws,AWS Trusted Advisor,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,management_tools,trusted_advisor,aws,AWS Well-Architected Tool,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,management_tools,trusted_advisor,azure,Azure Advisor,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,management_tools,trusted_advisor,oci,Oracle Cloud Advisor,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,management_tools,trusted_advisor,oci,Oracle Cloud Guard,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,management_tools,service_catalog,aws,AWS Service Catalog,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,service_catalog,azure,Azure Marketplace,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,service_catalog,azure,Azure Managed Applications,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,service_catalog,gcp,Service Catalog,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,marketplace,aws,AWS Marketplace,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,marketplace,azure,Azure Marketplace,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,marketplace,gcp,Google Cloud Marketplace,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,marketplace,oci,Oracle Cloud Marketplace,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,personal_health_dashboard,aws,AWS Personal Health Dashboard,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,management_tools,personal_health_dashboard,azure,Azure Monitor,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,management_tools,personal_health_dashboard,oci,Oracle Management Cloud,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,management_tools,mobile_console,aws,AWS Console Mobile Application,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,mobile_console,azure,Azure mobile app,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,mobile_console,gcp,Google Cloud app,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,os_management,aws,AWS Systems Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,management_tools,os_management,azure,Azure Update Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,management_tools,os_management,gcp,VM Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,management_tools,os_management,oci,OCI OS Management,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison; https://www.oracle.com/cloud/service-comparison/
+,management_tools,well_architected_assessment,aws,AWS Config,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,well_architected_assessment,azure,Azure Policy,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,well_architected_assessment,gcp,Workload Manager Evaluations,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,application_design_center,aws,AWS App Studio,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,application_design_center,aws,Application Composer,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,application_design_center,azure,AI Prompt Flow,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,application_design_center,azure,Bot Framework Composer,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,management_tools,application_design_center,gcp,App Design Center,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,database_migration,aws,AWS Database Migration Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,database_migration,azure,Azure Database Migration Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,database_migration,gcp,Database Migration Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,database_migration,oci,Oracle Lift Services,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,server_migration,aws,AWS Application Migration Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,server_migration,aws,AWS Server Migration Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,server_migration,azure,Azure Migrate,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,server_migration,gcp,Migrate to Virtual Machines,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,container_migration,aws,AWS App2Container,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,container_migration,azure,Azure Migrate: App Containerization,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,container_migration,gcp,Migrate to Containers,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,storage_migration,aws,AWS Storage Gateway,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,storage_migration,aws,AWS DataSync,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,storage_migration,azure,Azure Data Factory,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,storage_migration,azure,Azure Storage Migrator,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,storage_migration,gcp,Storage Transfer Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,data_transfer_appliance_terabyte,aws,AWS Snowcone,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_terabyte,aws,AWS Snowball Edge,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_terabyte,azure,Azure Data Box,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_terabyte,gcp,Transfer Appliance,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_terabyte,oci,OCI Data Transfer - Storage Appliance,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_petabyte,aws,AWS Snowball,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_petabyte,aws,AWS DataSync,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_petabyte,azure,Azure Data Box,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_petabyte,gcp,Transfer Appliance,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_exabyte,aws,AWS Snowmobile,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,data_transfer_appliance_exabyte,oci,OCI Data Transfer Services,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,migration,migration_hub,aws,AWS Migration Hub,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,migration_hub,azure,Azure Migrate,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,migration_hub,gcp,Google Cloud Migration Center,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,data_warehouse_migration,aws,AWS Schema Conversion Tool,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,data_warehouse_migration,gcp,BigQuery Migration Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,data_transfer_service,aws,AWS AppFlow,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,data_transfer_service,azure,Azure Data Factory,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,migration,data_transfer_service,gcp,BigQuery Data Transfer Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,backup_dr,backup_service,aws,AWS Backup,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,backup_dr,backup_service,aws,AWS Disaster Recovery,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,backup_dr,backup_service,azure,Azure Backup,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,backup_dr,backup_service,azure,Azure Site Recovery,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,backup_dr,backup_service,gcp,Backup and DR Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,backup_dr,backup_service,oci,Oracle Database Backup,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,hybrid_cloud_platform,aws,AWS Outposts,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,hybrid_cloud_platform,azure,Azure Arc,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,hybrid_cloud_platform,azure,Azure Stack,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,hybrid_cloud_platform,gcp,Google Distributed Cloud,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,hybrid_cloud_platform,oci,Oracle Exadata Cloud@Customer,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,hybrid_cloud_platform,oci,Oracle Roving Edge Infrastructure,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,air_gapped_edge,azure,Azure Stack,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,air_gapped_edge,gcp,Google Distributed Cloud (air-gapped),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,multicloud_kubernetes,gcp,GKE Attached Clusters,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_config_management,aws,AWS Controllers for Kubernetes (ACK),2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_config_management,azure,Azure Service Operator,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_config_management,azure,Azure Arc for GitOps,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_config_management,gcp,Config Connector,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_config_management,gcp,Config Sync,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_fleet_management,azure,Azure Kubernetes Fleet Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_fleet_management,gcp,GKE Fleets,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_fleet_management,gcp,Fleet Team Management,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_policy_controller,azure,Azure Policy for Kubernetes,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,hybrid_edge,kubernetes_policy_controller,gcp,Policy Controller,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,iot,iot_platform,aws,AWS IoT Core,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,iot,iot_platform,azure,Azure IoT Hub,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,iot,iot_platform,azure,Azure IoT Platform,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,iot,iot_platform,gcp,Google Cloud IoT Core,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,iot,iot_platform,oci,Oracle Internet of Things Cloud Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,iot,iot_edge,aws,AWS Greengrass,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,iot,iot_edge,azure,Azure IoT Edge,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,iot,iot_hardware,aws,AWS IoT Button,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,iot,iot_hardware,azure,Azure Sphere,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,mobile,mobile_backend,aws,AWS Amplify,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,mobile,mobile_backend,aws,AWS Mobile Hub,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,mobile,mobile_backend,azure,Azure Mobile Apps,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,mobile,mobile_backend,gcp,Firebase,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,mobile,mobile_backend,oci,Oracle Mobile Hub,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,mobile,mobile_app_testing,aws,AWS Device Farm,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,mobile_app_testing,azure,App Center Test,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,mobile_app_testing,gcp,Firebase Test Lab,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,mobile_authentication,aws,Amazon Cognito,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,mobile_authentication,azure,Azure Active Directory B2C,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,mobile_authentication,azure,Azure App Service Authentication,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,mobile_authentication,gcp,Firebase Authentication,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,mobile_authentication,oci,Oracle Mobile Cloud Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,mobile_analytics,aws,Amazon Pinpoint,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,mobile,mobile_analytics,azure,Visual Studio App Center,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,mobile,mobile_analytics,gcp,Google Analytics for Firebase,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,mobile,push_notifications,aws,Amazon SNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,push_notifications,aws,Amazon Device Messaging (ADM),2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,push_notifications,azure,Azure Notification Hubs,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,push_notifications,gcp,Firebase Cloud Messaging,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,push_notifications,oci,OCI Notifications,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,crash_reporting,gcp,Firebase Crashlytics,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,app_distribution,gcp,Firebase App Distribution,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,app_check,gcp,Firebase App Check,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,remote_config,aws,AWS AppConfig,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,remote_config,azure,Azure App Configuration,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,remote_config,gcp,Firebase Remote Config,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,firebase_data_connect,aws,AWS AppSync,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,mobile,firebase_data_connect,gcp,Firebase Data Connect,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,media_transcoding,aws,AWS Elemental MediaConvert,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,media,media_transcoding,azure,Azure Media Services,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,media,media_transcoding,gcp,Transcoder API,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,media,media_transcoding,oci,Oracle Digital Transcoding,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,media,live_streaming,aws,AWS Elemental MediaLive,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,live_streaming,azure,Azure Media Services,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,live_streaming,gcp,Live Stream API,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,ad_insertion,aws,AWS Elemental MediaTailor,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,ad_insertion,azure,Azure Media Services,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,ad_insertion,azure,Azure Video Indexer,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,ad_insertion,gcp,Video Stitcher API,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,video_ai,aws,Amazon Rekognition Video,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,video_ai,azure,Azure Video Analyzer for Media,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,media,video_ai,gcp,Video AI,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,application_services,queueing,aws,Amazon Simple Queue Service (SQS),2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,queueing,aws,Amazon MQ,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,queueing,azure,Azure Service Bus,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,queueing,azure,Azure Queue Storage,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,queueing,gcp,Pub/Sub,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,queueing,oci,Oracle Messaging,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,notification_service,aws,Amazon SNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,notification_service,azure,Azure Notification Hubs,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,notification_service,azure,Azure Service Bus,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,notification_service,gcp,Firebase Cloud Messaging,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,notification_service,oci,OCI Notifications,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,email_delivery,aws,Amazon SES,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,email_delivery,oci,OCI Email Delivery,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,blockchain_service,aws,Amazon Managed Blockchain,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,application_services,blockchain_service,azure,Azure Blockchain Workbench,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,application_services,blockchain_service,oci,Oracle Blockchain Platform,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://www.oracle.com/cloud/service-comparison/
+,application_services,nft_platform,oci,NFT on Oracle Blockchain,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,application_services,chatbot,aws,Amazon Lex,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,chatbot,aws,AWS Chatbot,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,chatbot,azure,Azure Bot Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,chatbot,gcp,Dialogflow,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,chatbot,oci,Oracle Digital Assistant,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,ipaas_integration,aws,Amazon AppFlow,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,application_services,ipaas_integration,azure,Azure Logic Apps,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,application_services,ipaas_integration,gcp,Application Integration,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,application_services,ipaas_integration,gcp,Integration Connectors,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,application_services,step_functions,aws,AWS Step Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,step_functions,azure,Azure Logic Apps,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,step_functions,azure,Azure Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,step_functions,gcp,Workflows,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,step_functions,oci,Oracle Application Express (APEX),2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,step_functions,oci,Oracle Visual Builder,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,virtual_desktop,aws,Amazon WorkSpaces,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,virtual_desktop,aws,Amazon AppStream 2.0,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,office_collaboration,aws,Amazon WorkDocs,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,office_collaboration,aws,Amazon WorkMail,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,office_collaboration,azure,Microsoft Office 365,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,office_collaboration,gcp,Google Workspace,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,unified_communications,aws,Amazon Chime,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,unified_communications,aws,Amazon Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,unified_communications,azure,Azure Communications Services,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,business_productivity,corporate_search,aws,Amazon CloudSearch,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,business_productivity,corporate_search,oci,OCI Search with OpenSearch,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,business_productivity,pre_configured_analytics,aws,Amazon FinSpace,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,business_productivity,pre_configured_analytics,oci,Oracle Fusion Analytics Warehouse,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,gaming,game_servers,aws,Amazon GameLift,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,gaming,game_servers,azure,Azure PlayFab Multiplayer Services,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,gaming,game_servers,gcp,Game Servers,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,gaming,game_engine,aws,Amazon Lumberyard,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,robotics,robotics_development,aws,AWS RoboMaker,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,sovereignty,sovereign_controls,aws,AWS European Sovereign Cloud,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,sovereignty,sovereign_controls,azure,Microsoft Cloud for Sovereignty,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,sovereignty,sovereign_controls,gcp,Sovereign Controls by Partners,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,sovereignty,sovereign_controls,gcp,Sovereign Controls for EU,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,sovereignty,key_access_justifications,gcp,Key Access Justifications,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,enterprise,sap_on_cloud,aws,SAP on AWS,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,enterprise,sap_on_cloud,azure,SAP on Azure,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,enterprise,sap_on_cloud,gcp,SAP on Google Cloud,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,enterprise,sap_on_cloud,gcp,RISE with SAP on Google Cloud,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,enterprise,workload_deployment_automation,aws,AWS Launch Wizard,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,enterprise,workload_deployment_automation,azure,Azure Center for SAP Solutions,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,enterprise,workload_deployment_automation,gcp,Workload Manager,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,enterprise,cortex_data_foundation,gcp,Google Cloud Cortex Framework,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,retail_search,aws,Amazon Lex for Retail,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,retail_search,aws,Amazon Personalize,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,retail_search,azure,Dynamics 365 Commerce,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,retail_search,azure,Azure AI Search,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,retail_search,gcp,Agent Search for Retail,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,talent_solution,aws,AI Powered Talent Search,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,talent_solution,gcp,Cloud Talent Solution,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,customer_experience_insights,aws,Contact Lens,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,customer_experience_insights,azure,Dynamics 365 Customer Service,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,customer_experience_insights,gcp,Customer Experience Insights,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,telecom_network_automation,aws,AWS Telco Network Builder,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,telecom_network_automation,azure,Azure for Operators,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,telecom_network_automation,gcp,Telecom Network Automation,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,industry_vertical,healthcare_data_lake,aws,Amazon HealthLake,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,compute,memory_optimized_machines,aws,Amazon EC2 U7i High Memory Instances,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,memory_optimized_machines,azure,Azure M-series Mv3,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,compute,memory_optimized_machines,gcp,Memory-optimized Machine Family,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison

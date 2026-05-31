@@ -22,16 +22,25 @@ class PgBillingReportRepository:
             status=report.status.value,
             row_count=report.row_count,
             error_message=report.error_message,
+            external_id=report.external_id,
         )
         self._session.add(model)
         await self._session.flush()
-        # Refresh server-computed columns (created_at/updated_at via DB defaults)
         await self._session.refresh(model)
         return self._to_entity(model)
 
     async def get_by_id(self, report_id: UUID, user_id: UUID) -> BillingReport | None:
         stmt = select(BillingReportModel).where(
             BillingReportModel.id == report_id,
+            BillingReportModel.user_id == user_id,
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return self._to_entity(model) if model else None
+
+    async def get_by_external_id(self, external_id: UUID, user_id: UUID) -> BillingReport | None:
+        stmt = select(BillingReportModel).where(
+            BillingReportModel.external_id == external_id,
             BillingReportModel.user_id == user_id,
         )
         result = await self._session.execute(stmt)
@@ -52,7 +61,6 @@ class PgBillingReportRepository:
         if report.schema_version is not None:
             model.schema_version = report.schema_version
         await self._session.flush()
-        # `onupdate=func.now()` is server-computed; refresh to pull new updated_at
         await self._session.refresh(model)
         return self._to_entity(model)
 
@@ -77,6 +85,7 @@ class PgBillingReportRepository:
             status=JobStatus(model.status),
             row_count=model.row_count,
             error_message=model.error_message,
+            external_id=model.external_id,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

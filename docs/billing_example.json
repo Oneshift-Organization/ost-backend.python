@@ -1,0 +1,123 @@
+{
+  "source_provider": "aws",
+  "billing_period": "2026-04",
+  "total_spend": "10388.592224",
+  "currency": "USD",
+  "categories": [
+    {
+      "category": "containers",
+      "billing_total": "1637.044164",
+      "services": [
+        {
+          "service_name": "Elastic Container Service for Kubernetes",
+          "service_type": "managed_kubernetes",
+          "total_cost": "1369.516505",
+          "line_count": 1,
+          "equivalents": [
+            {
+              "provider": "gcp",
+              "service_name": "Google Kubernetes Engine (GKE)",
+              "category": "containers",
+              "service_type": "managed_kubernetes",
+              "metadata": null
+            },
+            {
+              "provider": "oci",
+              "service_name": "Container Engine for Kubernetes (OKE)",
+              "category": "containers",
+              "service_type": "managed_kubernetes",
+              "metadata": null
+            },
+            {
+              "provider": "azure",
+              "service_name": "Azure Kubernetes Service (AKS)",
+              "category": "containers",
+              "service_type": "managed_kubernetes",
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "service_name": "Elastic Container Service",
+          "service_type": "container_instances",
+          "total_cost": "264.739219",
+          "line_count": 1,
+          "equivalents": [
+            {
+              "provider": "azure",
+              "service_name": "Azure Container Instances",
+              "category": "containers",
+              "service_type": "container_instances",
+              "metadata": null
+            },
+            {
+              "provider": "gcp",
+              "service_name": "Cloud Run",
+              "category": "containers",
+              "service_type": "container_instances",
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "service_name": "EC2 Container Registry (ECR)",
+          "service_type": "container_registry",
+          "total_cost": "2.788440",
+          "line_count": 1,
+          "equivalents": [
+            {
+              "provider": "gcp",
+              "service_name": "Artifact Registry",
+              "category": "containers",
+              "service_type": "container_registry",
+              "metadata": null
+            },
+            {
+              "provider": "oci",
+              "service_name": "Oracle Cloud Infrastructure Registry",
+              "category": "containers",
+              "service_type": "container_registry",
+              "metadata": null
+            },
+            {
+              "provider": "azure",
+              "service_name": "Azure Container Registry",
+              "category": "containers",
+              "service_type": "container_registry",
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "service_name": "Elastic Container Registry Public",
+          "service_type": "container_registry",
+          "total_cost": "0.000000",
+          "line_count": 1,
+          "equivalents": [
+            {
+              "provider": "gcp",
+              "service_name": "Artifact Registry",
+              "category": "containers",
+              "service_type": "container_registry",
+              "metadata": null
+            },
+            {
+              "provider": "oci",
+              "service_name": "Oracle Cloud Infrastructure Registry",
+              "category": "containers",
+              "service_type": "container_registry",
+              "metadata": null
+            },
+            {
+              "provider": "azure",
+              "service_name": "Azure Container Registry",
+              "category": "containers",
+              "service_type": "container_registry",
+              "metadata": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

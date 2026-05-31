@@ -103,6 +103,164 @@ CREATE INDEX ix_billing_items_report_id
 Modelo SQLAlchemy: [`billing_items.py`](../app/infrastructure/database/models/billing_items.py).
 Entidade do domínio: [`BillingItem`](../app/domain/entities/billing_item.py).
 
+### `billing_enriched`
+
+Tabela de enriquecimento: `billing_items` cruzado com ontologia de serviço e
+catálogo de SKUs. Populada pelo `BuildBillingEnrichedUseCase` durante o
+pós-parse (em BackgroundTask). Contém os mesmos line items com campos
+adicionais de classificação e matching de equivalência.
+
+```sql
+CREATE TABLE billing_enriched (
+    id                  UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    report_id           UUID            NOT NULL REFERENCES billing_reports(id) ON DELETE CASCADE,
+    user_id             UUID            NOT NULL,
+    provider            VARCHAR(10)     NOT NULL,
+    billing_period      VARCHAR(7)      NOT NULL,
+
+    service_name        VARCHAR(200)    NOT NULL,
+    service_type        VARCHAR(50),
+    category            VARCHAR(50),
+    usage_type          VARCHAR(200),
+    region              VARCHAR(100),
+
+    usage_amount        NUMERIC(18, 6),
+    usage_unit          VARCHAR(50),
+    cost                NUMERIC(18, 6)  NOT NULL,
+    currency            VARCHAR(3)      NOT NULL DEFAULT 'USD',
+
+    sku_id              VARCHAR(200),
+    sku_metadata        JSONB,
+    pricing_source      VARCHAR(50),
+    pricing_confidence  VARCHAR(20),
+
+    -- Rastreabilidade do matching (ver refactor/sku-accuracy-spec.md §3.2):
+    -- mapping_confidence = certeza da CLASSIFICAÇÃO (role/family);
+    -- match_layer = qual rung da Matching Ladder (L0–L5) casou.
+    mapping_confidence  VARCHAR(10),
+    match_layer         VARCHAR(2),
+
+    scope               VARCHAR(20)     NOT NULL DEFAULT 'line_item',
+    source_line_hash    VARCHAR(64)     NOT NULL,
+
+    created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX ix_enriched_user_provider_period
+  ON billing_enriched (user_id, provider, billing_period);
+
+CREATE INDEX ix_enriched_scope
+  ON billing_enriched (report_id, scope);
+```
+
+### `cloud_sku_catalog`
+
+Catálogo multi-cloud de SKUs com especificações de hardware (vCPUs, RAM).
+Usado pelo `EquivalenceMatcher` para encontrar SKUs equivalentes entre
+provedores com base em recursos (vcpus, ram_gb) — matching determinístico
+sem if/else em Python. Populado por `seed_mock_catalog.py` (mock MVP) e
+futuramente por Pricing Workers (Fase 2).
+
+```sql
+CREATE TABLE cloud_sku_catalog (
+    id                UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider          VARCHAR(10)     NOT NULL,
+    sku_id            VARCHAR(200)    NOT NULL,
+    service_name      VARCHAR(200)    NOT NULL,
+    service_type      VARCHAR(50),
+    category          VARCHAR(50),
+    region            VARCHAR(100),
+    usage_unit        VARCHAR(50),
+    price_per_unit    NUMERIC(18, 6),
+    currency          VARCHAR(3)      NOT NULL DEFAULT 'USD',
+    vcpus             NUMERIC(6, 2),
+    ram_gb            NUMERIC(8, 2),
+
+    -- Papel do SKU (role), consumido pelo aggregator no lugar de regex sobre
+    -- description. Enum em refactor/sku-accuracy-spec.md §3.1. Coluna dedicada
+    -- (indexável) preferida a guardar em attributes JSONB.
+    component_type    VARCHAR(30)     NOT NULL DEFAULT 'unclassified',
+
+    attributes        JSONB,
+    effective_date    TIMESTAMPTZ,
+    collected_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX ix_catalog_provider_service_type
+  ON cloud_sku_catalog (provider, service_type);
+
+CREATE INDEX ix_catalog_provider_vcpus_ram
+  ON cloud_sku_catalog (provider, service_type, vcpus, ram_gb);
+```
+
+### `service_ontology`
+
+Ontologia de serviços: mapeia `(provider, usage_type)` para `category` e
+`service_type`. Usada pelo enriquecimento para classificar linhas de billing
+sem if/elif/else em Python. Populada por seed de 781+ registros.
+
+```sql
+CREATE TABLE service_ontology (
+    id                UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider          VARCHAR(10)     NOT NULL,
+    usage_type        VARCHAR(200)    NOT NULL,
+    service_name      VARCHAR(200)    NOT NULL,
+    category          VARCHAR(50)     NOT NULL,
+    service_type      VARCHAR(50)     NOT NULL,
+    created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+
+    UNIQUE (provider, usage_type)
+);
+```
+
+### `sku_classification_rules`
+
+Regras data-driven da **Matching Ladder** (rungs L2/L3): casam a `description`
+livre do SKU a um `component_type` (role) sem `if/else` por cloud em Python.
+Versionada e avaliada por `priority ASC` (primeira regra que casa vence). Spec
+completa em [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md#41-sku_classification_rules-new-table).
+
+```sql
+CREATE TABLE sku_classification_rules (
+    id                UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider          VARCHAR(10)     NOT NULL,
+    pattern           TEXT            NOT NULL,   -- glob ou regex
+    kind              VARCHAR(10)     NOT NULL,   -- 'glob' | 'regex'
+    component_type    VARCHAR(30)     NOT NULL,
+    family            VARCHAR(30),                -- nullable; extraído se NULL
+    confidence        VARCHAR(10)     NOT NULL DEFAULT 'medium',
+    priority          INTEGER         NOT NULL DEFAULT 100,  -- menor = primeiro
+    active            BOOLEAN         NOT NULL DEFAULT true,
+    created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX ix_sku_rules_provider_priority
+  ON sku_classification_rules (provider, priority) WHERE active;
+```
+
+### `unmapped_billing_lines`
+
+Dead-letter table: linhas de billing que não encontraram ontologia (usage_type
+não mapeado em `service_ontology`). Usada para human-in-the-loop: admin aprova
+mapeamento sugerido por LLM.
+
+```sql
+CREATE TABLE unmapped_billing_lines (
+    id                UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id           UUID            NOT NULL,
+    report_id         UUID            NOT NULL,
+    provider          VARCHAR(10)     NOT NULL,
+    billing_period    VARCHAR(7)      NOT NULL,
+    usage_type        VARCHAR(200),
+    service_name      VARCHAR(200),
+    region            VARCHAR(100),
+    reason            VARCHAR(100)     NOT NULL,
+    raw_payload       JSONB,
+    source_line_hash  VARCHAR(64),
+    created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+```
+
 > **Sobre `raw_payload`:** o schema canônico do parser inclui um campo
 > `raw_payload: dict`, mas a **migration 0001 não persiste essa coluna** ainda
 > (decisão MVP — adiada para uma migration futura). Atualmente vive só no
@@ -162,8 +320,8 @@ como `TypedDict` (e em `NORMALIZED_COLUMNS` como tuple para ordem de DataFrame).
 
 | Coluna | Tipo Python | Obrigatório | Notas |
 |---|---|---|---|
-| `cost` | `Decimal` | sim | Custo sem descontos. Validado como `Decimal >= 0`. |
-| `cost_discounted` | `Decimal` | sim | Custo com descontos/créditos aplicados (`cost + credits` no GCP, p.ex.). |
+| `cost` | `Decimal` | sim | Custo sem descontos. **Pode ser negativo** para créditos/ajustes. |
+| `cost_discounted` | `Decimal` | sim | Custo com descontos/créditos aplicados (`cost + credits` no GCP, p.ex.). Pode ser negativo. |
 | `currency` | `str` (3 chars) | sim | ISO-4217 — `USD`, `BRL`, `EUR`, etc. |
 
 ### Uso
@@ -267,3 +425,4 @@ HAVING MAX(m_cost) > 0 AND MIN(m_cost) = 0;
 - [`parsers.md`](parsers.md) — como cada provider produz o schema canônico.
 - [`endpoints/billing.md`](endpoints/billing.md) — serialização Decimal→string no JSON.
 - [`api-conventions.md`](api-conventions.md) — paginação, envelopes, status codes.
+- [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) — `component_type`, `mapping_confidence`, `match_layer`, `sku_classification_rules` e a Matching Ladder.
