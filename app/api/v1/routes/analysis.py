@@ -41,6 +41,7 @@ from app.schemas.analysis import (
     WorkloadSummaryItem,
 )
 from app.schemas.analysis_v2 import AnalysisV2Response, LegacyAnalysisRequest
+from app.use_cases.analysis.run_analysis_pipeline import serialize_as_legacy
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
@@ -395,3 +396,136 @@ async def get_analysis_result(
         result=AnalysisV2Response.resilient_parse(job.ai_structured_output) if job.ai_structured_output else None,
         created_at=job.created_at,
     )
+
+
+# ── Legacy pipeline ───────────────────────────────────────────────────────────
+# Same data as /start/{report_id} but serialized in the legacy workload format
+# before being sent to the LLM. Existing endpoints above are NOT modified.
+
+async def _run_legacy_analysis_pipeline(
+    user_id: UUID,
+    report_id: UUID,
+    job_id: UUID,
+    sessionmaker,
+) -> None:
+    """Legacy-format pipeline: builds context via the normal pipeline, then
+    serializes it as workloads[] JSON before sending to the LLM."""
+    logger.info("legacy_pipeline_started job_id=%s", job_id)
+    async with sessionmaker() as session:
+        job_repo = PgAnalysisJobRepository(session)
+        job = await job_repo.get_by_id(job_id, user_id)
+        if job is None:
+            logger.warning("legacy_pipeline_job_not_found job_id=%s", job_id)
+            return
+
+        job.mark_processing()
+        await job_repo.update(job)
+
+        try:
+            ctx = await _build_ctx(user_id, report_id, session)
+            legacy_payload = serialize_as_legacy(ctx)
+            orchestrator = LLMOrchestrator(llm_client=_make_llm_client())
+            v2_result = await orchestrator.generate_from_legacy(legacy_payload)
+
+            if not isinstance(v2_result, AnalysisV2Response):
+                v2_result = AnalysisV2Response.resilient_parse(
+                    v2_result.model_dump() if hasattr(v2_result, "model_dump") else {}
+                )
+
+            llm_output = (
+                f"Viability score: {v2_result.viability_score}/1000. "
+                f"Recommendation: {v2_result.recommendation}. "
+                f"Provider: {v2_result.recommended_provider}. "
+                f"Savings: ${v2_result.savings_summary.total_monthly_savings_usd:.2f}/mo."
+            )
+            job.mark_completed(output=llm_output, structured=v2_result.model_dump())
+            await job_repo.update(job)
+            await session.commit()
+            logger.info("legacy_pipeline_completed job_id=%s", job_id)
+
+        except Exception:
+            await session.rollback()
+            logger.exception("legacy_pipeline_failed job_id=%s", job_id)
+            job.mark_failed("unexpected pipeline error")
+            await job_repo.update(job)
+            await session.commit()
+
+
+async def _build_ctx(user_id: UUID, report_id: UUID, session) -> "MigrationContext":
+    """Build MigrationContext — shared by both legacy endpoints."""
+    from app.core.exceptions import NotFoundError
+    uc = BuildMigrationContextUseCase(
+        PgBillingReportRepository(session),
+        PgBillingEnrichedRepository(session),
+        PGServiceMetadataRepository(session),
+        PGServiceComparisonRepository(session),
+        sku_repo=PgCloudSkuRepository(session),
+    )
+    try:
+        return await uc.execute(
+            BuildMigrationContextInput(user_id=user_id, report_id=report_id)
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+
+@router.post(
+    "/legacy/start/{report_id}",
+    response_model=AnalysisJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start analysis using legacy workload JSON format sent to LLM",
+)
+async def legacy_start_analysis(
+    report_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+    background: BackgroundTasks,
+    external_id: UUID | None = None,
+) -> AnalysisJobResponse:
+    """Same pipeline as /start/{report_id} but sends the legacy workloads[]
+    format to the LLM. Returns a job_id; poll GET /{job_id}/result for the
+    AnalysisV2Response.
+    """
+    job = AnalysisJob(
+        job_id=uuid4(),
+        user_id=UUID(user.sub),
+        report_id=report_id,
+        external_id=external_id,
+    )
+    repo = PgAnalysisJobRepository(session)
+    await repo.create(job)
+    await session.commit()
+
+    sm = get_sessionmaker()
+    background.add_task(
+        _run_legacy_analysis_pipeline, UUID(user.sub), report_id, job.job_id, sm,
+    )
+
+    return AnalysisJobResponse(
+        job_id=job.job_id,
+        report_id=job.report_id,
+        external_id=job.external_id,
+        status=job.status,
+        created_at=job.created_at,
+    )
+
+
+@router.get(
+    "/legacy/{job_id}/agents-payload",
+    summary="Return the legacy workload JSON sent to the LLM (inspection endpoint)",
+)
+async def get_legacy_agents_payload(
+    job_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+) -> dict:
+    """Returns the legacy workload[] serialization of the migration context.
+
+    Mirrors GET /{job_id}/agents-payload but in the legacy format so callers
+    can inspect exactly what the LLM receives in the legacy pipeline.
+    report_id == job_id (same as the existing agents-payload convention).
+    """
+    ctx = await _build_ctx(UUID(user.sub), job_id, session)
+    return serialize_as_legacy(ctx)

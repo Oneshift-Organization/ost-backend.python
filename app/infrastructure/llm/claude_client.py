@@ -130,10 +130,27 @@ def _extract_text(message: anthropic.types.Message) -> str:
 
 def _extract_json(text: str) -> dict[str, object]:
     stripped = text.strip()
+
+    # 1. Response is pure JSON
     if stripped.startswith("{"):
         return cast("dict[str, object]", json.loads(stripped))
-    match = re.search(r"```(?:json)?\s*\n({.*?})\s*\n```", stripped, re.DOTALL)
+
+    # 2. JSON inside a code fence (```json ... ``` or ``` ... ```)
+    match = re.search(r"```(?:json)?\s*\n?({.*?})\s*\n?```", stripped, re.DOTALL)
     if match:
         return cast("dict[str, object]", json.loads(match.group(1)))
+
+    # 3. First { ... } block anywhere in the text
+    start = stripped.find("{")
+    if start != -1:
+        depth = 0
+        for i, ch in enumerate(stripped[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return cast("dict[str, object]", json.loads(stripped[start : i + 1]))
+
     msg = f"Could not extract JSON from Claude response:\n{text[:500]}"
     raise ValueError(msg)
