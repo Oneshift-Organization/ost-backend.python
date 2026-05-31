@@ -79,8 +79,10 @@ class IngestBillingFileUseCase:
                 rows=inserted,
                 provider=report.provider.value if report.provider else None,
             )
-        except Exception as e:
+        except Exception:
             _log.exception("billing_ingest_failed", report_id=str(report.id))
-            report.mark_failed(str(e))
-            await self._reports.update(report)
+            # Do NOT touch the DB here — the transaction is aborted from the
+            # inner error; writing would raise InFailedSQLTransactionError and
+            # hide the root cause. The caller (_run_ingest_isolated) persists
+            # the failure in a fresh session via _persist_failure.
             raise
