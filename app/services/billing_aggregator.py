@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 _HOURS_IN_MONTH = Decimal("730")
 _COMPUTE_ROLES = frozenset({"core", "ram", "os_license"})
+# Only accumulate usage into capacity pools when the billing unit is time-based.
+# Second-billed units (Cloud Run, serverless) would inflate vcpus by ~3600x.
+_HOUR_UNITS = frozenset({"hour", "hours", "hr", "hrs", "h", "minute", "minutes", "min"})
 # component_type -> AuxiliaryCosts scalar bucket name (data-driven dispatch).
 _AUX_BUCKET = {
     "gke_control_plane": "gke_control_plane",
@@ -143,11 +146,18 @@ class BillingAggregator:
             region=item.region or "global",
         )
         bucket = pool_buckets[key]
+        unit_parts = (item.usage_unit or "").lower().split()
+        unit_base = unit_parts[0] if unit_parts else ""
+        is_hour_unit = unit_base in _HOUR_UNITS
         if component_type == "core":
-            bucket["core_hours"] += item.usage_amount or Decimal("0")
+            # Guard: only accumulate when unit is time-based (prevent second-billed
+            # Cloud Run lines inflating vcpus by ~3600x).
+            if is_hour_unit:
+                bucket["core_hours"] += item.usage_amount or Decimal("0")
             bucket["compute_cost"] += cost
         elif component_type == "ram":
-            bucket["ram_gib_hours"] += item.usage_amount or Decimal("0")
+            if is_hour_unit or "gib" in (item.usage_unit or "").lower():
+                bucket["ram_gib_hours"] += item.usage_amount or Decimal("0")
             bucket["compute_cost"] += cost
         else:  # os_license
             bucket["license_cost"] += cost
