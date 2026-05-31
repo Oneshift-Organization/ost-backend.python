@@ -14,7 +14,7 @@ from app.infrastructure.repositories.service_repositories import (
     PGServiceComparisonRepository,
     PGServiceMetadataRepository,
 )
-from app.schemas.analysis_ui import Flag
+from app.schemas.analysis_v2 import AnalysisV2Response
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
@@ -195,27 +195,26 @@ class RunAnalysisPipelineUseCase:
                 pools_json=pools_json,
             )
 
-            if ctx.missing_sku_ids:
-                catalog_flags = ui_report.flags.setdefault("catalog", [])
-                for sku_id in ctx.missing_sku_ids:
-                    catalog_flags.append(
-                        Flag(
-                            code="MISSING_SKU_DEFINITION",
-                            message=f"SKU '{sku_id}' without vCPU/RAM definition in catalog; no equivalents computed",
-                            impact_area="catalog",
-                        )
-                    )
+            if not isinstance(ui_report, AnalysisV2Response):
+                ui_report = AnalysisV2Response.resilient_parse(
+                    ui_report.model_dump() if hasattr(ui_report, "model_dump") else {}
+                )
 
+            flags = ui_report.flags
+            if ctx.missing_sku_ids:
+                flags.setdefault("catalog", []).extend(
+                    {"code": "MISSING_SKU_DEFINITION",
+                     "message": f"SKU '{sku_id}' without vCPU/RAM definition in catalog",
+                     "impact_area": "catalog"}
+                    for sku_id in ctx.missing_sku_ids
+                )
             if missing_equiv_ids:
-                equiv_flags = ui_report.flags.setdefault("equivalents", [])
-                for pool_id in missing_equiv_ids:
-                    equiv_flags.append(
-                        Flag(
-                            code="MISSING_EQUIVALENT",
-                            message=f"Pool '{pool_id}' has no cross-cloud equivalent in catalog",
-                            impact_area="catalog",
-                        )
-                    )
+                flags.setdefault("equivalents", []).extend(
+                    {"code": "MISSING_EQUIVALENT",
+                     "message": f"Pool '{pool_id}' has no cross-cloud equivalent in catalog",
+                     "impact_area": "catalog"}
+                    for pool_id in missing_equiv_ids
+                )
 
             llm_output = (
                 f"Viability score: {ui_report.viability_score}/1000. "

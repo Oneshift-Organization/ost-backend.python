@@ -57,21 +57,24 @@ class ClaudeLLMClient:
 
         system_block, user_block = _split_prompt(prompt)
 
-        message = await self._client.messages.create(
-            model=self._model,
-            max_tokens=_MAX_OUTPUT_TOKENS,
-            temperature=1,  # required when using extended thinking; harmless otherwise
-            system=[
+        create_kwargs: dict = {
+            "model": self._model,
+            "max_tokens": _MAX_OUTPUT_TOKENS,
+            "temperature": 1,
+            "messages": [{"role": "user", "content": user_block}],
+        }
+        # Only set a cached system block when there is actual content to cache.
+        # Anthropic rejects cache_control on empty text blocks.
+        if system_block:
+            create_kwargs["system"] = [
                 {
                     "type": "text",
                     "text": system_block,
                     "cache_control": {"type": "ephemeral"},
                 }
-            ],
-            messages=[
-                {"role": "user", "content": user_block},
-            ],
-        )
+            ]
+
+        message = await self._client.messages.create(**create_kwargs)
 
         logger.info(
             "claude_usage model=%s input=%d output=%d cache_read=%d cache_write=%d",

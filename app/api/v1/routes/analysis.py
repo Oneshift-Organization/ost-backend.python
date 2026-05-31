@@ -40,7 +40,7 @@ from app.schemas.analysis import (
     TechnicalMatchItem,
     WorkloadSummaryItem,
 )
-from app.schemas.analysis_ui import AnalysisUIResponse
+from app.schemas.analysis_v2 import AnalysisV2Response, LegacyAnalysisRequest
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
@@ -300,9 +300,75 @@ async def get_analysis_by_external_id(
         status=job.status,
         llm_output=job.llm_output,
         error=job.error,
-        result=AnalysisUIResponse(**job.ai_structured_output) if job.ai_structured_output else None,
+        result=AnalysisV2Response.resilient_parse(job.ai_structured_output) if job.ai_structured_output else None,
         created_at=job.created_at,
     )
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _make_llm_client() -> MockLLMClient | GeminiLLMClient | OpenRouterLLMClient | ClaudeLLMClient:
+    settings = get_settings()
+    match settings.llm_provider:
+        case "openrouter":
+            return OpenRouterLLMClient(
+                api_key=settings.openrouter_api_key, model=settings.openrouter_model
+            )
+        case "gemini":
+            return GeminiLLMClient(
+                api_key=settings.gemini_api_key, model=settings.gemini_model
+            )
+        case "anthropic":
+            return ClaudeLLMClient(
+                api_key=settings.anthropic_api_key, model=settings.anthropic_model
+            )
+        case _:
+            return MockLLMClient()
+
+
+# ── Legacy direct endpoint ────────────────────────────────────────────────────
+
+@router.post(
+    "/direct",
+    response_model=AnalysisV2Response,
+    status_code=status.HTTP_200_OK,
+    summary="Direct analysis from pre-computed workload JSON (legacy format)",
+)
+async def direct_analysis(
+    body: LegacyAnalysisRequest,
+    user: CurrentUser,
+) -> AnalysisV2Response:
+    """Accepts a pre-computed workload payload (no CSV upload required).
+
+    Returns ``AnalysisV2Response`` synchronously. Use this when billing data
+    and cross-cloud equivalents are already computed by the client.
+    """
+    billing_data = {
+        "source_provider": body.source_provider,
+        "billing_period": body.billing_period,
+        "currency": body.currency,
+        "total_spend": body.total_spend,
+        "company_context": body.company_context.model_dump() if body.company_context else None,
+        "workloads": [w.model_dump() for w in body.workloads],
+    }
+
+    orchestrator = LLMOrchestrator(llm_client=_make_llm_client())
+    logger.info(
+        "direct_analysis_started provider=%s period=%s",
+        body.source_provider, body.billing_period,
+    )
+
+    try:
+        result = await orchestrator.generate_from_legacy(billing_data)
+    except Exception as exc:
+        logger.exception("direct_analysis_failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"LLM analysis failed: {exc}",
+        ) from exc
+
+    logger.info("direct_analysis_completed viability=%s", result.viability_score)
+    return result
 
 
 @router.get(
@@ -326,6 +392,6 @@ async def get_analysis_result(
         status=job.status,
         llm_output=job.llm_output,
         error=job.error,
-        result=AnalysisUIResponse(**job.ai_structured_output) if job.ai_structured_output else None,
+        result=AnalysisV2Response.resilient_parse(job.ai_structured_output) if job.ai_structured_output else None,
         created_at=job.created_at,
     )
