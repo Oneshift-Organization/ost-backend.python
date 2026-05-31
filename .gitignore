@@ -45,6 +45,7 @@ uploads/
 
 # ── Artefatos de debug / sessões de IA (gerados localmente, nunca commitados) ──
 llm_payload_*.json
+scripts/llm_payload_*.json
 session-ses_*.md
 session-*.md
 
