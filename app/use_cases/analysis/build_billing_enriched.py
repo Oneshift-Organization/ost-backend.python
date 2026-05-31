@@ -77,7 +77,7 @@ class BuildBillingEnrichedUseCase:
         if not items:
             raise ValueError(f"report {payload.report_id} has no billing items")
 
-        provider = normalize_provider(report.provider.value)
+        provider = normalize_provider(items[0].provider.value)
         catalog = await self._sku.list_by_provider(provider)
         rules = await self._rules.list_active_by_provider(provider)
         matcher = SkuMatcher(catalog, rules)
