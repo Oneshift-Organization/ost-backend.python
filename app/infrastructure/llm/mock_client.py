@@ -33,9 +33,10 @@ class MockLLMClient:
         payload = _parse_prompt(prompt)
         billing = payload.get("billing_data", payload)  # handles both direct and wrapped
 
-        pools = billing.get("compute_pools", [])
-        source_provider = billing.get("source_provider", "unknown")
-        total_spend = _dec(billing.get("total_spend", 0))
+        # Support both PT (new) and EN (legacy/direct) key names
+        pools = billing.get("pools_computacao", billing.get("compute_pools", []))
+        source_provider = billing.get("provedor_origem", billing.get("source_provider", "unknown"))
+        total_spend = _dec(billing.get("gasto_total", billing.get("total_spend", 0)))
 
         # ── Aggregate savings per provider from pool equivalents ──────────
         savings_by_provider: dict[str, Decimal] = {}
@@ -46,18 +47,19 @@ class MockLLMClient:
         total_ram = Decimal("0")
 
         for pool in pools:
-            cap = pool.get("capacity", {})
+            cap = pool.get("capacidade", pool.get("capacity", {}))
             total_vcpus += _dec(cap.get("vcpus"))
             total_ram += _dec(cap.get("ram_gib"))
             workload_name = (
-                f"{pool.get('project_id','?')}/{pool.get('family','?')}/{pool.get('region','?')}"
+                f"{pool.get('familia', pool.get('family','?'))}/"
+                f"{pool.get('regiao', pool.get('region','global'))}"
             )
 
-            for eq in pool.get("equivalents", []):
-                prov = str(eq.get("provider", "")).upper()
-                fin = eq.get("financials", {})
-                delta = _dec(fin.get("cost_delta"))
-                est = _dec(fin.get("estimated_monthly_cost"))
+            for eq in pool.get("equivalentes", pool.get("equivalents", [])):
+                prov = str(eq.get("provedor", eq.get("provider", ""))).upper()
+                fin = eq.get("financeiro", eq.get("financials", {}))
+                delta = _dec(fin.get("delta_custo", fin.get("cost_delta")))
+                est = _dec(fin.get("custo_mensal_estimado", fin.get("estimated_monthly_cost")))
                 savings_by_provider[prov] = savings_by_provider.get(prov, Decimal("0")) + delta
                 cost_by_provider[prov] = cost_by_provider.get(prov, Decimal("0")) + est
 
@@ -65,11 +67,11 @@ class MockLLMClient:
                     CrossCloudEquivalent(
                         workload=workload_name,
                         source_provider=source_provider,
-                        source_service=pool.get("family", ""),
+                        source_service=pool.get("familia", pool.get("family", "")),
                         target_provider=prov.lower(),
-                        target_service=str(eq.get("service_name", "")),
+                        target_service=str(eq.get("nome_servico", eq.get("service_name", ""))),
                         equivalence_type="hardware_match"
-                        if eq.get("match_basis") == "pool_capacity"
+                        if eq.get("base_correspondencia", eq.get("match_basis")) == "pool_capacity"
                         else "curated_only",
                         estimated_monthly_cost=float(est),
                         cost_delta=float(delta),

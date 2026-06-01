@@ -105,11 +105,11 @@ def test_three_e2_projects_collapse_to_one_family():
 
     assert len(result) == 1
     fam = result[0]
-    assert fam["family"] == "E2"
-    assert set(fam["source_projects"]) == {"proj-001", "proj-002", "proj-003"}
-    assert round(fam["capacity"]["vcpus"], 1) == 20.6
-    assert round(fam["costs"]["compute_base"], 1) == 3066.0
-    assert fam["equivalents"] == []
+    assert fam["familia"] == "E2"
+    assert set(fam["projetos_origem"]) == {"proj-001", "proj-002", "proj-003"}
+    assert round(fam["capacidade"]["vcpus"], 1) == 20.6
+    assert round(fam["custos"]["custo_computacao"], 1) == 3066.0
+    assert fam["equivalentes"] == []
     assert "E2/global" in missing
 
 
@@ -120,7 +120,7 @@ def test_two_families_stay_separate():
     ])
     result, _ = _aggregate_pools_by_family(pools, {})
 
-    families = {r["family"] for r in result}
+    families = {r["familia"] for r in result}
     assert families == {"E2", "N2"}
 
 
@@ -136,11 +136,11 @@ def test_equivalents_cost_delta_summed():
     result, missing = _aggregate_pools_by_family(pools, pool_equiv)
 
     assert len(result) == 1
-    equivs = result[0]["equivalents"]
+    equivs = result[0]["equivalentes"]
     assert len(equivs) == 1  # one AWS entry, not two
-    assert equivs[0]["provider"] == "AWS"
-    fin = equivs[0]["financials"]
-    delta = Decimal(str(fin["cost_delta"]))
+    assert equivs[0]["provedor"] == "AWS"
+    fin = equivs[0]["financeiro"]
+    delta = Decimal(str(fin["delta_custo"]))
     assert delta == Decimal("-2221.0")  # -1574 + -647
     assert missing == []
 
@@ -158,8 +158,8 @@ def test_no_duplication_same_provider_different_projects():
     }
     result, _ = _aggregate_pools_by_family(pools, pool_equiv)
 
-    equivs = result[0]["equivalents"]
-    providers = [e["provider"] for e in equivs]
+    equivs = result[0]["equivalentes"]
+    providers = [e["provedor"] for e in equivs]
     assert providers.count("AWS") == 1
     assert providers.count("OCI") == 1
 
@@ -169,7 +169,7 @@ def test_source_projects_completeness():
     pools = tuple([_pool(p, "E2", 1.0, 100.0) for p in projects])
     result, _ = _aggregate_pools_by_family(pools, {})
 
-    assert set(result[0]["source_projects"]) == set(projects)
+    assert set(result[0]["projetos_origem"]) == set(projects)
 
 
 def test_vcpus_sum_invariant():
@@ -181,7 +181,7 @@ def test_vcpus_sum_invariant():
     result, _ = _aggregate_pools_by_family(pools, {})
 
     expected_total = Decimal("13.2") + Decimal("4.7") + Decimal("2.7")
-    assert round(Decimal(str(result[0]["capacity"]["vcpus"])), 1) == expected_total
+    assert round(Decimal(str(result[0]["capacidade"]["vcpus"])), 1) == expected_total
 
 
 def test_zero_capacity_pools_excluded():
@@ -192,4 +192,4 @@ def test_zero_capacity_pools_excluded():
     result, _ = _aggregate_pools_by_family(pools, {})
 
     assert len(result) == 1
-    assert result[0]["family"] == "N2"
+    assert result[0]["familia"] == "N2"

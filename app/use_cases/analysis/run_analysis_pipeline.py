@@ -79,46 +79,52 @@ def _aggregate_pools_by_family(
                 agg_key = (e.provider, e.service_name)
                 if agg_key not in agg_equivs:
                     agg_equivs[agg_key] = _serialize_equivalent(e)
-                    # reset financials to accumulate
-                    fin = agg_equivs[agg_key].get("financials")
+                    # copy financeiro dict so we can mutate it for accumulation
+                    fin = agg_equivs[agg_key].get("financeiro")
                     if fin:
-                        agg_equivs[agg_key]["financials"] = dict(fin)
+                        agg_equivs[agg_key]["financeiro"] = dict(fin)
                 else:
                     existing = agg_equivs[agg_key]
                     new_fin = getattr(e, "financials", None)
-                    if new_fin and existing.get("financials"):
-                        _add_financials(existing["financials"], new_fin)
+                    if new_fin and existing.get("financeiro"):
+                        _add_financials(existing["financeiro"], new_fin)
                     inst = getattr(e, "instances", 1)
-                    if inst > existing.get("instances", 1):
-                        existing["instances"] = inst
+                    if inst > existing.get("instancias", 1):
+                        existing["instancias"] = inst
 
         family_id = f"{family}/{region}"
         if not agg_equivs:
             missing_equiv_family_ids.append(family_id)
 
         compute_pools.append({
-            "family": family,
-            "region": region,
-            "source_projects": b["source_projects"],
-            "capacity": {
+            "familia": family,
+            "regiao": region,
+            "projetos_origem": b["source_projects"],
+            "capacidade": {
                 "vcpus": round(float(b["vcpus"]), 2),
                 "ram_gib": round(float(b["ram_gib"]), 2),
             },
-            "costs": {
-                "compute_base": round(float(b["compute_base"]), 2),
-                "os_licensing": round(float(b["os_licensing"]), 2),
+            "custos": {
+                "custo_computacao": round(float(b["compute_base"]), 2),
+                "custo_licenca_so": round(float(b["os_licensing"]), 2),
             },
-            "equivalents": list(agg_equivs.values()),
+            "equivalentes": list(agg_equivs.values()),
         })
 
     return compute_pools, missing_equiv_family_ids
 
 
 def _add_financials(existing: dict, new_fin) -> None:
-    """Accumulate estimated_monthly_cost and cost_delta in place (Decimal-safe)."""
-    for field_name in ("estimated_monthly_cost", "cost_delta"):
-        existing_val = existing.get(field_name)
-        new_val = getattr(new_fin, field_name, None)
+    """Accumulate financial totals in place (Decimal-safe). Uses PT key names."""
+    # Maps PT key in existing dict → attribute name on new_fin entity
+    field_map = {
+        "custo_mensal_estimado": "estimated_monthly_cost",
+        "delta_custo": "cost_delta",
+    }
+    for pt_key, attr in field_map.items():
+        existing_val = existing.get(pt_key)
+        new_val = getattr(new_fin, attr, None)
+        field_name = pt_key  # use PT key for assignment
         if existing_val is not None and new_val is not None:
             with _suppress():
                 existing[field_name] = str(Decimal(str(existing_val)) + Decimal(str(new_val)))
@@ -135,34 +141,34 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
         pools, pool_equivalents
     )
 
-    payload: dict[str, object] = {"compute_pools": compute_pools}
+    payload: dict[str, object] = {"pools_computacao": compute_pools}
 
     if auxiliary is not None and auxiliary.any_positive:
         aux_payload: dict[str, object] = {}
         if auxiliary.gke_control_plane > 0:
-            aux_payload["gke_control_plane"] = round(float(auxiliary.gke_control_plane), 2)
+            aux_payload["gke_plano_controle"] = round(float(auxiliary.gke_control_plane), 2)
         if auxiliary.storage_ssd > 0:
-            aux_payload["storage_ssd"] = round(float(auxiliary.storage_ssd), 2)
+            aux_payload["armazenamento_ssd"] = round(float(auxiliary.storage_ssd), 2)
         if auxiliary.storage_hdd > 0:
-            aux_payload["storage_hdd"] = round(float(auxiliary.storage_hdd), 2)
+            aux_payload["armazenamento_hdd"] = round(float(auxiliary.storage_hdd), 2)
         if auxiliary.network_egress > 0:
-            aux_payload["network_egress"] = round(float(auxiliary.network_egress), 2)
+            aux_payload["egresso_rede"] = round(float(auxiliary.network_egress), 2)
         if auxiliary.database > 0:
-            aux_payload["database"] = round(float(auxiliary.database), 2)
+            aux_payload["banco_dados"] = round(float(auxiliary.database), 2)
             if database_equivalents:
-                aux_payload["database_equivalents"] = [
+                aux_payload["equivalentes_banco_dados"] = [
                     _serialize_equivalent(e) for e in database_equivalents
                 ]
         if auxiliary.orphan > 0:
-            aux_payload["unmapped"] = {
-                "cost": round(float(auxiliary.orphan), 2),
+            aux_payload["nao_classificado"] = {
+                "custo": round(float(auxiliary.orphan), 2),
                 "skus": list(auxiliary.orphan_skus),
             }
-        payload["auxiliary_costs"] = aux_payload
+        payload["custos_auxiliares"] = aux_payload
 
     mapping_confidence = getattr(ctx, "mapping_confidence", None)
     if mapping_confidence:
-        payload["mapping_confidence"] = {
+        payload["confianca_classificacao"] = {
             level: round(float(cost), 2) for level, cost in mapping_confidence.items()
         }
 
@@ -172,29 +178,29 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
 def build_pipeline_llm_input_payload(ctx) -> tuple[dict, list[str]]:
     pools_json, missing_equiv_ids = _serialize_pools(ctx)
     context_payload = json.loads(pools_json)
-    context_payload["source_provider"] = ctx.source_provider
-    context_payload["billing_period"] = ctx.billing_period
-    context_payload["total_spend"] = float(ctx.total_spend)
-    context_payload["currency"] = ctx.currency
+    context_payload["provedor_origem"] = ctx.source_provider
+    context_payload["periodo_faturamento"] = ctx.billing_period
+    context_payload["gasto_total"] = float(ctx.total_spend)
+    context_payload["moeda"] = ctx.currency
     return context_payload, missing_equiv_ids
 
 
 def _serialize_equivalent(equiv) -> dict:
     """Serialize a single EquivalentService to a JSON-safe dict."""
     d: dict[str, object] = {
-        "provider": equiv.provider,
-        "service_name": equiv.service_name,
-        "category": equiv.category,
-        "service_type": equiv.service_type,
-        "match_basis": getattr(equiv, "match_basis", "pool_capacity"),
+        "provedor": equiv.provider,
+        "nome_servico": equiv.service_name,
+        "categoria": equiv.category,
+        "tipo_servico": equiv.service_type,
+        "base_correspondencia": getattr(equiv, "match_basis", "capacidade_pool"),
     }
     instances = getattr(equiv, "instances", 1)
     if instances > 1:
-        d["instances"] = instances
+        d["instancias"] = instances
 
     tm = getattr(equiv, "technical_match", None)
     if tm is not None:
-        d["technical_match"] = {
+        d["correspondencia_tecnica"] = {
             k: str(v) for k, v in [("vcpus", tm.vcpus), ("ram_gb", tm.ram_gb)] if v is not None
         }
 
@@ -202,19 +208,19 @@ def _serialize_equivalent(equiv) -> dict:
     if fin is not None:
         fin_dict: dict[str, object] = {}
         if fin.estimated_monthly_cost is not None:
-            fin_dict["estimated_monthly_cost"] = str(fin.estimated_monthly_cost)
+            fin_dict["custo_mensal_estimado"] = str(fin.estimated_monthly_cost)
         if fin.cost_delta is not None:
-            fin_dict["cost_delta"] = str(fin.cost_delta)
-        fin_dict["pricing_confidence"] = fin.pricing_confidence
-        d["financials"] = fin_dict
+            fin_dict["delta_custo"] = str(fin.cost_delta)
+        fin_dict["confianca_preco"] = fin.pricing_confidence
+        d["financeiro"] = fin_dict
 
     meta = getattr(equiv, "metadata", None)
     if meta:
-        d["metadata"] = meta
+        d["metadados"] = meta
 
     docs = getattr(equiv, "docs_costs", None)
     if docs:
-        d["docs_costs"] = docs
+        d["docs_custos"] = docs
 
     return d
 

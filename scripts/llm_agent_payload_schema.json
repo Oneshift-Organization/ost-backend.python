@@ -1,0 +1,660 @@
+{
+  "meta": {
+    "total_tokens_approx": 1325,
+    "compute_pools": 3,
+    "missing_equivalent_families": []
+  },
+  "billing_data": {
+    "compute_pools": [
+      {
+        "family": "E2",
+        "region": "global",
+        "source_projects": [
+          "proj-id-001",
+          "proj-id-017",
+          "proj-id-009",
+          "proj-id-016",
+          "proj-id-002",
+          "proj-id-004",
+          "proj-id-008",
+          "proj-id-018",
+          "proj-id-005",
+          "proj-id-007",
+          "proj-id-019",
+          "proj-id-014",
+          "proj-id-012",
+          "proj-id-020",
+          "proj-id-015",
+          "proj-id-003",
+          "proj-id-010",
+          "proj-id-011",
+          "proj-id-006"
+        ],
+        "capacity": {
+          "vcpus": 29.88,
+          "ram_gib": 119.53
+        },
+        "costs": {
+          "compute_base": 4424.03,
+          "os_licensing": 0.0
+        },
+        "equivalents": [
+          {
+            "provider": "OCI",
+            "service_name": "Compute",
+            "category": "compute",
+            "service_type": "virtual_server",
+            "match_basis": "pool_capacity",
+            "instances": 14,
+            "technical_match": {
+              "vcpus": "14.00",
+              "ram_gb": "210.00"
+            },
+            "financials": {
+              "estimated_monthly_cost": "918.340000",
+              "cost_delta": "-3505.690000",
+              "pricing_confidence": "low"
+            }
+          },
+          {
+            "provider": "AWS",
+            "service_name": "AmazonEC2",
+            "category": "compute",
+            "service_type": "virtual_server",
+            "match_basis": "pool_capacity",
+            "technical_match": {
+              "vcpus": "16.00",
+              "ram_gb": "64.00"
+            },
+            "financials": {
+              "estimated_monthly_cost": "838.478000",
+              "cost_delta": "-3585.552000",
+              "pricing_confidence": "low"
+            }
+          },
+          {
+            "provider": "azure",
+            "service_name": "Azure Virtual Machines",
+            "category": "compute",
+            "service_type": "virtual_server",
+            "match_basis": "curated_only"
+          }
+        ]
+      },
+      {
+        "family": "N2",
+        "region": "global",
+        "source_projects": [
+          "proj-id-001"
+        ],
+        "capacity": {
+          "vcpus": 0.82,
+          "ram_gib": 3.28
+        },
+        "costs": {
+          "compute_base": 168.74,
+          "os_licensing": 0.0
+        },
+        "equivalents": [
+          {
+            "provider": "OCI",
+            "service_name": "Compute",
+            "category": "compute",
+            "service_type": "virtual_server",
+            "match_basis": "pool_capacity",
+            "technical_match": {
+              "vcpus": "1.00",
+              "ram_gb": "15.00"
+            },
+            "financials": {
+              "estimated_monthly_cost": "20.440000",
+              "cost_delta": "-148.300000",
+              "pricing_confidence": "low"
+            }
+          },
+          {
+            "provider": "AWS",
+            "service_name": "AmazonEC2",
+            "category": "compute",
+            "service_type": "virtual_server",
+            "match_basis": "pool_capacity",
+            "technical_match": {
+              "vcpus": "2.00",
+              "ram_gb": "4.00"
+            },
+            "financials": {
+              "estimated_monthly_cost": "24.528000",
+              "cost_delta": "-144.212000",
+              "pricing_confidence": "low"
+            }
+          },
+          {
+            "provider": "azure",
+            "service_name": "Azure Virtual Machines",
+            "category": "compute",
+            "service_type": "virtual_server",
+            "match_basis": "curated_only"
+          }
+        ]
+      },
+      {
+        "family": "N1",
+        "region": "global",
+        "source_projects": [
+          "proj-id-021",
+          "proj-id-014"
+        ],
+        "capacity": {
+          "vcpus": 0.18,
+          "ram_gib": 0.66
+        },
+        "costs": {
+          "compute_base": 52.9,
+          "os_licensing": 0.0
+        },
+        "equivalents": [
+          {
+            "provider": "OCI",
+            "service_name": "Compute",
+            "category": "compute",
+            "service_type": "virtual_server",
+            "match_basis": "pool_capacity",
+            "technical_match": {
+              "vcpus": "1.00",
+              "ram_gb": "15.00"
+            },
+            "financials": {
+              "estimated_monthly_cost": "40.880000",
+              "cost_delta": "-12.020000",
+              "pricing_confidence": "low"
+            }
+          },
+          {
+            "provider": "AWS",
+            "service_name": "AmazonEC2",
+            "category": "compute",
+            "service_type": "virtual_server",
+            "match_basis": "pool_capacity",
+            "technical_match": {
+              "vcpus": "2.00",
+              "ram_gb": "0.50"
+            },
+            "financials": {
+              "estimated_monthly_cost": "6.132000",
+              "cost_delta": "-46.768000",
+              "pricing_confidence": "low"
+            }
+          },
+          {
+            "provider": "azure",
+            "service_name": "Azure Virtual Machines",
+            "category": "compute",
+            "service_type": "virtual_server",
+            "match_basis": "curated_only"
+          }
+        ]
+      }
+    ],
+    "auxiliary_costs": {
+      "gke_control_plane": 6543.89,
+      "storage_ssd": 779.71,
+      "storage_hdd": 4597.35,
+      "network_egress": 10521.65,
+      "database": 263.21,
+      "unmapped": {
+        "cost": 397.13,
+        "skus": [
+          "Autoclass Management Fee",
+          "DNS Query (port 53)",
+          "Download Worldwide Destinations (excluding Asia & Australia)",
+          "Generate content cached input token count gemini 2.5 flash input short text",
+          "Generate content cached input token count gemini 2.5 pro short input",
+          "Generate content input token count Gemini 2.5 Pro Experimental short input text",
+          "Generate content input token count Gemini 2.5 Pro input image",
+          "Generate content input token count Gemini 2.5 Pro short input text",
+          "Generate content input token count gemini 2.5 flash short input text",
+          "Generate content output token count Gemini 2.5 Pro Experimental short input text",
+          "Generate content output token count Gemini 2.5 Pro short output text",
+          "Generate content output token count gemini 2.5 flash short input text",
+          "GenerateContent text input token count for Gemini 2.0 Flash",
+          "GenerateContent text output token count for Gemini 2.0 Flash",
+          "Intra-region data delivery",
+          "Jobs",
+          "ManagedZone",
+          "Message Delivery Basic",
+          "Metric Volume",
+          "Multi-Region Standard Class A Operations",
+          "Network Intelligence Center Internet to Google Cloud Performance Resource Hours",
+          "Network Intelligence Center Network Analyzer Resource Hours",
+          "Network Intelligence Center Topology and Google Cloud Performance Resource Hours",
+          "Networking Private Service Connect Partner Select End Point",
+          "Networking Service Directory Integrated Resource",
+          "Networking Telemetry",
+          "Prometheus Samples Ingested",
+          "Regional Standard Class A Operations",
+          "Regional Standard Class B Operations",
+          "Requests",
+          "Services CPU (Request-based billing)",
+          "Services Memory (Request-based billing)",
+          "Subscriptions message backlog",
+          "Time series billed count",
+          "VM Manager Usage"
+        ]
+      }
+    },
+    "mapping_confidence": {
+      "medium": 10960.65,
+      "high": 16125.28,
+      "low": 342.07,
+      "missing": 397.13
+    },
+    "source_provider": "gcp",
+    "billing_period": "2025-11",
+    "total_spend": 27825.13,
+    "currency": "USD"
+  },
+  "output_schema": {
+    "$defs": {
+      "AgentViews": {
+        "properties": {
+          "finops": {
+            "$ref": "#/$defs/FinOpsView"
+          },
+          "cloud_engineering": {
+            "$ref": "#/$defs/CloudEngineeringView"
+          },
+          "risk_migration": {
+            "$ref": "#/$defs/RiskMigrationView"
+          }
+        },
+        "title": "AgentViews",
+        "type": "object"
+      },
+      "CloudEngineeringView": {
+        "properties": {
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          },
+          "confidence_level": {
+            "default": "low",
+            "title": "Confidence Level",
+            "type": "string"
+          },
+          "migration_complexity": {
+            "default": "unknown",
+            "title": "Migration Complexity",
+            "type": "string"
+          },
+          "technical_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Technical Flags",
+            "type": "array"
+          },
+          "technical_recommendations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Technical Recommendations",
+            "type": "array"
+          }
+        },
+        "title": "CloudEngineeringView",
+        "type": "object"
+      },
+      "CrossCloudEquivalent": {
+        "properties": {
+          "workload": {
+            "default": "",
+            "title": "Workload",
+            "type": "string"
+          },
+          "source_provider": {
+            "default": "",
+            "title": "Source Provider",
+            "type": "string"
+          },
+          "source_service": {
+            "default": "",
+            "title": "Source Service",
+            "type": "string"
+          },
+          "target_provider": {
+            "default": "",
+            "title": "Target Provider",
+            "type": "string"
+          },
+          "target_service": {
+            "default": "",
+            "title": "Target Service",
+            "type": "string"
+          },
+          "equivalence_type": {
+            "default": "unknown",
+            "title": "Equivalence Type",
+            "type": "string"
+          },
+          "estimated_monthly_cost": {
+            "default": 0.0,
+            "title": "Estimated Monthly Cost",
+            "type": "number"
+          },
+          "cost_delta": {
+            "default": 0.0,
+            "title": "Cost Delta",
+            "type": "number"
+          },
+          "portability": {
+            "default": "unknown",
+            "title": "Portability",
+            "type": "string"
+          },
+          "migration_risk": {
+            "default": "unknown",
+            "title": "Migration Risk",
+            "type": "string"
+          },
+          "requires_refactoring": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Requires Refactoring"
+          },
+          "vendor_lock_in_level": {
+            "default": "unknown",
+            "title": "Vendor Lock In Level",
+            "type": "string"
+          }
+        },
+        "title": "CrossCloudEquivalent",
+        "type": "object"
+      },
+      "FinOpsView": {
+        "properties": {
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          },
+          "confidence_level": {
+            "default": "low",
+            "title": "Confidence Level",
+            "type": "string"
+          },
+          "key_findings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Key Findings",
+            "type": "array"
+          },
+          "financial_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Financial Flags",
+            "type": "array"
+          }
+        },
+        "title": "FinOpsView",
+        "type": "object"
+      },
+      "OneshiftScores": {
+        "properties": {
+          "financial_score": {
+            "default": 0,
+            "title": "Financial Score",
+            "type": "integer"
+          },
+          "technical_score": {
+            "default": 0,
+            "title": "Technical Score",
+            "type": "integer"
+          },
+          "enterprise_score": {
+            "default": 0,
+            "title": "Enterprise Score",
+            "type": "integer"
+          },
+          "overall_score": {
+            "default": 0,
+            "title": "Overall Score",
+            "type": "integer"
+          }
+        },
+        "title": "OneshiftScores",
+        "type": "object"
+      },
+      "ProviderComparison": {
+        "properties": {
+          "provider": {
+            "default": "",
+            "title": "Provider",
+            "type": "string"
+          },
+          "financial_score": {
+            "default": 0,
+            "title": "Financial Score",
+            "type": "integer"
+          },
+          "technical_score": {
+            "default": 0,
+            "title": "Technical Score",
+            "type": "integer"
+          },
+          "enterprise_score": {
+            "default": 0,
+            "title": "Enterprise Score",
+            "type": "integer"
+          },
+          "overall_score": {
+            "default": 0,
+            "title": "Overall Score",
+            "type": "integer"
+          },
+          "estimated_monthly_cost": {
+            "default": 0.0,
+            "title": "Estimated Monthly Cost",
+            "type": "number"
+          },
+          "estimated_monthly_savings": {
+            "default": 0.0,
+            "title": "Estimated Monthly Savings",
+            "type": "number"
+          },
+          "migration_complexity": {
+            "default": "unknown",
+            "title": "Migration Complexity",
+            "type": "string"
+          },
+          "portability": {
+            "default": "unknown",
+            "title": "Portability",
+            "type": "string"
+          },
+          "confidence_level": {
+            "default": "low",
+            "title": "Confidence Level",
+            "type": "string"
+          },
+          "strengths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Strengths",
+            "type": "array"
+          },
+          "weaknesses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Weaknesses",
+            "type": "array"
+          }
+        },
+        "title": "ProviderComparison",
+        "type": "object"
+      },
+      "RiskMigrationView": {
+        "properties": {
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          },
+          "confidence_level": {
+            "default": "low",
+            "title": "Confidence Level",
+            "type": "string"
+          },
+          "risk_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Risk Flags",
+            "type": "array"
+          },
+          "blocked_or_uncertain_items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked Or Uncertain Items",
+            "type": "array"
+          },
+          "recommended_migration_sequence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recommended Migration Sequence",
+            "type": "array"
+          }
+        },
+        "title": "RiskMigrationView",
+        "type": "object"
+      },
+      "SavingsSummaryV2": {
+        "properties": {
+          "total_monthly_savings_usd": {
+            "default": 0.0,
+            "title": "Total Monthly Savings Usd",
+            "type": "number"
+          },
+          "percentage_reduction": {
+            "default": 0.0,
+            "title": "Percentage Reduction",
+            "type": "number"
+          },
+          "payback_period_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Payback Period Months"
+          },
+          "confidence_level": {
+            "default": "low",
+            "title": "Confidence Level",
+            "type": "string"
+          }
+        },
+        "title": "SavingsSummaryV2",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "viability_score": {
+        "default": 0,
+        "maximum": 1000,
+        "minimum": 0,
+        "title": "Viability Score",
+        "type": "integer"
+      },
+      "oneshift_scores": {
+        "$ref": "#/$defs/OneshiftScores"
+      },
+      "provider_comparison": {
+        "items": {
+          "$ref": "#/$defs/ProviderComparison"
+        },
+        "title": "Provider Comparison",
+        "type": "array"
+      },
+      "cross_cloud_equivalents": {
+        "items": {
+          "$ref": "#/$defs/CrossCloudEquivalent"
+        },
+        "title": "Cross Cloud Equivalents",
+        "type": "array"
+      },
+      "recommended_provider": {
+        "default": "",
+        "title": "Recommended Provider",
+        "type": "string"
+      },
+      "recommendation": {
+        "default": "",
+        "title": "Recommendation",
+        "type": "string"
+      },
+      "recommendation_rationale": {
+        "default": "",
+        "title": "Recommendation Rationale",
+        "type": "string"
+      },
+      "analysis_confidence": {
+        "default": "low",
+        "title": "Analysis Confidence",
+        "type": "string"
+      },
+      "prompt_contract_version": {
+        "default": "oneshift-operator-v2.1",
+        "title": "Prompt Contract Version",
+        "type": "string"
+      },
+      "agent_views": {
+        "$ref": "#/$defs/AgentViews"
+      },
+      "savings_summary": {
+        "$ref": "#/$defs/SavingsSummaryV2"
+      },
+      "flags": {
+        "additionalProperties": {
+          "items": {},
+          "type": "array"
+        },
+        "title": "Flags",
+        "type": "object"
+      },
+      "strategic_notes": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Strategic Notes",
+        "type": "array"
+      },
+      "action_plan": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Action Plan",
+        "type": "array"
+      }
+    },
+    "title": "AnalysisV2Response",
+    "type": "object"
+  }
+}

@@ -36,10 +36,10 @@ class LLMOrchestrator:
         pools_json: str,
     ) -> AnalysisV2Response:
         context_payload = json.loads(pools_json)
-        context_payload["source_provider"] = source_provider
-        context_payload["billing_period"] = billing_period
-        context_payload["total_spend"] = total_spend
-        context_payload["currency"] = currency
+        context_payload["provedor_origem"] = source_provider
+        context_payload["periodo_faturamento"] = billing_period
+        context_payload["gasto_total"] = total_spend
+        context_payload["moeda"] = currency
 
         log_llm_input_payload("pipeline", context_payload)
 
@@ -79,10 +79,10 @@ def _build_prompt(billing_data: dict) -> str:
 
 
 def log_llm_input_payload(flow: str, billing_data: dict) -> None:
-    source_provider = billing_data.get("source_provider", "unknown")
-    billing_period = billing_data.get("billing_period", "unknown")
-    total_spend = billing_data.get("total_spend", 0)
-    currency = billing_data.get("currency", "unknown")
+    source_provider = billing_data.get("provedor_origem", billing_data.get("source_provider", "unknown"))
+    billing_period = billing_data.get("periodo_faturamento", billing_data.get("billing_period", "unknown"))
+    total_spend = billing_data.get("gasto_total", billing_data.get("total_spend", 0))
+    currency = billing_data.get("moeda", billing_data.get("currency", "unknown"))
     payload = json.dumps(billing_data, default=str, indent=2, ensure_ascii=False)
 
     logger.warning(
