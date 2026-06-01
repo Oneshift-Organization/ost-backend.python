@@ -77,15 +77,17 @@ class ClaudeLLMClient:
         message = await self._client.messages.create(**create_kwargs)
 
         logger.info(
-            "claude_usage model=%s input=%d output=%d cache_read=%d cache_write=%d",
+            "claude_usage model=%s input=%d output=%d cache_read=%d cache_write=%d stop_reason=%s",
             self._model,
             message.usage.input_tokens,
             message.usage.output_tokens,
             getattr(message.usage, "cache_read_input_tokens", 0),
             getattr(message.usage, "cache_creation_input_tokens", 0),
+            message.stop_reason,
         )
 
         text = _extract_text(message)
+
         raw = _extract_json(text)
         return response_model(**raw)
 
@@ -152,5 +154,11 @@ def _extract_json(text: str) -> dict[str, object]:
                 if depth == 0:
                     return cast("dict[str, object]", json.loads(stripped[start : i + 1]))
 
+    # DEBUG: texto COMPLETO (antes era text[:500], escondia onde o JSON quebrava)
+    logger.error(
+        "claude_extract_failed len=%d\n--- BEGIN UNPARSEABLE TEXT ---\n%s\n--- END UNPARSEABLE TEXT ---",
+        len(text),
+        text,
+    )
     msg = f"Could not extract JSON from Claude response:\n{text[:500]}"
     raise ValueError(msg)

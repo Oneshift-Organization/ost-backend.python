@@ -10,6 +10,7 @@ See ``docs/refactor/analysis-v2-spec.md`` §4.
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING
 
 from app.domain.interfaces.i_llm_client import ILLMClient
@@ -17,6 +18,8 @@ from app.schemas.analysis_v2 import AnalysisV2Response
 
 if TYPE_CHECKING:
     from app.domain.analysis import MigrationContext
+
+logger = logging.getLogger(__name__)
 
 
 class LLMOrchestrator:
@@ -38,6 +41,8 @@ class LLMOrchestrator:
         context_payload["total_spend"] = total_spend
         context_payload["currency"] = currency
 
+        log_llm_input_payload("pipeline", context_payload)
+
         prompt = _build_prompt(context_payload)
         raw = await self._client.generate(prompt, AnalysisV2Response)
 
@@ -52,6 +57,8 @@ class LLMOrchestrator:
         legacy_payload: dict,
     ) -> AnalysisV2Response:
         """Run analysis on a pre-computed legacy workload dict."""
+        log_llm_input_payload("legacy", legacy_payload)
+
         prompt = _build_prompt(legacy_payload)
         raw = await self._client.generate(prompt, AnalysisV2Response)
 
@@ -69,3 +76,23 @@ def _build_prompt(billing_data: dict) -> str:
         "output_schema": AnalysisV2Response.model_json_schema(),
     }
     return json.dumps(payload, default=str)
+
+
+def log_llm_input_payload(flow: str, billing_data: dict) -> None:
+    source_provider = billing_data.get("source_provider", "unknown")
+    billing_period = billing_data.get("billing_period", "unknown")
+    total_spend = billing_data.get("total_spend", 0)
+    currency = billing_data.get("currency", "unknown")
+    payload = json.dumps(billing_data, default=str, indent=2, ensure_ascii=False)
+
+    logger.warning(
+        "llm_input_payload flow=%s source=%s period=%s total=%s %s bytes=%d\n"
+        "--- BEGIN LLM INPUT ---\n%s\n--- END LLM INPUT ---",
+        flow,
+        source_provider,
+        billing_period,
+        total_spend,
+        currency,
+        len(payload.encode("utf-8")),
+        payload,
+    )

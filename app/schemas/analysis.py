@@ -85,3 +85,19 @@ class AnalysisJobResponse(BaseModel):
     error: str | None = None
     result: AnalysisV2Response | None = None
     created_at: datetime
+
+
+class AnalysisJobSummary(BaseModel):
+    job_id: UUID
+    report_id: UUID
+    external_id: UUID | None = None
+    status: str
+    provider: str | None = None
+    source_filename: str | None = None
+    row_count: int = 0
+    recommended_provider: str | None = None
+    recommendation: str | None = None
+    viability_score: int | None = None
+    analysis_confidence: str | None = None
+    error: str | None = None
+    created_at: datetime
