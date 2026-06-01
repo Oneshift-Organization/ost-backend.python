@@ -243,12 +243,36 @@ async def get_llm_input_preview(
     user: CurrentUser,
     session: DbSession,
 ) -> dict:
-    ctx = await _build_ctx(UUID(user.sub), report_id, session)
+    # Prefer the persisted payload — exact record of what was sent to LLM.
+    # Falls back to recomputing when the job hasn't run yet or pre-migration rows.
+    user_uuid = UUID(user.sub)
+    stmt = (
+        select(AnalysisJobModel)
+        .where(
+            AnalysisJobModel.report_id == report_id,
+            AnalysisJobModel.user_id == user_uuid,
+            AnalysisJobModel.llm_input_payload.isnot(None),
+        )
+        .order_by(AnalysisJobModel.created_at.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    row = result.scalars().first()
+    if row is not None and row.llm_input_payload:
+        return {
+            "billing_data": dict(row.llm_input_payload),
+            "missing_equivalent_pool_ids": [],
+            "source": "persisted",
+        }
+
+    # Fallback: recompute from current billing_enriched data
+    ctx = await _build_ctx(user_uuid, report_id, session)
     payload, missing_equiv_ids = build_pipeline_llm_input_payload(ctx)
     log_llm_input_payload("preview", payload)
     return {
         "billing_data": payload,
         "missing_equivalent_pool_ids": missing_equiv_ids,
+        "source": "recomputed",
     }
 
 
@@ -378,6 +402,7 @@ async def get_analysis_by_external_id(
         llm_output=job.llm_output,
         error=job.error,
         result=AnalysisV2Response.resilient_parse(job.ai_structured_output) if job.ai_structured_output else None,
+        llm_input_payload=job.llm_input_payload,
         created_at=job.created_at,
     )
 
@@ -470,6 +495,7 @@ async def get_analysis_result(
         llm_output=job.llm_output,
         error=job.error,
         result=AnalysisV2Response.resilient_parse(job.ai_structured_output) if job.ai_structured_output else None,
+        llm_input_payload=job.llm_input_payload,
         created_at=job.created_at,
     )
 
@@ -514,7 +540,11 @@ async def _run_legacy_analysis_pipeline(
                 f"Provider: {v2_result.recommended_provider}. "
                 f"Savings: ${v2_result.savings_summary.total_monthly_savings_usd:.2f}/mo."
             )
-            job.mark_completed(output=llm_output, structured=v2_result.model_dump())
+            job.mark_completed(
+                output=llm_output,
+                structured=v2_result.model_dump(),
+                llm_input=legacy_payload,
+            )
             await job_repo.update(job)
             await session.commit()
             logger.info("legacy_pipeline_completed job_id=%s", job_id)

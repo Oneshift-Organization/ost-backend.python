@@ -84,6 +84,7 @@ class AnalysisJobResponse(BaseModel):
     llm_output: str | None = None
     error: str | None = None
     result: AnalysisV2Response | None = None
+    llm_input_payload: dict | None = None
     created_at: datetime
 
 

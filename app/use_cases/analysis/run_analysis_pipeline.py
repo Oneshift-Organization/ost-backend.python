@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from dataclasses import dataclass
+from decimal import Decimal
 from uuid import UUID
 
 from app.domain.entities.analysis_job import AnalysisJob
@@ -20,6 +22,9 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextUseCase,
 )
 
+# Shorthand used inside _add_financials to silently ignore bad Decimal conversions
+_suppress = contextlib.suppress
+
 
 @dataclass(frozen=True)
 class RunAnalysisPipelineInput:
@@ -27,41 +32,108 @@ class RunAnalysisPipelineInput:
     report_id: UUID
 
 
-def _serialize_pools(ctx) -> str:
-    """Serialize capacity pools + cross-cloud equivalents into the LLM payload."""
+def _aggregate_pools_by_family(
+    pools: tuple, pool_equivalents: dict
+) -> tuple[list[dict], list[str]]:
+    """Aggregate per-project pools into per-family pools for the LLM payload.
+
+    Groups by (machine_family, region) and sums capacity/costs. Keeps
+    source_projects so the family entry is traceable back to original projects.
+    Equivalents are aggregated by (provider, service_name) summing cost_delta
+    and estimated_monthly_cost — the math is preserved exactly.
+    """
+    buckets: dict[tuple[str, str], dict] = {}
+    for p in pools:
+        if p.capacity.vcpus <= 0 and p.capacity.ram_gib <= 0:
+            continue
+        key = (p.pool_key.machine_family, p.pool_key.region)
+        if key not in buckets:
+            buckets[key] = {
+                "family": p.pool_key.machine_family,
+                "region": p.pool_key.region,
+                "vcpus": Decimal("0"),
+                "ram_gib": Decimal("0"),
+                "compute_base": Decimal("0"),
+                "os_licensing": Decimal("0"),
+                "source_projects": [],
+                "pool_keys": [],
+            }
+        b = buckets[key]
+        b["vcpus"] += p.capacity.vcpus
+        b["ram_gib"] += p.capacity.ram_gib
+        b["compute_base"] += p.costs.compute_base
+        b["os_licensing"] += p.costs.os_licensing
+        b["source_projects"].append(p.pool_key.project_id)
+        b["pool_keys"].append(
+            f"{p.pool_key.project_id}/{p.pool_key.machine_family}/{p.pool_key.region}"
+        )
+
+    compute_pools: list[dict] = []
+    missing_equiv_family_ids: list[str] = []
+
+    for (family, region), b in buckets.items():
+        # Aggregate equivalents from all constituent project pools
+        agg_equivs: dict[tuple[str, str], dict] = {}
+        for pool_key in b["pool_keys"]:
+            for e in pool_equivalents.get(pool_key, []):
+                agg_key = (e.provider, e.service_name)
+                if agg_key not in agg_equivs:
+                    agg_equivs[agg_key] = _serialize_equivalent(e)
+                    # reset financials to accumulate
+                    fin = agg_equivs[agg_key].get("financials")
+                    if fin:
+                        agg_equivs[agg_key]["financials"] = dict(fin)
+                else:
+                    existing = agg_equivs[agg_key]
+                    new_fin = getattr(e, "financials", None)
+                    if new_fin and existing.get("financials"):
+                        _add_financials(existing["financials"], new_fin)
+                    inst = getattr(e, "instances", 1)
+                    if inst > existing.get("instances", 1):
+                        existing["instances"] = inst
+
+        family_id = f"{family}/{region}"
+        if not agg_equivs:
+            missing_equiv_family_ids.append(family_id)
+
+        compute_pools.append({
+            "family": family,
+            "region": region,
+            "source_projects": b["source_projects"],
+            "capacity": {
+                "vcpus": round(float(b["vcpus"]), 2),
+                "ram_gib": round(float(b["ram_gib"]), 2),
+            },
+            "costs": {
+                "compute_base": round(float(b["compute_base"]), 2),
+                "os_licensing": round(float(b["os_licensing"]), 2),
+            },
+            "equivalents": list(agg_equivs.values()),
+        })
+
+    return compute_pools, missing_equiv_family_ids
+
+
+def _add_financials(existing: dict, new_fin) -> None:
+    """Accumulate estimated_monthly_cost and cost_delta in place (Decimal-safe)."""
+    for field_name in ("estimated_monthly_cost", "cost_delta"):
+        existing_val = existing.get(field_name)
+        new_val = getattr(new_fin, field_name, None)
+        if existing_val is not None and new_val is not None:
+            with _suppress():
+                existing[field_name] = str(Decimal(str(existing_val)) + Decimal(str(new_val)))
+
+
+def _serialize_pools(ctx) -> tuple[str, list[str]]:
+    """Serialize capacity pools aggregated by family into the LLM payload."""
     pools = getattr(ctx, "pools", ())
     auxiliary = getattr(ctx, "auxiliary", None)
     pool_equivalents: dict = getattr(ctx, "pool_equivalents", {})
     database_equivalents: list = getattr(ctx, "database_equivalents", [])
 
-    compute_pools = []
-    missing_equiv_pool_ids: list[str] = []
-
-    for p in pools:
-        if p.capacity.vcpus <= 0 and p.capacity.ram_gib <= 0:
-            continue
-        pool_key_str = (
-            f"{p.pool_key.project_id}/{p.pool_key.machine_family}/{p.pool_key.region}"
-        )
-        equivs = pool_equivalents.get(pool_key_str, [])
-        if not equivs:
-            missing_equiv_pool_ids.append(pool_key_str)
-
-        pool_dict: dict[str, object] = {
-            "project_id": p.pool_key.project_id,
-            "family": p.pool_key.machine_family,
-            "region": p.pool_key.region,
-            "capacity": {
-                "vcpus": round(float(p.capacity.vcpus), 2),
-                "ram_gib": round(float(p.capacity.ram_gib), 2),
-            },
-            "costs": {
-                "compute_base": round(float(p.costs.compute_base), 2),
-                "os_licensing": round(float(p.costs.os_licensing), 2),
-            },
-            "equivalents": [_serialize_equivalent(e) for e in equivs],
-        }
-        compute_pools.append(pool_dict)
+    compute_pools, missing_equiv_pool_ids = _aggregate_pools_by_family(
+        pools, pool_equivalents
+    )
 
     payload: dict[str, object] = {"compute_pools": compute_pools}
 
@@ -289,6 +361,8 @@ class RunAnalysisPipelineUseCase:
             )
 
             pools_json, missing_equiv_ids = _serialize_pools(ctx)
+            # Capture payload for persistence before sending to LLM
+            llm_input, _ = build_pipeline_llm_input_payload(ctx)
 
             ui_report = await self._orchestrator.generate_report(
                 context=ctx,
@@ -332,6 +406,7 @@ class RunAnalysisPipelineUseCase:
             job.mark_completed(
                 output=llm_output,
                 structured=ui_report.model_dump(),
+                llm_input=llm_input,
             )
         except Exception as exc:
             job.mark_failed(str(exc))

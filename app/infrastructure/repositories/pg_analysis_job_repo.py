@@ -24,6 +24,7 @@ class PgAnalysisJobRepository(IAnalysisJobRepository):
             llm_output=job.llm_output,
             error=job.error,
             ai_structured_output=job.ai_structured_output,
+            llm_input_payload=job.llm_input_payload,
             created_at=job.created_at,
         )
         self._session.add(model)
@@ -39,6 +40,7 @@ class PgAnalysisJobRepository(IAnalysisJobRepository):
         model.llm_output = job.llm_output
         model.error = job.error
         model.ai_structured_output = job.ai_structured_output
+        model.llm_input_payload = job.llm_input_payload
 
     async def get_by_id(self, job_id: UUID, user_id: UUID) -> AnalysisJob | None:
         stmt = select(AnalysisJobModel).where(
@@ -78,6 +80,9 @@ class PgAnalysisJobRepository(IAnalysisJobRepository):
             error=model.error,
             ai_structured_output=(
                 dict(model.ai_structured_output) if model.ai_structured_output else None
+            ),
+            llm_input_payload=(
+                dict(model.llm_input_payload) if model.llm_input_payload else None
             ),
             created_at=model.created_at,
         )
