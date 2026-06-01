@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
     supabase_jwt_audience: str = "authenticated"
+    # Pre-fetched JWKS JSON string. When set, JWT validation uses local keys
+    # (no network needed). Leave empty to fetch from supabase_url at startup.
+    supabase_jwks_json: str = ""
 
     cors_origins: list[str] = Field(
         default_factory=lambda: [

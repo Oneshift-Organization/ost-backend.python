@@ -4,18 +4,21 @@ from uuid import UUID, uuid4
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.domain.analysis import MigrationContext
 from app.domain.entities.analysis_job import AnalysisJob
+from app.infrastructure.database.models.analysis_job import AnalysisJobModel
+from app.infrastructure.database.models.billing_reports import BillingReportModel
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.llm.claude_client import ClaudeLLMClient
 from app.infrastructure.llm.gemini_client import GeminiLLMClient
 from app.infrastructure.llm.mock_client import MockLLMClient
 from app.infrastructure.llm.openrouter_client import OpenRouterLLMClient
-from app.infrastructure.llm.orchestrator import LLMOrchestrator
+from app.infrastructure.llm.orchestrator import LLMOrchestrator, log_llm_input_payload
 from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
 from app.infrastructure.repositories.pg_billing_enriched_repo import (
     PgBillingEnrichedRepository,
@@ -30,6 +33,7 @@ from app.infrastructure.repositories.service_repositories import (
 )
 from app.schemas.analysis import (
     AnalysisJobResponse,
+    AnalysisJobSummary,
     AnalysisRequest,
     EquivalentServiceItem,
     FinancialEstimateItem,
@@ -41,7 +45,10 @@ from app.schemas.analysis import (
     WorkloadSummaryItem,
 )
 from app.schemas.analysis_v2 import AnalysisV2Response, LegacyAnalysisRequest
-from app.use_cases.analysis.run_analysis_pipeline import serialize_as_legacy
+from app.use_cases.analysis.run_analysis_pipeline import (
+    build_pipeline_llm_input_payload,
+    serialize_as_legacy,
+)
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
@@ -49,6 +56,8 @@ from app.use_cases.analysis.build_migration_context import (
 from app.use_cases.analysis.run_analysis_pipeline import RunAnalysisPipelineUseCase
 
 router = APIRouter(prefix="/analyses")
+
+_MAX_ANALYSES_PER_PAGE = 100
 
 
 def _build_response(ctx: MigrationContext) -> MigrationContextResponse:
@@ -120,6 +129,55 @@ def _build_response(ctx: MigrationContext) -> MigrationContextResponse:
     )
 
 
+@router.get("", response_model=list[AnalysisJobSummary])
+async def list_analysis_jobs(
+    user: CurrentUser,
+    session: DbSession,
+    limit: int = 50,
+) -> list[AnalysisJobSummary]:
+    if limit < 1 or limit > _MAX_ANALYSES_PER_PAGE:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"limit must be 1..{_MAX_ANALYSES_PER_PAGE}",
+        )
+
+    user_uuid = UUID(user.sub)
+    stmt = (
+        select(AnalysisJobModel, BillingReportModel)
+        .join(BillingReportModel, AnalysisJobModel.report_id == BillingReportModel.id)
+        .where(
+            AnalysisJobModel.user_id == user_uuid,
+            BillingReportModel.user_id == user_uuid,
+        )
+        .order_by(AnalysisJobModel.created_at.desc())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+
+    summaries: list[AnalysisJobSummary] = []
+    for job, report in result.all():
+        structured = job.ai_structured_output if isinstance(job.ai_structured_output, dict) else {}
+        summaries.append(
+            AnalysisJobSummary(
+                job_id=job.job_id,
+                report_id=job.report_id,
+                external_id=job.external_id,
+                status=job.status,
+                provider=report.provider,
+                source_filename=report.source_filename,
+                row_count=report.row_count,
+                recommended_provider=structured.get("recommended_provider"),
+                recommendation=structured.get("recommendation"),
+                viability_score=structured.get("viability_score"),
+                analysis_confidence=structured.get("analysis_confidence"),
+                error=job.error,
+                created_at=job.created_at,
+            )
+        )
+
+    return summaries
+
+
 @router.post(
     "/migration-context",
     response_model=MigrationContextResponse,
@@ -174,6 +232,24 @@ async def get_agents_payload(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     return _build_response(ctx)
+
+
+@router.get(
+    "/{report_id}/llm-input-preview",
+    status_code=status.HTTP_200_OK,
+)
+async def get_llm_input_preview(
+    report_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+) -> dict:
+    ctx = await _build_ctx(UUID(user.sub), report_id, session)
+    payload, missing_equiv_ids = build_pipeline_llm_input_payload(ctx)
+    log_llm_input_payload("preview", payload)
+    return {
+        "billing_data": payload,
+        "missing_equivalent_pool_ids": missing_equiv_ids,
+    }
 
 
 async def _run_analysis_pipeline(

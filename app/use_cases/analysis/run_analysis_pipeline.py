@@ -97,6 +97,16 @@ def _serialize_pools(ctx) -> str:
     return json.dumps(payload, default=str), missing_equiv_pool_ids
 
 
+def build_pipeline_llm_input_payload(ctx) -> tuple[dict, list[str]]:
+    pools_json, missing_equiv_ids = _serialize_pools(ctx)
+    context_payload = json.loads(pools_json)
+    context_payload["source_provider"] = ctx.source_provider
+    context_payload["billing_period"] = ctx.billing_period
+    context_payload["total_spend"] = float(ctx.total_spend)
+    context_payload["currency"] = ctx.currency
+    return context_payload, missing_equiv_ids
+
+
 def _serialize_equivalent(equiv) -> dict:
     """Serialize a single EquivalentService to a JSON-safe dict."""
     d: dict[str, object] = {
