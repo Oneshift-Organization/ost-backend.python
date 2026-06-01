@@ -98,13 +98,20 @@ class BuildMigrationContextUseCase:
         if not items:
             raise ValueError(f"report {payload.report_id} has no billing items")
 
-        billing_period = items[0].billing_period
+        # Bug fix: use cost-weighted dominant period, not first item's period.
+        # A CSV can span two months; we want the one with the most spend.
+        period_costs: dict[str, Decimal] = {}
+        currency_counts: dict[str, int] = {}
         total_spend = Decimal("0")
 
         # ── 1. Aggregate by service ──────────────────────────────
         service_agg: dict[str, dict[str, Any]] = {}
         for item in items:
             total_spend += item.cost
+            period_costs[item.billing_period] = (
+                period_costs.get(item.billing_period, Decimal("0")) + item.cost
+            )
+            currency_counts[item.currency] = currency_counts.get(item.currency, 0) + 1
             key = item.service_name
             if key not in service_agg:
                 service_agg[key] = {
@@ -120,6 +127,9 @@ class BuildMigrationContextUseCase:
             service_agg[key]["total_cost"] += item.cost
             service_agg[key]["line_count"] += 1
             service_agg[key]["items"].append(item)
+
+        billing_period = max(period_costs, key=lambda p: period_costs[p])
+        currency = max(currency_counts, key=lambda c: currency_counts[c]) if currency_counts else "USD"
 
         # ── 2. Load source catalog ───────────────────────────────
         source_comparisons = await self._comparison_repo.list_by_provider(source_provider)
@@ -393,7 +403,7 @@ class BuildMigrationContextUseCase:
             source_provider=source_provider,
             billing_period=billing_period,
             total_spend=total_spend,
-            currency="USD",
+            currency=currency,
             categories=[
                 ServiceCategoryGroup(
                     category=c["category"],
