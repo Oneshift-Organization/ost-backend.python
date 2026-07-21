@@ -30,7 +30,11 @@ logger = logging.getLogger(__name__)
 # Default model: Sonnet 4.6 — strong reasoning, fast, cost-efficient for FinOps
 # analysis.  Swap to claude-opus-4-8 in prod settings for highest accuracy.
 _DEFAULT_MODEL = "claude-sonnet-4-6"
-_MAX_OUTPUT_TOKENS = 8192
+# Full análise estruturada (viability + oneshift_scores + provider_comparison ×N
+# + cross_cloud_equivalents + 3 agent_views detalhados + action_plan + flags)
+# passa de 8192 tokens em cenários grandes, cortando o JSON no meio e quebrando o
+# parser. 16384 dá folga confortável e fica bem dentro do teto do Sonnet 4.x (64K).
+_MAX_OUTPUT_TOKENS = 16384
 
 
 class ClaudeLLMClient:
