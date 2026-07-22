@@ -101,3 +101,15 @@ def test_legacy_workloads_shape_aggregates_same_as_pools():
     assert oci.estimated_monthly_savings == 400.0
     assert out.savings_summary.total_monthly_savings_usd == 400.0
     assert out.savings_summary.percentage_reduction == 40.0
+
+
+def test_provider_comparison_scores_clamped_to_100():
+    r = _resp()
+    r.provider_comparison[0].overall_score = 850  # LLM alucinou escala por provedor
+    out = apply_financial_overlay(r, PAYLOAD)
+    oci = next(p for p in out.provider_comparison if p.provider.upper() == "OCI")
+    assert oci.overall_score == 100
+    assert any(
+        "provider_comparison" in str(f) and "overall_score" in str(f)
+        for f in out.flags.get("numeric_validation", [])
+    )

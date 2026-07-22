@@ -25,13 +25,19 @@ def apply_financial_overlay(
     # 2. provider_comparison
     for pc in response.provider_comparison:
         prov = pc.provider.upper()
-        if prov not in cost_by:
-            continue
-        det_cost = cost_by[prov]
-        det_sav = -savings_by[prov]
-        _check(divergences, prov, "estimated_monthly_cost", pc.estimated_monthly_cost, det_cost)
-        pc.estimated_monthly_cost = float(round(det_cost, 2))
-        pc.estimated_monthly_savings = float(round(det_sav, 2))
+        if prov in cost_by:
+            det_cost = cost_by[prov]
+            det_sav = -savings_by[prov]
+            _check(divergences, prov, "estimated_monthly_cost", pc.estimated_monthly_cost, det_cost)
+            pc.estimated_monthly_cost = float(round(det_cost, 2))
+            pc.estimated_monthly_savings = float(round(det_sav, 2))
+
+        # 4. clamp de sub-scores por provedor (mesma regra do OneshiftScores)
+        scope = f"provider_comparison[{pc.provider}]"
+        pc.financial_score = _clamp(divergences, f"{scope}.financial_score", pc.financial_score)
+        pc.technical_score = _clamp(divergences, f"{scope}.technical_score", pc.technical_score)
+        pc.enterprise_score = _clamp(divergences, f"{scope}.enterprise_score", pc.enterprise_score)
+        pc.overall_score = _clamp(divergences, f"{scope}.overall_score", pc.overall_score)
 
     # 5. recommended_provider deve existir no payload
     rec = response.recommended_provider.upper()
