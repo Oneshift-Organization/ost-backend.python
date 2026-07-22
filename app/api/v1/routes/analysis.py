@@ -14,10 +14,8 @@ from app.domain.entities.analysis_job import AnalysisJob
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
 from app.infrastructure.database.models.billing_reports import BillingReportModel
 from app.infrastructure.database.session import get_sessionmaker
-from app.infrastructure.llm.claude_client import ClaudeLLMClient
-from app.infrastructure.llm.gemini_client import GeminiLLMClient
+from app.infrastructure.llm.agno_client import AgnoLLMClient
 from app.infrastructure.llm.mock_client import MockLLMClient
-from app.infrastructure.llm.openrouter_client import OpenRouterLLMClient
 from app.infrastructure.llm.orchestrator import LLMOrchestrator, log_llm_input_payload
 from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
 from app.infrastructure.repositories.pg_billing_enriched_repo import (
@@ -294,25 +292,7 @@ async def _run_analysis_pipeline(
         logger.info("pipeline_job_loaded job_id=%s status=%s", job_id, job.status)
 
         settings = get_settings()
-        llm_client: MockLLMClient | GeminiLLMClient | OpenRouterLLMClient | ClaudeLLMClient
-        match settings.llm_provider:
-            case "openrouter":
-                llm_client = OpenRouterLLMClient(
-                    api_key=settings.openrouter_api_key,
-                    model=settings.openrouter_model,
-                )
-            case "gemini":
-                llm_client = GeminiLLMClient(
-                    api_key=settings.gemini_api_key,
-                    model=settings.gemini_model,
-                )
-            case "anthropic":
-                llm_client = ClaudeLLMClient(
-                    api_key=settings.anthropic_api_key,
-                    model=settings.anthropic_model,
-                )
-            case _:
-                llm_client = MockLLMClient()
+        llm_client = _make_llm_client()
         logger.info("llm_provider_selected provider=%s", settings.llm_provider)
 
         orchestrator = LLMOrchestrator(llm_client=llm_client)
@@ -409,21 +389,17 @@ async def get_analysis_by_external_id(
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _make_llm_client() -> MockLLMClient | GeminiLLMClient | OpenRouterLLMClient | ClaudeLLMClient:
+def _make_llm_client() -> MockLLMClient | AgnoLLMClient:
     settings = get_settings()
     match settings.llm_provider:
         case "openrouter":
-            return OpenRouterLLMClient(
-                api_key=settings.openrouter_api_key, model=settings.openrouter_model
+            return AgnoLLMClient(
+                "openrouter", settings.openrouter_api_key, settings.openrouter_model
             )
         case "gemini":
-            return GeminiLLMClient(
-                api_key=settings.gemini_api_key, model=settings.gemini_model
-            )
+            return AgnoLLMClient("gemini", settings.gemini_api_key, settings.gemini_model)
         case "anthropic":
-            return ClaudeLLMClient(
-                api_key=settings.anthropic_api_key, model=settings.anthropic_model
-            )
+            return AgnoLLMClient("anthropic", settings.anthropic_api_key, settings.anthropic_model)
         case _:
             return MockLLMClient()
 
