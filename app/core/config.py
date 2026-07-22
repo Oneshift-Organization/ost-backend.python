@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     openrouter_model: str = "deepseek/deepseek-v4-flash:free"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
+    llm_timeout_seconds: int = 90
+    llm_max_retries: int = 1
 
     gcp_service_account_path: str = Field(
         default="", alias="GOOGLE_APPLICATION_CREDENTIALS"

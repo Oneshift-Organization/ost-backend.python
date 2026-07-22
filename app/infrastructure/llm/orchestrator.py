@@ -11,23 +11,54 @@ See ``docs/refactor/analysis-v2-spec.md`` §4.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from app.core.config import get_settings
 from app.domain.interfaces.i_llm_client import ILLMClient
 from app.infrastructure.llm.system_prompt import SYSTEM_PROMPT
 from app.schemas.analysis_v2 import AnalysisV2Response
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
     from app.domain.analysis import MigrationContext
 
 logger = logging.getLogger(__name__)
 
 
 class LLMOrchestrator:
-    def __init__(self, llm_client: ILLMClient) -> None:
+    def __init__(
+        self,
+        llm_client: ILLMClient,
+        timeout_seconds: float | None = None,
+        retry_delay_seconds: float = 3.0,
+    ) -> None:
+        settings = get_settings()
         self._client = llm_client
+        self._timeout = timeout_seconds or settings.llm_timeout_seconds
+        self._max_retries = settings.llm_max_retries
+        self._retry_delay = retry_delay_seconds
+
+    async def _call_llm(self, user_message: str) -> BaseModel | dict[str, Any]:
+        async with asyncio.timeout(self._timeout):  # orçamento GLOBAL (inclui retry)
+            for attempt in range(self._max_retries + 1):
+                try:
+                    return await self._client.generate(
+                        SYSTEM_PROMPT, user_message, AnalysisV2Response
+                    )
+                except (TimeoutError, asyncio.CancelledError):
+                    raise
+                except Exception:
+                    if attempt >= self._max_retries:
+                        raise
+                    logger.warning(
+                        "llm_attempt_failed attempt=%d, retrying", attempt + 1, exc_info=True
+                    )
+                    await asyncio.sleep(self._retry_delay)
+        raise RuntimeError("unreachable")
 
     async def generate_report(
         self,
@@ -47,7 +78,7 @@ class LLMOrchestrator:
         log_llm_input_payload("pipeline", context_payload)
 
         user_message = json.dumps(context_payload, default=str)
-        raw = await self._client.generate(SYSTEM_PROMPT, user_message, AnalysisV2Response)
+        raw = await self._call_llm(user_message)
 
         if isinstance(raw, AnalysisV2Response):
             return raw
@@ -63,7 +94,7 @@ class LLMOrchestrator:
         log_llm_input_payload("legacy", legacy_payload)
 
         user_message = json.dumps(legacy_payload, default=str)
-        raw = await self._client.generate(SYSTEM_PROMPT, user_message, AnalysisV2Response)
+        raw = await self._call_llm(user_message)
 
         if isinstance(raw, AnalysisV2Response):
             return raw
