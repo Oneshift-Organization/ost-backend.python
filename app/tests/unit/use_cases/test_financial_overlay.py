@@ -65,3 +65,39 @@ def test_scores_clamped_to_100():
     r.oneshift_scores.financial_score = 850  # LLM alucinou escala
     out = apply_financial_overlay(r, PAYLOAD)
     assert out.oneshift_scores.financial_score == 100
+
+
+LEGACY_PAYLOAD = {
+    "source_provider": "aws",
+    "billing_period": "2026-06",
+    "currency": "USD",
+    "total_spend": 1000.0,
+    "workloads": [
+        {
+            "canonical_service": "virtual_server",
+            "category": "compute",
+            "service_name": "e2 Compute (proj-1)",
+            "equivalents": [
+                {
+                    "provider": "AWS",
+                    "financials": {"estimated_monthly_cost": 700.0, "cost_delta": -300.0},
+                },
+                {
+                    "provider": "OCI",
+                    "financials": {"estimated_monthly_cost": 600.0, "cost_delta": -400.0},
+                },
+            ],
+        }
+    ],
+}
+
+
+def test_legacy_workloads_shape_aggregates_same_as_pools():
+    """serialize_as_legacy() output (EN keys, workloads[]/equivalents[]) must
+    aggregate through the overlay exactly like the PT pools_computacao shape."""
+    out = apply_financial_overlay(_resp(), LEGACY_PAYLOAD)
+    oci = next(p for p in out.provider_comparison if p.provider.upper() == "OCI")
+    assert oci.estimated_monthly_cost == 600.0
+    assert oci.estimated_monthly_savings == 400.0
+    assert out.savings_summary.total_monthly_savings_usd == 400.0
+    assert out.savings_summary.percentage_reduction == 40.0

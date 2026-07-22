@@ -513,6 +513,8 @@ async def _run_legacy_analysis_pipeline(
                     v2_result.model_dump() if hasattr(v2_result, "model_dump") else {}
                 )
 
+            v2_result = apply_financial_overlay(v2_result, legacy_payload)
+
             llm_output = (
                 f"Viability score: {v2_result.viability_score}/1000. "
                 f"Recommendation: {v2_result.recommendation}. "
