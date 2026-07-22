@@ -21,6 +21,7 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
 )
+from app.use_cases.analysis.financial_overlay import apply_financial_overlay
 
 # Shorthand used inside _add_financials to silently ignore bad Decimal conversions
 _suppress = contextlib.suppress
@@ -389,6 +390,8 @@ class RunAnalysisPipelineUseCase:
                 ui_report = AnalysisV2Response.resilient_parse(
                     ui_report.model_dump() if hasattr(ui_report, "model_dump") else {}
                 )
+
+            ui_report = apply_financial_overlay(ui_report, llm_input)
 
             flags = ui_report.flags
             if ctx.missing_sku_ids:

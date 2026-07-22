@@ -1,8 +1,6 @@
 import logging
 from uuid import UUID, uuid4
 
-logger = logging.getLogger(__name__)
-
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy import select
 
@@ -51,7 +49,10 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
 )
+from app.use_cases.analysis.financial_overlay import apply_financial_overlay
 from app.use_cases.analysis.run_analysis_pipeline import RunAnalysisPipelineUseCase
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analyses")
 
@@ -444,6 +445,8 @@ async def direct_analysis(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"LLM analysis failed: {exc}",
         ) from exc
+
+    result = apply_financial_overlay(result, billing_data)
 
     logger.info("direct_analysis_completed viability=%s", result.viability_score)
     return result
