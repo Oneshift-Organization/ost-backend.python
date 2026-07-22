@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
@@ -22,6 +23,8 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextUseCase,
 )
 from app.use_cases.analysis.financial_overlay import apply_financial_overlay
+
+logger = logging.getLogger(__name__)
 
 # Shorthand used inside _add_financials to silently ignore bad Decimal conversions
 _suppress = contextlib.suppress
@@ -428,6 +431,7 @@ class RunAnalysisPipelineUseCase:
                 llm_input=llm_input,
             )
         except Exception as exc:
+            logger.exception("analysis_pipeline_failed job_id=%s", job.job_id)
             job.mark_failed(str(exc))
 
         await self._job_repo.update(job)

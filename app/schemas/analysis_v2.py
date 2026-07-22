@@ -131,9 +131,21 @@ class AnalysisV2Response(BaseModel):
         except Exception:
             logger.warning("analysis_v2_parse_fallback", exc_info=True)
             try:
-                return cls.model_validate({})
+                degraded = cls.model_validate({})
+                degraded.flags["parsing"] = [{
+                    "code": "PARSE_FALLBACK",
+                    "message": "Resposta do LLM inválida — objeto degradado retornado",
+                    "impact_area": "analysis",
+                }]
+                return degraded
             except Exception:
-                return cls()
+                degraded = cls()
+                degraded.flags["parsing"] = [{
+                    "code": "PARSE_FALLBACK",
+                    "message": "Resposta do LLM inválida — objeto degradado retornado",
+                    "impact_area": "analysis",
+                }]
+                return degraded
 
 
 # ── Field-alias normalization ─────────────────────────────────────────────────
