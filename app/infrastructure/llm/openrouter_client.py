@@ -89,7 +89,7 @@ class OpenRouterLLMClient:
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.2,
-            "max_tokens": 8192,
+            "max_tokens": 16384,
         }
 
         async with httpx.AsyncClient(timeout=300.0) as client:
