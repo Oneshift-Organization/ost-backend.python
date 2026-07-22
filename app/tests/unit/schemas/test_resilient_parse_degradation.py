@@ -29,3 +29,13 @@ def test_out_of_range_viability_is_clamped_not_discarded():
     assert out.recommendation == "MIGRATE"            # resposta boa preservada
     assert out.provider_comparison[0].provider == "OCI"
     assert "parsing" not in out.flags                  # não é fallback
+
+
+def test_single_key_envelope_is_unwrapped():
+    """LLMs envolvem a resposta numa chave raiz própria — desembrulhar."""
+    out = AnalysisV2Response.resilient_parse(
+        {"oneshift_analysis": {"viability_score": 70, "recommendation": "MIGRATE"}}
+    )
+    assert out.viability_score == 70
+    assert out.recommendation == "MIGRATE"
+    assert "parsing" not in out.flags

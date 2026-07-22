@@ -56,6 +56,10 @@ class LLMOrchestrator:
                     # numa chave fora da tabela de aliases valida com defaults —
                     # A4/A5): gasta o retry nela em vez de aceitar silencioso.
                     if _is_empty(result):
+                        # Diagnóstico: quais chaves o modelo realmente devolveu
+                        # (aponta lacunas na tabela de aliases do resilient_parse)
+                        keys = sorted(raw.keys()) if isinstance(raw, dict) else type(raw).__name__
+                        logger.warning("llm_empty_response raw_keys=%s", keys)
                         msg = "resposta do LLM semanticamente vazia após validação"
                         raise ValueError(msg)
                     return result

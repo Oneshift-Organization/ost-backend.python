@@ -207,6 +207,12 @@ _AGENT_VIEW_ALIASES: dict[str, str] = {
 
 
 def _normalize_top(raw: dict[str, Any]) -> dict[str, Any]:
+    # Desembrulha envelope de chave única (ex.: {"oneshift_analysis": {...}},
+    # {"analysis": {...}}) — LLMs frequentemente envolvem a resposta numa chave
+    # raiz própria; sem o unwrap, extra="ignore" descarta tudo silenciosamente.
+    while len(raw) == 1 and isinstance(next(iter(raw.values())), dict):
+        raw = next(iter(raw.values()))
+
     out: dict[str, Any] = {}
     for k, v in raw.items():
         canonical = _TOP_ALIASES.get(k, k)

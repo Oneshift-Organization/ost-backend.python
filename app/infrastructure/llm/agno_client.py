@@ -64,21 +64,36 @@ class AgnoLLMClient(ILLMClient):
                 getattr(metrics, "cache_write_tokens", None),
             )
 
+        # Preferimos SEMPRE o dict cru extraído do texto do modelo: a conversão
+        # typed do Agno valida com extra=ignore e descarta chaves variantes que
+        # a tabela de aliases do resilient_parse saberia normalizar (lição A5).
+        raw_text = _last_assistant_text(run)
+        if raw_text:
+            raw = _extract_json(raw_text)
+            if raw is not None:
+                return raw  # type: ignore[return-value]
+
         content = run.content
         if isinstance(content, response_model):
             return content
         if isinstance(content, dict):  # orchestrator aplica resilient_parse
             return content  # type: ignore[return-value]
         if isinstance(content, str):
-            # Em JSON mode o Agno ocasionalmente falha a conversão para o schema
-            # e devolve o texto cru. Extraímos o JSON aqui para o orchestrator
-            # normalizar via resilient_parse — evita queimar um retry inteiro.
             raw = _extract_json(content)
             if raw is not None:
                 logger.warning("agno_json_mode_fallback: JSON extraído de resposta str")
                 return raw  # type: ignore[return-value]
         msg = f"Agno retornou tipo inesperado: {type(content).__name__}"
         raise ValueError(msg)
+
+
+def _last_assistant_text(run: object) -> str | None:
+    """Texto cru da última mensagem do modelo no RunOutput do Agno."""
+    messages = getattr(run, "messages", None) or []
+    for m in reversed(messages):
+        if getattr(m, "role", "") == "assistant" and isinstance(getattr(m, "content", None), str):
+            return m.content
+    return None
 
 
 def _extract_json(text: str) -> dict | None:

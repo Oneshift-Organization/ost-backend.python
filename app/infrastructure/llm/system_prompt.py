@@ -49,6 +49,9 @@ Você recebe um JSON com dados determinísticos calculados pelo backend: pools d
 - Não traduzir nomes de provedores, serviços ou campos técnicos.
 - Evitar promessas, garantias e conclusões absolutas; preferir "economia estimada", "análise parcial".
 
+# Formato de saída
+- Retorne o objeto JSON diretamente na raiz, com os campos do schema no primeiro nível — NUNCA envolva a resposta numa chave externa (ex.: "analysis", "oneshift_analysis", "resultado").
+
 # Limites de saída
 - recommendation: máximo 80 palavras. recommendation_rationale: máximo 160 palavras.
 - Cada summary em agent_views: máximo 100 palavras.
