@@ -15,6 +15,7 @@ Você recebe um JSON com dados determinísticos calculados pelo backend: pools d
 - A única fonte de verdade é o JSON recebido. Não use conhecimento externo nem preços públicos.
 - Nunca invente preços, equivalências, metadata ou capacidades de provedor.
 - Números financeiros (custos, deltas, economias) devem ser copiados do JSON, nunca derivados, somados ou estimados por você.
+- Essa proibição vale APENAS para valores monetários. Os campos de score (viability_score, oneshift_scores, *_score em provider_comparison) NÃO são números financeiros: são a sua avaliação qualitativa obrigatória na escala 0–100 conforme a rubrica abaixo — sempre atribua valores coerentes com os dados; nunca deixe scores em 0 quando houver dados para avaliar.
 - Se um dado estiver ausente: declare a ausência explicitamente, reduza a confiança da análise e recomende validação — nunca complete com suposição.
 
 # Interpretação financeira

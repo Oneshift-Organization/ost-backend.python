@@ -44,13 +44,21 @@ class LLMOrchestrator:
         self._max_retries = settings.llm_max_retries
         self._retry_delay = retry_delay_seconds
 
-    async def _call_llm(self, user_message: str) -> BaseModel | dict[str, Any]:
+    async def _call_llm(self, user_message: str) -> AnalysisV2Response:
         async with asyncio.timeout(self._timeout):  # orçamento GLOBAL (inclui retry)
             for attempt in range(self._max_retries + 1):
                 try:
-                    return await self._client.generate(
+                    raw = await self._client.generate(
                         SYSTEM_PROMPT, user_message, AnalysisV2Response
                     )
+                    result = _normalize(raw)
+                    # Resposta "válida" porém semanticamente vazia (JSON aninhado
+                    # numa chave fora da tabela de aliases valida com defaults —
+                    # A4/A5): gasta o retry nela em vez de aceitar silencioso.
+                    if _is_empty(result):
+                        msg = "resposta do LLM semanticamente vazia após validação"
+                        raise ValueError(msg)
+                    return result
                 except (TimeoutError, asyncio.CancelledError):
                     raise
                 except Exception:
@@ -83,13 +91,7 @@ class LLMOrchestrator:
         log_llm_input_payload("pipeline", context_payload)
 
         user_message = json.dumps(context_payload, default=str)
-        raw = await self._call_llm(user_message)
-
-        if isinstance(raw, AnalysisV2Response):
-            return raw
-        if isinstance(raw, dict):
-            return AnalysisV2Response.resilient_parse(raw)
-        raise TypeError(f"Expected AnalysisV2Response or dict, got {type(raw).__name__}")
+        return await self._call_llm(user_message)
 
     async def generate_from_legacy(
         self,
@@ -99,13 +101,24 @@ class LLMOrchestrator:
         log_llm_input_payload("legacy", legacy_payload)
 
         user_message = json.dumps(legacy_payload, default=str)
-        raw = await self._call_llm(user_message)
+        return await self._call_llm(user_message)
 
-        if isinstance(raw, AnalysisV2Response):
-            return raw
-        if isinstance(raw, dict):
-            return AnalysisV2Response.resilient_parse(raw)
-        raise TypeError(f"Expected AnalysisV2Response or dict, got {type(raw).__name__}")
+
+def _normalize(raw: BaseModel | dict[str, Any]) -> AnalysisV2Response:
+    if isinstance(raw, AnalysisV2Response):
+        return raw
+    if isinstance(raw, dict):
+        return AnalysisV2Response.resilient_parse(raw)
+    raise TypeError(f"Expected AnalysisV2Response or dict, got {type(raw).__name__}")
+
+
+def _is_empty(resp: AnalysisV2Response) -> bool:
+    """Resposta validada mas sem conteúdo útil (tudo em defaults)."""
+    return (
+        not resp.recommendation
+        and not resp.provider_comparison
+        and resp.viability_score == 0
+    )
 
 
 def log_llm_input_payload(flow: str, billing_data: dict) -> None:

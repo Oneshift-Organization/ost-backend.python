@@ -9,7 +9,9 @@ from app.schemas.analysis_v2 import AnalysisV2Response
 
 class DummyLLMClient:
     async def generate(self, system: str, user: str, response_model):
-        return AnalysisV2Response()
+        # Resposta não-vazia: o orchestrator agora re-tenta respostas
+        # semanticamente vazias (tudo em defaults) antes de aceitá-las.
+        return AnalysisV2Response(viability_score=50, recommendation="STAY")
 
 
 @pytest.mark.asyncio

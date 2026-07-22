@@ -77,6 +77,26 @@ def apply_financial_overlay(
     s.enterprise_score = _clamp(divergences, "enterprise_score", s.enterprise_score)
     s.overall_score = _clamp(divergences, "overall_score", s.overall_score)
 
+    # 4b. oneshift_scores omitido pelo LLM (tudo 0) mas provider_comparison tem
+    # scores: deriva deterministicamente do provedor recomendado (senão o melhor
+    # pontuado) em vez de exibir zeros ao usuário.
+    all_zero = not any(
+        (s.financial_score, s.technical_score, s.enterprise_score, s.overall_score)
+    )
+    if all_zero and response.provider_comparison:
+        source = next(
+            (p for p in response.provider_comparison if p.provider.upper() == rec),
+            max(response.provider_comparison, key=lambda p: p.overall_score),
+        )
+        if source.overall_score > 0:
+            s.financial_score = source.financial_score
+            s.technical_score = source.technical_score
+            s.enterprise_score = source.enterprise_score
+            s.overall_score = source.overall_score
+            divergences.append(
+                f"oneshift_scores omitidos pelo LLM; derivados de provider_comparison[{source.provider}]"
+            )
+
     # 6. divergências viram flags
     if divergences:
         response.flags.setdefault("numeric_validation", []).extend(
@@ -115,6 +135,10 @@ def _aggregate_by_provider(
 
 
 def _check(out: list[str], scope: str, field: str, llm_value: float, det_value: Decimal) -> None:
+    if _dec(llm_value) == 0:
+        # 0 = abstenção (o prompt proíbe o LLM de somar valores monetários);
+        # o overwrite determinístico corrige — não é sinal de alucinação.
+        return
     tolerance = max(Decimal("1"), abs(det_value) * _TOLERANCE_PCT)
     if abs(_dec(llm_value) - det_value) > tolerance:
         out.append(f"{scope}.{field}: LLM={llm_value} determinístico={det_value:.2f}")

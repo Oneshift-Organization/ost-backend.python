@@ -113,3 +113,17 @@ def test_provider_comparison_scores_clamped_to_100():
         "provider_comparison" in str(f) and "overall_score" in str(f)
         for f in out.flags.get("numeric_validation", [])
     )
+
+
+def test_empty_oneshift_scores_derived_from_provider_comparison():
+    """LLM omitiu oneshift_scores (tudo 0) mas pontuou os provedores."""
+    r = _resp()
+    oci = r.provider_comparison[0]
+    oci.financial_score, oci.technical_score = 80, 70
+    oci.enterprise_score, oci.overall_score = 60, 70
+    out = apply_financial_overlay(r, PAYLOAD)
+    assert out.oneshift_scores.overall_score == 70
+    assert out.oneshift_scores.financial_score == 80
+    assert any(
+        "oneshift_scores omitidos" in str(f) for f in out.flags.get("numeric_validation", [])
+    )
