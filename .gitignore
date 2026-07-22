@@ -75,3 +75,6 @@ oneshift-catalogsync-*.json
 Description
 SKU ID
 .~lock.*
+
+# ── Knowledge graph local (graphify) ─────────────────────────────────────
+graphify-out/
