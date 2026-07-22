@@ -96,20 +96,22 @@ def _aggregate_pools_by_family(
         if not agg_equivs:
             missing_equiv_family_ids.append(family_id)
 
-        compute_pools.append({
-            "familia": family,
-            "regiao": region,
-            "projetos_origem": b["source_projects"],
-            "capacidade": {
-                "vcpus": round(float(b["vcpus"]), 2),
-                "ram_gib": round(float(b["ram_gib"]), 2),
-            },
-            "custos": {
-                "custo_computacao": round(float(b["compute_base"]), 2),
-                "custo_licenca_so": round(float(b["os_licensing"]), 2),
-            },
-            "equivalentes": list(agg_equivs.values()),
-        })
+        compute_pools.append(
+            {
+                "familia": family,
+                "regiao": region,
+                "projetos_origem": b["source_projects"],
+                "capacidade": {
+                    "vcpus": round(float(b["vcpus"]), 2),
+                    "ram_gib": round(float(b["ram_gib"]), 2),
+                },
+                "custos": {
+                    "custo_computacao": round(float(b["compute_base"]), 2),
+                    "custo_licenca_so": round(float(b["os_licensing"]), 2),
+                },
+                "equivalentes": list(agg_equivs.values()),
+            }
+        )
 
     return compute_pools, missing_equiv_family_ids
 
@@ -137,9 +139,7 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
     pool_equivalents: dict = getattr(ctx, "pool_equivalents", {})
     database_equivalents: list = getattr(ctx, "database_equivalents", [])
 
-    compute_pools, missing_equiv_pool_ids = _aggregate_pools_by_family(
-        pools, pool_equivalents
-    )
+    compute_pools, missing_equiv_pool_ids = _aggregate_pools_by_family(pools, pool_equivalents)
 
     payload: dict[str, object] = {"pools_computacao": compute_pools}
 
@@ -242,40 +242,42 @@ def serialize_as_legacy(ctx) -> dict:
         if pool.capacity.vcpus <= 0 and pool.capacity.ram_gib <= 0:
             continue
         pool_key = (
-            f"{pool.pool_key.project_id}/"
-            f"{pool.pool_key.machine_family}/"
-            f"{pool.pool_key.region}"
+            f"{pool.pool_key.project_id}/{pool.pool_key.machine_family}/{pool.pool_key.region}"
         )
         equivs = pool_equivalents.get(pool_key, [])
-        workloads.append({
-            "canonical_service": "virtual_server",
-            "category": "compute",
-            "service_name": (
-                f"{pool.pool_key.machine_family} Compute ({pool.pool_key.project_id})"
-            ),
-            "service_type": "virtual_server",
-            "source_usage": {
-                "sku_id": pool_key,
-                "billed_cost": round(float(pool.monthly_cost), 6),
-                "usage_quantity": round(float(pool.capacity.vcpus), 2),
-                "currency": ctx.currency,
-            },
-            "equivalents": [_equiv_to_legacy(e) for e in equivs],
-        })
+        workloads.append(
+            {
+                "canonical_service": "virtual_server",
+                "category": "compute",
+                "service_name": (
+                    f"{pool.pool_key.machine_family} Compute ({pool.pool_key.project_id})"
+                ),
+                "service_type": "virtual_server",
+                "source_usage": {
+                    "sku_id": pool_key,
+                    "billed_cost": round(float(pool.monthly_cost), 6),
+                    "usage_quantity": round(float(pool.capacity.vcpus), 2),
+                    "currency": ctx.currency,
+                },
+                "equivalents": [_equiv_to_legacy(e) for e in equivs],
+            }
+        )
 
     if auxiliary and auxiliary.database > 0 and db_equivalents:
-        workloads.append({
-            "canonical_service": "relational_database",
-            "category": "database",
-            "service_name": "Database Services",
-            "service_type": "relational_database",
-            "source_usage": {
-                "sku_id": "database",
-                "billed_cost": round(float(auxiliary.database), 6),
-                "currency": ctx.currency,
-            },
-            "equivalents": [_equiv_to_legacy(e) for e in db_equivalents],
-        })
+        workloads.append(
+            {
+                "canonical_service": "relational_database",
+                "category": "database",
+                "service_name": "Database Services",
+                "service_type": "relational_database",
+                "source_usage": {
+                    "sku_id": "database",
+                    "billed_cost": round(float(auxiliary.database), 6),
+                    "currency": ctx.currency,
+                },
+                "equivalents": [_equiv_to_legacy(e) for e in db_equivalents],
+            }
+        )
 
     return {
         "source_provider": ctx.source_provider,
@@ -307,14 +309,18 @@ def _equiv_to_legacy(e) -> dict:
         "technical_match": {
             "vcpus": float(tm.vcpus) if tm and tm.vcpus is not None else None,
             "ram_gb": float(tm.ram_gb) if tm and tm.ram_gb is not None else None,
-        } if tm else None,
+        }
+        if tm
+        else None,
         "financials": {
             "estimated_monthly_cost": float(fin.estimated_monthly_cost)
-            if fin and fin.estimated_monthly_cost is not None else None,
-            "cost_delta": float(fin.cost_delta)
-            if fin and fin.cost_delta is not None else None,
+            if fin and fin.estimated_monthly_cost is not None
+            else None,
+            "cost_delta": float(fin.cost_delta) if fin and fin.cost_delta is not None else None,
             "pricing_confidence": fin.pricing_confidence if fin else "low",
-        } if fin else None,
+        }
+        if fin
+        else None,
         "metadata": getattr(e, "metadata", None),
     }
 
@@ -387,21 +393,25 @@ class RunAnalysisPipelineUseCase:
             flags = ui_report.flags
             if ctx.missing_sku_ids:
                 flags.setdefault("catalog", []).extend(
-                    {"code": "MISSING_SKU_DEFINITION",
-                     "message": f"SKU '{sku_id}' without vCPU/RAM definition in catalog",
-                     "impact_area": "catalog"}
+                    {
+                        "code": "MISSING_SKU_DEFINITION",
+                        "message": f"SKU '{sku_id}' without vCPU/RAM definition in catalog",
+                        "impact_area": "catalog",
+                    }
                     for sku_id in ctx.missing_sku_ids
                 )
             if missing_equiv_ids:
                 flags.setdefault("equivalents", []).extend(
-                    {"code": "MISSING_EQUIVALENT",
-                     "message": f"Pool '{pool_id}' has no cross-cloud equivalent in catalog",
-                     "impact_area": "catalog"}
+                    {
+                        "code": "MISSING_EQUIVALENT",
+                        "message": f"Pool '{pool_id}' has no cross-cloud equivalent in catalog",
+                        "impact_area": "catalog",
+                    }
                     for pool_id in missing_equiv_ids
                 )
 
             llm_output = (
-                f"Viability score: {ui_report.viability_score}/1000. "
+                f"Viability score: {ui_report.viability_score}/100. "
                 f"Recommendation: {ui_report.recommendation}. "
                 f"Recommended provider: {ui_report.recommended_provider}. "
                 f"Rationale: {ui_report.recommendation_rationale}. "

@@ -51,8 +51,8 @@ class MockLLMClient:
             total_vcpus += _dec(cap.get("vcpus"))
             total_ram += _dec(cap.get("ram_gib"))
             workload_name = (
-                f"{pool.get('familia', pool.get('family','?'))}/"
-                f"{pool.get('regiao', pool.get('region','global'))}"
+                f"{pool.get('familia', pool.get('family', '?'))}/"
+                f"{pool.get('regiao', pool.get('region', 'global'))}"
             )
 
             for eq in pool.get("equivalentes", pool.get("equivalents", [])):
@@ -95,13 +95,11 @@ class MockLLMClient:
         # ── Best provider ─────────────────────────────────────────────────
         best_provider, best_delta = "", Decimal("0")
         if savings_by_provider:
-            best_provider, best_delta = min(
-                savings_by_provider.items(), key=lambda kv: kv[1]
-            )
+            best_provider, best_delta = min(savings_by_provider.items(), key=lambda kv: kv[1])
 
         total_savings = -best_delta
         pct = float(total_savings / total_spend * 100) if total_spend > 0 else 0.0
-        viability = min(1000, max(0, int(400 + pct * 10 + len(pools) * 5)))
+        viability = min(100, max(0, int(40 + pct + len(pools) * 0.5)))
 
         # ── Provider comparison ───────────────────────────────────────────
         provider_comparison: list[ProviderComparison] = []
@@ -121,9 +119,7 @@ class MockLLMClient:
                     migration_complexity="medium",
                     portability="high",
                     confidence_level="low",
-                    strengths=[f"Maior economia: ${savings:,.0f}/mês"]
-                    if savings > 0
-                    else [],
+                    strengths=[f"Maior economia: ${savings:,.0f}/mês"] if savings > 0 else [],
                     weaknesses=["Preços baseados em catálogo público on-demand"],
                 )
             )

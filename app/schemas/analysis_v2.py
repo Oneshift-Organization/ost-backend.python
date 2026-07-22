@@ -101,7 +101,7 @@ class SavingsSummaryV2(BaseModel):
 class AnalysisV2Response(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    viability_score: int = Field(default=0, ge=0, le=1000)
+    viability_score: int = Field(default=0, ge=0, le=100)
     oneshift_scores: OneshiftScores = Field(default_factory=OneshiftScores)
     provider_comparison: list[ProviderComparison] = Field(default_factory=list)
     cross_cloud_equivalents: list[CrossCloudEquivalent] = Field(default_factory=list)
@@ -109,7 +109,7 @@ class AnalysisV2Response(BaseModel):
     recommendation: str = ""
     recommendation_rationale: str = ""
     analysis_confidence: str = "low"
-    prompt_contract_version: str = "oneshift-operator-v2.1"
+    prompt_contract_version: str = "oneshift-operator-v3.0"
     agent_views: AgentViews = Field(default_factory=AgentViews)
     savings_summary: SavingsSummaryV2 = Field(default_factory=SavingsSummaryV2)
     flags: dict[str, list[Any]] = Field(default_factory=dict)
@@ -262,6 +262,7 @@ class LegacyWorkload(BaseModel):
 
 class LegacyAnalysisRequest(BaseModel):
     """Pre-computed workload payload — no CSV upload required."""
+
     model_config = ConfigDict(extra="ignore")
 
     source_provider: str
