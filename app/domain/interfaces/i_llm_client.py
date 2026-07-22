@@ -9,5 +9,6 @@ if TYPE_CHECKING:
 
 class ILLMClient(ABC):
     @abstractmethod
-    async def generate(self, prompt: str, response_model: type[BaseModel]) -> BaseModel:
-        ...
+    async def generate(
+        self, system: str, user: str, response_model: type[BaseModel]
+    ) -> BaseModel: ...

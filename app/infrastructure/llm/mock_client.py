@@ -1,7 +1,7 @@
 """Mock LLM client — returns AnalysisV2Response from real context data.
 
-No network calls. Parses the serialized billing data from the prompt and derives
-scores, savings and recommendation from actual equivalents/cost_deltas.
+No network calls. Parses the serialized billing data from the user message and
+derives scores, savings and recommendation from actual equivalents/cost_deltas.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ if TYPE_CHECKING:
 class MockLLMClient:
     """Derives a realistic V2 analysis from the billing/pool data in the prompt."""
 
-    async def generate(self, prompt: str, response_model: type[BaseModel]) -> BaseModel:
-        payload = _parse_prompt(prompt)
+    async def generate(self, system: str, user: str, response_model: type[BaseModel]) -> BaseModel:
+        payload = _parse_prompt(user)
         billing = payload.get("billing_data", payload)  # handles both direct and wrapped
 
         # Support both PT (new) and EN (legacy/direct) key names

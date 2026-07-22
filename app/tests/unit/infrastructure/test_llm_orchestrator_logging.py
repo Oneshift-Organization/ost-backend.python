@@ -8,7 +8,7 @@ from app.schemas.analysis_v2 import AnalysisV2Response
 
 
 class DummyLLMClient:
-    async def generate(self, prompt: str, response_model):
+    async def generate(self, system: str, user: str, response_model):
         return AnalysisV2Response()
 
 

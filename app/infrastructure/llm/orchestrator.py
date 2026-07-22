@@ -1,8 +1,10 @@
-"""LLM orchestrator — V2 data-only prompt.
+"""LLM orchestrator — production system prompt + data-only user message.
 
-The prompt contains only the billing data and the expected output schema.
-No instructions, no rules, no tone guidance. The model reasons from the
-data and returns a JSON that matches ``AnalysisV2Response``.
+The system message carries the Operator's rules, grounding constraints and
+tone guidance (``system_prompt.SYSTEM_PROMPT``, static, cacheable). The user
+message is pure JSON with the billing data — no wrapper, no embedded schema;
+the expected output shape is enforced via structured output on the LLM
+client side (Task 3, Agno).
 
 See ``docs/refactor/analysis-v2-spec.md`` §4.
 """
@@ -14,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app.domain.interfaces.i_llm_client import ILLMClient
+from app.infrastructure.llm.system_prompt import SYSTEM_PROMPT
 from app.schemas.analysis_v2 import AnalysisV2Response
 
 if TYPE_CHECKING:
@@ -43,8 +46,8 @@ class LLMOrchestrator:
 
         log_llm_input_payload("pipeline", context_payload)
 
-        prompt = _build_prompt(context_payload)
-        raw = await self._client.generate(prompt, AnalysisV2Response)
+        user_message = json.dumps(context_payload, default=str)
+        raw = await self._client.generate(SYSTEM_PROMPT, user_message, AnalysisV2Response)
 
         if isinstance(raw, AnalysisV2Response):
             return raw
@@ -59,23 +62,14 @@ class LLMOrchestrator:
         """Run analysis on a pre-computed legacy workload dict."""
         log_llm_input_payload("legacy", legacy_payload)
 
-        prompt = _build_prompt(legacy_payload)
-        raw = await self._client.generate(prompt, AnalysisV2Response)
+        user_message = json.dumps(legacy_payload, default=str)
+        raw = await self._client.generate(SYSTEM_PROMPT, user_message, AnalysisV2Response)
 
         if isinstance(raw, AnalysisV2Response):
             return raw
         if isinstance(raw, dict):
             return AnalysisV2Response.resilient_parse(raw)
         raise TypeError(f"Expected AnalysisV2Response or dict, got {type(raw).__name__}")
-
-
-def _build_prompt(billing_data: dict) -> str:
-    """Data-only prompt: billing data + expected output schema. No instructions."""
-    payload = {
-        "billing_data": billing_data,
-        "output_schema": AnalysisV2Response.model_json_schema(),
-    }
-    return json.dumps(payload, default=str)
 
 
 def log_llm_input_payload(flow: str, billing_data: dict) -> None:

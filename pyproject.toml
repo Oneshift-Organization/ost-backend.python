@@ -22,6 +22,9 @@ ignore = [
 "app/tests/**" = ["S", "T20", "PLR2004"]
 "app/infrastructure/database/migrations/**" = ["E501", "N806"]
 "app/infrastructure/cloud_clients/**" = ["PLC0415"]
+# Prompt content is natural-language prose (PT-BR), not code — line length and
+# em/en-dash rules don't apply. Keep the string verbatim; don't wrap/reflow it.
+"app/infrastructure/llm/system_prompt.py" = ["E501", "RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"
