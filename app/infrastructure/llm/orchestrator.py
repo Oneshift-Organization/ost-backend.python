@@ -38,7 +38,9 @@ class LLMOrchestrator:
     ) -> None:
         settings = get_settings()
         self._client = llm_client
-        self._timeout = timeout_seconds or settings.llm_timeout_seconds
+        self._timeout = (
+            timeout_seconds if timeout_seconds is not None else settings.llm_timeout_seconds
+        )
         self._max_retries = settings.llm_max_retries
         self._retry_delay = retry_delay_seconds
 
@@ -58,6 +60,9 @@ class LLMOrchestrator:
                         "llm_attempt_failed attempt=%d, retrying", attempt + 1, exc_info=True
                     )
                     await asyncio.sleep(self._retry_delay)
+        # Every branch of the loop above either returns or raises; this is
+        # unreachable at runtime and exists only to satisfy static return
+        # completeness checks (mypy).
         raise RuntimeError("unreachable")
 
     async def generate_report(

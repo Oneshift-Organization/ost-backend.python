@@ -10,7 +10,7 @@ from app.schemas.analysis_v2 import AnalysisV2Response
 async def test_retries_once_then_succeeds():
     client = AsyncMock()
     client.generate.side_effect = [RuntimeError("boom"), AnalysisV2Response(viability_score=50)]
-    orch = LLMOrchestrator(llm_client=client)
+    orch = LLMOrchestrator(llm_client=client, retry_delay_seconds=0)
     result = await orch.generate_from_legacy({"total_spend": 1})
     assert result.viability_score == 50
     assert client.generate.call_count == 2
