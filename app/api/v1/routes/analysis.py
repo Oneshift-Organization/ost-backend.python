@@ -516,7 +516,7 @@ async def _run_legacy_analysis_pipeline(
             v2_result = apply_financial_overlay(v2_result, legacy_payload)
 
             llm_output = (
-                f"Viability score: {v2_result.viability_score}/1000. "
+                f"Viability score: {v2_result.viability_score}/100. "
                 f"Recommendation: {v2_result.recommendation}. "
                 f"Provider: {v2_result.recommended_provider}. "
                 f"Savings: ${v2_result.savings_summary.total_monthly_savings_usd:.2f}/mo."

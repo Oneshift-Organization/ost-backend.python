@@ -127,6 +127,7 @@ class AnalysisV2Response(BaseModel):
         """
         try:
             normalized = _normalize_top(raw)
+            _clamp_viability_score(normalized)
             return cls.model_validate(normalized)
         except Exception:
             logger.warning("analysis_v2_parse_fallback", exc_info=True)
@@ -219,6 +220,26 @@ def _normalize_top(raw: dict[str, Any]) -> dict[str, Any]:
         out["agent_views"] = av
 
     return out
+
+
+def _clamp_viability_score(normalized: dict[str, Any]) -> None:
+    """Clamp ``viability_score`` into 0-100 before validation (spec §3).
+
+    LLMs occasionally emit out-of-range scores (e.g. 720 on a 0-1000 scale).
+    Without a pre-validation clamp, Pydantic's ``le=100`` rejects the whole
+    dict and an otherwise-good response degrades to an empty PARSE_FALLBACK
+    object. Non-numeric values are left untouched for Pydantic to reject via
+    the normal fallback path. Sub-scores are not clamped here — divergences
+    there are recorded by the financial overlay downstream.
+    """
+    if "viability_score" not in normalized:
+        return
+    value = normalized["viability_score"]
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return
+    normalized["viability_score"] = max(0, min(100, value))
 
 
 # ── Legacy input request ──────────────────────────────────────────────────────

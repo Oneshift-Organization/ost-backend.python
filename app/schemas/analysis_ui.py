@@ -17,7 +17,7 @@ class SavingsSummary(BaseModel):
 
 
 class AnalysisUIResponse(BaseModel):
-    viability_score: int = Field(..., ge=0, le=1000)
+    viability_score: int = Field(..., ge=0, le=100)
     recommendation: str
     recommendation_rationale: str = ""
     recommended_provider: str = ""

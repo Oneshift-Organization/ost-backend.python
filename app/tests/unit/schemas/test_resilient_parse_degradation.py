@@ -17,3 +17,15 @@ def test_alias_normalization_still_reaches_data():
     assert out.provider_comparison[0].provider == "OCI"
     assert out.viability_score == 80
     assert "parsing" not in out.flags  # caminho feliz sem flag
+
+
+def test_out_of_range_viability_is_clamped_not_discarded():
+    out = AnalysisV2Response.resilient_parse({
+        "viability_score": 720,
+        "recommendation": "MIGRATE",
+        "providers": [{"provider": "OCI"}],
+    })
+    assert out.viability_score == 100
+    assert out.recommendation == "MIGRATE"            # resposta boa preservada
+    assert out.provider_comparison[0].provider == "OCI"
+    assert "parsing" not in out.flags                  # não é fallback
