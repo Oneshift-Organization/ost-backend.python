@@ -15,6 +15,7 @@ import asyncio
 
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.pricing.azure_price_client import fetch_azure_vm_prices
+from app.infrastructure.pricing.oci_price_client import fetch_oci_compute_prices
 from app.infrastructure.repositories.pg_cloud_price_point_repo import (
     PgCloudPricePointRepository,
 )
@@ -25,17 +26,26 @@ async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--region", default="eastus")
     parser.add_argument("--max-pages", type=int, default=8)
+    parser.add_argument(
+        "--providers", default="azure,oci", help="csv: azure,oci"
+    )
     args = parser.parse_args()
+    wanted = {p.strip() for p in args.providers.split(",") if p.strip()}
+
+    fetchers = {
+        "azure": lambda: fetch_azure_vm_prices(args.region, max_pages=args.max_pages),
+        "oci": fetch_oci_compute_prices,
+    }
 
     sm = get_sessionmaker()
     async with sm() as session:
         uc = SyncCloudPricesUseCase(PgCloudPricePointRepository(session))
-        res = await uc.execute(
-            "azure",
-            lambda: fetch_azure_vm_prices(args.region, max_pages=args.max_pages),
-        )
+        for provider in ("azure", "oci"):
+            if provider not in wanted:
+                continue
+            res = await uc.execute(provider, fetchers[provider])
+            print(f"{provider}: fetched={res.fetched} upserted={res.upserted}")
         await session.commit()
-        print(f"azure/{args.region}: fetched={res.fetched} upserted={res.upserted}")
 
 
 if __name__ == "__main__":
