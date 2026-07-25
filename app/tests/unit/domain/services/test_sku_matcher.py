@@ -129,3 +129,27 @@ def test_priority_order_first_wins() -> None:
 )
 def test_extract_family(text: str, expected: str | None) -> None:
     assert extract_family(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # AWS instance-type shape <familia>.<tamanho> — sem enumerar famílias.
+        ("BoxUsage:m7g.2xlarge", "M7G"),
+        ("SpotUsage:c7g.2xlarge", "C7G"),
+        ("BoxUsage:r8g.4xlarge", "R8G"),
+        ("BoxUsage:is4gen.xlarge", "IS4GEN"),
+        ("HeavyUsage:db.r8g.2xl", "R8G"),
+        ("BoxUsage:c4.4xlarge", "C4"),
+        # separador '-' (GCP) também é forma válida de tamanho.
+        ("c4a-standard-8", "C4A"),
+        # sem shape de instância -> None (não inventa família).
+        ("ComputeSP:3yrNoUpfront", None),
+    ],
+)
+def test_extract_family_structural_shape(text: str, expected: str | None) -> None:
+    """Extração por forma estrutural, não por lista de nomes conhecidos.
+
+    Regressão do colapso da AWS num único pool 'general' — antes só tokens GCP
+    hard-coded eram reconhecidos; m7g/c7g/r8g caíam todos em 'general'."""
+    assert extract_family(text) == expected

@@ -13,6 +13,7 @@ from app.domain.entities.workload_pool import (
     PoolKey,
     WorkloadPool,
 )
+from app.domain.services.instance_shape import parse_instance_shape
 from app.domain.services.sku_matcher import extract_family
 
 if TYPE_CHECKING:
@@ -43,6 +44,9 @@ class AggregateResult:
     unmapped_cost: Decimal
     hours_window: Decimal
     confidence_breakdown: dict[str, Decimal] = field(default_factory=dict)
+    # Custo de compute cuja capacidade foi ESTIMADA por shape (instance-hours →
+    # vCPU/RAM), não faturada por-vCPU. Alimenta premissas.dimensionamento_estimado.
+    estimated_capacity_cost: Decimal = Decimal("0")
 
 
 class BillingAggregator:
@@ -81,9 +85,11 @@ class BillingAggregator:
                 "ram_gib_hours": Decimal("0"),
                 "compute_cost": Decimal("0"),
                 "license_cost": Decimal("0"),
+                "shaped_cost": Decimal("0"),
             }
         )
         aux_totals: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+        commitment_cost = Decimal("0")
         orphan_cost = Decimal("0")
         orphan_skus: list[str] = []
         confidence_breakdown: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
@@ -94,7 +100,9 @@ class BillingAggregator:
             confidence_breakdown[item.mapping_confidence or "missing"] += cost
 
             if component_type in _COMPUTE_ROLES:
-                self._accumulate_compute(pool_buckets, item, component_type, cost)
+                commitment_cost += self._accumulate_compute(
+                    pool_buckets, item, component_type, cost
+                )
             elif component_type in _AUX_BUCKET:
                 aux_totals[_AUX_BUCKET[component_type]] += cost
             else:
@@ -102,7 +110,9 @@ class BillingAggregator:
                 orphan_skus.append(item.sku_id or item.usage_type or "unknown")
 
         pools: list[WorkloadPool] = []
+        estimated_capacity_cost = Decimal("0")
         for key, bucket in pool_buckets.items():
+            estimated_capacity_cost += bucket["shaped_cost"]
             vcpus = bucket["core_hours"] / hours_window if hours_window > 0 else Decimal("0")
             ram_gib = bucket["ram_gib_hours"] / hours_window if hours_window > 0 else Decimal("0")
             pools.append(
@@ -125,12 +135,14 @@ class BillingAggregator:
                 storage_hdd=aux_totals["storage_hdd"],
                 network_egress=aux_totals["network_egress"],
                 database=aux_totals["database"],
+                commitment=commitment_cost,
                 orphan=orphan_cost,
                 orphan_skus=tuple(sorted(set(orphan_skus))),
             ),
             unmapped_cost=orphan_cost,
             hours_window=hours_window,
             confidence_breakdown=dict(confidence_breakdown),
+            estimated_capacity_cost=estimated_capacity_cost,
         )
 
     def _accumulate_compute(
@@ -139,28 +151,65 @@ class BillingAggregator:
         item: BillingEnriched,
         component_type: str,
         cost: Decimal,
-    ) -> None:
-        key = PoolKey(
-            project_id=item.project_id or "_unknown",
-            machine_family=self._family_of(item),
-            region=item.region or "global",
-        )
-        bucket = pool_buckets[key]
+    ) -> Decimal:
+        """Acumula uma linha de compute. Retorna o custo que NÃO virou pool.
+
+        Invariante: custo só entra no pool quando a capacidade correspondente
+        entrou. Uma linha core/ram cuja unidade não é temporal (ou cujo uso é
+        zero) é compromisso/reserva — Savings Plan, RI, CUD — e seu custo é
+        devolvido como `commitment` em vez de inflar o preço/vCPU do pool.
+        """
+        usage = item.usage_amount or Decimal("0")
         unit_parts = (item.usage_unit or "").lower().split()
         unit_base = unit_parts[0] if unit_parts else ""
         is_hour_unit = unit_base in _HOUR_UNITS
+
+        if component_type == "os_license":
+            # Licença é custo recorrente legítimo do pool sem unidade de capacidade.
+            key = self._pool_key(item)
+            pool_buckets[key]["license_cost"] += cost
+            return Decimal("0")
+
+        # Faturamento por INSTÂNCIA (AWS BoxUsage): usage é hora-de-instância, não
+        # hora-de-vCPU. Uma única linha carrega os dois eixos — expande ambos pelo
+        # shape (m7g.2xlarge = 8 vCPU / 32 GiB). Sem shape (ex.: 'N2 Instance Core'
+        # do GCP, já por-vCPU), segue o caminho por-unidade abaixo.
+        shape = parse_instance_shape(item.usage_type) or parse_instance_shape(
+            (item.sku_metadata or {}).get("instance_type")
+        )
+        if shape is not None and is_hour_unit and usage > 0:
+            key = self._pool_key(item)
+            bucket = pool_buckets[key]
+            bucket["core_hours"] += usage * shape.vcpus
+            bucket["ram_gib_hours"] += usage * shape.ram_gib
+            bucket["compute_cost"] += cost
+            bucket["shaped_cost"] += cost
+            return Decimal("0")
+
+        # core / ram: a capacidade só acumula com unidade temporal (core/ram) ou
+        # GiB (ram). Sem isso, a linha não representa capacidade viva.
+        capacity_accrues = is_hour_unit or (
+            component_type == "ram" and "gib" in (item.usage_unit or "").lower()
+        )
+        if not capacity_accrues or usage <= 0:
+            return cost
+
+        key = self._pool_key(item)
+        bucket = pool_buckets[key]
         if component_type == "core":
-            # Guard: only accumulate when unit is time-based (prevent second-billed
-            # Cloud Run lines inflating vcpus by ~3600x).
-            if is_hour_unit:
-                bucket["core_hours"] += item.usage_amount or Decimal("0")
-            bucket["compute_cost"] += cost
-        elif component_type == "ram":
-            if is_hour_unit or "gib" in (item.usage_unit or "").lower():
-                bucket["ram_gib_hours"] += item.usage_amount or Decimal("0")
-            bucket["compute_cost"] += cost
-        else:  # os_license
-            bucket["license_cost"] += cost
+            bucket["core_hours"] += usage
+        else:  # ram
+            bucket["ram_gib_hours"] += usage
+        bucket["compute_cost"] += cost
+        return Decimal("0")
+
+    @staticmethod
+    def _pool_key(item: BillingEnriched) -> PoolKey:
+        return PoolKey(
+            project_id=item.project_id or "_unknown",
+            machine_family=BillingAggregator._family_of(item),
+            region=item.region or "global",
+        )
 
     @staticmethod
     def _family_of(item: BillingEnriched) -> str:

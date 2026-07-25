@@ -1,0 +1,404 @@
+{
+  "$defs": {
+    "AgentViews": {
+      "properties": {
+        "finops": {
+          "$ref": "#/$defs/FinOpsView"
+        },
+        "cloud_engineering": {
+          "$ref": "#/$defs/CloudEngineeringView"
+        },
+        "risk_migration": {
+          "$ref": "#/$defs/RiskMigrationView"
+        }
+      },
+      "title": "AgentViews",
+      "type": "object"
+    },
+    "CloudEngineeringView": {
+      "properties": {
+        "summary": {
+          "default": "",
+          "title": "Summary",
+          "type": "string"
+        },
+        "confidence_level": {
+          "default": "low",
+          "title": "Confidence Level",
+          "type": "string"
+        },
+        "migration_complexity": {
+          "default": "unknown",
+          "title": "Migration Complexity",
+          "type": "string"
+        },
+        "technical_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Technical Flags",
+          "type": "array"
+        },
+        "technical_recommendations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Technical Recommendations",
+          "type": "array"
+        }
+      },
+      "title": "CloudEngineeringView",
+      "type": "object"
+    },
+    "CrossCloudEquivalent": {
+      "properties": {
+        "workload": {
+          "default": "",
+          "title": "Workload",
+          "type": "string"
+        },
+        "source_provider": {
+          "default": "",
+          "title": "Source Provider",
+          "type": "string"
+        },
+        "source_service": {
+          "default": "",
+          "title": "Source Service",
+          "type": "string"
+        },
+        "target_provider": {
+          "default": "",
+          "title": "Target Provider",
+          "type": "string"
+        },
+        "target_service": {
+          "default": "",
+          "title": "Target Service",
+          "type": "string"
+        },
+        "equivalence_type": {
+          "default": "unknown",
+          "title": "Equivalence Type",
+          "type": "string"
+        },
+        "estimated_monthly_cost": {
+          "default": 0.0,
+          "title": "Estimated Monthly Cost",
+          "type": "number"
+        },
+        "cost_delta": {
+          "default": 0.0,
+          "title": "Cost Delta",
+          "type": "number"
+        },
+        "portability": {
+          "default": "unknown",
+          "title": "Portability",
+          "type": "string"
+        },
+        "migration_risk": {
+          "default": "unknown",
+          "title": "Migration Risk",
+          "type": "string"
+        },
+        "requires_refactoring": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requires Refactoring"
+        },
+        "vendor_lock_in_level": {
+          "default": "unknown",
+          "title": "Vendor Lock In Level",
+          "type": "string"
+        }
+      },
+      "title": "CrossCloudEquivalent",
+      "type": "object"
+    },
+    "FinOpsView": {
+      "properties": {
+        "summary": {
+          "default": "",
+          "title": "Summary",
+          "type": "string"
+        },
+        "confidence_level": {
+          "default": "low",
+          "title": "Confidence Level",
+          "type": "string"
+        },
+        "key_findings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Key Findings",
+          "type": "array"
+        },
+        "financial_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Financial Flags",
+          "type": "array"
+        }
+      },
+      "title": "FinOpsView",
+      "type": "object"
+    },
+    "OneshiftScores": {
+      "properties": {
+        "financial_score": {
+          "default": 0,
+          "title": "Financial Score",
+          "type": "integer"
+        },
+        "technical_score": {
+          "default": 0,
+          "title": "Technical Score",
+          "type": "integer"
+        },
+        "enterprise_score": {
+          "default": 0,
+          "title": "Enterprise Score",
+          "type": "integer"
+        },
+        "overall_score": {
+          "default": 0,
+          "title": "Overall Score",
+          "type": "integer"
+        }
+      },
+      "title": "OneshiftScores",
+      "type": "object"
+    },
+    "ProviderComparison": {
+      "properties": {
+        "provider": {
+          "default": "",
+          "title": "Provider",
+          "type": "string"
+        },
+        "financial_score": {
+          "default": 0,
+          "title": "Financial Score",
+          "type": "integer"
+        },
+        "technical_score": {
+          "default": 0,
+          "title": "Technical Score",
+          "type": "integer"
+        },
+        "enterprise_score": {
+          "default": 0,
+          "title": "Enterprise Score",
+          "type": "integer"
+        },
+        "overall_score": {
+          "default": 0,
+          "title": "Overall Score",
+          "type": "integer"
+        },
+        "estimated_monthly_cost": {
+          "default": 0.0,
+          "title": "Estimated Monthly Cost",
+          "type": "number"
+        },
+        "estimated_monthly_savings": {
+          "default": 0.0,
+          "title": "Estimated Monthly Savings",
+          "type": "number"
+        },
+        "migration_complexity": {
+          "default": "unknown",
+          "title": "Migration Complexity",
+          "type": "string"
+        },
+        "portability": {
+          "default": "unknown",
+          "title": "Portability",
+          "type": "string"
+        },
+        "confidence_level": {
+          "default": "low",
+          "title": "Confidence Level",
+          "type": "string"
+        },
+        "strengths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Strengths",
+          "type": "array"
+        },
+        "weaknesses": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Weaknesses",
+          "type": "array"
+        }
+      },
+      "title": "ProviderComparison",
+      "type": "object"
+    },
+    "RiskMigrationView": {
+      "properties": {
+        "summary": {
+          "default": "",
+          "title": "Summary",
+          "type": "string"
+        },
+        "confidence_level": {
+          "default": "low",
+          "title": "Confidence Level",
+          "type": "string"
+        },
+        "risk_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Risk Flags",
+          "type": "array"
+        },
+        "blocked_or_uncertain_items": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocked Or Uncertain Items",
+          "type": "array"
+        },
+        "recommended_migration_sequence": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Recommended Migration Sequence",
+          "type": "array"
+        }
+      },
+      "title": "RiskMigrationView",
+      "type": "object"
+    },
+    "SavingsSummaryV2": {
+      "properties": {
+        "total_monthly_savings_usd": {
+          "default": 0.0,
+          "title": "Total Monthly Savings Usd",
+          "type": "number"
+        },
+        "percentage_reduction": {
+          "default": 0.0,
+          "title": "Percentage Reduction",
+          "type": "number"
+        },
+        "payback_period_months": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payback Period Months"
+        },
+        "confidence_level": {
+          "default": "low",
+          "title": "Confidence Level",
+          "type": "string"
+        }
+      },
+      "title": "SavingsSummaryV2",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "viability_score": {
+      "default": 0,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Viability Score",
+      "type": "integer"
+    },
+    "oneshift_scores": {
+      "$ref": "#/$defs/OneshiftScores"
+    },
+    "provider_comparison": {
+      "items": {
+        "$ref": "#/$defs/ProviderComparison"
+      },
+      "title": "Provider Comparison",
+      "type": "array"
+    },
+    "cross_cloud_equivalents": {
+      "items": {
+        "$ref": "#/$defs/CrossCloudEquivalent"
+      },
+      "title": "Cross Cloud Equivalents",
+      "type": "array"
+    },
+    "recommended_provider": {
+      "default": "",
+      "title": "Recommended Provider",
+      "type": "string"
+    },
+    "recommendation": {
+      "default": "",
+      "title": "Recommendation",
+      "type": "string"
+    },
+    "recommendation_rationale": {
+      "default": "",
+      "title": "Recommendation Rationale",
+      "type": "string"
+    },
+    "analysis_confidence": {
+      "default": "low",
+      "title": "Analysis Confidence",
+      "type": "string"
+    },
+    "prompt_contract_version": {
+      "default": "oneshift-operator-v2.1",
+      "title": "Prompt Contract Version",
+      "type": "string"
+    },
+    "agent_views": {
+      "$ref": "#/$defs/AgentViews"
+    },
+    "savings_summary": {
+      "$ref": "#/$defs/SavingsSummaryV2"
+    },
+    "flags": {
+      "additionalProperties": {
+        "items": {},
+        "type": "array"
+      },
+      "title": "Flags",
+      "type": "object"
+    },
+    "strategic_notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Strategic Notes",
+      "type": "array"
+    },
+    "action_plan": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Action Plan",
+      "type": "array"
+    }
+  },
+  "title": "AnalysisV2Response",
+  "type": "object"
+}

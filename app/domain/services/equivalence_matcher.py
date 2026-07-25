@@ -8,6 +8,18 @@ from app.domain.entities.cloud_sku import CloudSku
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 
 _HOURS_PER_MONTH = Decimal("730")
+# Peso do desperdício no score de packing. 0 = escolhe sempre o mais barato
+# (comportamento antigo); valores altos priorizam ajuste fino sobre preço.
+_WASTE_PENALTY = Decimal("0.30")
+# Teto de instâncias por mix. É *relativo*: o que torna uma proposta inoperável
+# não é o número absoluto de instâncias (um pool de 228 vCPU precisa de muitas),
+# e sim a fragmentação — escolher um SKU minúsculo quando existe um que cobre o
+# pool com poucas máquinas. O teto é então
+#   max(_MIN_INSTANCE_ALLOWANCE, menor_mix_viável x _FRAGMENTATION_FACTOR).
+_MIN_INSTANCE_ALLOWANCE = 12
+_FRAGMENTATION_FACTOR = 3
+# Quantos SKUs por provider o packer avalia (ordenados por preço no repo).
+_CANDIDATE_LIMIT = 60
 
 
 @dataclass(frozen=True)
@@ -161,67 +173,56 @@ class EquivalenceMatcher:
         monthly_cost: Decimal,
         service_type: str,
         target_providers: list[str],
+        pricing_confidence: str = "low",
     ) -> list[EquivalentOption]:
-        """Return the cheapest covering equivalent per target provider for a pool.
+        """Return the best-value covering mix per target provider for a pool.
 
-        Unlike get_equivalents, this does NOT require a source sku_id — it
-        matches directly against pool capacity (spec §5 E1). For each provider:
-        1. Query candidates with specs >= pool capacity.
-        2. Pick the cheapest single SKU that covers the pool.
-        3. If one SKU does not cover, scale with instances = ceil(max ratio).
-        4. Compute estimated_monthly_cost and cost_delta deterministically.
+        ``monthly_cost`` MUST already be expressed in the analysis currency
+        (see ``domain/services/currency.py``) — this method does no conversion
+        and would otherwise produce a currency-mixed ``cost_delta``.
+
+        Selection is a small bin-packing: every candidate SKU is scored by the
+        **total monthly cost of the mix that covers the pool**, penalised for
+        over-provisioning. Picking the cheapest SKU per unit (the previous
+        behaviour) produced absurd mixes like 14x1vCPU/15GB for a 13vCPU/52GiB
+        pool — technically covering, financially cheap, architecturally wrong.
         """
         options: list[EquivalentOption] = []
 
-        min_vcpus = vcpus if vcpus > 0 else None
-        min_ram_gb = ram_gib if ram_gib > 0 else None
-
         for provider in target_providers:
+            # Query unfiltered: the packer needs both SKUs that cover alone and
+            # smaller ones it can multiply. Filtering by min_vcpus here would
+            # hide every option that only covers when scaled.
             candidates = await self._sku_repo.find_equivalents(
                 provider=provider,
                 service_type=service_type,
-                min_vcpus=min_vcpus,
-                min_ram_gb=min_ram_gb,
-                limit=10,
+                limit=_CANDIDATE_LIMIT,
             )
 
-            if not candidates:
-                # Relax constraints: take cheapest of that service_type
-                candidates = await self._sku_repo.find_equivalents(
-                    provider=provider,
-                    service_type=service_type,
-                    limit=10,
-                )
-
-            best = min(
-                candidates,
-                key=lambda x: x.price_per_unit or Decimal("999999"),
-                default=None,
-            )
-            if best is None or best.price_per_unit is None:
+            best = _best_packing(vcpus, ram_gib, candidates)
+            if best is None:
                 continue
 
-            instances = _instances_needed(vcpus, ram_gib, best)
-            estimated_monthly = best.price_per_unit * _HOURS_PER_MONTH * instances
+            cand, instances, estimated_monthly = best
             cost_delta = estimated_monthly - monthly_cost
 
             options.append(
                 EquivalentOption(
-                    provider=best.provider,
-                    sku_id=best.sku_id,
-                    service_name=best.service_name,
-                    service_type=best.service_type or service_type,
-                    category=best.category or "",
+                    provider=cand.provider,
+                    sku_id=cand.sku_id,
+                    service_name=cand.service_name,
+                    service_type=cand.service_type or service_type,
+                    category=cand.category or "",
                     instances=instances,
                     technical_match=TechnicalMatch(
-                        vcpus=(best.vcpus or Decimal("0")) * instances,
-                        ram_gb=(best.ram_gb or Decimal("0")) * instances,
+                        vcpus=(cand.vcpus or Decimal("0")) * instances,
+                        ram_gb=(cand.ram_gb or Decimal("0")) * instances,
                     ),
                     financials=FinancialEstimate(
-                        unit_price=best.price_per_unit,
+                        unit_price=cand.price_per_unit,
                         estimated_monthly_cost=estimated_monthly,
                         cost_delta=cost_delta,
-                        pricing_confidence="low",
+                        pricing_confidence=pricing_confidence,
                     ),
                 )
             )
@@ -237,3 +238,60 @@ def _instances_needed(vcpus: Decimal, ram_gib: Decimal, cand: CloudSku) -> int:
     if cand.ram_gb and cand.ram_gb > 0 and ram_gib > 0:
         ratios.append(float(ram_gib / cand.ram_gb))
     return max(1, math.ceil(max(ratios))) if ratios else 1
+
+
+def _waste_ratio(offered: Decimal, needed: Decimal) -> Decimal:
+    """Fração de recurso ofertado além do necessário (0 = ajuste perfeito)."""
+    if needed <= 0:
+        return Decimal("0")
+    excess = offered - needed
+    return excess / needed if excess > 0 else Decimal("0")
+
+
+def _best_packing(
+    vcpus: Decimal,
+    ram_gib: Decimal,
+    candidates: list[CloudSku],
+) -> tuple[CloudSku, int, Decimal] | None:
+    """Escolhe (SKU, instâncias, custo_mensal) de menor custo total ajustado.
+
+    Score = custo_mensal x (1 + λ x desperdício). O desperdício soma o excesso
+    relativo de vCPU e de RAM, então um mix que entrega 4x a RAM necessária é
+    penalizado mesmo sendo barato. Retorna None se nenhum candidato cobre a
+    demanda dentro do teto de instâncias.
+    """
+    priced: list[tuple[CloudSku, int]] = []
+    for cand in candidates:
+        if cand.price_per_unit is None or cand.price_per_unit <= 0:
+            continue
+        # Um SKU sem specs de hardware não pode ser dimensionado contra o pool.
+        if vcpus > 0 and not cand.vcpus:
+            continue
+        if ram_gib > 0 and not cand.ram_gb:
+            continue
+        priced.append((cand, _instances_needed(vcpus, ram_gib, cand)))
+
+    if not priced:
+        return None
+
+    min_feasible = min(inst for _, inst in priced)
+    cap = max(_MIN_INSTANCE_ALLOWANCE, min_feasible * _FRAGMENTATION_FACTOR)
+
+    best: tuple[CloudSku, int, Decimal] | None = None
+    best_score: Decimal | None = None
+
+    for cand, instances in priced:
+        if instances > cap:
+            continue
+
+        monthly = cand.price_per_unit * _HOURS_PER_MONTH * instances
+        waste = _waste_ratio((cand.vcpus or Decimal("0")) * instances, vcpus) + _waste_ratio(
+            (cand.ram_gb or Decimal("0")) * instances, ram_gib
+        )
+        score = monthly * (Decimal("1") + _WASTE_PENALTY * waste)
+
+        if best_score is None or score < best_score:
+            best_score = score
+            best = (cand, instances, monthly)
+
+    return best

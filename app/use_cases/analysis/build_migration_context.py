@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.domain.analysis import (
     BillingItemSummary,
@@ -24,7 +25,17 @@ from app.domain.interfaces.i_service_repositories import (
 from app.domain.repositories.i_billing_enriched_repo import IBillingEnrichedRepository
 from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
+from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
+from app.domain.services.currency import (
+    ANALYSIS_CURRENCY,
+    FxRate,
+    as_ledger,
+    convert,
+    identity_rate,
+)
 from app.domain.services.equivalence_matcher import EquivalenceMatcher
+from app.domain.services.pool_aggregation import aggregate_by_family
+from app.domain.services.reconciliation import reconcile
 from app.services.billing_aggregator import BillingAggregator
 
 
@@ -73,6 +84,7 @@ class BuildMigrationContextUseCase:
         metadata_repo: IServiceMetadataRepository,
         comparison_repo: IServiceComparisonRepository,
         sku_repo: ICloudSkuRepository | None = None,
+        fx_repo: IExchangeRateRepository | None = None,
     ) -> None:
         self._report_repo = report_repo
         self._item_repo = item_repo
@@ -80,6 +92,7 @@ class BuildMigrationContextUseCase:
         self._comparison_repo = comparison_repo
         self._matcher = EquivalenceMatcher(sku_repo) if sku_repo else None
         self._aggregator = BillingAggregator(sku_repo) if sku_repo else None
+        self._fx_repo = fx_repo
 
     async def execute(self, payload: BuildMigrationContextInput) -> MigrationContext:  # noqa: PLR0912, PLR0915
         report = await self._report_repo.get_by_id(payload.report_id, payload.user_id)
@@ -316,29 +329,37 @@ class BuildMigrationContextUseCase:
         pools: tuple[WorkloadPool, ...] = ()
         auxiliary: AuxiliaryCosts | None = None
         mapping_confidence: dict[str, Decimal] = {}
+        estimated_capacity_cost = Decimal("0")
         if self._aggregator is not None:
             agg_result = await self._aggregator.aggregate(items, source_provider)
             pools = agg_result.pools
             auxiliary = agg_result.auxiliary
             mapping_confidence = agg_result.confidence_breakdown
+            estimated_capacity_cost = agg_result.estimated_capacity_cost
 
-        # ── 8. Pool-level equivalents (L2 hardware + L3 curated) ──
+        # ── 8. Câmbio: normaliza custos para a moeda de análise ───
+        # Nunca comparar BRL de origem com USD de catálogo (Precision Engine A1).
+        fx = await self._resolve_fx(currency)
+
+        # ── 9. Agrega pools por família ANTES de dimensionar ──────
+        # Dimensionar projeto a projeto e somar depois produzia hardware de um
+        # projeto com custo de dezenove. Agregando primeiro, o matcher vê a
+        # capacidade real da família.
+        family_pools = aggregate_by_family(pools)
+
+        family_equivalents: dict[str, list[EquivalentService]] = {}
         pool_equivalents: dict[str, list[EquivalentService]] = {}
         database_equivalents: list[EquivalentService] = []
 
         if self._matcher is not None and target_providers:
-            for pool in pools:
-                if pool.capacity.vcpus <= 0 and pool.capacity.ram_gib <= 0:
-                    continue
-                pool_key_str = (
-                    f"{pool.pool_key.project_id}/"
-                    f"{pool.pool_key.machine_family}/"
-                    f"{pool.pool_key.region}"
-                )
+            curated_compute = await _get_equivalents("compute", "virtual_server")
+
+            for fpool in family_pools:
+                monthly_cost_analysis = convert(fpool.monthly_cost, fx) or Decimal("0")
                 l2_options = await self._matcher.match_pool(
-                    vcpus=pool.capacity.vcpus,
-                    ram_gib=pool.capacity.ram_gib,
-                    monthly_cost=pool.monthly_cost,
+                    vcpus=fpool.capacity.vcpus,
+                    ram_gib=fpool.capacity.ram_gib,
+                    monthly_cost=monthly_cost_analysis,
                     service_type="virtual_server",
                     target_providers=target_providers,
                 )
@@ -378,7 +399,6 @@ class BuildMigrationContextUseCase:
                     ))
 
                 # L3-only curated fallback for providers without hardware match
-                curated_compute = await _get_equivalents("compute", "virtual_server")
                 for ce in curated_compute:
                     if ce.provider.lower() in providers_with_l2:
                         continue
@@ -392,12 +412,52 @@ class BuildMigrationContextUseCase:
                         docs_costs=ce.docs_costs,
                     ))
 
-                pool_equivalents[pool_key_str] = equivs
+                family_equivalents[fpool.pool_key.as_str()] = equivs
+                # Compat: expõe os mesmos equivalentes por projeto (drill-down
+                # e formato legado). O dimensionamento continua sendo o da família.
+                for proj in fpool.source_projects:
+                    key = f"{proj}/{fpool.pool_key.machine_family}/{fpool.pool_key.region}"
+                    pool_equivalents[key] = equivs
 
             # Database aux: L3 curated (no hardware sizing available at pool level)
             if auxiliary and auxiliary.database > 0:
                 db_curated = await _get_equivalents("database", "relational_database")
                 database_equivalents = list(db_curated)
+
+        # ── 10. Ledger de premissas (auditoria) ───────────────────
+        mapped_cost = total_spend - (auxiliary.orphan if auxiliary else Decimal("0"))
+        cobertura = float(mapped_cost / total_spend) if total_spend > 0 else 0.0
+        premissas: dict[str, Any] = {
+            "fx": as_ledger(fx),
+            "moeda_origem": currency,
+            "moeda_analise": ANALYSIS_CURRENCY,
+            "janela_horas": float(family_pools[0].hours_window) if family_pools else 730.0,
+            "fonte_precos": "seed_catalog_pareto",
+            "confianca_precos": "low",
+            "cobertura_classificacao": cobertura,
+            "fator_utilizacao": 1.0,
+            # Fração do gasto de compute cuja capacidade foi estimada por shape
+            # (instance-hours → vCPU/RAM) em vez de faturada por-vCPU.
+            "dimensionamento_estimado": (
+                float(convert(estimated_capacity_cost, fx) or Decimal("0"))
+                / float(convert(total_spend, fx) or Decimal("1"))
+                if total_spend > 0
+                else 0.0
+            ),
+        }
+
+        # ── 11. Reconciliação: a análise auditando a si mesma ─────
+        # Roda sempre; grava violações/suspeitas em premissas. É o gate que
+        # transforma "achei um bug lendo o CSV" em "a API sabe onde não confia".
+        premissas["reconciliacao"] = reconcile(
+            total_spend=total_spend,
+            family_pools=family_pools,
+            auxiliary=auxiliary,
+            family_equivalents=family_equivalents,
+            target_providers=target_providers,
+            cobertura_classificacao=cobertura,
+            fx=fx,
+        )
 
         return MigrationContext(
             source_provider=source_provider,
@@ -419,4 +479,29 @@ class BuildMigrationContextUseCase:
             mapping_confidence=mapping_confidence,
             pool_equivalents=pool_equivalents,
             database_equivalents=database_equivalents,
+            family_pools=family_pools,
+            family_equivalents=family_equivalents,
+            analysis_currency=ANALYSIS_CURRENCY,
+            premissas=premissas,
         )
+
+    async def _resolve_fx(self, source_currency: str) -> FxRate:
+        """Taxa origem→moeda de análise: tabela primeiro, config como fallback."""
+        src = (source_currency or ANALYSIS_CURRENCY).upper()
+        if src == ANALYSIS_CURRENCY:
+            return identity_rate(src)
+
+        par = f"{src}/{ANALYSIS_CURRENCY}"
+        if self._fx_repo is not None:
+            rate = await self._fx_repo.get_latest(par)
+            if rate is not None:
+                return rate
+
+        settings = get_settings()
+        configured = getattr(settings, f"fx_{src.lower()}_{ANALYSIS_CURRENCY.lower()}", None)
+        if configured:
+            return FxRate(par=par, taxa=Decimal(str(configured)), fonte="config")
+
+        # Sem taxa conhecida: identidade seria comparar moedas diferentes.
+        # Preferimos sinalizar do que devolver número errado.
+        return FxRate(par=par, taxa=Decimal("1"), fonte="SEM_TAXA_CAMBIO")

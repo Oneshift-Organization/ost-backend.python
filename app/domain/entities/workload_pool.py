@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,12 +38,50 @@ class WorkloadPool:
 
 
 @dataclass(frozen=True, slots=True)
+class FamilyPoolKey:
+    """Chave de um pool agregado por família de máquina + região."""
+
+    machine_family: str
+    region: str
+
+    def as_str(self) -> str:
+        return f"{self.machine_family}/{self.region}"
+
+
+@dataclass(frozen=True, slots=True)
+class FamilyPool:
+    """Pool agregado por (família, região) — unidade de comparação cross-cloud.
+
+    Substitui o pool por projeto como entrada do matching: o dimensionamento
+    precisa ser feito sobre a capacidade TOTAL da família, não projeto a
+    projeto (senão hardware e custo ficam em escalas diferentes).
+    ``source_projects`` mantém a rastreabilidade para drill-down.
+    """
+
+    pool_key: FamilyPoolKey
+    capacity: PoolCapacity
+    costs: PoolCosts
+    hours_window: Decimal
+    source_projects: tuple[str, ...] = ()
+
+    @property
+    def monthly_cost(self) -> Decimal:
+        return self.costs.compute_base + self.costs.os_licensing
+
+
+@dataclass(frozen=True, slots=True)
 class AuxiliaryCosts:
     gke_control_plane: Decimal = Decimal("0")
     storage_ssd: Decimal = Decimal("0")
     storage_hdd: Decimal = Decimal("0")
     network_egress: Decimal = Decimal("0")
     database: Decimal = Decimal("0")
+    # Custo de linhas com papel de compute (core/ram) que NÃO contribuíram
+    # capacidade — Savings Plans, Reserved Instances, Committed Use, Universal
+    # Credits. Prepago/reserva por natureza: entra como custo, não como vCPU.
+    # Segregá-lo é o que impede o preço/vCPU do pool de explodir (invariante:
+    # custo só entra no pool se a capacidade correspondente entrou).
+    commitment: Decimal = Decimal("0")
     orphan: Decimal = Decimal("0")
     orphan_skus: tuple[str, ...] = ()
 
@@ -56,5 +93,6 @@ class AuxiliaryCosts:
             self.storage_hdd > 0,
             self.network_egress > 0,
             self.database > 0,
+            self.commitment > 0,
             self.orphan > 0,
         ))
