@@ -10,6 +10,7 @@ from app.domain.entities.analysis_job import AnalysisJob
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.domain.repositories.i_billing_enriched_repo import IBillingEnrichedRepository
 from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
+from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
 from app.domain.services.currency import FxRate, convert, identity_rate
@@ -413,8 +414,10 @@ class RunAnalysisPipelineUseCase:
         sku_repo: ICloudSkuRepository,
         llm_orchestrator: LLMOrchestrator,
         fx_repo: IExchangeRateRepository | None = None,
+        price_repo: ICloudPricePointRepository | None = None,
     ) -> None:
         self._fx_repo = fx_repo
+        self._price_repo = price_repo
         self._job_repo = analysis_job_repo
         self._report_repo = report_repo
         self._item_repo = item_repo
@@ -435,6 +438,7 @@ class RunAnalysisPipelineUseCase:
                 self._comparison_repo,
                 sku_repo=self._sku_repo,
                 fx_repo=self._fx_repo,
+                price_repo=self._price_repo,
             )
 
             ctx = await context_uc.execute(

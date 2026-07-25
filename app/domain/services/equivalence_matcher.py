@@ -4,7 +4,9 @@ import math
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from app.domain.entities.cloud_price_point import CloudPricePoint
 from app.domain.entities.cloud_sku import CloudSku
+from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 
 _HOURS_PER_MONTH = Decimal("730")
@@ -66,8 +68,30 @@ class EquivalenceMatcher:
     find SKUs with >= vcpus and >= ram_gb at the lowest unit price.
     """
 
-    def __init__(self, sku_repo: ICloudSkuRepository) -> None:
+    def __init__(
+        self,
+        sku_repo: ICloudSkuRepository,
+        price_repo: ICloudPricePointRepository | None = None,
+    ) -> None:
         self._sku_repo = sku_repo
+        self._price_repo = price_repo
+
+    async def _candidates(
+        self, provider: str, service_type: str, default_confidence: str
+    ) -> tuple[list[CloudSku], str]:
+        """Candidatos + confiança do preço: price points oficiais primeiro,
+        catálogo seed como fallback. É o seam que troca preço ~30% errado por
+        preço real sem mudar o algoritmo de packing."""
+        if self._price_repo is not None:
+            points = await self._price_repo.find(
+                provider=provider, service_type=service_type
+            )
+            if points:
+                return [_pricepoint_to_sku(p) for p in points], "official"
+        catalog = await self._sku_repo.find_equivalents(
+            provider=provider, service_type=service_type, limit=_CANDIDATE_LIMIT
+        )
+        return catalog, default_confidence
 
     async def get_equivalents(
         self,
@@ -190,13 +214,11 @@ class EquivalenceMatcher:
         options: list[EquivalentOption] = []
 
         for provider in target_providers:
-            # Query unfiltered: the packer needs both SKUs that cover alone and
-            # smaller ones it can multiply. Filtering by min_vcpus here would
-            # hide every option that only covers when scaled.
-            candidates = await self._sku_repo.find_equivalents(
-                provider=provider,
-                service_type=service_type,
-                limit=_CANDIDATE_LIMIT,
+            # Candidatos: price points reais primeiro (confiança por-provedor),
+            # senão catálogo seed. O packer precisa deles sem filtro de min_vcpus
+            # — ele considera SKUs pequenos multiplicados e grandes que cobrem só.
+            candidates, confidence = await self._candidates(
+                provider, service_type, pricing_confidence
             )
 
             best = _best_packing(vcpus, ram_gib, candidates)
@@ -222,12 +244,31 @@ class EquivalenceMatcher:
                         unit_price=cand.price_per_unit,
                         estimated_monthly_cost=estimated_monthly,
                         cost_delta=cost_delta,
-                        pricing_confidence=pricing_confidence,
+                        pricing_confidence=confidence,
                     ),
                 )
             )
 
         return options
+
+
+def _pricepoint_to_sku(p: CloudPricePoint) -> CloudSku:
+    """Adapta um price point real ao candidato que o packer entende.
+
+    O preço é por instância-hora (mesma semântica dos candidatos do catálogo),
+    então ``_best_packing`` multiplica por 730h sem ajuste."""
+    return CloudSku(
+        sku_id=p.sku_key,
+        provider=p.provider,
+        service_name=p.service_name,
+        currency=p.currency,
+        service_type=p.service_type,
+        category="compute",
+        region=p.region,
+        price_per_unit=p.price,
+        vcpus=p.vcpus,
+        ram_gb=p.ram_gib,
+    )
 
 
 def _instances_needed(vcpus: Decimal, ram_gib: Decimal, cand: CloudSku) -> int:
@@ -284,7 +325,7 @@ def _best_packing(
         if instances > cap:
             continue
 
-        monthly = cand.price_per_unit * _HOURS_PER_MONTH * instances
+        monthly = (cand.price_per_unit or Decimal("0")) * _HOURS_PER_MONTH * instances
         waste = _waste_ratio((cand.vcpus or Decimal("0")) * instances, vcpus) + _waste_ratio(
             (cand.ram_gb or Decimal("0")) * instances, ram_gib
         )

@@ -27,6 +27,9 @@ from app.infrastructure.repositories.pg_billing_report_repo import (
     PgBillingReportRepository,
 )
 from app.infrastructure.repositories.pg_cloud_sku_repo import PgCloudSkuRepository
+from app.infrastructure.repositories.pg_cloud_price_point_repo import (
+    PgCloudPricePointRepository,
+)
 from app.infrastructure.repositories.pg_exchange_rate_repo import (
     PgExchangeRateRepository,
 )
@@ -198,6 +201,7 @@ async def build_migration_context(
         PGServiceComparisonRepository(session),
         sku_repo=PgCloudSkuRepository(session),
         fx_repo=PgExchangeRateRepository(session),
+        price_repo=PgCloudPricePointRepository(session),
     )
     try:
         ctx = await uc.execute(
@@ -227,6 +231,7 @@ async def get_agents_payload(
         PGServiceComparisonRepository(session),
         sku_repo=PgCloudSkuRepository(session),
         fx_repo=PgExchangeRateRepository(session),
+        price_repo=PgCloudPricePointRepository(session),
     )
     try:
         ctx = await uc.execute(
@@ -330,6 +335,7 @@ async def _run_analysis_pipeline(
             comparison_repo=PGServiceComparisonRepository(session),
             sku_repo=PgCloudSkuRepository(session),
             fx_repo=PgExchangeRateRepository(session),
+            price_repo=PgCloudPricePointRepository(session),
             llm_orchestrator=orchestrator,
         )
 
@@ -573,6 +579,7 @@ async def _build_ctx(user_id: UUID, report_id: UUID, session) -> "MigrationConte
         PGServiceComparisonRepository(session),
         sku_repo=PgCloudSkuRepository(session),
         fx_repo=PgExchangeRateRepository(session),
+        price_repo=PgCloudPricePointRepository(session),
     )
     try:
         return await uc.execute(

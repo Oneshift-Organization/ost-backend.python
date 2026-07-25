@@ -24,6 +24,7 @@ from app.domain.interfaces.i_service_repositories import (
 )
 from app.domain.repositories.i_billing_enriched_repo import IBillingEnrichedRepository
 from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
+from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
 from app.domain.services.currency import (
@@ -85,14 +86,18 @@ class BuildMigrationContextUseCase:
         comparison_repo: IServiceComparisonRepository,
         sku_repo: ICloudSkuRepository | None = None,
         fx_repo: IExchangeRateRepository | None = None,
+        price_repo: ICloudPricePointRepository | None = None,
     ) -> None:
         self._report_repo = report_repo
         self._item_repo = item_repo
         self._metadata_repo = metadata_repo
         self._comparison_repo = comparison_repo
-        self._matcher = EquivalenceMatcher(sku_repo) if sku_repo else None
+        self._matcher = (
+            EquivalenceMatcher(sku_repo, price_repo) if sku_repo else None
+        )
         self._aggregator = BillingAggregator(sku_repo) if sku_repo else None
         self._fx_repo = fx_repo
+        self._price_repo = price_repo
 
     async def execute(self, payload: BuildMigrationContextInput) -> MigrationContext:  # noqa: PLR0912, PLR0915
         report = await self._report_repo.get_by_id(payload.report_id, payload.user_id)
@@ -427,13 +432,22 @@ class BuildMigrationContextUseCase:
         # ── 10. Ledger de premissas (auditoria) ───────────────────
         mapped_cost = total_spend - (auxiliary.orphan if auxiliary else Decimal("0"))
         cobertura = float(mapped_cost / total_spend) if total_spend > 0 else 0.0
+        # Confiança do preço é POR-PROVEDOR: 'official' quando veio de
+        # cloud_price_points (API oficial), 'low' quando do catálogo seed.
+        confianca_por_provedor: dict[str, str] = {}
+        for equivs in family_equivalents.values():
+            for e in equivs:
+                if e.financials is not None:
+                    confianca_por_provedor[e.provider.lower()] = (
+                        e.financials.pricing_confidence
+                    )
         premissas: dict[str, Any] = {
             "fx": as_ledger(fx),
             "moeda_origem": currency,
             "moeda_analise": ANALYSIS_CURRENCY,
             "janela_horas": float(family_pools[0].hours_window) if family_pools else 730.0,
-            "fonte_precos": "seed_catalog_pareto",
-            "confianca_precos": "low",
+            "fonte_precos": "cloud_price_points (oficial) + seed_catalog_pareto (fallback)",
+            "confianca_precos": confianca_por_provedor or "low",
             "cobertura_classificacao": cobertura,
             "fator_utilizacao": 1.0,
             # Fração do gasto de compute cuja capacidade foi estimada por shape
