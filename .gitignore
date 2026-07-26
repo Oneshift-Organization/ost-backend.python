@@ -65,6 +65,9 @@ crash.log
 tmp/
 temp/
 
+# ── Runtime (PID do servidor de dev, etc.) ────────────────────────────────
+*.pid
+
 # ── Brain do arquiteto (local-only, não versionado) ───────────────────────
 ost-docs.backend.plan/
 
@@ -75,3 +78,6 @@ oneshift-catalogsync-*.json
 Description
 SKU ID
 .~lock.*
+
+# ── Knowledge graph local (graphify) ─────────────────────────────────────
+graphify-out/

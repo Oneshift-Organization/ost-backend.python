@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
@@ -52,6 +53,11 @@ class Settings(BaseSettings):
     openrouter_model: str = "deepseek/deepseek-v4-flash:free"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
+
+    # ── Precision Engine v3 — câmbio ────────────────────────────────────
+    # Fallback usado quando `exchange_rates` não tem taxa para o par.
+    # Formato: unidades da moeda de origem por 1 USD (BRL/USD = 5.70).
+    fx_brl_usd: Decimal = Decimal("5.70")
 
     gcp_service_account_path: str = Field(
         default="", alias="GOOGLE_APPLICATION_CREDENTIALS"

@@ -10,7 +10,10 @@ from app.domain.entities.analysis_job import AnalysisJob
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.domain.repositories.i_billing_enriched_repo import IBillingEnrichedRepository
 from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
+from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
+from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
+from app.domain.services.currency import FxRate, convert, identity_rate
 from app.infrastructure.llm.orchestrator import LLMOrchestrator
 from app.infrastructure.repositories.service_repositories import (
     PGServiceComparisonRepository,
@@ -30,6 +33,71 @@ _suppress = contextlib.suppress
 class RunAnalysisPipelineInput:
     user_id: UUID
     report_id: UUID
+
+
+def _fx_from_premissas(ctx) -> FxRate:
+    """Reconstrói a taxa aplicada a partir do ledger (ou identidade)."""
+    prem = getattr(ctx, "premissas", None) or {}
+    fx = prem.get("fx") or {}
+    taxa = fx.get("taxa")
+    if not taxa:
+        return identity_rate(getattr(ctx, "currency", "USD"))
+    return FxRate(
+        par=fx.get("par", "?"),
+        taxa=Decimal(str(taxa)),
+        fonte=fx.get("fonte", "config"),
+    )
+
+
+def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
+    """Serializa os pools já agregados por família (Precision Engine v3).
+
+    A agregação e o dimensionamento acontecem em ``build_migration_context``;
+    aqui apenas formatamos e convertemos os custos de origem para a moeda de
+    análise. Os equivalentes já vêm em moeda de análise do matcher.
+    """
+    family_pools = getattr(ctx, "family_pools", ()) or ()
+    family_equivalents: dict = getattr(ctx, "family_equivalents", {}) or {}
+
+    out: list[dict] = []
+    missing: list[str] = []
+
+    for fp in family_pools:
+        key = fp.pool_key.as_str()
+        equivs = family_equivalents.get(key, [])
+        if not equivs:
+            missing.append(key)
+        out.append({
+            "familia": fp.pool_key.machine_family,
+            "regiao": fp.pool_key.region,
+            "projetos_origem": list(fp.source_projects),
+            "capacidade": {
+                "vcpus": round(float(fp.capacity.vcpus), 2),
+                "ram_gib": round(float(fp.capacity.ram_gib), 2),
+            },
+            "custos": {
+                "custo_computacao": _money(fp.costs.compute_base, fx),
+                "custo_licenca_so": _money(fp.costs.os_licensing, fx),
+            },
+            "equivalentes": [_serialize_equivalent(e) for e in equivs],
+        })
+
+    return out, missing
+
+
+def _round2(value: Decimal) -> float:
+    """Arredonda para 2 casas no payload.
+
+    Sem isto o ``delta_custo`` vaza a precisão bruta da divisão de câmbio
+    (28 casas), o que só gasta token e sugere uma exatidão que não existe.
+    """
+    return round(float(value), 2)
+
+
+def _money(amount: Decimal | None, fx: FxRate) -> float:
+    """Converte para a moeda de análise e arredonda para o payload."""
+    converted = convert(amount, fx)
+    return round(float(converted), 2) if converted is not None else 0.0
 
 
 def _aggregate_pools_by_family(
@@ -131,45 +199,61 @@ def _add_financials(existing: dict, new_fin) -> None:
 
 
 def _serialize_pools(ctx) -> tuple[str, list[str]]:
-    """Serialize capacity pools aggregated by family into the LLM payload."""
-    pools = getattr(ctx, "pools", ())
-    auxiliary = getattr(ctx, "auxiliary", None)
-    pool_equivalents: dict = getattr(ctx, "pool_equivalents", {})
-    database_equivalents: list = getattr(ctx, "database_equivalents", [])
+    """Serialize family-level pools + equivalents into the LLM payload.
 
-    compute_pools, missing_equiv_pool_ids = _aggregate_pools_by_family(
-        pools, pool_equivalents
-    )
+    Todos os valores monetários saem na MOEDA DE ANÁLISE (ctx.analysis_currency),
+    já convertidos. A taxa aplicada está em ``premissas.fx``.
+    """
+    auxiliary = getattr(ctx, "auxiliary", None)
+    database_equivalents: list = getattr(ctx, "database_equivalents", [])
+    fx = _fx_from_premissas(ctx)
+
+    compute_pools, missing_equiv_pool_ids = _serialize_family_pools(ctx, fx)
 
     payload: dict[str, object] = {"pools_computacao": compute_pools}
 
     if auxiliary is not None and auxiliary.any_positive:
         aux_payload: dict[str, object] = {}
         if auxiliary.gke_control_plane > 0:
-            aux_payload["gke_plano_controle"] = round(float(auxiliary.gke_control_plane), 2)
+            aux_payload["gke_plano_controle"] = _money(auxiliary.gke_control_plane, fx)
         if auxiliary.storage_ssd > 0:
-            aux_payload["armazenamento_ssd"] = round(float(auxiliary.storage_ssd), 2)
+            aux_payload["armazenamento_ssd"] = _money(auxiliary.storage_ssd, fx)
         if auxiliary.storage_hdd > 0:
-            aux_payload["armazenamento_hdd"] = round(float(auxiliary.storage_hdd), 2)
+            aux_payload["armazenamento_hdd"] = _money(auxiliary.storage_hdd, fx)
         if auxiliary.network_egress > 0:
-            aux_payload["egresso_rede"] = round(float(auxiliary.network_egress), 2)
+            aux_payload["egresso_rede"] = _money(auxiliary.network_egress, fx)
         if auxiliary.database > 0:
-            aux_payload["banco_dados"] = round(float(auxiliary.database), 2)
+            aux_payload["banco_dados"] = _money(auxiliary.database, fx)
             if database_equivalents:
                 aux_payload["equivalentes_banco_dados"] = [
                     _serialize_equivalent(e) for e in database_equivalents
                 ]
+        if auxiliary.commitment > 0:
+            # Compromisso/reserva (Savings Plan, RI, CUD): custo sem capacidade,
+            # segregado para não distorcer o preço/vCPU dos pools.
+            aux_payload["compromisso_reserva"] = _money(auxiliary.commitment, fx)
         if auxiliary.orphan > 0:
             aux_payload["nao_classificado"] = {
-                "custo": round(float(auxiliary.orphan), 2),
-                "skus": list(auxiliary.orphan_skus),
+                "custo": _money(auxiliary.orphan, fx),
+                "quantidade_skus": len(auxiliary.orphan_skus),
             }
+        # Equivalentes cross-cloud por categoria (storage/egress), já em moeda de
+        # análise — reprecificados por razão de taxa em build_migration_context.
+        category_equivalents = getattr(ctx, "category_equivalents", {}) or {}
+        _cat_key = {
+            "storage_ssd": "armazenamento_ssd",
+            "storage_hdd": "armazenamento_hdd",
+            "network_egress": "egresso_rede",
+            "database": "banco_dados",
+        }
+        for category, equivs in category_equivalents.items():
+            aux_payload[f"equivalentes_{_cat_key.get(category, category)}"] = equivs
         payload["custos_auxiliares"] = aux_payload
 
     mapping_confidence = getattr(ctx, "mapping_confidence", None)
     if mapping_confidence:
         payload["confianca_classificacao"] = {
-            level: round(float(cost), 2) for level, cost in mapping_confidence.items()
+            level: _money(cost, fx) for level, cost in mapping_confidence.items()
         }
 
     return json.dumps(payload, default=str), missing_equiv_pool_ids
@@ -178,10 +262,13 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
 def build_pipeline_llm_input_payload(ctx) -> tuple[dict, list[str]]:
     pools_json, missing_equiv_ids = _serialize_pools(ctx)
     context_payload = json.loads(pools_json)
+    fx = _fx_from_premissas(ctx)
     context_payload["provedor_origem"] = ctx.source_provider
     context_payload["periodo_faturamento"] = ctx.billing_period
-    context_payload["gasto_total"] = float(ctx.total_spend)
-    context_payload["moeda"] = ctx.currency
+    # Gasto total também na moeda de análise — payload inteiro em uma só moeda.
+    context_payload["gasto_total"] = _money(ctx.total_spend, fx)
+    context_payload["moeda"] = getattr(ctx, "analysis_currency", ctx.currency)
+    context_payload["premissas"] = getattr(ctx, "premissas", {}) or {}
     return context_payload, missing_equiv_ids
 
 
@@ -201,16 +288,16 @@ def _serialize_equivalent(equiv) -> dict:
     tm = getattr(equiv, "technical_match", None)
     if tm is not None:
         d["correspondencia_tecnica"] = {
-            k: str(v) for k, v in [("vcpus", tm.vcpus), ("ram_gb", tm.ram_gb)] if v is not None
+            k: _round2(v) for k, v in [("vcpus", tm.vcpus), ("ram_gb", tm.ram_gb)] if v is not None
         }
 
     fin = getattr(equiv, "financials", None)
     if fin is not None:
         fin_dict: dict[str, object] = {}
         if fin.estimated_monthly_cost is not None:
-            fin_dict["custo_mensal_estimado"] = str(fin.estimated_monthly_cost)
+            fin_dict["custo_mensal_estimado"] = _round2(fin.estimated_monthly_cost)
         if fin.cost_delta is not None:
-            fin_dict["delta_custo"] = str(fin.cost_delta)
+            fin_dict["delta_custo"] = _round2(fin.cost_delta)
         fin_dict["confianca_preco"] = fin.pricing_confidence
         d["financeiro"] = fin_dict
 
@@ -337,7 +424,11 @@ class RunAnalysisPipelineUseCase:
         comparison_repo: PGServiceComparisonRepository,
         sku_repo: ICloudSkuRepository,
         llm_orchestrator: LLMOrchestrator,
+        fx_repo: IExchangeRateRepository | None = None,
+        price_repo: ICloudPricePointRepository | None = None,
     ) -> None:
+        self._fx_repo = fx_repo
+        self._price_repo = price_repo
         self._job_repo = analysis_job_repo
         self._report_repo = report_repo
         self._item_repo = item_repo
@@ -357,6 +448,8 @@ class RunAnalysisPipelineUseCase:
                 self._metadata_repo,
                 self._comparison_repo,
                 sku_repo=self._sku_repo,
+                fx_repo=self._fx_repo,
+                price_repo=self._price_repo,
             )
 
             ctx = await context_uc.execute(

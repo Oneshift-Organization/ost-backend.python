@@ -149,6 +149,12 @@ existe").
   Ladder** (L0–L5, data-driven via `sku_classification_rules`, sem `if/else` por
   cloud). Gate de acurácia: `sku_coverage_ratio ≥ 95%` (orphan ≤ 5%). Spec em
   [`docs/refactor/sku-accuracy-spec.md`](docs/refactor/sku-accuracy-spec.md).
+- **Fase atual — PRECISÃO (Precision Engine v3):** spec-mestre em
+  [`docs/refactor/precision-engine-v3-spec.md`](docs/refactor/precision-engine-v3-spec.md)
+  — FX antes de qualquer `delta_custo` (nunca comparar BRL×USD), preços de API
+  oficial em `cloud_price_points`, calculadoras por categoria
+  (`ICategoryCalculator`), packing por custo total, ledger `premissas`, payback
+  calculado no backend (LLM nunca calcula).
 
 ## Regras Inegociáveis (resumo)
 

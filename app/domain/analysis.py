@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from app.domain.entities.workload_pool import AuxiliaryCosts, WorkloadPool
+from app.domain.entities.workload_pool import AuxiliaryCosts, FamilyPool, WorkloadPool
 
 
 @dataclass(frozen=True)
@@ -105,3 +105,17 @@ class MigrationContext:
     pool_equivalents: dict[str, list[EquivalentService]] = field(default_factory=dict)
     # equivalents for the database auxiliary bucket
     database_equivalents: list[EquivalentService] = field(default_factory=list)
+
+    # ── Precision Engine v3 ────────────────────────────────────────────────
+    # Pools agregados por (família, região) — unidade de comparação cross-cloud.
+    family_pools: tuple[FamilyPool, ...] = ()
+    # keyed by "{family}/{region}" — equivalentes dimensionados sobre o agregado
+    family_equivalents: dict[str, list[EquivalentService]] = field(default_factory=dict)
+    # Equivalentes por categoria auxiliar não-compute (storage/egress), calculados
+    # por razão de taxa. keyed pela categoria → lista de {provider, custo, delta}.
+    category_equivalents: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # Moeda em que os custos comparados estão expressos (pode diferir de `currency`,
+    # que é a moeda de origem do billing).
+    analysis_currency: str = "USD"
+    # Ledger de premissas: fx aplicado, fonte de preços, janela, cobertura.
+    premissas: dict[str, Any] = field(default_factory=dict)

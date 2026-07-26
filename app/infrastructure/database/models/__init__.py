@@ -10,7 +10,9 @@ from app.infrastructure.database.models.cloud_services_comparation import (
 from app.infrastructure.database.models.cloud_services_metadata import (
     CloudServiceMetadataModel,
 )
+from app.infrastructure.database.models.cloud_price_point import CloudPricePointModel
 from app.infrastructure.database.models.cloud_sku_catalog import CloudSkuCatalogModel
+from app.infrastructure.database.models.exchange_rate import ExchangeRateModel
 from app.infrastructure.database.models.service_ontology import ServiceOntologyModel
 from app.infrastructure.database.models.sku_classification_rules import (
     SkuClassificationRuleModel,
@@ -22,9 +24,11 @@ __all__ = [
     "BillingEnrichedModel",
     "BillingItemModel",
     "BillingReportModel",
+    "CloudPricePointModel",
     "CloudServiceComparisonModel",
     "CloudServiceMetadataModel",
     "CloudSkuCatalogModel",
+    "ExchangeRateModel",
     "ServiceOntologyModel",
     "SkuClassificationRuleModel",
     "UnmappedBillingLineModel",

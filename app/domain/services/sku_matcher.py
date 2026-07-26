@@ -24,17 +24,28 @@ from app.domain.services.sku_normalization import match_key
 
 DEFAULT_FUZZY_THRESHOLD = 88
 
-# Machine-family tokens (data, not branching logic). Longest first so e.g.
-# "n2d" wins over "n2". Used by L2 family extraction and the L3 fallback.
+# Family extraction is data/shape-driven, not a per-cloud name list. Two rungs:
+#
+#  1. Known GCP tokens (high confidence) — these lack the ``family.size`` shape
+#     (``e2-standard-4`` uses ``-`` and the size word carries no dot), so a
+#     structural rule alone would miss them. Longest first so "n2d" beats "n2".
+#  2. Structural fallback — matches the *shape* of an instance-type family token
+#     ``<letras><dígito><sufixo>`` seguido de um separador de tamanho (``.``/``-``).
+#     Cobre m7g, c7g, r8g, is4gen, c4, db.r8g… de qualquer cloud sem enumerá-los.
+#     É isto que evita que a AWS inteira colapse num pool "general".
 _FAMILY_TOKENS = (
     "n2d", "n4d", "c2d", "t2d", "t2a",
     "e2", "n1", "n2", "n4", "c2", "c3",
     "m1", "m2", "m3", "g2", "z3", "h3",
 )
-_FAMILY_PATTERN = re.compile(
+_KNOWN_FAMILY_PATTERN = re.compile(
     r"\b(" + "|".join(sorted(_FAMILY_TOKENS, key=len, reverse=True)) + r")\b",
     re.IGNORECASE,
 )
+# Shape: 1-4 letras + 1 dígito + até 3 letras, seguido de '.' ou '-' (o começo
+# do sufixo de tamanho — .2xlarge, -standard-4). O separador obrigatório é o que
+# distingue "m7g.2xlarge" (família) de um token solto sem tamanho.
+_FAMILY_SHAPE_PATTERN = re.compile(r"\b([a-z]{1,4}\d[a-z]{0,3})[.\-]", re.IGNORECASE)
 
 # component_type implied by a catalog service_type on an L0/L1 hit.
 _SERVICE_TYPE_ROLE = {
@@ -77,10 +88,18 @@ def _unmatched() -> SkuMatch:
 
 
 def extract_family(text: str | None) -> str | None:
-    """Return the uppercase machine family token found in ``text``, or None."""
+    """Return the uppercase machine family token found in ``text``, or None.
+
+    Two rungs: known GCP tokens first (high confidence, no structural shape),
+    then a structural ``<letras><dígito><sufixo>.`` shape that generalises to
+    any provider's instance-type naming without enumerating families.
+    """
     if not text:
         return None
-    m = _FAMILY_PATTERN.search(text)
+    m = _KNOWN_FAMILY_PATTERN.search(text)
+    if m:
+        return m.group(1).upper()
+    m = _FAMILY_SHAPE_PATTERN.search(text)
     return m.group(1).upper() if m else None
 
 
