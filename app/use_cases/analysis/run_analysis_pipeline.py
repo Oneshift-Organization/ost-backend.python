@@ -237,6 +237,16 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
                 "custo": _money(auxiliary.orphan, fx),
                 "quantidade_skus": len(auxiliary.orphan_skus),
             }
+        # Equivalentes cross-cloud por categoria (storage/egress), já em moeda de
+        # análise — reprecificados por razão de taxa em build_migration_context.
+        category_equivalents = getattr(ctx, "category_equivalents", {}) or {}
+        _cat_key = {
+            "storage_ssd": "armazenamento_ssd",
+            "storage_hdd": "armazenamento_hdd",
+            "network_egress": "egresso_rede",
+        }
+        for category, equivs in category_equivalents.items():
+            aux_payload[f"equivalentes_{_cat_key.get(category, category)}"] = equivs
         payload["custos_auxiliares"] = aux_payload
 
     mapping_confidence = getattr(ctx, "mapping_confidence", None)

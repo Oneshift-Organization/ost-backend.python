@@ -23,6 +23,11 @@ class ICloudPricePointRepository(ABC):
         ...
 
     @abstractmethod
+    async def rates_for_category(self, category: str) -> list[CloudPricePoint]:
+        """Taxa de uma categoria (storage_ssd, network_egress…) por provedor."""
+        ...
+
+    @abstractmethod
     async def bulk_upsert(self, points: list[CloudPricePoint]) -> tuple[int, int]:
         """Upsert por (provider, sku_key, region). Retorna (inseridos, atualizados)."""
         ...

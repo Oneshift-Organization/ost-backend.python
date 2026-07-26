@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 
+from app.infrastructure.database.seed_category_rates import category_rate_points
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.pricing.azure_price_client import fetch_azure_vm_prices
 from app.infrastructure.pricing.oci_price_client import fetch_oci_compute_prices
@@ -35,12 +36,13 @@ async def main() -> None:
     fetchers = {
         "azure": lambda: fetch_azure_vm_prices(args.region, max_pages=args.max_pages),
         "oci": fetch_oci_compute_prices,
+        "categories": category_rate_points,
     }
 
     sm = get_sessionmaker()
     async with sm() as session:
         uc = SyncCloudPricesUseCase(PgCloudPricePointRepository(session))
-        for provider in ("azure", "oci"):
+        for provider in ("azure", "oci", "categories"):
             if provider not in wanted:
                 continue
             res = await uc.execute(provider, fetchers[provider])

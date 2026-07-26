@@ -46,6 +46,9 @@ class _PriceRepo(ICloudPricePointRepository):
     async def find(self, *, provider, service_type, region=None):
         return self._by.get(provider, [])
 
+    async def rates_for_category(self, category: str):
+        return []
+
     async def providers_with_prices(self, service_type: str) -> list[str]:
         return list(self._by)
 

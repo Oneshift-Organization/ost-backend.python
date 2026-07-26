@@ -27,6 +27,10 @@ from app.domain.repositories.i_billing_report_repo import IBillingReportReposito
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
+from app.domain.services.category_calculator import (
+    CategoryRate,
+    estimate_by_cost_ratio,
+)
 from app.domain.services.currency import (
     ANALYSIS_CURRENCY,
     FxRate,
@@ -429,6 +433,48 @@ class BuildMigrationContextUseCase:
                 db_curated = await _get_equivalents("database", "relational_database")
                 database_equivalents = list(db_curated)
 
+        # ── 9b. Categorias não-compute: sizing por razão de taxa ──
+        # Storage/egress não têm hardware; reprecificamos o custo (confiável) pela
+        # razão de taxas por provedor. Provider-agnóstico, sem lógica por nuvem.
+        category_equivalents: dict[str, list[dict[str, Any]]] = {}
+        if auxiliary is not None and self._price_repo is not None:
+            aux_by_category = {
+                "storage_ssd": auxiliary.storage_ssd,
+                "storage_hdd": auxiliary.storage_hdd,
+                "network_egress": auxiliary.network_egress,
+            }
+            for category, aux_cost in aux_by_category.items():
+                if aux_cost <= 0:
+                    continue
+                rate_points = await self._price_repo.rates_for_category(category)
+                if not rate_points:
+                    continue
+                rates = {
+                    p.provider.lower(): CategoryRate(
+                        provider=p.provider.lower(),
+                        rate=p.price,
+                        unit=p.unit,
+                        confidence=p.confidence,
+                    )
+                    for p in rate_points
+                }
+                source_cost = convert(aux_cost, fx) or Decimal("0")
+                equivs = estimate_by_cost_ratio(
+                    source_provider=source_provider,
+                    source_cost=source_cost,
+                    rates=rates,
+                )
+                if equivs:
+                    category_equivalents[category] = [
+                        {
+                            "provedor": e.provider,
+                            "custo_mensal_estimado": round(float(e.estimated_monthly_cost), 2),
+                            "delta_custo": round(float(e.cost_delta), 2),
+                            "confianca_preco": e.pricing_confidence,
+                        }
+                        for e in equivs
+                    ]
+
         # ── 10. Ledger de premissas (auditoria) ───────────────────
         mapped_cost = total_spend - (auxiliary.orphan if auxiliary else Decimal("0"))
         cobertura = float(mapped_cost / total_spend) if total_spend > 0 else 0.0
@@ -495,6 +541,7 @@ class BuildMigrationContextUseCase:
             database_equivalents=database_equivalents,
             family_pools=family_pools,
             family_equivalents=family_equivalents,
+            category_equivalents=category_equivalents,
             analysis_currency=ANALYSIS_CURRENCY,
             premissas=premissas,
         )

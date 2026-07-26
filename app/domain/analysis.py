@@ -111,6 +111,9 @@ class MigrationContext:
     family_pools: tuple[FamilyPool, ...] = ()
     # keyed by "{family}/{region}" — equivalentes dimensionados sobre o agregado
     family_equivalents: dict[str, list[EquivalentService]] = field(default_factory=dict)
+    # Equivalentes por categoria auxiliar não-compute (storage/egress), calculados
+    # por razão de taxa. keyed pela categoria → lista de {provider, custo, delta}.
+    category_equivalents: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     # Moeda em que os custos comparados estão expressos (pode diferir de `currency`,
     # que é a moeda de origem do billing).
     analysis_currency: str = "USD"

@@ -48,6 +48,13 @@ class PgCloudPricePointRepository:
         result = await self._session.execute(stmt)
         return [_to_entity(r) for r in result.scalars().all()]
 
+    async def rates_for_category(self, category: str) -> list[CloudPricePoint]:
+        stmt = select(CloudPricePointModel).where(
+            CloudPricePointModel.service_type == category
+        )
+        result = await self._session.execute(stmt)
+        return [_to_entity(r) for r in result.scalars().all()]
+
     async def providers_with_prices(self, service_type: str) -> list[str]:
         stmt = (
             select(CloudPricePointModel.provider)
