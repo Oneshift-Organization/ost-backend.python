@@ -442,6 +442,7 @@ class BuildMigrationContextUseCase:
                 "storage_ssd": auxiliary.storage_ssd,
                 "storage_hdd": auxiliary.storage_hdd,
                 "network_egress": auxiliary.network_egress,
+                "database": auxiliary.database,
             }
             for category, aux_cost in aux_by_category.items():
                 if aux_cost <= 0:
@@ -487,6 +488,17 @@ class BuildMigrationContextUseCase:
                     confianca_por_provedor[e.provider.lower()] = (
                         e.financials.pricing_confidence
                     )
+        # Cobertura de ANÁLISE: fração do gasto que tem equivalentes cross-cloud
+        # (compute + categorias reprecificadas), vs. classificação apenas. É o que
+        # mede o avanço da Wave 4: sair de balde opaco para comparação.
+        analyzed = sum(
+            (convert(fp.monthly_cost, fx) or Decimal("0") for fp in family_pools),
+            Decimal("0"),
+        )
+        for category in category_equivalents:
+            analyzed += convert(getattr(auxiliary, category, Decimal("0")), fx) or Decimal("0")
+        total_analysis = convert(total_spend, fx) or Decimal("0")
+        cobertura_analise = float(analyzed / total_analysis) if total_analysis > 0 else 0.0
         premissas: dict[str, Any] = {
             "fx": as_ledger(fx),
             "moeda_origem": currency,
@@ -495,6 +507,7 @@ class BuildMigrationContextUseCase:
             "fonte_precos": "cloud_price_points (oficial) + seed_catalog_pareto (fallback)",
             "confianca_precos": confianca_por_provedor or "low",
             "cobertura_classificacao": cobertura,
+            "cobertura_analise": cobertura_analise,
             "fator_utilizacao": 1.0,
             # Fração do gasto de compute cuja capacidade foi estimada por shape
             # (instance-hours → vCPU/RAM) em vez de faturada por-vCPU.

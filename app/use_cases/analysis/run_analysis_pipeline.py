@@ -244,6 +244,7 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
             "storage_ssd": "armazenamento_ssd",
             "storage_hdd": "armazenamento_hdd",
             "network_egress": "egresso_rede",
+            "database": "banco_dados",
         }
         for category, equivs in category_equivalents.items():
             aux_payload[f"equivalentes_{_cat_key.get(category, category)}"] = equivs

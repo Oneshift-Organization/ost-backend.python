@@ -34,6 +34,13 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("gcp", "network_egress", "gb", "0.120"),
     ("azure", "network_egress", "gb", "0.087"),
     ("oci", "network_egress", "gb", "0.0085"),       # OCI egress ~10x mais barato
+    # Índice de managed relational DB ($/vCPU-mês, general-purpose single-AZ). O
+    # custo de DB inclui instância+storage+IO; reprecificar o total pela razão dos
+    # índices é uma 1ª aproximação direcional (compute domina o custo de managed DB).
+    ("aws", "database", "db_vcpu_month", "62"),      # RDS m6g
+    ("gcp", "database", "db_vcpu_month", "60"),      # Cloud SQL
+    ("azure", "database", "db_vcpu_month", "73"),    # Azure SQL / MySQL Flex
+    ("oci", "database", "db_vcpu_month", "30"),      # OCI DB/MySQL (mais barato)
 )
 
 
