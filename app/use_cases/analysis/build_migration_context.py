@@ -450,15 +450,17 @@ class BuildMigrationContextUseCase:
                 rate_points = await self._price_repo.rates_for_category(category)
                 if not rate_points:
                     continue
-                rates = {
-                    p.provider.lower(): CategoryRate(
+                # Um provedor pode ter taxa official (fetch) E reference (seed).
+                # A official prevalece — ordenamos para ela ser aplicada por último.
+                _rank = {"official": 2, "reference": 1, "low": 0}
+                rates: dict[str, CategoryRate] = {}
+                for p in sorted(rate_points, key=lambda x: _rank.get(x.confidence, 0)):
+                    rates[p.provider.lower()] = CategoryRate(
                         provider=p.provider.lower(),
                         rate=p.price,
                         unit=p.unit,
                         confidence=p.confidence,
                     )
-                    for p in rate_points
-                }
                 source_cost = convert(aux_cost, fx) or Decimal("0")
                 equivs = estimate_by_cost_ratio(
                     source_provider=source_provider,

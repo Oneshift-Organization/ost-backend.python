@@ -16,6 +16,10 @@ import asyncio
 from app.infrastructure.database.seed_category_rates import category_rate_points
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.pricing.azure_price_client import fetch_azure_vm_prices
+from app.infrastructure.pricing.category_rate_client import (
+    fetch_azure_category_rates,
+    fetch_oci_category_rates,
+)
 from app.infrastructure.pricing.oci_price_client import fetch_oci_compute_prices
 from app.infrastructure.repositories.pg_cloud_price_point_repo import (
     PgCloudPricePointRepository,
@@ -33,16 +37,20 @@ async def main() -> None:
     args = parser.parse_args()
     wanted = {p.strip() for p in args.providers.split(",") if p.strip()}
 
+    def _category_live() -> list:
+        return [*fetch_azure_category_rates(args.region), *fetch_oci_category_rates()]
+
     fetchers = {
         "azure": lambda: fetch_azure_vm_prices(args.region, max_pages=args.max_pages),
         "oci": fetch_oci_compute_prices,
-        "categories": category_rate_points,
+        "categories": category_rate_points,       # taxas de referência (seed)
+        "categories-live": _category_live,         # taxas oficiais (fetch)
     }
 
     sm = get_sessionmaker()
     async with sm() as session:
         uc = SyncCloudPricesUseCase(PgCloudPricePointRepository(session))
-        for provider in ("azure", "oci", "categories"):
+        for provider in ("azure", "oci", "categories", "categories-live"):
             if provider not in wanted:
                 continue
             res = await uc.execute(provider, fetchers[provider])
