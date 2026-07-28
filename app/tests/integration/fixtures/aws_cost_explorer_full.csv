@@ -1,0 +1,975 @@
+InvoiceID,PayerAccountId,LinkedAccountId,RecordType,RecordID,BillingPeriodStartDate,BillingPeriodEndDate,InvoiceDate,PayerAccountName,LinkedAccountName,TaxationAddress,PayerPONumber,ProductCode,ProductName,SellerOfRecord,UsageType,Operation,RateId,ItemDescription,UsageStartDate,UsageEndDate,UsageQuantity,BlendedRate,CurrencyCode,CostBeforeTax,Credits,TaxAmount,TaxType,TotalCost
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c4.4xlarge,,,,,,744,,USD,592.224,,0,,592.224
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c5a.large,,,,,,5701.57368,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c7a.2xlarge,,,,,,789.15639,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c7g.2xlarge,,,,,,40456.287774,,USD,1275.622220269,,0,,1275.622220269
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c7g.4xlarge,,,,,,1511.5525,,USD,317.5339048009,,0,,317.5339048009
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c7g.large,,,,,,54.692501,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c7g.xlarge,,,,,,3096.232494,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c7gn.xlarge,,,,,,5282.933056,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c8g.2xlarge,,,,,,327.554442,,USD,49.8817447588,,0,,49.8817447588
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:c8g.xlarge,,,,,,4222.319448,,USD,241.0374755971,,0,,241.0374755971
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:is4gen.xlarge,,,,,,1984.299723,,USD,1143.5519303649,,0,,1143.5519303649
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m5a.2xlarge,,,,,,744,,USD,112.7212266091,,0,,112.7212266091
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m5a.large,,,,,,744,,USD,27.7665018336,,0,,27.7665018336
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m6a.xlarge,,,,,,154.162811,,USD,26.6393337408,,0,,26.6393337408
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m7a.2xlarge,,,,,,745.751389,,USD,340.2934506507,,0,,340.2934506507
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m7a.xlarge,,,,,,3722.634167,,USD,863.0555052773,,0,,863.0555052773
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m7g.2xlarge,,,,,,18454.044147,,USD,4822.987618669,,0,,4822.987618669
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m7g.4xlarge,,,,,,879.683334,,USD,574.2572804352,,0,,574.2572804352
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m7g.large,,,,,,40.487227,,USD,3.3037577232,,0,,3.3037577232
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m7g.medium,,,,,,149.696112,,USD,6.1076013696,,0,,6.1076013696
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m7g.xlarge,,,,,,419.329213,,USD,68.4345275616,,0,,68.4345275616
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m8a.2xlarge,,,,,,290.194167,,USD,141.289736029,,0,,141.289736029
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m8g.2xlarge,,,,,,7440.073336,,USD,2667.5539872368,,0,,2667.5539872368
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:m8g.xlarge,,,,,,791.805278,,USD,139.0523771054,,0,,139.0523771054
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:r6g.2xlarge,,,,,,4.298333,,USD,1.7330878656,,0,,1.7330878656
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:r7g.4xlarge,,,,,,1733.720001,,USD,1482.6566412378,,0,,1482.6566412378
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:r7g.xlarge,,,,,,13413.751945,,USD,7.453922238,,0,,7.453922238
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:r8g.large,,,,,,1093.705277,,USD,128.8603557362,,0,,128.8603557362
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:r8g.xlarge,,,,,,1614.620279,,USD,380.4691225433,,0,,380.4691225433
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t2.micro,,,,,,744,,USD,3.6192,,0,,3.6192
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t2.xlarge,,,,,,744,,USD,52.1607383793,,0,,52.1607383793
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t3.small,,,,,,449.431944,,USD,17.6177322048,,0,,17.6177322048
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t3.xlarge,,,,,,744,,USD,46.3779807892,,0,,46.3779807892
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t3a.2xlarge,,,,,,1270.600833,,USD,148.4428415792,,0,,148.4428415792
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t3a.large,,,,,,4164.481389,,USD,182.1589480957,,0,,182.1589480957
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t3a.medium,,,,,,15623.275,,USD,237.4004543565,,0,,237.4004543565
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t3a.micro,,,,,,2232,,USD,8.7984,,0,,8.7984
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t3a.nano,,,,,,744,,USD,1.3019,,0,,1.3019
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t3a.small,,,,,,8182.70861,,USD,65.8570537058,,0,,65.8570537058
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t3a.xlarge,,,,,,788.25389,,USD,49.8212070323,,0,,49.8212070323
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t4g.large,,,,,,1827.706114,,USD,53.3273678087,,0,,53.3273678087
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t4g.medium,,,,,,888.533891,,USD,10.9813371432,,0,,10.9813371432
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t4g.micro,,,,,,2976.588889,,USD,10.4832,,0,,10.4832
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t4g.nano,,,,,,744,,USD,1.3104,,0,,1.3104
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t4g.small,,,,,,4881.389722,,USD,34.795635895,,0,,34.795635895
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,BoxUsage:t4g.xlarge,,,,,,3282.978889,,USD,169.1704324857,,0,,169.1704324857
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,DataTransfer-In-Bytes,,,,,,20845.1678290846,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,DataTransfer-Out-Bytes,,,,,,1986.3915282264,,USD,175.1089865619,,0,,175.1089865619
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APN1-AWS-Out-Bytes,,,,,,0.0000692912,,USD,0.0000095604,,0,,0.0000095604
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APN2-AWS-Out-Bytes,,,,,,0.0000692912,,USD,0.0000095604,,0,,0.0000095604
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS1-AWS-Out-Bytes,,,,,,0.0000692912,,USD,0.0000095604,,0,,0.0000095604
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS2-AWS-Out-Bytes,,,,,,0.0000692912,,USD,0.0000095604,,0,,0.0000095604
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-BoxUsage:t3a.medium,,,,,,1487.5625,,USD,37.7345276731,,0,,37.7345276731
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-CloudFront-In-Bytes,,,,,,2.924e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-CloudFront-Out-Bytes,,,,,,2.237e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-DataTransfer-In-Bytes,,,,,,3.1522130011,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-DataTransfer-Out-Bytes,,,,,,0.5372229482,,USD,0.0779344252,,0,,0.0779344252
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EU-AWS-Out-Bytes,,,,,,0.0000692912,,USD,0.0000095604,,0,,0.0000095604
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EUC1-AWS-Out-Bytes,,,,,,0.0000692912,,USD,0.0000095604,,0,,0.0000095604
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USE1-AWS-In-Bytes,,,,,,0.0007927895,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USE1-AWS-Out-Bytes,,,,,,0.0263186579,,USD,0.0036319745,,0,,0.0036319745
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USW1-AWS-Out-Bytes,,,,,,0.0000692907,,USD,0.0000095609,,0,,0.0000095609
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USW2-AWS-Out-Bytes,,,,,,0.0000692902,,USD,0.0000095612,,0,,0.0000095612
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:c7g.2xlarge,,,,,,10053.642777,,USD,1229.3269039102,,0,,1229.3269039102
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:c7g.xlarge,,,,,,17.231389,,USD,1.006320562,,0,,1.006320562
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:c7gn.2xlarge,,,,,,1.390556,,USD,0.314784878,,0,,0.314784878
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:c7gn.large,,,,,,0.701111,,USD,0.0356070499,,0,,0.0356070499
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:c7gn.xlarge,,,,,,15.681945,,USD,1.7890063971,,0,,1.7890063971
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:c7i-flex.xlarge,,,,,,0.040556,,USD,0.0031106452,,0,,0.0031106452
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:c8g.2xlarge,,,,,,21.8775,,USD,3.4082663971,,0,,3.4082663971
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:c8g.xlarge,,,,,,11.779443,,USD,0.6677151959,,0,,0.6677151959
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:c8gn.large,,,,,,0.265556,,USD,0.0134166336,,0,,0.0134166336
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:m6a.24xlarge,,,,,,0.155278,,USD,0.2210227052,,0,,0.2210227052
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:m7g.2xlarge,,,,,,3526.10191,,USD,490.327815334,,0,,490.327815334
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:m8g.2xlarge,,,,,,6.257778,,USD,0.839605452,,0,,0.839605452
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:m8gb.large,,,,,,0.049167,,USD,0.0042431121,,0,,0.0042431121
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:r5.4xlarge,,,,,,0.0575,,USD,0.02216625,,0,,0.02216625
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SpotUsage:r5dn.large,,,,,,0.050556,,USD,0.0026996904,,0,,0.0026996904
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-AFS1-AWS-In-Bytes,,,,,,1.0068007312,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-AFS1-AWS-Out-Bytes,,,,,,0.516880608,,USD,0.0103376124,,0,,0.0103376124
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APE1-AWS-In-Bytes,,,,,,1.0050315911,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APE1-AWS-Out-Bytes,,,,,,0.5153373268,,USD,0.0103067511,,0,,0.0103067511
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN1-AWS-In-Bytes,,,,,,0.9998961344,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN1-AWS-Out-Bytes,,,,,,0.509825059,,USD,0.0101965036,,0,,0.0101965036
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN2-AWS-In-Bytes,,,,,,1.0000530428,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN2-AWS-Out-Bytes,,,,,,0.5105582387,,USD,0.0102111678,,0,,0.0102111678
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN3-AWS-In-Bytes,,,,,,0.9941639619,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN3-AWS-Out-Bytes,,,,,,0.5099093263,,USD,0.010198189,,0,,0.010198189
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS1-AWS-In-Bytes,,,,,,0.9999363429,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS1-AWS-Out-Bytes,,,,,,0.5103437452,,USD,0.0102068789,,0,,0.0102068789
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS2-AWS-In-Bytes,,,,,,0.9974873305,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS2-AWS-Out-Bytes,,,,,,0.5102774951,,USD,0.0102055548,,0,,0.0102055548
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS3-AWS-In-Bytes,,,,,,1.0008633594,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS3-AWS-Out-Bytes,,,,,,0.5081732639,,USD,0.0101634674,,0,,0.0101634674
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS4-AWS-In-Bytes,,,,,,1.0120841998,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS4-AWS-Out-Bytes,,,,,,0.519298455,,USD,0.0103859711,,0,,0.0103859711
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-CAN1-AWS-In-Bytes,,,,,,0.9955494133,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-CAN1-AWS-Out-Bytes,,,,,,0.4955491097,,USD,0.0099109832,,0,,0.0099109832
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-CloudFront-In-Bytes,,,,,,31104.7137283898,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-CloudFront-Out-Bytes,,,,,,6612.6879695989,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EU-AWS-In-Bytes,,,,,,1.00135158,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EU-AWS-Out-Bytes,,,,,,0.5074651004,,USD,0.0101493039,,0,,0.0101493039
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUC1-AWS-In-Bytes,,,,,,0.9944232667,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUC1-AWS-Out-Bytes,,,,,,0.5089693477,,USD,0.0101793889,,0,,0.0101793889
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUN1-AWS-In-Bytes,,,,,,0.9930651012,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUN1-AWS-Out-Bytes,,,,,,0.5081050268,,USD,0.0101621033,,0,,0.0101621033
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUS1-AWS-In-Bytes,,,,,,1.0044407745,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUS1-AWS-Out-Bytes,,,,,,0.5162249796,,USD,0.0103245019,,0,,0.0103245019
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUW2-AWS-In-Bytes,,,,,,0.9958833476,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUW2-AWS-Out-Bytes,,,,,,0.5079955576,,USD,0.010159914,,0,,0.010159914
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUW3-AWS-In-Bytes,,,,,,0.9984167995,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUW3-AWS-Out-Bytes,,,,,,0.5073354818,,USD,0.0101467112,,0,,0.0101467112
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-MES1-AWS-In-Bytes,,,,,,1.0043044238,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-MES1-AWS-Out-Bytes,,,,,,0.5157512803,,USD,0.0103150281,,0,,0.0103150281
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-SAE1-AWS-In-Bytes,,,,,,955.5053268278,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-SAE1-AWS-Out-Bytes,,,,,,2858.6905328029,,USD,57.1738106569,,0,,57.1738106569
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-UGE1-AWS-In-Bytes,,,,,,1.003616103,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-UGE1-AWS-Out-Bytes,,,,,,0.496293457,,USD,0.0099258726,,0,,0.0099258726
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-UGW1-AWS-In-Bytes,,,,,,1.0113441291,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-UGW1-AWS-Out-Bytes,,,,,,0.5171472623,,USD,0.0103429462,,0,,0.0103429462
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USE2-AWS-In-Bytes,,,,,,1.5180483692,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USE2-AWS-Out-Bytes,,,,,,0.5231317801,,USD,0.0052313184,,0,,0.0052313184
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USW1-AWS-In-Bytes,,,,,,190.6888689431,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USW1-AWS-Out-Bytes,,,,,,2.1056604145,,USD,0.0421132088,,0,,0.0421132088
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USW2-AWS-In-Bytes,,,,,,563.9423706794,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USW2-AWS-Out-Bytes,,,,,,3.8211357537,,USD,0.0764227188,,0,,0.0764227188
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,CPUCredits:t4g,,,,,,185.330258,,USD,7.41321032,,0,,7.41321032
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,DataTransfer-Regional-Bytes,,,,,,234144.6953089215,,USD,2341.4369532844,,0,,2341.4369532844
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBS:SnapshotUsage,,,,,,6880.7655560939,,USD,344.0382778225,,0,,344.0382778225
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBS:VolumeP-IOPS.gp3,,,,,,198189.5806446835,,USD,990.9479026057,,0,,990.9479026057
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBS:VolumeP-Throughput.gp3,,,,,,10.6070561892,,USD,434.4650221201,,0,,434.4650221201
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBS:VolumeUsage.gp2,,,,,,2121.4249060071,,USD,212.1424899721,,0,,212.1424899721
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBS:VolumeUsage.gp3,,,,,,46232.9119363326,,USD,3698.6329497253,,0,,3698.6329497253
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:c4.4xlarge,,,,,,744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:c7a.2xlarge,,,,,,429.670001,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:c7g.2xlarge,,,,,,74.470555,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:c7g.4xlarge,,,,,,426.768056,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:is4gen.xlarge,,,,,,1985.846945,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m5a.2xlarge,,,,,,744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m5a.large,,,,,,744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m7a.2xlarge,,,,,,744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m7a.xlarge,,,,,,3722.634167,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m7g.2xlarge,,,,,,927.312224,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m7g.4xlarge,,,,,,500.857222,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m7g.medium,,,,,,149.696112,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m7g.xlarge,,,,,,74.848611,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m8a.2xlarge,,,,,,290.402778,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m8g.2xlarge,,,,,,7425,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:m8g.xlarge,,,,,,425.565278,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:r7g.4xlarge,,,,,,1002.675,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:r8g.large,,,,,,733.843611,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t3.small,,,,,,449.155833,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t3.xlarge,,,,,,744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t3a.2xlarge,,,,,,1270.600833,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t3a.large,,,,,,4164.443056,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t3a.medium,,,,,,14135,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t3a.micro,,,,,,1488,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t3a.nano,,,,,,744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t3a.small,,,,,,6695,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t3a.xlarge,,,,,,787.216946,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t4g.large,,,,,,1324.844723,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t4g.medium,,,,,,791.097779,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t4g.micro,,,,,,2232.588889,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t4g.nano,,,,,,744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t4g.small,,,,,,4835,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,EBSOptimized:t4g.xlarge,,,,,,3283.605,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,NatGateway-Bytes,,,,,,133098.5792513111,,USD,5989.4360663212,,0,,5989.4360663212
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,NatGateway-Hours,,,,,,5952,,USD,267.84,,0,,267.84
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-AFS1-AWS-In-Bytes,,,,,,5.588e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APE1-AWS-In-Bytes,,,,,,9.408e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APE1-AWS-Out-Bytes,,,,,,7.45e-8,,USD,1.03e-8,,0,,1.03e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APE2-AWS-In-Bytes,,,,,,1.229e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APN1-AWS-In-Bytes,,,,,,0.0000069275,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APN2-AWS-In-Bytes,,,,,,0.0000075378,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APN2-AWS-Out-Bytes,,,,,,6.714e-7,,USD,9.18e-8,,0,,9.18e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APN3-AWS-In-Bytes,,,,,,0.0000027605,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS1-AWS-In-Bytes,,,,,,0.0005950953,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS1-AWS-Out-Bytes,,,,,,3.73e-8,,USD,5.1e-9,,0,,5.1e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS2-AWS-In-Bytes,,,,,,0.0000072646,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS3-AWS-In-Bytes,,,,,,0.0000097077,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS3-AWS-Out-Bytes,,,,,,3.73e-8,,USD,5.1e-9,,0,,5.1e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS4-AWS-In-Bytes,,,,,,1.284e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS5-AWS-In-Bytes,,,,,,4.637e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS8-AWS-In-Bytes,,,,,,2.085e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-APS9-AWS-In-Bytes,,,,,,4.265e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-AWS-In-Bytes,,,,,,0.3325365112,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-AWS-Out-Bytes,,,,,,0.7820780238,,USD,0.107926768,,0,,0.107926768
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-CAN1-AWS-In-Bytes,,,,,,0.0000079485,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-DataTransfer-Regional-Bytes,,,,,,2.5446193624,,USD,0.0254461941,,0,,0.0254461941
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EBS:SnapshotUsage,,,,,,325.6835681494,,USD,22.1464826379,,0,,22.1464826379
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EBS:VolumeUsage.gp3,,,,,,272.0000000376,,USD,41.3440000944,,0,,41.3440000944
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EBSOptimized:t3a.medium,,,,,,1488,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-ESC1-AWS-In-Bytes,,,,,,0.000015014,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EU-AWS-In-Bytes,,,,,,0.0000034166,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EUC1-AWS-In-Bytes,,,,,,0.0000279004,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EUC2-AWS-In-Bytes,,,,,,6.147e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EUN1-AWS-In-Bytes,,,,,,0.0000067737,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EUS1-AWS-In-Bytes,,,,,,5.029e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EUW2-AWS-In-Bytes,,,,,,0.0000096572,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-EUW3-AWS-In-Bytes,,,,,,0.000003493,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-MES1-AWS-In-Bytes,,,,,,8.94e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-NatGateway-Bytes,,,,,,0.0006414741,,USD,0.0000596818,,0,,0.0000596818
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-NatGateway-Hours,,,,,,4464,,USD,415.152,,0,,415.152
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USE1-AWS-In-Bytes,,,,,,0.0027959902,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USE1-AWS-Out-Bytes,,,,,,0.0000302281,,USD,0.0000041726,,0,,0.0000041726
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USE2-AWS-In-Bytes,,,,,,0.0082896703,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USE2-AWS-Out-Bytes,,,,,,4.846e-7,,USD,6.66e-8,,0,,6.66e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USW1-AWS-In-Bytes,,,,,,4.285e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,SAE1-USW2-AWS-In-Bytes,,,,,,0.0001808352,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-AFS1-AWS-In-Bytes,,,,,,1.546e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APE1-AWS-In-Bytes,,,,,,0.0000014239,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APE2-AWS-In-Bytes,,,,,,0.000001285,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN1-AWS-In-Bytes,,,,,,0.000533505,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN1-AWS-Out-Bytes,,,,,,0.0000192896,,USD,3.858e-7,,0,,3.858e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN2-AWS-In-Bytes,,,,,,0.0000068585,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN2-AWS-Out-Bytes,,,,,,5.968e-7,,USD,1.12e-8,,0,,1.12e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APN3-AWS-In-Bytes,,,,,,0.0000037291,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS1-AWS-In-Bytes,,,,,,0.0016856703,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS1-AWS-Out-Bytes,,,,,,0.0000100481,,USD,2.009e-7,,0,,2.009e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS2-AWS-In-Bytes,,,,,,0.0000083071,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS3-AWS-In-Bytes,,,,,,0.0000165846,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS3-AWS-Out-Bytes,,,,,,3.73e-8,,USD,7e-10,,0,,7e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS4-AWS-In-Bytes,,,,,,1.713e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS5-AWS-In-Bytes,,,,,,4.803e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS7-AWS-In-Bytes,,,,,,4.28e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS8-AWS-In-Bytes,,,,,,2.14e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-APS9-AWS-In-Bytes,,,,,,6.61e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-AWS-In-Bytes,,,,,,0.7819781032,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-AWS-Out-Bytes,,,,,,0.3419886112,,USD,0.006839771,,0,,0.006839771
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-CAN1-AWS-In-Bytes,,,,,,0.0000110197,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-DataTransfer-AZ-In-Bytes,,,,,,2416.2366592051,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-DataTransfer-AZ-Out-Bytes,,,,,,2366.5739910211,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-DataTransfer-xAZ-In-Bytes,,,,,,117.0065178383,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-DataTransfer-xAZ-Out-Bytes,,,,,,125.3888332532,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-ESC1-AWS-In-Bytes,,,,,,0.000021443,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EU-AWS-In-Bytes,,,,,,0.0693386984,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EU-AWS-Out-Bytes,,,,,,0.0482682439,,USD,0.0009653663,,0,,0.0009653663
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUC1-AWS-In-Bytes,,,,,,0.0253406202,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUC1-AWS-Out-Bytes,,,,,,0.0253120051,,USD,0.0005062355,,0,,0.0005062355
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUC2-AWS-In-Bytes,,,,,,4.28e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUN1-AWS-In-Bytes,,,,,,0.000015321,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUS1-AWS-In-Bytes,,,,,,2.729e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUS2-AWS-In-Bytes,,,,,,4.28e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUW2-AWS-In-Bytes,,,,,,0.0000128313,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-EUW3-AWS-In-Bytes,,,,,,0.0000037432,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-MES1-AWS-In-Bytes,,,,,,0.0000011175,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-SAE1-AWS-In-Bytes,,,,,,464.6447045437,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-SAE1-AWS-Out-Bytes,,,,,,217.1487618911,,USD,4.342975238,,0,,4.342975238
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-UGW1-AWS-In-Bytes,,,,,,4.284e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USE2-AWS-In-Bytes,,,,,,115.7096122233,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USE2-AWS-Out-Bytes,,,,,,26.7603449858,,USD,0.2676034513,,0,,0.2676034513
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USW1-AWS-In-Bytes,,,,,,0.0003311744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USW1-AWS-Out-Bytes,,,,,,0.0001155594,,USD,0.000002312,,0,,0.000002312
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USW2-AWS-In-Bytes,,,,,,13.3487762675,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-USW2-AWS-Out-Bytes,,,,,,7.1992707362,,USD,0.1439854175,,0,,0.1439854175
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-VpcPeering-In-Bytes,,,,,,853.9687512883,,USD,8.5396875515,,0,,8.5396875515
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE1-VpcPeering-Out-Bytes,,,,,,398.6955896539,,USD,3.9869559063,,0,,3.9869559063
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEC2,,,USE2-EBS:SnapshotUsage,,,,,,199.9770507798,,USD,9.9988525393,,0,,9.9988525393
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,APN1-Requests-Tier1,,,,,,2,,USD,0.0000094,,0,,0.0000094
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,APS1-Requests-Tier1,,,,,,2,,USD,0.00001,,0,,0.00001
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,APS3-Requests-Tier1,,,,,,1,,USD,0.000005,,0,,0.000005
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,DataTransfer-In-Bytes,,,,,,0.0585935171,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,DataTransfer-Out-Bytes,,,,,,57.3376377067,,USD,5.0814799152,,0,,5.0814799152
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,EU-Requests-Tier1,,,,,,1,,USD,0.000005,,0,,0.000005
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,EUN1-Requests-Tier1,,,,,,1,,USD,0.000005,,0,,0.000005
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,EarlyDelete-GDA,,,,,,0.6083043371,,USD,0.0006022211,,0,,0.0006022211
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,Global-Bucket-Hrs-FreeTier,,,,,,4.884408524,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,Monitoring-Automation-INT,,,,,,462150.1290322583,,USD,1.1553753226,,0,,1.1553753226
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,Requests-INT-Tier2,,,,,,221779,,USD,0.0887116,,0,,0.0887116
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,Requests-Tier1,,,,,,41510970,,USD,207.55485,,0,,207.55485
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,Requests-Tier2,,,,,,65676468,,USD,26.2705872,,0,,26.2705872
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,Requests-Tier3,,,,,,25,,USD,0.00125,,0,,0.00125
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,Requests-Tier4,,,,,,195091,,USD,1.95091,,0,,1.95091
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,Requests-Tier8,,,,,,1,,USD,0.00003,,0,,0.00003
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,SAE1-DataTransfer-In-Bytes,,,,,,0.0005653547,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,SAE1-DataTransfer-Out-Bytes,,,,,,0.0385158589,,USD,0.0057690357,,0,,0.0057690357
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,SAE1-EU-AWS-Out-Bytes,,,,,,0.0020956419,,USD,0.000289185,,0,,0.000289185
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,SAE1-Requests-Tier1,,,,,,666,,USD,0.004662,,0,,0.004662
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,SAE1-Requests-Tier2,,,,,,23672,,USD,0.01325632,,0,,0.01325632
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,SAE1-Requests-Tier8,,,,,,93,,USD,0.00279,,0,,0.00279
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,SAE1-Tables-Requests-Tier1,,,,,,62,,USD,0.000434,,0,,0.000434
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,SAE1-TimedStorage-ByteHrs,,,,,,463.1304009902,,USD,18.7567812406,,0,,18.7567812406
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,SAE1-USE1-AWS-Out-Bytes,,,,,,0.2876216408,,USD,0.0396917875,,0,,0.0396917875
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,Tables-Requests-Tier1,,,,,,1,,USD,0.000005,,0,,0.000005
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,TimedStorage-ByteHrs,,,,,,157190.9431928411,,USD,3506.0279740784,,0,,3506.0279740784
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,TimedStorage-GDA-ByteHrs,,,,,,1.896056723,,USD,0.0018770959,,0,,0.0018770959
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,TimedStorage-GIR-ByteHrs,,,,,,0.0000071858,,USD,2.79e-8,,0,,2.79e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,TimedStorage-GIR-SmObjects,,,,,,0.000114886,,USD,4.588e-7,,0,,4.588e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,TimedStorage-INT-FA-ByteHrs,,,,,,73755.3653840311,,USD,1673.8180384487,,0,,1673.8180384487
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,TimedStorage-INT-IA-ByteHrs,,,,,,73948.3429485725,,USD,924.3542868572,,0,,924.3542868572
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,TimedStorage-SIA-ByteHrs,,,,,,40.6881936836,,USD,0.5086024209,,0,,0.5086024209
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,TimedStorage-SIA-SmObjects,,,,,,0.0042699183,,USD,0.0000533758,,0,,0.0000533758
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-APN1-AWS-Out-Bytes,,,,,,2.59e-7,,USD,5.2e-9,,0,,5.2e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-APN2-AWS-Out-Bytes,,,,,,3.41e-7,,USD,6.8e-9,,0,,6.8e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-APS1-AWS-Out-Bytes,,,,,,0.0000419287,,USD,8.379e-7,,0,,8.379e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-APS2-AWS-Out-Bytes,,,,,,1.705e-7,,USD,3.4e-9,,0,,3.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-APS3-AWS-Out-Bytes,,,,,,1.705e-7,,USD,3.4e-9,,0,,3.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-CAN1-AWS-Out-Bytes,,,,,,1.705e-7,,USD,3.4e-9,,0,,3.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-CloudFront-Out-Bytes,,,,,,0.0021398021,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-EU-AWS-Out-Bytes,,,,,,0.0217507264,,USD,0.0004348228,,0,,0.0004348228
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-EUC1-AWS-Out-Bytes,,,,,,2.525e-7,,USD,5e-9,,0,,5e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-EUN1-AWS-Out-Bytes,,,,,,1.705e-7,,USD,3.4e-9,,0,,3.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-EUW2-AWS-Out-Bytes,,,,,,2.525e-7,,USD,5e-9,,0,,5e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-EUW3-AWS-Out-Bytes,,,,,,1.705e-7,,USD,3.4e-9,,0,,3.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-SAE1-AWS-In-Bytes,,,,,,0.0250899541,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-SAE1-AWS-Out-Bytes,,,,,,0.1290321679,,USD,0.0025806428,,0,,0.0025806428
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-USE2-AWS-Out-Bytes,,,,,,0.0073761602,,USD,0.0000737605,,0,,0.0000737605
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-USW1-AWS-Out-Bytes,,,,,,1.705e-7,,USD,3.4e-9,,0,,3.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE1-USW2-AWS-Out-Bytes,,,,,,0.0286916332,,USD,0.0005738328,,0,,0.0005738328
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USE2-Requests-Tier1,,,,,,2,,USD,0.00001,,0,,0.00001
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USW2-EU-AWS-Out-Bytes,,,,,,0.000155518,,USD,0.0000031121,,0,,0.0000031121
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USW2-Requests-Tier1,,,,,,842,,USD,0.00421,,0,,0.00421
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USW2-Requests-Tier2,,,,,,685,,USD,0.000274,,0,,0.000274
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USW2-TimedStorage-ByteHrs,,,,,,10.2210794559,,USD,0.2350848275,,0,,0.2350848275
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USW2-USE1-AWS-In-Bytes,,,,,,19.0984604538,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonS3,,,USW2-USE1-AWS-Out-Bytes,,,,,,0.0001522324,,USD,0.0000030442,,0,,0.0000030442
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,HeavyUsage:cache.m6g.large,,,,,,0,,USD,343.728,,0,,343.728
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,HeavyUsage:cache.m7g.large,,,,,,0,,USD,122.016,,0,,122.016
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,HeavyUsage:cache.m7g.xlarge,,,,,,0,,USD,244.032,,0,,244.032
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,HeavyUsage:cache.r7g.xlarge,,,,,,0,,USD,168.888,,0,,168.888
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,HeavyUsage:cache.t4g.medium,,,,,,0,,USD,505.92,,0,,505.92
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,HeavyUsage:cache.t4g.small,,,,,,0,,USD,126.48,,0,,126.48
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.c7gn.2xlarge,,,,,,12,,USD,12.216,,0,,12.216
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.m6g.2xlarge,,,,,,20,,USD,11.86,,0,,11.86
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.m6g.large,,,,,,1716,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.m6g.xlarge,,,,,,2714,,USD,397.98,,0,,397.98
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.m7g.large,,,,,,1500,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.m7g.xlarge,,,,,,1488,,USD,1.89,,0,,1.89
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.r7g.2xlarge,,,,,,12,,USD,6.111,,0,,6.111
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.r7g.xlarge,,,,,,734,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.t4g.medium,,,,,,12646,,USD,75.26025,,0,,75.26025
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.t4g.micro,,,,,,14136,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,NodeUsage:cache.t4g.small,,,,,,7440,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,USE1-ExtendedSupportYr1_Yr2-NodeUsage:cache.m6g.2xlarge,,,,,,20,,USD,9.48,,0,,9.48
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,USE1-ExtendedSupportYr1_Yr2-NodeUsage:cache.m6g.large,,,,,,1716,,USD,204.204,,0,,204.204
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,USE1-ExtendedSupportYr1_Yr2-NodeUsage:cache.m6g.xlarge,,,,,,2688,,USD,639.744,,0,,639.744
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,USE1-ExtendedSupportYr1_Yr2-NodeUsage:cache.t4g.medium,,,,,,1488,,USD,77.376,,0,,77.376
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonElastiCache,,,USE1-ExtendedSupportYr1_Yr2-NodeUsage:cache.t4g.micro,,,,,,1488,,USD,19.344,,0,,19.344
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,CW:AlarmMonitorUsage,,,,,,31.9677419442,,USD,3.1967742162,,0,,3.1967742162
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,CW:GMD-Metrics,,,,,,53283205,,USD,532.83205,,0,,532.83205
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,CW:MetricMonitorUsage,,,,,,140.4422042875,,USD,41.9721773526,,0,,41.9721773526
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,CW:Requests,,,,,,455501,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,DashboardsUsageHour,,,,,,0.999999984,,USD,2.999999952,,0,,2.999999952
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,DashboardsUsageHour-Basic,,,,,,1.87499997,,USD,4.645161216,,0,,4.645161216
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,SAE1-CW:GMD-Metrics,,,,,,86891,,USD,1.216474,,0,,1.216474
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,SAE1-TimedStorage-ByteHrs,,,,,,0.0000057071,,USD,2.1e-7,,0,,2.1e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,USE1-CW:DatabaseInsights-vCPU-Hours,,,,,,774,,USD,9.675,,0,,9.675
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,USE1-DataProcessing-Bytes,,,,,,46.3910461172,,USD,23.1955231818,,0,,23.1955231818
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,USE1-DataScanned-Bytes,,,,,,0.6346610338,,USD,0.0031733053,,0,,0.0031733053
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,USE1-TimedStorage-ByteHrs,,,,,,196.860373224,,USD,5.9058111994,,0,,5.9058111994
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,USE1-VendedLog-Bytes,,,,,,773.368301896,,USD,386.6841510758,,0,,386.6841510758
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,USE1-VendedLog-Bytes-WAFLogs,,,,,,2.1775919531,,USD,1.0887959947,,0,,1.0887959947
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonCloudWatch,,,USW2-TimedStorage-ByteHrs,,,,,,0.0000019375,,USD,5.89e-8,,0,,5.89e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEFS,,,USE1-ArchiveTimedStorage-ByteHrs,,,,,,0.0009994152,,USD,0.0000079608,,0,,0.0000079608
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEFS,,,USE1-ArchiveTimedStorage-SmallFiles,,,,,,0.0004692408,,USD,0.00000372,,0,,0.00000372
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEFS,,,USE1-ETDataAccess-Bytes,,,,,,3.4864301858,,USD,0.1105431839,,0,,0.1105431839
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEFS,,,USE1-IADataAccess-Bytes,,,,,,0.0079345704,,USD,0.0000793456,,0,,0.0000793456
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEFS,,,USE1-IATimedStorage-ET-ByteHrs,,,,,,0.0012526216,,USD,0.0000200549,,0,,0.0000200549
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEFS,,,USE1-IATimedStorage-ET-SmallFiles,,,,,,0.0069141425,,USD,0.0001106341,,0,,0.0001106341
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonEFS,,,USE1-TimedStorage-ByteHrs,,,,,,0.0055039163,,USD,0.0016511428,,0,,0.0016511428
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonECR,,,DataTransfer-Out-Bytes,,,,,,3.7176110257,,USD,0.3265204645,,0,,0.3265204645
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonECR,,,SAE1-TimedStorage-ByteHrs,,,,,,81.0248759064,,USD,8.1024875832,,0,,8.1024875832
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonECR,,,TimedStorage-ByteHrs,,,,,,1871.42914089,,USD,187.1429146165,,0,,187.1429146165
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Aurora:BackupUsage,CreateDBInstance:0021,,,,,24314.35877534,,USD,510.6015342824,,0,,510.6015342824
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Aurora:IO-OptimizedStorageUsage,CreateDBInstance:0021,,,,,5524.5375857616,,USD,1243.0209567975,,0,,1243.0209567975
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Aurora:ServerlessV2Usage,CreateDBInstance:0021,,,,,48.2511111124,,USD,5.7901333333,,0,,5.7901333333
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Aurora:StorageIOUsage,CreateDBInstance:0021,,,,,1191126,,USD,0.2382252,,0,,0.2382252
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Aurora:StorageUsage,CreateDBInstance:0021,,,,,2.6190298383,,USD,0.2619029899,,0,,0.2619029899
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,CPUCredits:db.t4g,CreateDBInstance:0014,,db.t4g (PostgreSQL),,,389.004668,,USD,29.1753501,,0,,29.1753501
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,CPUCredits:db.t4g,CreateDBInstance:0021,,db.t4g (Aurora PostgreSQL),,,5.944555,,USD,0.53500995,,0,,0.53500995
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,DataTransfer-In-Bytes,CreateDBInstance:0021,,,,,0.027040935,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,DataTransfer-In-Bytes,Not Applicable,,,,,0.1407346608,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,DataTransfer-Out-Bytes,CreateDBInstance:0021,,,,,0.0273845852,,USD,0.0024103686,,0,,0.0024103686
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,DataTransfer-Out-Bytes,Not Applicable,,,,,0.1822740871,,USD,0.0160682203,,0,,0.0160682203
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,ExtendedSupport:Yr1-Yr2:PostgreSQL13,CreateDBInstance:0014,,,,,4464,,USD,446.4,,0,,446.4
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.m6g.2xl,CreateDBInstance:0014,,db.m6g.2xl (PostgreSQL),,,0,,USD,498.0808759444,,0,,498.0808759444
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.m6g.4xl,CreateDBInstance:0014,,db.m6g.4xl (PostgreSQL),,,0,,USD,104.6245943333,,0,,104.6245943333
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.m6g.xl,CreateDBInstance:0014,,db.m6g.xl (PostgreSQL),,,0,,USD,249.0011579167,,0,,249.0011579167
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.m7g.xl,CreateDBInstance:0014,,db.m7g.xl (PostgreSQL),,,0,,USD,386.136,,0,,386.136
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.r8g.12xl,CreateDBInstance:0021,,db.r8g.12xl (Aurora PostgreSQL),,,0,,USD,3301.872,,0,,3301.872
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.r8g.2xl,CreateDBInstance:0021,,db.r8g.2xl (Aurora PostgreSQL),,,0,,USD,550.56,,0,,550.56
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.r8g.4xl,CreateDBInstance:0021,,db.r8g.4xl (Aurora PostgreSQL),,,0,,USD,1100.376,,0,,1100.376
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.r8g.8xl,CreateDBInstance:0021,,db.r8g.8xl (Aurora PostgreSQL),,,0,,USD,2201.496,,0,,2201.496
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.r8g.xl,CreateDBInstance:0021,,db.r8g.xl (Aurora PostgreSQL),,,0,,USD,275.28,,0,,275.28
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,HeavyUsage:db.t4g.medium,CreateDBInstance:0014,,db.t4g.medium (PostgreSQL),,,0,,USD,3480.854375,,0,,3480.854375
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsage:db.m6g.large,CreateDBInstance:0014,,db.m6g.large (PostgreSQL),,,231.056944,,USD,10.812,,0,,10.812
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsage:db.t3.micro,CreateDBInstance:0014,,db.t3.micro (PostgreSQL),,,744,,USD,13.392,,0,,13.392
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsage:db.t3.small,CreateDBInstance:0020,,,,,744,,USD,55.8,,0,,55.8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsage:db.t4g.large,CreateDBInstance:0021,,db.t4g.large (Aurora PostgreSQL),,,11.061372,,USD,1.614960312,,0,,1.614960312
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsage:db.t4g.medium,CreateDBInstance:0014,,db.t4g.medium (PostgreSQL),,,513.068332,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsage:db.t4g.micro,CreateDBInstance:0014,,db.t4g.micro (PostgreSQL),,,1197.890554,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsage:db.t4g.small,CreateDBInstance:0014,,db.t4g.small (PostgreSQL),,,2195.643032,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsageIOOptimized:db.r8g.16xl,CreateDBInstance:0021,,db.r8g.16xl (Aurora PostgreSQL),,,744,,USD,1725.8509322952,,0,,1725.8509322952
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsageIOOptimized:db.r8g.4xl,CreateDBInstance:0021,,db.r8g.4xl (Aurora PostgreSQL),,,1488,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,InstanceUsageIOOptimized:db.t4g.large,CreateDBInstance:0021,,db.t4g.large (Aurora PostgreSQL),,,269.919157,,USD,51.28463983,,0,,51.28463983
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.m6g.2xl,CreateDBInstance:0014,,db.m6g.2xl (PostgreSQL),,,950.710276,,USD,242.767557456,,0,,242.767557456
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.m6g.4xl,CreateDBInstance:0014,,db.m6g.4xl (PostgreSQL),,,87.93611,,USD,213.651123204,,0,,213.651123204
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.m6g.xl,CreateDBInstance:0014,,db.m6g.xl (PostgreSQL),,,1.974443,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.m7g.xl,CreateDBInstance:0014,,db.m7g.xl (PostgreSQL),,,744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.m8g.xl,CreateDBInstance:0014,,db.m8g.xl (PostgreSQL),,,0.451943,,USD,0.303705696,,0,,0.303705696
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.r8g.xl,CreateDBInstance:0014,,db.r8g.xl (PostgreSQL),,,534.862222,,USD,511.328284232,,0,,511.328284232
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.t3.micro,CreateDBInstance:0002,,db.t3.micro (MySQL),,,744,,USD,25.296,,0,,25.296
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.t3.micro,CreateDBInstance:0014,,db.t3.micro (PostgreSQL),,,744,,USD,26.784,,0,,26.784
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.t3.small,CreateDBInstance:0020,,,,,744,,USD,111.6,,0,,111.6
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.t4g.2xlarge,CreateDBInstance:0014,,db.t4g.2xlarge (PostgreSQL),,,1092.176942,,USD,1129.310958028,,0,,1129.310958028
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.t4g.large,CreateDBInstance:0014,,db.t4g.large (PostgreSQL),,,4042.556109,,USD,148.5790368455,,0,,148.5790368455
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.t4g.medium,CreateDBInstance:0014,,db.t4g.medium (PostgreSQL),,,7853.779997,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.t4g.micro,CreateDBInstance:0014,,db.t4g.micro (PostgreSQL),,,11768.008609,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.t4g.small,CreateDBInstance:0014,,db.t4g.small (PostgreSQL),,,28272,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,Multi-AZUsage:db.t4g.xlarge,CreateDBInstance:0014,,db.t4g.xlarge (PostgreSQL),,,3290.707774,,USD,1104.1997110128,,0,,1104.1997110128
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:ChargedBackupUsage,CreateDBInstance,,,,,40.1177709311,,USD,3.8111882385,,0,,3.8111882385
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:ChargedBackupUsage,CreateDBInstance:0014,,,,,10346.9513676901,,USD,982.9603799322,,0,,982.9603799322
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:GP2-Storage,CreateDBInstance:0014,,,,,1235.7971027712,,USD,142.1166666935,,0,,142.1166666935
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:GP2-Storage,CreateDBInstance:0020,,,,,19.9999999776,,USD,2.2999999632,,0,,2.2999999632
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:GP3-Storage,CreateDBInstance:0014,,,,,150.0143518325,,USD,17.2516504844,,0,,17.2516504844
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:Multi-AZ-GP2-Storage,CreateDBInstance:0014,,,,,2241.4193537328,,USD,515.5264510896,,0,,515.5264510896
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:Multi-AZ-GP2-Storage,CreateDBInstance:0020,,,,,100.0000000368,,USD,23.000000004,,0,,23.000000004
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:Multi-AZ-GP3-PIOPS,CreateDBInstance:0014,,,,,17774.1845878125,,USD,710.9673835054,,0,,710.9673835054
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:Multi-AZ-GP3-Storage,CreateDBInstance:0002,,,,,19.9999999776,,USD,4.6000000008,,0,,4.6000000008
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:Multi-AZ-GP3-Storage,CreateDBInstance:0014,,,,,19794.1926127215,,USD,4552.6643010444,,0,,4552.6643010444
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,RDS:Multi-AZ-GP3-Throughput,CreateDBInstance:0014,,,,,499.9988799583,,USD,79.9998207726,,0,,79.9998207726
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,SAE1-CPUCredits:db.t3,CreateDBInstance:0020,,,,,299.926534,,USD,22.49449005,,0,,22.49449005
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,SAE1-DataTransfer-In-Bytes,Not Applicable,,,,,0.000870228,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,SAE1-DataTransfer-Out-Bytes,Not Applicable,,,,,0.0008706528,,USD,0.0001267428,,0,,0.0001267428
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,SAE1-InstanceUsage:db.t3.small,CreateDBInstance:0020,,,,,744,,USD,80.352,,0,,80.352
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,SAE1-RDS:ChargedBackupUsage,CreateDBInstance:0020,,,,,2.851193664,,USD,0.2708633979,,0,,0.2708633979
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,SAE1-RDS:GP2-Storage,CreateDBInstance:0020,,,,,29.9999999664,,USD,6.5700000288,,0,,6.5700000288
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,USE1-DataTransfer-xAZ-In-Bytes,CreateDBInstance:0021,,,,,0.2470084294,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,USE1-DataTransfer-xAZ-Out-Bytes,CreateDBInstance:0021,,,,,0.2938206572,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,USE1-RDS:ProxyUsage,CreateDBProxy:0014,,,,,1488,,USD,22.32,,0,,22.32
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonRDS,,,USE1:PI_LTR_FMR:Provisioned,CreateDBInstance:0021,,,,,96.0000000264,,USD,144.0000000768,,0,,144.0000000768
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,DataTransfer-In-Bytes,CreateVpnConnection,,,,,191.2521107251,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,DataTransfer-Out-Bytes,CreateVpnConnection,,,,,1408.8747758369,,USD,124.3327926198,,0,,124.3327926198
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-AFS1-AWS-In-Bytes,CreateVpnConnection,,,,,6.33e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-AFS1-AWS-Out-Bytes,CreateVpnConnection,,,,,6.33e-8,,USD,8.7e-9,,0,,8.7e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APE1-AWS-In-Bytes,CreateVpnConnection,,,,,5.592e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APE1-AWS-Out-Bytes,CreateVpnConnection,,,,,5.592e-7,,USD,7.68e-8,,0,,7.68e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APE2-AWS-In-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APE2-AWS-Out-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,1.03e-8,,0,,1.03e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APN1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000021702,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APN1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000021702,,USD,2.998e-7,,0,,2.998e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APN2-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000015906,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APN2-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000015906,,USD,2.193e-7,,0,,2.193e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APN3-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APN3-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,5.1e-9,,0,,5.1e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APS1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0003070353,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APS1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000012768,,USD,1.763e-7,,0,,1.763e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APS2-AWS-In-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APS2-AWS-Out-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,1.03e-8,,0,,1.03e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APS8-AWS-In-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APS8-AWS-Out-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,1.02e-8,,0,,1.02e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APS9-AWS-In-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-APS9-AWS-Out-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,2.08e-8,,0,,2.08e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-BKK1-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-BKK1-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,5.1e-9,,0,,5.1e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-CAN1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000015291,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-CAN1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000015291,,USD,2.111e-7,,0,,2.111e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-CCU1-AWS-In-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-CCU1-AWS-Out-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,1.03e-8,,0,,1.03e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-DEL1-AWS-In-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-DEL1-AWS-Out-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,1.03e-8,,0,,1.03e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-DataTransfer-In-Bytes,CreateVpnConnection,,,,,1.050124346,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-DataTransfer-Out-Bytes,CreateVpnConnection,,,,,0.8565932042,,USD,0.1243260705,,0,,0.1243260705
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-ESC1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000091741,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-ESC1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000091741,,USD,0.0000012563,,0,,0.0000012563
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EU-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000016066,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EU-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000016066,,USD,2.218e-7,,0,,2.218e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EUC1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000021736,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EUC1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000021736,,USD,2.997e-7,,0,,2.997e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EUN1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000018467,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EUN1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000018467,,USD,2.548e-7,,0,,2.548e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EUW2-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000014882,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EUW2-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000014882,,USD,2.058e-7,,0,,2.058e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EUW3-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000018076,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-EUW3-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000018076,,USD,2.496e-7,,0,,2.496e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-IAH1-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-IAH1-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,5.1e-9,,0,,5.1e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-LAS1-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-LAX1-AWS-In-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-LAX1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,1.54e-8,,0,,1.54e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-LIM1-AWS-In-Bytes,CreateVpnConnection,,,,,7.82e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-LIM1-AWS-Out-Bytes,CreateVpnConnection,,,,,7.82e-8,,USD,1.08e-8,,0,,1.08e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-LOS1-AWS-In-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-LOS1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,1.54e-8,,0,,1.54e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-MCI2-AWS-In-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-MCI2-AWS-Out-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,1.03e-8,,0,,1.03e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-MCT1-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-MCT1-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,5.1e-9,,0,,5.1e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-MIA1-AWS-In-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-MIA1-AWS-Out-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,1.03e-8,,0,,1.03e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-NYC1-AWS-In-Bytes,CreateVpnConnection,,,,,0.000001531,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-NYC1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.000001531,,USD,2.117e-7,,0,,2.117e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-PDX1-AWS-In-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-PDX1-AWS-Out-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,1.03e-8,,0,,1.03e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-PHL1-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-PHL1-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,5.1e-9,,0,,5.1e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-PHX1-AWS-In-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-PHX1-AWS-Out-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,1.02e-8,,0,,1.02e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-PublicIPv4:IdleAddress,AllocateAddressVPC,,,,,744,,USD,3.72,,0,,3.72
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-PublicIPv4:InUseAddress,AssociateAddressVPC,,,,,5208,,USD,26.04,,0,,26.04
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-PublicIPv4:InUseAddress,CreateVpnConnection,,,,,2976,,USD,14.88,,0,,14.88
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-QRO1-AWS-In-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-QRO1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,1.54e-8,,0,,1.54e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-TPE1-AWS-In-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-TPE1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,1.54e-8,,0,,1.54e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-USE1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000500171,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-USE1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000500171,,USD,0.0000068803,,0,,0.0000068803
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-USE2-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000025828,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-USE2-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000025306,,USD,3.491e-7,,0,,3.491e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-USW2-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000017853,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-USW2-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000017853,,USD,2.466e-7,,0,,2.466e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-VPN-Usage-Hours:ipsec.1,CreateVpnConnection,,,,,1488,,USD,74.4,,0,,74.4
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-WAW1-AWS-In-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,SAE1-WAW1-AWS-Out-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,1.02e-8,,0,,1.02e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-AFS1-AWS-In-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-AFS1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,2.2e-9,,0,,2.2e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-AKL1-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-AKL1-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,7e-10,,0,,7e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APE1-AWS-In-Bytes,CreateVpnConnection,,,,,4.753e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APE1-AWS-Out-Bytes,CreateVpnConnection,,,,,4.753e-7,,USD,9.2e-9,,0,,9.2e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APE2-AWS-In-Bytes,CreateVpnConnection,,,,,5.595e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APE2-AWS-Out-Bytes,CreateVpnConnection,,,,,5.595e-7,,USD,1.05e-8,,0,,1.05e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APN1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000080278,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APN1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000080278,,USD,1.608e-7,,0,,1.608e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APN2-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000075989,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APN2-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000075989,,USD,1.524e-7,,0,,1.524e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APN3-AWS-In-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APN3-AWS-Out-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,2.9e-9,,0,,2.9e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0013813361,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000054205,,USD,1.085e-7,,0,,1.085e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS2-AWS-In-Bytes,CreateVpnConnection,,,,,2.161e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS2-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,2.2e-9,,0,,2.2e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS3-AWS-In-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS3-AWS-Out-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,1.5e-9,,0,,1.5e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS4-AWS-In-Bytes,CreateVpnConnection,,,,,2.982e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS4-AWS-Out-Bytes,CreateVpnConnection,,,,,2.982e-7,,USD,5.8e-9,,0,,5.8e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS5-AWS-In-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS5-AWS-Out-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,1.4e-9,,0,,1.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS8-AWS-In-Bytes,CreateVpnConnection,,,,,1.492e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS8-AWS-Out-Bytes,CreateVpnConnection,,,,,1.492e-7,,USD,2.8e-9,,0,,2.8e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS9-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000012315,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-APS9-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000012315,,USD,9.86e-8,,0,,9.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-ATL1-AWS-In-Bytes,CreateVpnConnection,,,,,1.49e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-ATL1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.49e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-BKK1-AWS-In-Bytes,CreateVpnConnection,,,,,1.863e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-BKK1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.863e-7,,USD,3.7e-9,,0,,3.7e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-BOS1-AWS-In-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-BOS1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-BUE1-AWS-In-Bytes,CreateVpnConnection,,,,,2.273e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-BUE1-AWS-Out-Bytes,CreateVpnConnection,,,,,2.273e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-CAN1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000062859,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-CAN1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000062859,,USD,1.253e-7,,0,,1.253e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-CAN2-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-CAN2-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,7e-10,,0,,7e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-CCU1-AWS-In-Bytes,CreateVpnConnection,,,,,2.647e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-CCU1-AWS-Out-Bytes,CreateVpnConnection,,,,,2.647e-7,,USD,5.1e-9,,0,,5.1e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-CHI1-AWS-In-Bytes,CreateVpnConnection,,,,,2.609e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-CHI1-AWS-Out-Bytes,CreateVpnConnection,,,,,2.609e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-DEL1-AWS-In-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-DEL1-AWS-Out-Bytes,CreateVpnConnection,,,,,7.46e-8,,USD,1.4e-9,,0,,1.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-DFW1-AWS-In-Bytes,CreateVpnConnection,,,,,1.155e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-DFW1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.155e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-DataTransfer-xAZ-In-Bytes,VpcEndpoint,,,,,273.4293035975,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-DataTransfer-xAZ-Out-Bytes,VpcEndpoint,,,,,511.345882386,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-ESC1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000431505,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-ESC1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000431505,,USD,0.0000021927,,0,,0.0000021927
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EU-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000072697,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EU-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000072697,,USD,1.454e-7,,0,,1.454e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUC1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000076719,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUC1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000076719,,USD,1.531e-7,,0,,1.531e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUC2-AWS-In-Bytes,CreateVpnConnection,,,,,4.1e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUC2-AWS-Out-Bytes,CreateVpnConnection,,,,,4.1e-8,,USD,8e-10,,0,,8e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUN1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000072221,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUN1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000072221,,USD,1.449e-7,,0,,1.449e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUS1-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUS1-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,7e-10,,0,,7e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUW2-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000061124,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUW2-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000061124,,USD,1.217e-7,,0,,1.217e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUW3-AWS-In-Bytes,CreateVpnConnection,,,,,0.000007992,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-EUW3-AWS-Out-Bytes,CreateVpnConnection,,,,,0.000007992,,USD,1.597e-7,,0,,1.597e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-HAM1-AWS-In-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-HAM1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,2.9e-9,,0,,2.9e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-ILC1-AWS-In-Bytes,CreateVpnConnection,,,,,1.006e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-ILC1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.006e-7,,USD,2e-9,,0,,2e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-LAS1-AWS-In-Bytes,CreateVpnConnection,,,,,2.609e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-LAS1-AWS-Out-Bytes,CreateVpnConnection,,,,,2.609e-7,,USD,5.1e-9,,0,,5.1e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MCI2-AWS-In-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MCI2-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MCT1-AWS-In-Bytes,CreateVpnConnection,,,,,2.608e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MCT1-AWS-Out-Bytes,CreateVpnConnection,,,,,2.608e-7,,USD,5.2e-9,,0,,5.2e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MES1-AWS-In-Bytes,CreateVpnConnection,,,,,2.05e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MES1-AWS-Out-Bytes,CreateVpnConnection,,,,,2.05e-7,,USD,4e-9,,0,,4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MIA1-AWS-In-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MIA1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MNL1-AWS-In-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MNL1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,2.9e-9,,0,,2.9e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MSP1-AWS-In-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MSP1-AWS-Out-Bytes,CreateVpnConnection,,,,,7.45e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MXC1-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-MXC1-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,7e-10,,0,,7e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-NYC1-AWS-In-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-NYC1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.491e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PDX1-AWS-In-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PDX1-AWS-Out-Bytes,CreateVpnConnection,,,,,3.73e-8,,USD,7e-10,,0,,7e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PER1-AWS-In-Bytes,CreateVpnConnection,,,,,8.2e-8,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PER1-AWS-Out-Bytes,CreateVpnConnection,,,,,8.2e-8,,USD,1.6e-9,,0,,1.6e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PHL1-AWS-In-Bytes,CreateVpnConnection,,,,,1.49e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PHL1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.49e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PHX1-AWS-In-Bytes,CreateVpnConnection,,,,,2.609e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PHX1-AWS-Out-Bytes,CreateVpnConnection,,,,,2.609e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PublicIPv4:IdleAddress,AllocateAddressVPC,,,,,0.902795,,USD,0.004513975,,0,,0.004513975
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PublicIPv4:InUseAddress,AssociateAddressVPC,,,,,12300.420558,,USD,61.50210279,,0,,61.50210279
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PublicIPv4:InUseAddress,CreateVpnConnection,,,,,13392,,USD,66.96,,0,,66.96
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PublicIPv4:InUseAddress,DescribeNetworkInterfaces,,,,,3558.984445,,USD,17.794922225,,0,,17.794922225
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-PublicIPv4:InUseAddress,RunInstances,,,,,1081.091945,,USD,5.405459725,,0,,5.405459725
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-QRO1-AWS-In-Bytes,CreateVpnConnection,,,,,1.863e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-QRO1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.863e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-SCL1-AWS-In-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-SCL1-AWS-Out-Bytes,CreateVpnConnection,,,,,1.118e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-USE2-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000100917,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-USE2-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000098235,,USD,9.76e-8,,0,,9.76e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-USW1-AWS-In-Bytes,CreateVpnConnection,,,,,0.0000019412,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-USW1-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000016618,,USD,3.29e-8,,0,,3.29e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-USW2-AWS-In-Bytes,CreateVpnConnection,,,,,0.000011593,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-USW2-AWS-Out-Bytes,CreateVpnConnection,,,,,0.0000114812,,USD,2.297e-7,,0,,2.297e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-VpcEndpoint-Bytes,VpcEndpoint,,,,,1571.1623079622,,USD,15.7116230821,,0,,15.7116230821
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,USE1-VpcEndpoint-Hours,VpcEndpoint,,,,,12992,,USD,129.92,,0,,129.92
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AmazonVPC,,,VPN-Usage-Hours:ipsec.1,CreateVpnConnection,,,,,6696,,USD,334.8,,0,,334.8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Backup,AWS Backup,,USE1-WarmStorage-ByteHrs-EFS,,,,,,0.0074133584,,USD,0.0003706699,,0,,0.0003706699
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Certificate Manager,AWS Certificate Manager,,USE1-IssuePublicCertificateWildcardDomain,,,,,,2,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS CloudFormation,AWS CloudFormation,,USE1-Resource-Operation-Count,,,,,,10,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS CloudShell,AWS CloudShell,,DataTransfer-Regional-Bytes,,,,,,0.0000036806,,USD,3.68e-8,,0,,3.68e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS CloudShell,AWS CloudShell,,USE1-DataTransfer-xAZ-In-Bytes,,,,,,0.0020080851,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS CloudShell,AWS CloudShell,,USE1-DataTransfer-xAZ-Out-Bytes,,,,,,0.0070583224,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Config,AWS Config,,SAE1-ConfigurationItemRecorded,,,,,,411,,USD,1.233,,0,,1.233
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Cost Explorer,AWS Cost Explorer,,USE1-APIRequest,,,,,,16,,USD,0.16,,0,,0.16
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Directory Service,AWS Directory Service,,SAE1-Std-MicrosoftAD-DC-Usage,,,,,,1488.417649167,,USD,128.0039178286,,0,,128.0039178286
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,APN1-Catalog-Request,,,,,,220,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,APN2-Catalog-Request,,,,,,221,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,APN3-Catalog-Request,,,,,,221,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,APS1-Catalog-Request,,,,,,220,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,APS2-Catalog-Request,,,,,,220,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,APS3-Catalog-Request,,,,,,222,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,CAN1-Catalog-Request,,,,,,221,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,EU-Catalog-Request,,,,,,214,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,EUC1-Catalog-Request,,,,,,220,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,EUN1-Catalog-Request,,,,,,222,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,EUW2-Catalog-Request,,,,,,221,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,EUW3-Catalog-Request,,,,,,220,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,SAE1-Catalog-Request,,,,,,250,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,USE1-Catalog-Request,,,,,,227,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,USE2-Catalog-Request,,,,,,216,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,USW1-Catalog-Request,,,,,,220,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Glue,AWS Glue,,USW2-Catalog-Request,,,,,,199,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS IoT,AWS IoT,,USE1-ConnectionMinutes,,,,,,2,,USD,1.6e-7,,0,,1.6e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS IoT,AWS IoT,,USE1-Messages,,,,,,2,,USD,0.000002,,0,,0.000002
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,ap-northeast-1-KMS-Requests,,,,,,222,,USD,0.000537,,0,,0.000537
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,ap-northeast-2-KMS-Requests,,,,,,220,,USD,0.000531,,0,,0.000531
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,ap-northeast-3-KMS-Requests,,,,,,63,,USD,0.000153,,0,,0.000153
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,ap-south-1-KMS-Requests,,,,,,259,,USD,0.000618,,0,,0.000618
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,ap-southeast-1-KMS-Requests,,,,,,221,,USD,0.000534,,0,,0.000534
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,ap-southeast-2-KMS-Requests,,,,,,220,,USD,0.000531,,0,,0.000531
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,ca-central-1-KMS-Requests,,,,,,219,,USD,0.000531,,0,,0.000531
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,eu-central-1-KMS-Requests,,,,,,222,,USD,0.00054,,0,,0.00054
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,eu-north-1-KMS-Requests,,,,,,376,,USD,0.000909,,0,,0.000909
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,eu-west-1-KMS-Requests,,,,,,222,,USD,0.000537,,0,,0.000537
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,eu-west-2-KMS-Requests,,,,,,221,,USD,0.000537,,0,,0.000537
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,eu-west-3-KMS-Requests,,,,,,220,,USD,0.000531,,0,,0.000531
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,sa-east-1-KMS-Keys,,,,,,0.999999984,,USD,0.999999984,,0,,0.999999984
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,sa-east-1-KMS-Requests,,,,,,8161,,USD,0.019314,,0,,0.019314
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,us-east-1-KMS-Keys,,,,,,15.12768793,,USD,15.12768793,,0,,15.12768793
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,us-east-1-KMS-Requests,,,,,,59772,,USD,0.14043,,0,,0.14043
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,us-east-2-KMS-Requests,,,,,,379,,USD,0.000918,,0,,0.000918
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,us-west-1-KMS-Requests,,,,,,63,,USD,0.000153,,0,,0.000153
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Key Management Service,AWS Key Management Service,,us-west-2-KMS-Requests,,,,,,224,,USD,0.000543,,0,,0.000543
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,DataTransfer-In-Bytes,,,,,,0.0019159968,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,DataTransfer-Out-Bytes,,,,,,0.000951593,,USD,0.000084216,,0,,0.000084216
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,Lambda-GB-Second,,,,,,734.349625,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,Lambda-GB-Second-ARM,,,,,,4363.297125,,USD,0.0002168427,,0,,0.0002168427
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,Request,,,,,,1848,,USD,0.0002692,,0,,0.0002692
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,Request-ARM,,,,,,12922,,USD,0.001911,,0,,0.001911
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,USE1-DataTransfer-xAZ-In-Bytes,,,,,,0.2028683479,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,USE1-DataTransfer-xAZ-Out-Bytes,,,,,,0.3189416048,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,USE1-SAE1-AWS-In-Bytes,,,,,,0.0017844142,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Lambda,AWS Lambda,,USE1-SAE1-AWS-Out-Bytes,,,,,,0.0016170702,,USD,0.0000323413,,0,,0.0000323413
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,APN1-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,APN2-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,APN3-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,APS1-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,APS2-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,APS3-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,CAN1-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,EU-AWSSecretsManager-APIRequests,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,EUC1-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,EUN1-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,EUW2-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,EUW3-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,SAE1-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,USE1-AWSSecretsManager-Secrets,,,,,,2.999999952,,USD,1.1999999808,,0,,1.1999999808
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,USE1-AWSSecretsManagerAPIRequest,,,,,,387,,USD,0.001935,,0,,0.001935
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,USE2-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,USW1-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Secrets Manager,AWS Secrets Manager,,USW2-AWSSecretsManagerAPIRequest,,,,,,62,,USD,0.00031,,0,,0.00031
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Security Hub,AWS Security Hub,,USE2-PaidComplianceCheck,,,,,,62,,USD,0.062,,0,,0.062
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Security Hub,AWS Security Hub,,USE2-SecurityHubProduct:FreeFindingsIngestion,,,,,,62,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,APN1-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,APN2-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,APN3-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,APS1-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,APS2-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,APS3-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,CAN1-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,EU-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,EUC1-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,EUN1-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,EUW2-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,EUW3-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,SAE1-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,USE1-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,USE2-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,USW1-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Service Catalog,AWS Service Catalog,,USW2-SC-API-Calls,,,,,,32,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN1-EU-AWS-In-Bytes,,,,,,0.0000319021,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN1-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,5.27e-8,,0,,5.27e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN1-USE1-AWS-In-Bytes,,,,,,0.0000017527,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN1-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,1.7e-9,,0,,1.7e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN2-EU-AWS-In-Bytes,,,,,,0.0000319021,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN2-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,4.65e-8,,0,,4.65e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN2-USE1-AWS-In-Bytes,,,,,,0.0000017527,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN2-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,1.5e-9,,0,,1.5e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN3-EU-AWS-In-Bytes,,,,,,0.0000319021,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN3-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,5.27e-8,,0,,5.27e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN3-USE1-AWS-In-Bytes,,,,,,0.0000017527,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APN3-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,1.7e-9,,0,,1.7e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS1-EU-AWS-In-Bytes,,,,,,0.0000319021,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS1-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,5.27e-8,,0,,5.27e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS1-USE1-AWS-In-Bytes,,,,,,0.0000017527,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS1-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,1.7e-9,,0,,1.7e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS2-EU-AWS-In-Bytes,,,,,,0.0000319021,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS2-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,5.58e-8,,0,,5.58e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS2-USE1-AWS-In-Bytes,,,,,,0.0000017527,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS2-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,1.8e-9,,0,,1.8e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS3-EU-AWS-In-Bytes,,,,,,0.0000316727,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS3-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,4.96e-8,,0,,4.96e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS3-USE1-AWS-In-Bytes,,,,,,0.0000017453,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,APS3-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,1.6e-9,,0,,1.6e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,CAN1-EU-AWS-In-Bytes,,,,,,0.0000317874,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,CAN1-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,1.24e-8,,0,,1.24e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,CAN1-USE1-AWS-In-Bytes,,,,,,0.000001749,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,CAN1-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,4e-10,,0,,4e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EU-USE1-AWS-In-Bytes,,,,,,0.0000017434,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EU-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,4e-10,,0,,4e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUC1-EU-AWS-In-Bytes,,,,,,0.0000317874,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUC1-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,1.24e-8,,0,,1.24e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUC1-USE1-AWS-In-Bytes,,,,,,0.000001749,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUC1-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,4e-10,,0,,4e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUN1-EU-AWS-In-Bytes,,,,,,0.0000316727,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUN1-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,1.24e-8,,0,,1.24e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUN1-USE1-AWS-In-Bytes,,,,,,0.0000017453,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUN1-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,4e-10,,0,,4e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUW2-EU-AWS-In-Bytes,,,,,,0.0000316138,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUW2-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,1.24e-8,,0,,1.24e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUW2-USE1-AWS-In-Bytes,,,,,,0.0000017434,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUW2-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,4e-10,,0,,4e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUW3-EU-AWS-In-Bytes,,,,,,0.0000316138,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUW3-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,1.24e-8,,0,,1.24e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUW3-USE1-AWS-In-Bytes,,,,,,0.0000017434,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,EUW3-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,4e-10,,0,,4e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,SAE1-EU-AWS-In-Bytes,,,,,,0.0000316138,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,SAE1-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,8.06e-8,,0,,8.06e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,SAE1-USE1-AWS-In-Bytes,,,,,,0.0000017434,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,SAE1-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,2.6e-9,,0,,2.6e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USE1-EU-AWS-In-Bytes,,,,,,0.0000316138,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USE1-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,1.24e-8,,0,,1.24e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USE2-EU-AWS-In-Bytes,,,,,,0.0000316138,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USE2-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,1.24e-8,,0,,1.24e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USE2-USE1-AWS-In-Bytes,,,,,,0.0000017434,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USE2-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,2e-10,,0,,2e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USW1-EU-AWS-In-Bytes,,,,,,0.0000316138,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USW1-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,1.24e-8,,0,,1.24e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USW1-USE1-AWS-In-Bytes,,,,,,0.0000017434,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USW1-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,4e-10,,0,,4e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USW2-EU-AWS-In-Bytes,,,,,,0.0000316138,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USW2-EU-AWS-Out-Bytes,,,,,,5.766e-7,,USD,1.24e-8,,0,,1.24e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USW2-USE1-AWS-In-Bytes,,,,,,0.0000017434,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS Step Functions,AWS Step Functions,,USW2-USE1-AWS-Out-Bytes,,,,,,1.86e-8,,USD,4e-10,,0,,4e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS WAF,AWS WAF,,USE1-RequestV2-Tier1,,,,,,4577876520,,USD,2746.725912,,0,,2746.725912
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS WAF,AWS WAF,,USE1-RuleV2,,,,,,32.9999999184,,USD,32.9999999184,,0,,32.9999999184
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS WAF,AWS WAF,,USE1-WebACLV2,,,,,,2.999999952,,USD,14.99999976,,0,,14.99999976
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,AWS X-Ray,AWS X-Ray,,USE1-XRay-TracesAccessed,,,,,,2,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon CloudFront,Amazon CloudFront,,US-DataTransfer-Out-Bytes,,,,,,0.0005569207,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon CloudFront,Amazon CloudFront,,US-Requests-Tier2-HTTPS,,,,,,53,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Comprehend,Amazon Comprehend,,USE2-DetectDominantLanguage,,,,,,1907647,,USD,190.7647,,0,,190.7647
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Container Registry Public,Amazon Elastic Container Registry Public,,USE1-TimedStorage-ByteHrs,,,,,,3.7377310824,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Container Service for Kubernetes,Amazon Elastic Container Service for Kubernetes,,USE1-AmazonEKS-Hours:extendedSupport,,,,,,17.23945278,,USD,8.61972639,,0,,8.61972639
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Container Service for Kubernetes,Amazon Elastic Container Service for Kubernetes,,USE1-AmazonEKS-Hours:perCluster,,,,,,5208,,USD,520.8,,0,,520.8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,DataProcessing-Bytes,,,,,,0.0000590524,,USD,4.738e-7,,0,,4.738e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,DataTransfer-In-Bytes,,,,,,2675.8136269954,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,DataTransfer-Out-Bytes,,,,,,11372.4657484621,,USD,1003.4687022691,,0,,1003.4687022691
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,DataTransfer-Regional-Bytes,,,,,,24046.4101118291,,USD,240.4641010936,,0,,240.4641010936
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,LCUUsage,,,,,,80816.9965006046,,USD,541.0397809331,,0,,541.0397809331
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,LoadBalancerUsage,,,,,,15819,,USD,357.7875,,0,,357.7875
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-AFS1-AWS-In-Bytes,,,,,,0.0000058878,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-AFS1-AWS-Out-Bytes,,,,,,0.0000128876,,USD,2.578e-7,,0,,2.578e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APE1-AWS-In-Bytes,,,,,,0.0000075942,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APE1-AWS-Out-Bytes,,,,,,0.0000089947,,USD,1.8e-7,,0,,1.8e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APE2-AWS-In-Bytes,,,,,,1.119e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APE2-AWS-Out-Bytes,,,,,,7.46e-8,,USD,1.4e-9,,0,,1.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APN1-AWS-In-Bytes,,,,,,0.0001643906,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APN1-AWS-Out-Bytes,,,,,,0.0041717571,,USD,0.0000834354,,0,,0.0000834354
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APN2-AWS-In-Bytes,,,,,,0.0000659251,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APN2-AWS-Out-Bytes,,,,,,0.0001084976,,USD,0.0000021685,,0,,0.0000021685
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APN3-AWS-In-Bytes,,,,,,0.0000016132,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APN3-AWS-Out-Bytes,,,,,,9.275e-7,,USD,1.87e-8,,0,,1.87e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS1-AWS-In-Bytes,,,,,,0.0045375618,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS1-AWS-Out-Bytes,,,,,,0.1104175568,,USD,0.0022083498,,0,,0.0022083498
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS2-AWS-In-Bytes,,,,,,0.0008224762,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS2-AWS-Out-Bytes,,,,,,0.0018869101,,USD,0.0000377376,,0,,0.0000377376
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS3-AWS-In-Bytes,,,,,,0.0022069621,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS3-AWS-Out-Bytes,,,,,,0.010949148,,USD,0.0002189808,,0,,0.0002189808
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS4-AWS-In-Bytes,,,,,,0.0000094268,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS4-AWS-Out-Bytes,,,,,,0.0000219214,,USD,4.385e-7,,0,,4.385e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS5-AWS-In-Bytes,,,,,,0.0000052537,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS5-AWS-Out-Bytes,,,,,,0.0000081305,,USD,1.625e-7,,0,,1.625e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS6-AWS-In-Bytes,,,,,,0.0000056252,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS6-AWS-Out-Bytes,,,,,,0.0000086129,,USD,1.723e-7,,0,,1.723e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS9-AWS-In-Bytes,,,,,,0.000005778,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-APS9-AWS-Out-Bytes,,,,,,0.0000104607,,USD,8.369e-7,,0,,8.369e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-CAN1-AWS-In-Bytes,,,,,,0.0008215054,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-CAN1-AWS-Out-Bytes,,,,,,0.0018409219,,USD,0.0000368197,,0,,0.0000368197
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-CCU1-AWS-In-Bytes,,,,,,5.96e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-CCU1-AWS-Out-Bytes,,,,,,3.279e-7,,USD,6.5e-9,,0,,6.5e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-CloudFront-In-Bytes,,,,,,1.863e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-CloudFront-Out-Bytes,,,,,,3.763e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-ESC1-AWS-In-Bytes,,,,,,0.0000086152,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-ESC1-AWS-Out-Bytes,,,,,,0.0000044008,,USD,2.236e-7,,0,,2.236e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EU-AWS-In-Bytes,,,,,,13.6224982604,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EU-AWS-Out-Bytes,,,,,,32.174856546,,USD,0.6434971337,,0,,0.6434971337
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUC1-AWS-In-Bytes,,,,,,0.1190339302,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUC1-AWS-Out-Bytes,,,,,,1.2591820988,,USD,0.0251836456,,0,,0.0251836456
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUC2-AWS-In-Bytes,,,,,,0.0000042394,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUC2-AWS-Out-Bytes,,,,,,0.0000050739,,USD,1.016e-7,,0,,1.016e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUN1-AWS-In-Bytes,,,,,,0.0000370216,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUN1-AWS-Out-Bytes,,,,,,0.0000816507,,USD,0.0000016318,,0,,0.0000016318
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUS1-AWS-In-Bytes,,,,,,0.0000037662,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUS1-AWS-Out-Bytes,,,,,,0.0000114525,,USD,2.291e-7,,0,,2.291e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUW2-AWS-In-Bytes,,,,,,0.0011594409,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUW2-AWS-Out-Bytes,,,,,,0.0251484522,,USD,0.0005029702,,0,,0.0005029702
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUW3-AWS-In-Bytes,,,,,,0.0327674249,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-EUW3-AWS-Out-Bytes,,,,,,0.041930702,,USD,0.0008386138,,0,,0.0008386138
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-HNL1-AWS-In-Bytes,,,,,,0.0000444679,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-HNL1-AWS-Out-Bytes,,,,,,0.0000577737,,USD,0.0000011554,,0,,0.0000011554
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-MES1-AWS-In-Bytes,,,,,,0.0001729577,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-MES1-AWS-Out-Bytes,,,,,,0.0009088935,,USD,0.0000181778,,0,,0.0000181778
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-PHX1-AWS-In-Bytes,,,,,,1.639e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-PHX1-AWS-Out-Bytes,,,,,,1.639e-7,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-SAE1-AWS-In-Bytes,,,,,,275.6313857774,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-SAE1-AWS-Out-Bytes,,,,,,1612.3228576681,,USD,32.2464571586,,0,,32.2464571586
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-UGW1-AWS-In-Bytes,,,,,,0.0000055609,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-UGW1-AWS-Out-Bytes,,,,,,0.0000125756,,USD,2.515e-7,,0,,2.515e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-USE2-AWS-In-Bytes,,,,,,231.1298974947,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-USE2-AWS-Out-Bytes,,,,,,1828.4892543957,,USD,18.2848925469,,0,,18.2848925469
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-USW1-AWS-In-Bytes,,,,,,0.0007084975,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-USW1-AWS-Out-Bytes,,,,,,0.0041413927,,USD,0.0000828263,,0,,0.0000828263
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-USW2-AWS-In-Bytes,,,,,,2.1224836847,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-USW2-AWS-Out-Bytes,,,,,,14.4093662972,,USD,0.2881873197,,0,,0.2881873197
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-VpcPeering-In-Bytes,,,,,,0.2319838692,,USD,0.002319841,,0,,0.002319841
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Elastic Load Balancing,Amazon Elastic Load Balancing,,USE1-VpcPeering-Out-Bytes,,,,,,0.3684123093,,USD,0.0036841228,,0,,0.0036841228
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APN1-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,7.75e-8,,0,,7.75e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APN1-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,2.5e-9,,0,,2.5e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APN2-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,6.82e-8,,0,,6.82e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APN2-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,2.2e-9,,0,,2.2e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APN3-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,7.75e-8,,0,,7.75e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APN3-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,2.5e-9,,0,,2.5e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APS1-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,7.75e-8,,0,,7.75e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APS1-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,2.5e-9,,0,,2.5e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APS2-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,8.37e-8,,0,,8.37e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APS2-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,2.7e-9,,0,,2.7e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APS3-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,7.44e-8,,0,,7.44e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,APS3-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,2.4e-9,,0,,2.4e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,CAN1-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.86e-8,,0,,1.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,CAN1-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,6e-10,,0,,6e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,EU-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,6e-10,,0,,6e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,EUC1-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.86e-8,,0,,1.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,EUC1-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,6e-10,,0,,6e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,EUN1-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.86e-8,,0,,1.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,EUN1-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,6e-10,,0,,6e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,EUW2-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.86e-8,,0,,1.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,EUW2-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,6e-10,,0,,6e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,EUW3-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.86e-8,,0,,1.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,EUW3-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,6e-10,,0,,6e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,SAE1-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.209e-7,,0,,1.209e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,SAE1-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,3.9e-9,,0,,3.9e-9
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,USE1-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.86e-8,,0,,1.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,USE2-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.86e-8,,0,,1.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,USE2-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,3e-10,,0,,3e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,USW1-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.86e-8,,0,,1.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,USW1-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,6e-10,,0,,6e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,USW2-EU-AWS-Out-Bytes,,,,,,8.649e-7,,USD,1.86e-8,,0,,1.86e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Glacier,Amazon Glacier,,USW2-USE1-AWS-Out-Bytes,,,,,,2.79e-8,,USD,6e-10,,0,,6e-10
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Managed Streaming for Apache Kafka,Amazon Managed Streaming for Apache Kafka,,DataTransfer-Regional-Bytes,,,,,,48005.7372229741,,USD,480.0573722313,,0,,480.0573722313
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Managed Streaming for Apache Kafka,Amazon Managed Streaming for Apache Kafka,,USE1-Kafka.Storage.GP2,,,,,,3840.0000000888,,USD,384.0000001056,,0,,384.0000001056
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Managed Streaming for Apache Kafka,Amazon Managed Streaming for Apache Kafka,,USE1-Kafka.m5.large,,,,,,2976,,USD,624.96,,0,,624.96
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Managed Streaming for Apache Kafka,Amazon Managed Streaming for Apache Kafka,,USE1-Kafka.m7g.large,,,,,,2976,,USD,607.104,,0,,607.104
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Managed Streaming for Apache Kafka,Amazon Managed Streaming for Apache Kafka,,USE1-Kafka.t3.small,,,,,,8928,,USD,407.1168,,0,,407.1168
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Managed Workflows for Apache Airflow,Amazon Managed Workflows for Apache Airflow,,USE1-Airflow-SmallEnvironment,,,,,,744,,USD,364.56,,0,,364.56
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Route 53,Amazon Route 53,,DNS-Queries,,,,,,417737600,,USD,167.09504,,0,,167.09504
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Route 53,Amazon Route 53,,HostedZone,,,,,,33,,USD,3.3,,0,,3.3
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Route 53,Amazon Route 53,,USE1-DNS-Queries,,,,,,196057,,USD,0.0784228,,0,,0.0784228
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Route 53,Amazon Route 53,,USE1-ResolverNetworkInterface,,,,,,2975.95148056,,USD,371.9939350701,,0,,371.9939350701
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APN1-DataTransfer-Out-Bytes,,,,,,0.0000069564,,USD,7.936e-7,,0,,7.936e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APN1-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APN2-DataTransfer-Out-Bytes,,,,,,0.0000013857,,USD,1.736e-7,,0,,1.736e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APN2-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APN3-DataTransfer-Out-Bytes,,,,,,0.0000013857,,USD,1.581e-7,,0,,1.581e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APN3-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APS1-DataTransfer-Out-Bytes,,,,,,0.0000017451,,USD,2.104e-7,,0,,2.104e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APS1-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APS2-DataTransfer-Out-Bytes,,,,,,0.0000013857,,USD,1.581e-7,,0,,1.581e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APS2-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APS3-DataTransfer-Out-Bytes,,,,,,0.000006727,,USD,7.347e-7,,0,,7.347e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,APS3-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,CAN1-DataTransfer-Out-Bytes,,,,,,0.0000013857,,USD,1.24e-7,,0,,1.24e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,CAN1-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,DataTransfer-Out-Bytes,,,,,,0.0000066681,,USD,5.893e-7,,0,,5.893e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EU-DataTransfer-Out-Bytes,,,,,,2.151e-7,,USD,1.94e-8,,0,,1.94e-8
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EU-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EUC1-DataTransfer-Out-Bytes,,,,,,0.0000068417,,USD,6.169e-7,,0,,6.169e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EUC1-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EUN1-DataTransfer-Out-Bytes,,,,,,0.0000013857,,USD,1.24e-7,,0,,1.24e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EUN1-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EUW2-DataTransfer-Out-Bytes,,,,,,0.0000013857,,USD,1.24e-7,,0,,1.24e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EUW2-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EUW3-DataTransfer-Out-Bytes,,,,,,0.0000013857,,USD,1.24e-7,,0,,1.24e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,EUW3-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,Requests-Tier1,,,,,,164,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,SAE1-DataTransfer-Out-Bytes,,,,,,0.0000013857,,USD,2.01e-7,,0,,2.01e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,SAE1-Requests-Tier1,,,,,,156,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,USE2-DataTransfer-Out-Bytes,,,,,,0.0000066681,,USD,6.014e-7,,0,,6.014e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,USE2-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,USW1-DataTransfer-Out-Bytes,,,,,,0.0000013857,,USD,1.24e-7,,0,,1.24e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,USW1-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,USW2-DataTransfer-Out-Bytes,,,,,,0.0000066681,,USD,6.014e-7,,0,,6.014e-7
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Notification Service,Amazon Simple Notification Service,,USW2-Requests-Tier1,,,,,,125,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,APN1-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,APN2-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,APN3-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,APS1-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,APS2-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,APS3-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,CAN1-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,DataTransfer-In-Bytes,,,,,,0.0000196575,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,DataTransfer-Out-Bytes,,,,,,0.0016107191,,USD,0.0001421302,,0,,0.0001421302
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,EU-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,EUC1-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,EUN1-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,EUW2-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,EUW3-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,Requests-FIFO-RBP,,,,,,498455708,,USD,248.862163,,0,,248.862163
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,Requests-RBP,,,,,,28063193,,USD,11.2252772,,0,,11.2252772
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,SAE1-Requests-Tier1,,,,,,93,,USD,0.0000372,,0,,0.0000372
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,USE2-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,USW1-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Simple Queue Service,Amazon Simple Queue Service,,USW2-Requests-Tier1,,,,,,62,,USD,0.0000248,,0,,0.0000248
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Amazon Translate,Amazon Translate,,USE2-TranslateText,,,,,,49176579,,USD,707.648685,,0,,707.648685
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Bitnami LMS powered by Moodle(TM) LMS,Bitnami LMS powered by Moodle(TM) LMS,,SoftwareUsage:t2.micro,,,,,,744,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,CloudWatch Events,CloudWatch Events,,USE1-Event-64K-Chunks,,,,,,2119442,,USD,2.119442,,0,,2.119442
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,CloudWatch Events,CloudWatch Events,,USE1-ScheduledInvocation,,,,,,151,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Kiro,Kiro,,USE1-KiroEnterprise-Credits,,,,,,8.9945152735,,USD,0,,0,,0
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Kiro,Kiro,,USE1-KiroEnterprise-ProPlus,,,,,,0.03612493,,USD,1.4449972,,0,,1.4449972
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Savings Plans for AWS Compute usage,Savings Plans for AWS Compute usage,,ComputeSP:3yrNoUpfront,,,,,,0,,USD,8184,,0,,8184
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Savings Plans for AWS Compute usage,Savings Plans for AWS Compute usage,,EC2SP:r7g.1yrNoUpfront,,,,,,0,,USD,1897.6464,,0,,1897.6464
+,,,PayerLineItem,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,Tax,Tax,,NoUsageType,,,,,,0,,USD,11973.66,,0,,11973.66
+,,,StatementTotal,,2026/03/01 00:00:00,2026/04/01 00:00:00,,,,,,,,,,,,,,,,,USD,104077.14341337948,,,,104077.14341337948

@@ -2,8 +2,7 @@ import logging
 
 import pytest
 
-from app.infrastructure.llm.orchestrator import LLMOrchestrator
-from app.infrastructure.llm.orchestrator import log_llm_input_payload
+from app.infrastructure.llm.orchestrator import LLMOrchestrator, log_llm_input_payload
 from app.schemas.analysis_v2 import AnalysisV2Response
 
 

@@ -1,0 +1,103 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  quality:
+    name: Lint + testes unitários
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Ruff (bloqueante — áreas já limpas)
+        # Gatear o repo inteiro deixaria o CI vermelho desde o dia 1: há ~250
+        # lints pré-existentes em infrastructure/api/scripts. Bloqueamos onde
+        # já está limpo (o núcleo puro e os testes), impedindo dívida NOVA ali.
+        run: ruff check app/domain app/services app/schemas app/tests
+
+      - name: Ruff (informativo — dívida a queimar)
+        continue-on-error: true
+        run: ruff check app/infrastructure app/api app/use_cases scripts
+
+      - name: Testes unitários
+        # Integração é exercida no job abaixo (precisa de Postgres).
+        run: pytest -m "not integration" --no-cov -q
+
+  gates:
+    name: Gates do request (integração)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ost
+          POSTGRES_PASSWORD: ost
+          POSTGRES_DB: ost_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ost -d ost_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://ost:ost@localhost:5432/ost_test
+      APP_ENV: development
+      AUTH_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Migrations
+        run: alembic upgrade head
+
+      - name: Seeds de referência
+        # Os gates exigem DE-PARA curado, metadata, catálogo e regras — sem eles
+        # os testes mediriam o vazio e passariam por acidente (o conftest pula
+        # declarando qual seed faltou, então a ausência apareceria como skip).
+        run: |
+          python -m app.infrastructure.database.seed_refactor
+          python -m app.infrastructure.database.seed_service_metadata
+          python -m app.infrastructure.database.seed_catalog_pareto
+          python -m app.infrastructure.database.seed_classification_rules
+
+      - name: Taxas de categoria (referência, sem rede)
+        run: python scripts/sync_prices.py --providers categories
+
+      - name: Gates
+        # Um skip silencioso esconderia a rede de segurança caída: o conftest
+        # pula quando falta banco ou seed, então aqui um skip é FALHA de
+        # ambiente, não teste ignorável. (O gate de preço oficial é o único que
+        # pode pular legitimamente — ele depende de fetch de rede.)
+        run: |
+          set -o pipefail
+          pytest -m integration --no-cov -q -rs --strict-markers | tee /tmp/gates.txt
+          if grep -qE "integração pulada" /tmp/gates.txt; then
+            echo "::error::Gates pulados — Postgres ou seeds ausentes no CI."
+            exit 1
+          fi
