@@ -34,12 +34,21 @@ class LLMOrchestrator:
         total_spend: float,
         currency: str,
         pools_json: str,
+        payload: dict | None = None,
     ) -> AnalysisV2Response:
-        context_payload = json.loads(pools_json)
-        context_payload["provedor_origem"] = source_provider
-        context_payload["periodo_faturamento"] = billing_period
-        context_payload["gasto_total"] = total_spend
-        context_payload["moeda"] = currency
+        # `payload` completo (build_pipeline_llm_input_payload) tem serviços
+        # nomeados, premissas/reconciliação e resumo_executivo, e traz TODOS os
+        # valores já na moeda de análise. Remontar a partir de `pools_json`
+        # descartava tudo isso e ainda misturava moedas (gasto_total vinha na
+        # moeda de origem enquanto os pools já estavam convertidos).
+        if payload is not None:
+            context_payload = dict(payload)
+        else:
+            context_payload = json.loads(pools_json)
+            context_payload["provedor_origem"] = source_provider
+            context_payload["periodo_faturamento"] = billing_period
+            context_payload["gasto_total"] = total_spend
+            context_payload["moeda"] = currency
 
         log_llm_input_payload("pipeline", context_payload)
 

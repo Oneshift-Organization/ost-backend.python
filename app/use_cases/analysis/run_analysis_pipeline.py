@@ -21,6 +21,7 @@ from app.infrastructure.repositories.service_repositories import (
     PGServiceMetadataRepository,
 )
 from app.schemas.analysis_v2 import AnalysisV2Response
+from app.use_cases.analysis.backend_authority import apply_backend_authority
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
@@ -525,12 +526,22 @@ class RunAnalysisPipelineUseCase:
                 total_spend=float(ctx.total_spend),
                 currency=ctx.currency,
                 pools_json=pools_json,
+                payload=llm_input,
             )
 
             if not isinstance(ui_report, AnalysisV2Response):
                 ui_report = AnalysisV2Response.resilient_parse(
                     ui_report.model_dump() if hasattr(ui_report, "model_dump") else {}
                 )
+
+            # O backend é a autoridade sobre número: sobrescreve custo, economia
+            # e provedor recomendado com o cálculo determinístico já auditado
+            # (premissas.reconciliacao). O que o modelo escreveu de qualitativo
+            # é preservado. Sem isto a resposta da API poderia contradizer a
+            # própria reconciliação.
+            ui_report = apply_backend_authority(
+                ui_report, getattr(ctx, "resumo_executivo", None)
+            )
 
             flags = ui_report.flags
             if ctx.missing_sku_ids:
