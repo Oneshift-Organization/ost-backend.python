@@ -59,6 +59,8 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://ost:ost@localhost:5432/ost_test
       APP_ENV: development
       AUTH_ENABLED: "false"
+      # `scripts/` importa `app.*`; sem isto o seed falha com ModuleNotFoundError.
+      PYTHONPATH: .
 
     steps:
       - uses: actions/checkout@v4
