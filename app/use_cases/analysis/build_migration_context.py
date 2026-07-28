@@ -46,6 +46,7 @@ from app.domain.services.provider_consolidation import (
     weakest_confidence,
 )
 from app.domain.services.reconciliation import reconcile
+from app.domain.services.sku_normalization import squash_key
 from app.services.billing_aggregator import BillingAggregator
 
 
@@ -163,6 +164,16 @@ class BuildMigrationContextUseCase:
         source_metadata = await self._metadata_repo.list_by_providers([source_provider])
         canonicals = {_normalize(c.service_name): c for c in source_comparisons}
         meta_map = {_normalize(m.service_name): m for m in source_metadata}
+        # Índice insensível a espaço/pontuação. Os parsers emitem nomes
+        # concatenados (`AmazonRDS`) e o catálogo curado usa nomes com espaço
+        # (`Amazon RDS`); sem esta ponte o casamento falha e o `service_type` cai
+        # no palpite do classificador de SKU — foi assim que object storage virou
+        # block storage. Lista (não dict) porque um serviço aparece uma vez por
+        # capacidade (BigQuery = interactive_query + data_lake + data_warehouse).
+        canonicals_squashed: dict[str, list[ServiceComparison]] = {}
+        for c in sorted(source_comparisons, key=lambda x: (x.category, x.service_type)):
+            canonicals_squashed.setdefault(squash_key(c.service_name), []).append(c)
+        meta_squashed = {squash_key(m.service_name): m for m in source_metadata}
 
         # ── 3. Load target provider metadata ─────────────────────
         target_providers = list(
@@ -201,12 +212,23 @@ class BuildMigrationContextUseCase:
             aliases = PROVIDER_SERVICE_ALIASES.get(source_provider, {})
             return aliases.get(name, name)
 
-        def _match(svc_name: str) -> ServiceComparison | None:
-            n = _normalize(_canonical_name(svc_name))
+        def _match(svc_name: str, hint_type: str | None = None) -> ServiceComparison | None:
+            name = _canonical_name(svc_name)
+            n = _normalize(name)
             comp = canonicals.get(n)
             if comp:
                 return comp
-            if meta_map.get(n):
+            # Ponte concatenado <-> espaçado. Quando o serviço tem várias
+            # capacidades, prefere a que bate com o tipo que o classificador
+            # sugeriu; senão a primeira em ordem determinística.
+            candidates = canonicals_squashed.get(squash_key(name))
+            if candidates:
+                if hint_type:
+                    for cand in candidates:
+                        if cand.service_type == hint_type:
+                            return cand
+                return candidates[0]
+            if meta_map.get(n) or meta_squashed.get(squash_key(name)):
                 return None
             for canon_name, comp in canonicals.items():
                 if n in canon_name or canon_name in n:
@@ -229,7 +251,7 @@ class BuildMigrationContextUseCase:
 
         categories: dict[str, dict[str, Any]] = {}
         for raw in sorted_services:
-            comp = _match(raw["service_name"])
+            comp = _match(raw["service_name"], raw.get("service_type"))
             category_name = comp.category if comp else (
                 raw.get("category") or _meta_category(raw["service_name"]) or "unknown"
             )
@@ -237,8 +259,17 @@ class BuildMigrationContextUseCase:
                 raw.get("service_type") or "unknown"
             )
 
+            # Instrumento financeiro, não recurso migrável: custo sem NENHUMA
+            # quantidade de uso (Savings Plan, RI, CUD, créditos, ajustes). Mesmo
+            # invariante do balde `commitment` no agregador — sugerir "migre seu
+            # Savings Plan para Compute Engine" seria conselho sem sentido.
+            # Regra estrutural: nenhum nome de serviço/nuvem é citado.
+            sem_uso = not any(
+                (i.usage_amount or Decimal("0")) > 0 for i in raw["items"]
+            )
+
             equivs: list[EquivalentService] = []
-            if category_name != "unknown" and service_type != "unknown":
+            if not sem_uso and category_name != "unknown" and service_type != "unknown":
                 equivs = await _get_equivalents(category_name, service_type)
 
             svc = BillingItemSummary(

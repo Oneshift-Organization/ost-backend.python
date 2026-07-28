@@ -36,3 +36,20 @@ def match_key(raw: str | None) -> str:
         return ""
     folded = raw.casefold().strip()
     return _WHITESPACE.sub(" ", folded).strip()
+
+
+def squash_key(raw: str | None) -> str:
+    """Chave insensível a espaço e pontuação: ``AmazonRDS`` == ``Amazon RDS``.
+
+    Os parsers de billing emitem nomes concatenados (``AmazonRDS``, ``AmazonS3``)
+    enquanto o catálogo curado usa nomes com espaço (``Amazon RDS``). ``match_key``
+    apenas colapsa espaços, então não faz essa ponte — e o casamento falhava,
+    caindo num fallback por categoria que atribuía o ``service_type`` errado
+    (object storage virava block storage).
+
+    Mantém só alfanuméricos: é a forma mais forte de normalização textual antes
+    de partir para heurísticas (substring/fuzzy), e não depende de nome de nuvem.
+    """
+    if not raw or not isinstance(raw, str):
+        return ""
+    return "".join(ch for ch in raw.casefold() if ch.isalnum())
