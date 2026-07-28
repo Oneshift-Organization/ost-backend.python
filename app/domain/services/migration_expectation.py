@@ -19,6 +19,7 @@ Função pura, sem I/O e sem citar nome de nuvem ou de serviço.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,6 +35,9 @@ class MigrationExpectation:
     esforco: str         # baixo | medio | alto
     lock_in: str | None  # low | medium | high
     requer_refatoracao: bool
+    # "curada"  = metadata do próprio serviço
+    # "classe"  = herdada de serviços curados do MESMO service_type
+    fonte: str = "curada"
 
     def as_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -43,6 +47,8 @@ class MigrationExpectation:
         }
         if self.lock_in:
             d["lock_in"] = self.lock_in
+        if self.fonte != "curada":
+            d["fonte"] = self.fonte
         return d
 
 
@@ -75,3 +81,55 @@ def derive_expectation(metadata: dict[str, Any] | None) -> MigrationExpectation 
         lock_in=lock_in,
         requer_refatoracao=requer,
     )
+
+
+_LOCK_RANK = {"low": 1, "medium": 2, "high": 3}
+
+
+def learn_class_defaults(
+    curated: Iterable[tuple[str, dict[str, Any] | None]],
+) -> dict[str, MigrationExpectation]:
+    """Aprende a expectativa TÍPICA de cada ``service_type`` a partir dos
+    serviços que já têm metadata curada.
+
+    A dificuldade de migração é propriedade da **classe** do serviço, não do
+    produto: object storage é fácil em qualquer nuvem (API compatível), banco
+    relacional gerenciado é difícil em qualquer nuvem (engine/versão/extensões).
+    Em vez de enumerar 234 tipos à mão — o que seria outra esteira de manutenção
+    — derivamos o padrão dos exemplos curados existentes, e ele melhora sozinho
+    conforme a curadoria cresce.
+
+    Agregação **conservadora**: se algum serviço curado daquele tipo exige
+    reescrita, o tipo inteiro é tratado como `refactor`; o lock-in é o maior
+    observado. Errar para o lado difícil não gera promessa de economia fácil.
+
+    Recebe pares ``(service_type, metadata)`` — função pura, sem I/O.
+    """
+    agregado: dict[str, dict[str, Any]] = {}
+    for service_type, metadata in curated:
+        if not service_type or not metadata:
+            continue
+        exp = derive_expectation(metadata)
+        if exp is None:
+            continue
+        acc = agregado.setdefault(service_type, {"refac": False, "lock": None})
+        acc["refac"] = acc["refac"] or exp.requer_refatoracao
+        if exp.lock_in and _LOCK_RANK.get(exp.lock_in, 0) > _LOCK_RANK.get(
+            acc["lock"] or "", 0
+        ):
+            acc["lock"] = exp.lock_in
+
+    defaults: dict[str, MigrationExpectation] = {}
+    for service_type, acc in agregado.items():
+        base = derive_expectation(
+            {"requires_refactoring": acc["refac"], "vendor_lock_in_level": acc["lock"]}
+        )
+        if base is not None:
+            defaults[service_type] = MigrationExpectation(
+                classe=base.classe,
+                esforco=base.esforco,
+                lock_in=base.lock_in,
+                requer_refatoracao=base.requer_refatoracao,
+                fonte="classe",
+            )
+    return defaults

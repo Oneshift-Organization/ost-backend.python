@@ -68,6 +68,11 @@ class BillingItemSummary:
     # Expectativa de migração derivada da metadata curada (classe 6R + esforço).
     # Calculada no backend; a IA apenas narra. None quando não há dado curado.
     migration_expectation: dict[str, Any] | None = None
+    # Origem do `service_type`: "curado" quando o serviço foi casado no catálogo
+    # curado; "inferido" quando veio do palpite do classificador de SKU. Um tipo
+    # inferido pode gerar DE-PARA errado (foi assim que object storage virou
+    # block storage) — quem lê precisa saber a diferença.
+    type_source: str = "curado"
 
 
 @dataclass(frozen=True)

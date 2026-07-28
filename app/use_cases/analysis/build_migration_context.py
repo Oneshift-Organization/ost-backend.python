@@ -39,7 +39,10 @@ from app.domain.services.currency import (
     identity_rate,
 )
 from app.domain.services.equivalence_matcher import EquivalenceMatcher
-from app.domain.services.migration_expectation import derive_expectation
+from app.domain.services.migration_expectation import (
+    derive_expectation,
+    learn_class_defaults,
+)
 from app.domain.services.pool_aggregation import aggregate_by_family
 from app.domain.services.provider_consolidation import (
     ProviderTally,
@@ -190,6 +193,22 @@ class BuildMigrationContextUseCase:
         }
         equivalents_cache: dict[tuple[str, str], list[EquivalentService]] = {}
 
+        # Padrão de migração POR CLASSE, aprendido dos serviços já curados.
+        # A dificuldade é propriedade do tipo (object storage é fácil em qualquer
+        # nuvem; banco gerenciado é difícil em qualquer nuvem), então serviços sem
+        # metadata própria herdam do tipo em vez de ficarem sem expectativa.
+        _tipo_por_servico = {
+            (c.provider, _normalize(c.service_name)): c.service_type
+            for c in await self._comparison_repo.list_all()
+        }
+        class_defaults = learn_class_defaults(
+            (
+                _tipo_por_servico.get((m.provider, _normalize(m.service_name))),
+                m.metadata,
+            )
+            for m in [*source_metadata, *target_metadata_all]
+        )
+
         async def _get_equivalents(category: str, service_type: str) -> list[EquivalentService]:
             key = (category, service_type)
             if key not in equivalents_cache:
@@ -279,9 +298,12 @@ class BuildMigrationContextUseCase:
             svc_meta = meta_map.get(_normalize(_canonical_name(raw["service_name"])))
             if svc_meta is None:
                 svc_meta = meta_squashed.get(squash_key(_canonical_name(raw["service_name"])))
-            expectation = (
-                derive_expectation(svc_meta.metadata) if svc_meta and not sem_uso else None
-            )
+            expectation = None
+            if not sem_uso:
+                expectation = derive_expectation(svc_meta.metadata) if svc_meta else None
+                if expectation is None:
+                    # Herda o padrão do tipo (marcado como fonte="classe").
+                    expectation = class_defaults.get(service_type)
 
             svc = BillingItemSummary(
                 service_name=raw["service_name"],
@@ -292,6 +314,7 @@ class BuildMigrationContextUseCase:
                 line_count=raw["line_count"],
                 equivalents=equivs,
                 migration_expectation=expectation.as_dict() if expectation else None,
+                type_source="curado" if comp is not None else "inferido",
             )
 
             if category_name not in categories:
@@ -625,6 +648,17 @@ class BuildMigrationContextUseCase:
         # ── 11. Reconciliação: a análise auditando a si mesma ─────
         # Roda sempre; grava violações/suspeitas em premissas. É o gate que
         # transforma "achei um bug lendo o CSV" em "a API sabe onde não confia".
+        # Fração do gasto cujo tipo é palpite do classificador, não catálogo curado.
+        custo_inferido = sum(
+            (sv.total_cost for c in categories.values() for sv in c["services"]
+             if getattr(sv, "type_source", "curado") != "curado"),
+            Decimal("0"),
+        )
+        fracao_inferida = (
+            float(custo_inferido / total_spend) if total_spend > 0 else 0.0
+        )
+        premissas["tipo_servico_inferido"] = fracao_inferida
+
         premissas["reconciliacao"] = reconcile(
             total_spend=total_spend,
             family_pools=family_pools,
@@ -633,6 +667,7 @@ class BuildMigrationContextUseCase:
             target_providers=target_providers,
             cobertura_classificacao=cobertura,
             fx=fx,
+            fracao_tipo_inferido=fracao_inferida,
         )
 
         return MigrationContext(
