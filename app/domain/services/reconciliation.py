@@ -36,6 +36,9 @@ _CONCENTRACAO_GENERICA = Decimal("0.25")
 # Tolerância da conservação de custo (soma dos baldes == gasto total).
 _TOLERANCIA_CONSERVACAO = Decimal("0.005")  # 0,5%
 _COBERTURA_MINIMA = Decimal("0.95")
+# Fração do gasto cujo `service_type` veio do classificador de SKU (palpite) em
+# vez do catálogo curado. Acima disto o DE-PARA por serviço repousa em inferência.
+_MAX_TIPO_INFERIDO = Decimal("0.30")
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +72,7 @@ def reconcile(
     target_providers: list[str],
     cobertura_classificacao: float,
     fx: FxRate,
+    fracao_tipo_inferido: float = 0.0,
 ) -> dict[str, object]:
     """Roda todas as verificações e devolve o bloco `reconciliacao`.
 
@@ -83,6 +87,7 @@ def reconcile(
     conservacao = _check_conservacao(total, family_pools, auxiliary, fx, findings)
     findings += _check_providers_sem_preco(family_equivalents, target_providers)
     findings += _check_cobertura(cobertura_classificacao)
+    findings += _check_tipo_inferido(fracao_tipo_inferido)
 
     contagem = {"violacao": 0, "suspeita": 0, "info": 0}
     for f in findings:
@@ -275,5 +280,30 @@ def _check_cobertura(cobertura: float) -> list[ReconciliationFinding]:
                 f"abaixo do mínimo {_q2(_COBERTURA_MINIMA * 100)}%"
             ),
             valores={"cobertura": round(cobertura, 4)},
+        )
+    ]
+
+
+def _check_tipo_inferido(fracao: float) -> list[ReconciliationFinding]:
+    """Gasto cujo tipo de serviço é palpite, não verdade curada.
+
+    O tipo determina quais equivalentes são oferecidos; um tipo inferido errado
+    produz DE-PARA errado apresentado como fato (foi assim que object storage
+    virou block storage). O sistema precisa declarar quando está inferindo.
+    """
+    valor = Decimal(str(fracao))
+    if valor <= _MAX_TIPO_INFERIDO:
+        return []
+    return [
+        ReconciliationFinding(
+            codigo="tipo_servico_inferido_concentrado",
+            severidade="suspeita",
+            escopo="total",
+            detalhe=(
+                f"{_q2(valor * 100)}% do gasto tem service_type inferido pelo "
+                "classificador (serviço ausente do catálogo curado) — o DE-PARA "
+                "desses serviços repousa em palpite"
+            ),
+            valores={"fracao": round(fracao, 4)},
         )
     ]

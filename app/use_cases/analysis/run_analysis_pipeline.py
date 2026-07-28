@@ -119,6 +119,11 @@ def _serialize_services(ctx, fx: FxRate) -> list[dict]:
                     f"{normalize_provider(e.provider).upper()}:{e.service_name}"
                     for e in sv.equivalents[:3]
                 ]
+            # Só quando NÃO é o caso normal: um tipo inferido (palpite do
+            # classificador, não casado no catálogo curado) pode gerar DE-PARA
+            # errado — quem lê precisa saber a diferença.
+            if getattr(sv, "type_source", "curado") != "curado":
+                entry["tipo_fonte"] = "inferido"
             # Expectativa de migração calculada no backend (classe 6R + esforço).
             expectativa = getattr(sv, "migration_expectation", None)
             if expectativa:

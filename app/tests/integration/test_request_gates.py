@@ -217,6 +217,50 @@ def test_classe_de_migracao_reflete_dificuldade_real(aws_context) -> None:
     ] == "refactor"
 
 
+# ── Proveniência: o sistema declara quando está inferindo ───────────────
+
+
+def test_tipo_inferido_e_declarado(aws_context) -> None:
+    """Serviço fora do catálogo curado usa o tipo palpitado pelo classificador —
+    e o payload marca isso. Um tipo inferido errado gera DE-PARA errado (foi
+    assim que object storage virou block storage); quem lê precisa saber."""
+    payload, _ = build_pipeline_llm_input_payload(aws_context)
+    por_nome = {s["nome"]: s for s in payload["servicos"]}
+    # MSK não está no catálogo curado: o tipo é inferência.
+    msk = por_nome.get("Amazon Managed Streaming for Apache Kafka")
+    assert msk is not None
+    assert msk.get("tipo_fonte") == "inferido"
+    # Serviço casado no catálogo NÃO carrega a marca (o caso normal fica limpo).
+    assert "tipo_fonte" not in por_nome["AmazonS3"]
+    # E a fração vai para o ledger, auditável.
+    assert 0.0 <= aws_context.premissas["tipo_servico_inferido"] <= 1.0
+
+
+@pytest.mark.parametrize("ctx_name", ["aws_context", "gcp_context"])
+def test_expectativa_herda_do_tipo_quando_falta_metadata(
+    ctx_name: str, request: pytest.FixtureRequest
+) -> None:
+    """A dificuldade de migração é propriedade da CLASSE do serviço. Serviços sem
+    metadata própria herdam o padrão aprendido de serviços curados do mesmo
+    `service_type` — e a origem fica declarada como `classe`."""
+    ctx = request.getfixturevalue(ctx_name)
+    payload, _ = build_pipeline_llm_input_payload(ctx)
+    for s in payload["servicos"]:
+        mg = s.get("migracao")
+        if not mg:
+            continue
+        assert mg.get("fonte", "curada") in {"curada", "classe"}
+        assert mg["classe_migracao"] in {"rehost", "replatform", "refactor"}
+
+
+def test_classe_nao_e_inventada_sem_exemplo(aws_context) -> None:
+    """Sem nenhum serviço curado daquele tipo, o sistema CALA em vez de chutar."""
+    payload, _ = build_pipeline_llm_input_payload(aws_context)
+    waf = next(s for s in payload["servicos"] if s["nome"] == "AWS WAF")
+    # `web_application_firewall` não tem exemplo curado -> sem expectativa.
+    assert "migracao" not in waf
+
+
 # ── Onda 7 — contrato com o LLM ─────────────────────────────────────────
 
 

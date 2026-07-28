@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.services.migration_expectation import derive_expectation
+from app.domain.services.migration_expectation import (
+    derive_expectation,
+    learn_class_defaults,
+)
 
 
 @pytest.mark.parametrize(
@@ -61,3 +64,58 @@ def test_as_dict_omite_lock_in_ausente() -> None:
         "requer_refatoracao": True,
     }
     assert "lock_in" not in d
+
+
+# ── aprendizado por classe (a dificuldade é do TIPO, não do produto) ──────
+
+
+def test_aprende_padrao_do_tipo_a_partir_dos_curados() -> None:
+    """Em vez de enumerar 234 service_types à mão, deriva dos exemplos."""
+    defaults = learn_class_defaults([
+        ("object_storage", {"requires_refactoring": False, "vendor_lock_in_level": "low"}),
+        ("object_storage", {"requires_refactoring": False, "vendor_lock_in_level": "low"}),
+        ("managed_relational_database", {"requires_refactoring": True,
+                                         "vendor_lock_in_level": "medium"}),
+    ])
+    assert defaults["object_storage"].classe == "rehost"
+    assert defaults["managed_relational_database"].classe == "refactor"
+    # Herdado != curado: a origem fica declarada.
+    assert defaults["object_storage"].fonte == "classe"
+    assert defaults["object_storage"].as_dict()["fonte"] == "classe"
+
+
+def test_agregacao_e_conservadora() -> None:
+    """Se QUALQUER exemplo do tipo exige reescrita, o tipo vira refactor, e o
+    lock-in é o maior observado. Errar para o lado difícil não gera promessa de
+    economia fácil."""
+    defaults = learn_class_defaults([
+        ("data_warehouse", {"requires_refactoring": False, "vendor_lock_in_level": "low"}),
+        ("data_warehouse", {"requires_refactoring": True, "vendor_lock_in_level": "high"}),
+    ])
+    assert defaults["data_warehouse"].classe == "refactor"
+    assert defaults["data_warehouse"].lock_in == "high"
+
+
+def test_tipo_sem_exemplo_curado_nao_e_inventado() -> None:
+    """Sem evidência o sistema cala — não chuta a dificuldade."""
+    defaults = learn_class_defaults([
+        ("object_storage", {"requires_refactoring": False, "vendor_lock_in_level": "low"}),
+    ])
+    assert "web_application_firewall" not in defaults
+
+
+def test_entradas_invalidas_sao_ignoradas() -> None:
+    defaults = learn_class_defaults([
+        (None, {"requires_refactoring": True}),
+        ("", {"requires_refactoring": True}),
+        ("x", None),
+        ("y", {"pricing_model": "irrelevante"}),
+    ])
+    assert defaults == {}
+
+
+def test_curada_prevalece_sobre_classe() -> None:
+    """`as_dict` só marca `fonte` quando NÃO é curada — o caso normal fica limpo."""
+    propria = derive_expectation({"requires_refactoring": True})
+    assert propria is not None
+    assert "fonte" not in propria.as_dict()

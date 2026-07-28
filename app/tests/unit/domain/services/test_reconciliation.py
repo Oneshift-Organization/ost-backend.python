@@ -165,3 +165,33 @@ def _equiv(provider: str, *, monthly: str | None) -> EquivalentService:
         service_type="virtual_server",
         financials=fin,
     )
+
+
+def test_tipo_inferido_concentrado_vira_suspeita() -> None:
+    """O tipo determina quais equivalentes são oferecidos; se boa parte do gasto
+    tem tipo palpitado, o DE-PARA repousa em inferência e o sistema declara."""
+    r = reconcile(
+        total_spend=Decimal("1000"),
+        family_pools=(_pool("E2", "10", "40", "260"),),
+        auxiliary=AuxiliaryCosts(orphan=Decimal("740")),
+        family_equivalents={},
+        target_providers=[],
+        cobertura_classificacao=0.99,
+        fx=_USD,
+        fracao_tipo_inferido=0.55,
+    )
+    assert "tipo_servico_inferido_concentrado" in _codes(r)
+
+
+def test_pouco_tipo_inferido_nao_alarma() -> None:
+    r = reconcile(
+        total_spend=Decimal("1000"),
+        family_pools=(_pool("E2", "10", "40", "260"),),
+        auxiliary=AuxiliaryCosts(orphan=Decimal("740")),
+        family_equivalents={},
+        target_providers=[],
+        cobertura_classificacao=0.99,
+        fx=_USD,
+        fracao_tipo_inferido=0.10,
+    )
+    assert "tipo_servico_inferido_concentrado" not in _codes(r)
