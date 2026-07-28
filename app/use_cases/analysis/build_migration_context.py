@@ -39,6 +39,7 @@ from app.domain.services.currency import (
     identity_rate,
 )
 from app.domain.services.equivalence_matcher import EquivalenceMatcher
+from app.domain.services.migration_expectation import derive_expectation
 from app.domain.services.pool_aggregation import aggregate_by_family
 from app.domain.services.provider_consolidation import (
     ProviderTally,
@@ -272,6 +273,16 @@ class BuildMigrationContextUseCase:
             if not sem_uso and category_name != "unknown" and service_type != "unknown":
                 equivs = await _get_equivalents(category_name, service_type)
 
+            # Expectativa de migração (classe 6R + esforço) a partir da metadata
+            # curada do serviço de ORIGEM. Instrumento financeiro não migra, então
+            # não recebe expectativa. Derivação determinística no backend.
+            svc_meta = meta_map.get(_normalize(_canonical_name(raw["service_name"])))
+            if svc_meta is None:
+                svc_meta = meta_squashed.get(squash_key(_canonical_name(raw["service_name"])))
+            expectation = (
+                derive_expectation(svc_meta.metadata) if svc_meta and not sem_uso else None
+            )
+
             svc = BillingItemSummary(
                 service_name=raw["service_name"],
                 provider=raw["provider"],
@@ -280,6 +291,7 @@ class BuildMigrationContextUseCase:
                 currency=raw["currency"],
                 line_count=raw["line_count"],
                 equivalents=equivs,
+                migration_expectation=expectation.as_dict() if expectation else None,
             )
 
             if category_name not in categories:

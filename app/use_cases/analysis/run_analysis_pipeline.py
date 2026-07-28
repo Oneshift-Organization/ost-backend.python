@@ -119,6 +119,10 @@ def _serialize_services(ctx, fx: FxRate) -> list[dict]:
                     f"{normalize_provider(e.provider).upper()}:{e.service_name}"
                     for e in sv.equivalents[:3]
                 ]
+            # Expectativa de migração calculada no backend (classe 6R + esforço).
+            expectativa = getattr(sv, "migration_expectation", None)
+            if expectativa:
+                entry["migracao"] = expectativa
             out.append(entry)
     out.sort(key=lambda d: -float(d["custo"]))
     return out

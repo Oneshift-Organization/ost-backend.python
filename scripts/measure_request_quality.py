@@ -54,6 +54,8 @@ USER = UUID("00000000-0000-0000-0000-000000000001")
 
 # Famílias de service_type que NÃO são intercambiáveis. Um mapeamento que cruza
 # essas fronteiras é conselho errado (S3 object_storage -> Persistent Disk block).
+_EXPECT_FIELDS = ("requires_refactoring", "vendor_lock_in_level")
+
 _INCOMPATIBLE = (
     ("object_storage", "block_storage"),
     ("object_storage", "file_storage"),
@@ -83,6 +85,12 @@ async def measure(report_id: UUID) -> dict:
         catalog = {
             _squash(c.service_name): c
             for c in await PGServiceComparisonRepository(s).list_all()
+        }
+        # Metadata de expectativa de migração (refatoração / lock-in).
+        meta_repo = PGServiceMetadataRepository(s)
+        metas = {
+            _squash(m.service_name): m
+            for m in await meta_repo.list_by_providers(["aws", "gcp", "azure", "oci"])
         }
         uc = BuildMigrationContextUseCase(
             PgBillingReportRepository(s),
@@ -140,9 +148,22 @@ async def measure(report_id: UUID) -> dict:
     divergentes.sort(key=lambda d: -d["custo"])
     custo_divergente = sum(Decimal(str(x["custo"])) for x in divergentes)
 
+    # Expectativa de migração: o serviço tem metadata curada de esforço/risco?
+    com_expectativa = [
+        sv for _, sv in services
+        if (m := metas.get(_squash(sv.service_name))) is not None
+        and any(k in (m.metadata or {}) for k in _EXPECT_FIELDS)
+    ]
+    custo_expectativa = sum((sv.total_cost for sv in com_expectativa), Decimal("0"))
+
     custo_suspeito = sum(Decimal(str(x["custo"])) for x in suspeitos)
     payload, _ = build_pipeline_llm_input_payload(ctx)
     prem = ctx.premissas
+    # Quanto disso REALMENTE chega ao request enviado ao modelo.
+    blob = json.dumps(payload, ensure_ascii=False)
+    expectativa_no_payload = any(
+        k in blob for k in ("requer_refatoracao", "lock_in", "complexidade_migracao")
+    )
 
     return {
         "provedor": ctx.source_provider,
@@ -155,6 +176,11 @@ async def measure(report_id: UUID) -> dict:
         "mapeamentos_suspeitos": suspeitos,
         "custo_em_mapeamento_suspeito": round(float(custo_suspeito), 2),
         "pct_custo_suspeito": round(float(custo_suspeito / total), 4) if total else 0.0,
+        "servicos_com_expectativa": len(com_expectativa),
+        "expectativa_cobertura_custo": (
+            round(float(custo_expectativa / total), 4) if total else 0.0
+        ),
+        "expectativa_chega_no_payload": expectativa_no_payload,
         "divergentes_vs_catalogo": divergentes[:8],
         "custo_divergente": round(float(custo_divergente), 2),
         "pct_custo_divergente": round(float(custo_divergente / total), 4) if total else 0.0,
@@ -200,6 +226,9 @@ async def main() -> None:
               f"   (${m['custo_em_mapeamento_suspeito']:,.2f})")
         print(f"  DIVERGENTE vs catálogo .. {m['pct_custo_divergente']:.1%}"
               f"   (${m['custo_divergente']:,.2f})")
+        print(f"  expectativa migração .... {m['expectativa_cobertura_custo']:.1%}"
+              f"   ({m['servicos_com_expectativa']} serviços)"
+              f"   chega no payload: {'SIM' if m['expectativa_chega_no_payload'] else 'NAO'}")
         print(f"  cobertura de análise .... {(m['cobertura_analise'] or 0):.1%}")
         print(f"  reconciliação ........... {m['reconciliacao']}  conserva={m['conservacao_bate']}")
         print(f"  payload ................. ~{m['payload_tokens']} tokens")
