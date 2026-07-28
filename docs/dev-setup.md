@@ -68,7 +68,40 @@ Sem a chave o sistema usa `MockLLMClient` — não faz nenhuma requisição exte
 .venv/bin/alembic upgrade head
 ```
 
-Cria `billing_reports` + `billing_items` com `NUMERIC(18,6)`, índices e FK CASCADE.
+Cria `billing_reports` + `billing_items` com `NUMERIC(18,6)`, índices e FK CASCADE,
+mais as tabelas de referência (`cloud_sku_catalog`, `cloud_services_comparation`,
+`exchange_rates`, `cloud_price_points`).
+
+## 4.1 Seeds de referência — **a ordem importa**
+
+Sem eles a análise roda mas compara contra o vazio.
+
+```bash
+python -m app.infrastructure.database.seed_refactor
+python -m app.infrastructure.database.seed_service_metadata
+python -m app.infrastructure.database.seed_catalog_pareto
+python -m app.infrastructure.database.seed_classification_rules
+python -m app.infrastructure.database.seed_from_csv    # <- POR ÚLTIMO
+```
+
+> ⚠️ **`seed_from_csv` tem que ser o último.** Ele carrega
+> `cloud_services_mapping.csv` (816 linhas, a fonte autoritativa do DE-PARA, com
+> tipos finos como `managed_relational_database`) e **limpa e recarrega** a tabela.
+> O `seed_service_metadata` também escreve em `cloud_services_comparation`, mas a
+> partir de uma lista inline de 120 tuplas com tipos grosseiros (`relational`).
+> Na ordem errada, um ambiente novo — **inclusive produção** — fica com o tipo
+> grosseiro e o DE-PARA por serviço perde precisão. Isso foi descoberto pelos
+> gates de integração, não em revisão de código.
+
+## 4.2 Preços oficiais (opcional, precisa de rede)
+
+```bash
+python scripts/sync_prices.py --providers azure,oci,categories,categories-live
+```
+
+Popula `cloud_price_points` das APIs públicas (Azure Retail, OCI cetools). Roda
+**offline**, nunca no caminho crítico. Sem isso a análise funciona, mas os
+equivalentes ficam com `confianca_preco: low` (catálogo seed).
 
 ## 5. Subir a API
 
@@ -79,6 +112,25 @@ Cria `billing_reports` + `billing_items` com `NUMERIC(18,6)`, índices e FK CASC
 Endpoints:
 - http://127.0.0.1:8000/docs — Swagger UI
 - http://127.0.0.1:8000/v1/health — sanity check
+
+## Testes
+
+```bash
+pytest                          # tudo (unitários + gates de integração)
+pytest -m "not integration"     # só unitários — rápido, não precisa de banco
+pytest -m integration           # só os gates da pipeline (precisa de Postgres + seeds)
+```
+
+Os gates de integração **pulam graciosamente** sem Postgres ou sem seed,
+declarando o motivo. No CI (`.github/workflows/tests.yml`) um skip é tratado
+como **falha de ambiente** — skip silencioso esconderia a rede de segurança caída.
+
+Qualidade do request enviado ao agente (DE-PARA por custo, divergência vs
+catálogo curado, cobertura de expectativa de migração):
+
+```bash
+python scripts/measure_request_quality.py --json /tmp/qualidade.json
+```
 
 ## Smoke test rápido
 

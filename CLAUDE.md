@@ -149,12 +149,24 @@ existe").
   Ladder** (L0–L5, data-driven via `sku_classification_rules`, sem `if/else` por
   cloud). Gate de acurácia: `sku_coverage_ratio ≥ 95%` (orphan ≤ 5%). Spec em
   [`docs/refactor/sku-accuracy-spec.md`](docs/refactor/sku-accuracy-spec.md).
-- **Fase atual — PRECISÃO (Precision Engine v3):** spec-mestre em
-  [`docs/refactor/precision-engine-v3-spec.md`](docs/refactor/precision-engine-v3-spec.md)
-  — FX antes de qualquer `delta_custo` (nunca comparar BRL×USD), preços de API
-  oficial em `cloud_price_points`, calculadoras por categoria
-  (`ICategoryCalculator`), packing por custo total, ledger `premissas`, payback
-  calculado no backend (LLM nunca calcula).
+- **Fase atual — PRECISÃO (Precision Engine v3):** spec-mestre AS-BUILT em
+  [`docs/refactor/precision-engine-v3-spec.md`](docs/refactor/precision-engine-v3-spec.md).
+  Já construído: FX antes de qualquer `delta_custo` (nunca comparar BRL×USD),
+  preços de API oficial em `cloud_price_points` (Azure/OCI), shape de instância
+  (instance-hours → vCPU/RAM), packing por custo total, categorias não-compute
+  por razão de taxa, consolidação por provedor com recomendação determinística,
+  ledger `premissas` e **camada de reconciliação** (a análise auditando a si
+  mesma). Pendente: preços AWS/GCP, `family_equivalence`, payback.
+- **O backend manda no número; a IA narra.** `use_cases/analysis/backend_authority.py`
+  sobrescreve custo, economia e provedor recomendado da resposta do LLM com o
+  cálculo determinístico de `resumo_executivo`. O qualitativo do modelo é
+  preservado. Sem isso a resposta da API poderia contradizer a reconciliação.
+- **Seeds têm ordem.** `seed_from_csv` (816 linhas, DE-PARA autoritativo) roda
+  **por último** — ver [`docs/dev-setup.md`](docs/dev-setup.md#41-seeds-de-referência--a-ordem-importa).
+  Na ordem errada o ambiente novo fica com `service_type` grosseiro.
+- **Gates de integração:** `app/tests/integration/` roda a pipeline inteira sobre
+  os 2 CSVs reais versionados e trava os invariantes de cada onda. Pula sem
+  Postgres; no CI um skip é falha. `pytest -m "not integration"` para o loop rápido.
 
 ## Regras Inegociáveis (resumo)
 
