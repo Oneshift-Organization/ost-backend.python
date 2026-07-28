@@ -269,6 +269,10 @@ def build_pipeline_llm_input_payload(ctx) -> tuple[dict, list[str]]:
     context_payload["gasto_total"] = _money(ctx.total_spend, fx)
     context_payload["moeda"] = getattr(ctx, "analysis_currency", ctx.currency)
     context_payload["premissas"] = getattr(ctx, "premissas", {}) or {}
+    # Roll-up por provedor + recomendação, já calculado no backend. A IA narra.
+    resumo = getattr(ctx, "resumo_executivo", {}) or {}
+    if resumo:
+        context_payload["resumo_executivo"] = resumo
     return context_payload, missing_equiv_ids
 
 

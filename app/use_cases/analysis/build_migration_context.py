@@ -40,6 +40,11 @@ from app.domain.services.currency import (
 )
 from app.domain.services.equivalence_matcher import EquivalenceMatcher
 from app.domain.services.pool_aggregation import aggregate_by_family
+from app.domain.services.provider_consolidation import (
+    ProviderTally,
+    consolidate,
+    weakest_confidence,
+)
 from app.domain.services.reconciliation import reconcile
 from app.services.billing_aggregator import BillingAggregator
 
@@ -501,6 +506,59 @@ class BuildMigrationContextUseCase:
             analyzed += convert(getattr(auxiliary, category, Decimal("0")), fx) or Decimal("0")
         total_analysis = convert(total_spend, fx) or Decimal("0")
         cobertura_analise = float(analyzed / total_analysis) if total_analysis > 0 else 0.0
+
+        # ── 9c. Consolidação por provedor (backend calcula, IA narra) ──
+        # Cada provedor só reprecifica o que ELE cobre; o resto fica ao custo atual.
+        _tally: dict[str, dict[str, Any]] = {}
+
+        def _add(provider: str, analyzed_cost: Decimal, source_cost: Decimal, conf: str) -> None:
+            acc = _tally.setdefault(
+                provider,
+                {"analyzed": Decimal("0"), "covered": Decimal("0"), "confs": []},
+            )
+            acc["analyzed"] += analyzed_cost
+            acc["covered"] += source_cost
+            acc["confs"].append(conf)
+
+        family_src = {
+            fp.pool_key.as_str(): convert(fp.monthly_cost, fx) or Decimal("0")
+            for fp in family_pools
+        }
+        for fkey, equivs in family_equivalents.items():
+            src = family_src.get(fkey, Decimal("0"))
+            for e in equivs:
+                fin = e.financials
+                if fin is not None and fin.estimated_monthly_cost is not None:
+                    _add(
+                        e.provider.lower(),
+                        fin.estimated_monthly_cost,
+                        src,
+                        fin.pricing_confidence,
+                    )
+        for category, cat_equivs in category_equivalents.items():
+            src = convert(getattr(auxiliary, category, Decimal("0")), fx) or Decimal("0")
+            for ce in cat_equivs:
+                _add(
+                    str(ce["provedor"]).lower(),
+                    Decimal(str(ce["custo_mensal_estimado"])),
+                    src,
+                    str(ce["confianca_preco"]),
+                )
+
+        tallies = {
+            provider: ProviderTally(
+                analyzed_cost=acc["analyzed"],
+                source_covered=acc["covered"],
+                confidence=weakest_confidence(acc["confs"]),
+            )
+            for provider, acc in _tally.items()
+        }
+        resumo_executivo = consolidate(
+            source_provider=source_provider,
+            current_total=total_analysis,
+            tallies=tallies,
+        )
+
         premissas: dict[str, Any] = {
             "fx": as_ledger(fx),
             "moeda_origem": currency,
@@ -559,6 +617,7 @@ class BuildMigrationContextUseCase:
             category_equivalents=category_equivalents,
             analysis_currency=ANALYSIS_CURRENCY,
             premissas=premissas,
+            resumo_executivo=resumo_executivo,
         )
 
     async def _resolve_fx(self, source_currency: str) -> FxRate:

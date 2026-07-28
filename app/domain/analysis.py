@@ -119,3 +119,5 @@ class MigrationContext:
     analysis_currency: str = "USD"
     # Ledger de premissas: fx aplicado, fonte de preços, janela, cobertura.
     premissas: dict[str, Any] = field(default_factory=dict)
+    # Roll-up por provedor + recomendação (backend calcula, LLM narra).
+    resumo_executivo: dict[str, Any] = field(default_factory=dict)
