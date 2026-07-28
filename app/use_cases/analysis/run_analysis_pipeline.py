@@ -14,12 +14,14 @@ from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRep
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
 from app.domain.services.currency import FxRate, convert, identity_rate
+from app.domain.services.sku_normalization import normalize_provider
 from app.infrastructure.llm.orchestrator import LLMOrchestrator
 from app.infrastructure.repositories.service_repositories import (
     PGServiceComparisonRepository,
     PGServiceMetadataRepository,
 )
 from app.schemas.analysis_v2 import AnalysisV2Response
+from app.use_cases.analysis.backend_authority import apply_backend_authority
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
@@ -67,22 +69,63 @@ def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
         equivs = family_equivalents.get(key, [])
         if not equivs:
             missing.append(key)
-        out.append({
+        entry: dict[str, object] = {
             "familia": fp.pool_key.machine_family,
-            "regiao": fp.pool_key.region,
-            "projetos_origem": list(fp.source_projects),
             "capacidade": {
                 "vcpus": round(float(fp.capacity.vcpus), 2),
                 "ram_gib": round(float(fp.capacity.ram_gib), 2),
             },
-            "custos": {
-                "custo_computacao": _money(fp.costs.compute_base, fx),
-                "custo_licenca_so": _money(fp.costs.os_licensing, fx),
-            },
+            "custo_computacao": _money(fp.costs.compute_base, fx),
             "equivalentes": [_serialize_equivalent(e) for e in equivs],
-        })
+        }
+        # Campos só quando informam algo (Onda 6/E5): região e licença eram
+        # constantes ("global" / 0.0) em 20/20 pools, e a lista de projetos era
+        # ["_unknown"] — puro ruído que disputa atenção do modelo.
+        if fp.pool_key.region and fp.pool_key.region != "global":
+            entry["regiao"] = fp.pool_key.region
+        licenca = _money(fp.costs.os_licensing, fx)
+        if licenca > 0:
+            entry["custo_licenca_so"] = licenca
+        projetos = [p for p in fp.source_projects if p and p != "_unknown"]
+        if projetos:
+            entry["qtd_projetos"] = len(projetos)
+        out.append(entry)
 
     return out, missing
+
+
+def _serialize_services(ctx, fx: FxRate) -> list[dict]:
+    """Serviços nomeados + DE-PARA cross-cloud (Onda 6/E1).
+
+    Sem isto a IA recebia só baldes agregados (`banco_dados: 27760`) e não sabia
+    que o cliente usa Amazon RDS — impossível recomendar migração de serviço.
+    Equivalentes vão como strings `provedor:serviço` (bem mais barato em tokens
+    que objetos aninhados, e igualmente legível pelo modelo).
+    """
+    out: list[dict] = []
+    for cat in getattr(ctx, "categories", []) or []:
+        for sv in cat.services:
+            custo = _money(sv.total_cost, fx)
+            if custo <= 0:
+                continue
+            entry: dict[str, object] = {
+                "nome": sv.service_name,
+                "custo": custo,
+                "categoria": cat.category,
+                "tipo": sv.service_type,
+            }
+            if sv.equivalents:
+                entry["equivalentes"] = [
+                    f"{normalize_provider(e.provider).upper()}:{e.service_name}"
+                    for e in sv.equivalents[:3]
+                ]
+            # Expectativa de migração calculada no backend (classe 6R + esforço).
+            expectativa = getattr(sv, "migration_expectation", None)
+            if expectativa:
+                entry["migracao"] = expectativa
+            out.append(entry)
+    out.sort(key=lambda d: -float(d["custo"]))
+    return out
 
 
 def _round2(value: Decimal) -> float:
@@ -269,18 +312,35 @@ def build_pipeline_llm_input_payload(ctx) -> tuple[dict, list[str]]:
     context_payload["gasto_total"] = _money(ctx.total_spend, fx)
     context_payload["moeda"] = getattr(ctx, "analysis_currency", ctx.currency)
     context_payload["premissas"] = getattr(ctx, "premissas", {}) or {}
+    # Serviços nomeados com DE-PARA — o que permite recomendar migração de
+    # serviço (RDS -> Cloud SQL), não só de capacidade agregada.
+    servicos = _serialize_services(ctx, fx)
+    if servicos:
+        context_payload["servicos"] = servicos
+    # Roll-up por provedor + recomendação, já calculado no backend. A IA narra.
+    resumo = getattr(ctx, "resumo_executivo", {}) or {}
+    if resumo:
+        context_payload["resumo_executivo"] = resumo
     return context_payload, missing_equiv_ids
 
 
 def _serialize_equivalent(equiv) -> dict:
-    """Serialize a single EquivalentService to a JSON-safe dict."""
+    """Serialize a single EquivalentService to a JSON-safe dict.
+
+    ``categoria``/``tipo_servico`` são implicados pela seção que contém o
+    equivalente (``pools_computacao``, ``equivalentes_banco_dados``) e eram
+    idênticos em 100% das 60 ocorrências — repetí-los custava ~840 tokens sem
+    informar nada (Onda 6/E5). ``base_correspondencia`` só aparece quando NÃO é
+    o padrão, aí sim informativo (``curated_only`` = sem dimensionamento real).
+    """
     d: dict[str, object] = {
-        "provedor": equiv.provider,
+        # Casing único: o mesmo payload trazia "GCP", "azure" e "oci".
+        "provedor": normalize_provider(equiv.provider).upper(),
         "nome_servico": equiv.service_name,
-        "categoria": equiv.category,
-        "tipo_servico": equiv.service_type,
-        "base_correspondencia": getattr(equiv, "match_basis", "capacidade_pool"),
     }
+    basis = getattr(equiv, "match_basis", "pool_capacity")
+    if basis != "pool_capacity":
+        d["base_correspondencia"] = basis
     instances = getattr(equiv, "instances", 1)
     if instances > 1:
         d["instancias"] = instances
@@ -470,12 +530,22 @@ class RunAnalysisPipelineUseCase:
                 total_spend=float(ctx.total_spend),
                 currency=ctx.currency,
                 pools_json=pools_json,
+                payload=llm_input,
             )
 
             if not isinstance(ui_report, AnalysisV2Response):
                 ui_report = AnalysisV2Response.resilient_parse(
                     ui_report.model_dump() if hasattr(ui_report, "model_dump") else {}
                 )
+
+            # O backend é a autoridade sobre número: sobrescreve custo, economia
+            # e provedor recomendado com o cálculo determinístico já auditado
+            # (premissas.reconciliacao). O que o modelo escreveu de qualitativo
+            # é preservado. Sem isto a resposta da API poderia contradizer a
+            # própria reconciliação.
+            ui_report = apply_backend_authority(
+                ui_report, getattr(ctx, "resumo_executivo", None)
+            )
 
             flags = ui_report.flags
             if ctx.missing_sku_ids:

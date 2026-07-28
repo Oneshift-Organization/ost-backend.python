@@ -6,165 +6,273 @@
 > implementados). Plano de execução vivo: `ost-docs.backend.plan/precision_engine_execution_plan.md`
 > (local-only). Benchmark de referência: AWS Migration Evaluator, Azure Migrate,
 > Google Migration Center, Infracost, Cloudamize, Densify, CAST Highlight, FOCUS.
+>
+> **Revisão 2026-07-28 — spec AS-BUILT.** As ondas 1–8 foram executadas e a
+> implementação divergiu do plano em pontos importantes (marcados com ⚠️). Este
+> documento agora descreve **o que existe**, não o que se pretendia; o que segue
+> pendente está na §7.
 
 ## 0. Context
 
 A fase anterior resolveu **classificação** (que recurso é cada linha de billing).
-O erro dominante agora está nos **números comparados**:
+O erro dominante estava nos **números comparados** — e, descoberto na auditoria
+de 2026-07-28, também na **informação enviada ao agente**:
 
-| # | Defeito ativo | Efeito |
+| # | Defeito | Status |
 |---|---|---|
-| 1 | `delta_custo` compara BRL (origem) com USD (catálogo) sem conversão | economia superestimada ~5,7×; recomendação pode inverter |
-| 2 | Preços do catálogo são seeds mock | `confianca_preco=low` em 100% dos equivalentes |
-| 3 | `match_pool` escolhe SKU mais barato e multiplica | mix absurdo (14×1vCPU/15GB p/ 13vCPU/52GiB — RAM 4× over) |
-| 4 | Matching por vCPU/RAM ≥ apenas | ignora classe de família (burstable↔compute-opt) e perf real de CPU por cloud |
-| 5 | `payback_period_months` vem do LLM | custo one-time de migração nunca é calculado |
-| 6 | Serviços não-VM sem modelo de unidade | Cloud SQL/GKE/serverless/egress viram bucket auxiliar sem equivalência dimensionada |
+| 1 | `delta_custo` comparava BRL (origem) com USD (catálogo) | ✅ resolvido (§3.1) |
+| 2 | Preços do catálogo eram seeds mock | ✅ Azure/OCI oficiais · ⚠️ AWS/GCP seguem seed |
+| 3 | `match_pool` escolhia SKU mais barato e multiplicava (14×1vCPU) | ✅ resolvido (§4.2) |
+| 4 | Matching por vCPU/RAM ≥ apenas (ignora classe de família) | ❌ pendente (§7) |
+| 5 | `payback_period_months` vinha do LLM | ⚠️ LLM não calcula mais, mas payback ainda não é calculado (§7) |
+| 6 | Serviços não-VM sem modelo de unidade | ⚠️ parcial — razão de taxa (§3.5) |
+| 7 | Custo de compromisso (Savings Plan/RI/CUD) inflava o preço/vCPU do pool | ✅ resolvido (§4.1) |
+| 8 | Instance-hours tratados como vCPU-hours (pool 8× subdimensionado) | ✅ resolvido (§3.6) |
+| 9 | Serviços nomeados e DE-PARA nunca chegavam ao agente | ✅ resolvido (§4.5) |
+| 10 | Schema pedia ao LLM números que o backend já calculava | ✅ resolvido (§4.6) |
 
-**Tese do v3** (validada pelo benchmark): acurácia de recomendação =
-`verdade dos preços × equivalência semântica por categoria × premissas explícitas`.
+**Tese do v3** (validada): acurácia de recomendação =
+`verdade dos preços × equivalência correta × premissas explícitas × auto-auditoria`.
 
-## 1. Goals
+O quarto fator não estava na tese original — emergiu na execução e virou o
+Pilar E (§5).
 
-- **G1** Todo `delta_custo` em **uma única moeda**, com taxa e data registradas.
-- **G2** `confianca_preco=high` para ≥90% do custo comparado (preços de API oficial).
-- **G3** Mix alvo ótimo por custo total com desperdício de RAM ≤ 50% do necessário.
-- **G4** Cada categoria de serviço (compute, storage, database, k8s, serverless,
-  egress) com calculadora e modelo de unidade próprios — zero if/else por cloud.
-- **G5** `payback_period_months` calculado no backend (egress one-time + esforço 6R);
-  LLM apenas narra.
-- **G6** Ledger de premissas (`premissas`) presente em 100% dos payloads e respostas.
+## 1. Goals — status
+
+- **G1** Todo `delta_custo` em moeda única, com taxa registrada — ✅
+- **G2** `confianca_preco` alta para ≥90% do custo comparado — ⚠️ hoje 2 de 3
+  alvos são `official`; o provedor-origem-oposto segue em seed
+- **G3** Mix alvo ótimo por custo total com desperdício controlado — ✅
+- **G4** Calculadora por categoria, zero if/else por cloud — ⚠️ parcial (§3.5)
+- **G5** `payback_period_months` calculado no backend — ❌ (§7)
+- **G6** Ledger de premissas em 100% dos payloads — ✅
 
 ## 2. Non-Goals
 
-- Right-sizing por telemetria (P95) — fica atrás do knob `fator_utilizacao` (C3),
-  conectores de métricas são fase futura.
-- Descontos enterprise negociados (EA/EDP/PPA) — fora do escopo; tiers públicos
-  on-demand/1yr/3yr apenas.
-- LLM continua proibido de calcular (inalterado).
+- Right-sizing por telemetria (P95) — atrás do knob `fator_utilizacao`.
+- Descontos enterprise negociados (EA/EDP/PPA).
+- LLM continua proibido de calcular — agora **garantido em código** (§4.6).
 
-## 3. Data Contracts
+## 3. Data Contracts (as-built)
 
-### 3.1 `exchange_rates` (novo)
+### 3.1 `exchange_rates` — implementado
 ```sql
 CREATE TABLE exchange_rates (
-  par         VARCHAR(7) NOT NULL,      -- 'BRL/USD'
-  taxa        NUMERIC(18,8) NOT NULL,
-  data        DATE NOT NULL,
-  fonte       VARCHAR(40) NOT NULL,     -- 'manual' | 'bcb' | 'ecb'
+  par    VARCHAR(7)    NOT NULL,        -- 'BRL/USD'
+  data   DATE          NOT NULL,
+  taxa   NUMERIC(18,8) NOT NULL,        -- unidades da origem por 1 do destino
+  fonte  VARCHAR(40)   NOT NULL DEFAULT 'manual',
   PRIMARY KEY (par, data)
 );
 ```
-MVP: taxa manual via env `FX_BRL_USD`; worker de fonte oficial depois.
+Migration `f5a6b7c8d9e0`. Fallback por env `FX_BRL_USD` quando a tabela não tem o
+par. Domínio: `domain/services/currency.py` (`FxRate`, `convert`, `as_ledger`).
+Sem taxa conhecida a fonte vira `SEM_TAXA_CAMBIO` — sinaliza em vez de mentir.
 
-### 3.2 `cloud_price_points` (novo — estilo Infracost)
+### 3.2 `cloud_price_points` — implementado ⚠️ (schema difere do plano)
 ```sql
 CREATE TABLE cloud_price_points (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  provider      VARCHAR(10) NOT NULL,
-  service       VARCHAR(60) NOT NULL,      -- 'ec2','compute_engine','cloud_sql',...
-  sku_code      TEXT NOT NULL,             -- id oficial do vendor
-  region        VARCHAR(40) NOT NULL,
-  unidade       VARCHAR(30) NOT NULL,      -- 'vcpu_hour','gb_month','request_1m','gb_egress'
-  preco_ondemand NUMERIC(18,8),
-  preco_1yr      NUMERIC(18,8),
-  preco_3yr      NUMERIC(18,8),
-  moeda         VARCHAR(3) NOT NULL DEFAULT 'USD',
-  atributos     JSONB,                     -- vcpus, ram_gb, familia, engine, iops...
-  coletado_em   TIMESTAMPTZ NOT NULL,
-  fonte         VARCHAR(30) NOT NULL       -- 'azure_retail_api','aws_price_list',...
+  provider     VARCHAR(10)   NOT NULL,
+  sku_key      VARCHAR(120)  NOT NULL,   -- chave nativa (armSkuName, partNumber…)
+  region       VARCHAR(60)   NOT NULL,
+  service_name VARCHAR(200)  NOT NULL,
+  service_type VARCHAR(100)  NOT NULL,   -- 'virtual_server' | categoria não-compute
+  price        NUMERIC(18,8) NOT NULL,
+  currency     VARCHAR(3)    NOT NULL,
+  unit         VARCHAR(30)   NOT NULL DEFAULT 'instance_hour',
+  vcpus        NUMERIC(6,2),
+  ram_gib      NUMERIC(8,2),
+  source       VARCHAR(40)   NOT NULL DEFAULT 'manual',
+  confidence   VARCHAR(10)   NOT NULL DEFAULT 'official',
+  captured_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  PRIMARY KEY (provider, sku_key, region)
 );
-CREATE INDEX ix_price_points_lookup ON cloud_price_points (provider, service, region, unidade);
+CREATE INDEX ix_price_points_provider_type ON cloud_price_points (provider, service_type);
 ```
-Fontes (ordem de implementação): Azure Retail Prices API (público, sem auth) →
-AWS Price List Bulk (offer files) → GCP Cloud Billing Catalog API → OCI price list.
-`cloud_sku_catalog` atual passa a ser VIEW/projeção de `cloud_price_points` p/ compat.
+Migration `a6b7c8d9e0f1`. **Divergências do plano, e por quê:**
 
-### 3.3 `family_equivalence` (novo)
-```sql
-CREATE TABLE family_equivalence (
-  classe     VARCHAR(20) NOT NULL,   -- 'burstable','general','compute_opt','memory_opt','gpu'
-  provider   VARCHAR(10) NOT NULL,
-  familia    VARCHAR(20) NOT NULL,   -- 'E2','t3','B','N2','m6i','D'...
-  perf_coef  NUMERIC(6,3) NOT NULL DEFAULT 1.0,  -- vCPU normalizado (benchmark-based)
-  PRIMARY KEY (provider, familia)
-);
-```
-Matching de compute passa a ser **dentro da mesma classe** (fallback: classe vizinha
-com flag), e capacidade comparada como `vcpus × perf_coef`.
+- Sem `preco_1yr`/`preco_3yr` — commitment tiers ficaram para depois (§7).
+- Specs (`vcpus`/`ram_gib`) em colunas, não em `atributos` JSONB: vêm da mesma
+  resposta da API, então o registro é **autossuficiente** e o matcher o consome
+  sem precisar casar chave com o `cloud_sku_catalog` seed.
+- `cloud_sku_catalog` **não** virou view: continua como fallback. O matcher
+  prefere `cloud_price_points` e rebaixa a confiança quando cai no seed.
 
-### 3.4 `premissas` (assumption ledger — bloco novo no payload e na resposta)
+Fontes implementadas (`infrastructure/pricing/`):
+
+| Fonte | Módulo | O que traz |
+|---|---|---|
+| Azure Retail Prices API (público) | `azure_price_client.py` | ~900 VMs Linux on-demand (famílias B/D/E/F) |
+| OCI cetools API (público) | `oci_price_client.py` | taxas flex (OCPU/h + GB/h) → configs sintéticas |
+| Azure + OCI, categorias | `category_rate_client.py` | egress e block storage ($/GB, $/GB-mês) |
+| Referência publicada | `seed_category_rates.py` | storage/egress/database dos 4 provedores |
+
+AWS (bulk de 480 MB) e GCP (exige API key) seguem pendentes — §7.
+Sync offline: `python scripts/sync_prices.py --providers azure,oci,categories,categories-live`.
+
+### 3.3 `family_equivalence` — ❌ NÃO implementado
+Segue no backlog (§7). O matching de compute continua por capacidade + custo,
+sem classe semântica nem `perf_coef`.
+
+### 3.4 `premissas` (assumption ledger) — implementado, mais rico que o plano
 ```json
 "premissas": {
-  "fx": {"par": "BRL/USD", "taxa": "5.70", "data": "2026-06-01", "fonte": "manual"},
-  "precos": {"fonte": "azure_retail_api", "coletado_em": "2026-05-30", "tier": "ondemand"},
+  "fx": {"par": "BRL/USD", "taxa": "5.70", "data": null, "fonte": "config"},
+  "moeda_origem": "BRL",
+  "moeda_analise": "USD",
+  "janela_horas": 730.0,
+  "fonte_precos": "cloud_price_points (oficial) + seed_catalog_pareto (fallback)",
+  "confianca_precos": {"azure": "official", "oci": "official", "aws": "low"},
+  "cobertura_classificacao": 0.9857,
+  "cobertura_analise": 0.748,
+  "dimensionamento_estimado": 0.31,
   "fator_utilizacao": 1.0,
-  "cobertura_classificacao": 0.986,
-  "janela_horas": 730
+  "reconciliacao": { "ok": true, "resumo": {...}, "achados": [...] }
 }
 ```
+`confianca_precos` é **por provedor** (não um escalar) e `reconciliacao` (§5) não
+existia no plano.
 
-### 3.5 `ICategoryCalculator` (registry — domínio)
-```python
-class ICategoryCalculator(Protocol):
-    categoria: str                       # 'compute'|'storage'|'database'|'kubernetes'|'serverless'|'egress'
-    def dimensionar(self, demanda: Demanda) -> list[OpcaoEquivalente]: ...
+### 3.5 Calculadoras por categoria — ⚠️ implementado por razão de taxa
+O plano previa um registry `ICategoryCalculator` com modelo de unidade próprio.
+O que existe é `domain/services/category_calculator.py`, que reprecifica por
+**razão de taxa**:
+
 ```
-Cada calculadora conhece seu modelo de unidade (compute: vCPU/RAM-h com packing;
-storage: GB-mês+IOPS; database: vCPU/RAM/GB+engine; k8s: taxa fixa control plane +
-node pools via compute; serverless: vCPU-s + requests; egress: tiers por GB).
-Registro data-driven — **zero if/else por cloud** (regra inegociável mantida).
-
-### 3.6 Custo one-time de migração (novo cálculo backend)
+custo_alvo = custo_origem × (taxa_alvo / taxa_origem)
 ```
-custo_migracao = egress_gb_estimado × tarifa_egress_origem
-              + esforco_semanas(classe_6R) × custo_semana_config
-payback_meses  = custo_migracao / economia_mensal   (se economia > 0)
+
+**Motivo da divergência:** `usage_unit`/`usage_amount` dos parsers é inconsistente
+(vazio na AWS, escalas de bilhões no storage), mas o **custo** é confiável —
+conservação validada ao centavo. A razão cancela o GB implícito e depende só de
+uma tabela de taxas. Cobre storage SSD/HDD, egress e database; falta o modelo de
+unidade fino (IOPS, engine, requests, tiers de egress).
+
+Confiança do resultado = **elo mais fraco** entre a taxa de origem e a de destino.
+
+### 3.6 Shape de instância — não estava no plano
+`domain/services/instance_shape.py` e `azure_shape.py` derivam (vCPU, RAM) do
+**esquema de nomenclatura**, não de tabela por instância:
+
+- AWS: tamanho → vCPU (`Nxlarge = N×4`), letra de classe → GiB/vCPU (c=2, m=4, r=8, i=6).
+- Azure: número após a família → vCPU; letra → GiB/vCPU. Séries D/E/G v1–v2 são
+  **rejeitadas** (ali o número é índice, não contagem: `D11_v2` são 2 vCPU) —
+  melhor não dimensionar do que inventar spec.
+
+Sem isso, uma linha `BoxUsage:m7g.2xlarge` (hora-de-instância) era contada como
+hora-de-vCPU e o pool saía 8× subdimensionado.
+
+### 3.7 Expectativa de migração — não estava no plano (era parte do payback)
+`domain/services/migration_expectation.py` deriva a classe 6R da metadata curada:
+
 ```
-`classe_6R` (rehost/replatform/refactor) vem da metadata curada L3 já existente.
+requires_refactoring            → refactor    (esforço alto)
+lock-in médio/alto, sem reescrita → replatform  (médio)
+portável, sem reescrita         → rehost      (baixo)
+```
+Sem metadata retorna `None` — a IA saber que não temos o dado é melhor que
+receber palpite. Alimenta o campo `migracao` de cada serviço no payload.
 
-## 4. Behavior (regras-chave)
+## 4. Behavior (regras-chave, as-built)
 
-1. Conversão FX acontece **antes** de qualquer `delta_custo`; nunca comparar moedas
-   distintas. Sem taxa disponível → flag `SEM_TAXA_CAMBIO`, delta omitido (nunca errado).
-2. `match_pool` v3: filtra classe de família compatível → gera candidatos → resolve
-   mix por **custo total mínimo** com penalidade λ·RAM_desperdicada e teto de instâncias.
-3. Preço buscado por (provider, service, region, unidade) em `cloud_price_points`;
-   fallback catálogo mock rebaixa `confianca_preco` e registra em `premissas`.
-4. LLM recebe `premissas` e é instruído (data-only, inalterado) — continua sem calcular.
-5. Toda resposta persiste (já existente `llm_input_payload`) + `premissas` aplicadas.
+1. **FX antes de tudo.** Conversão acontece antes de qualquer `delta_custo`.
+   Nenhum ponto do payload mistura moeda: `gasto_total`, pools, categorias e
+   `resumo_executivo` saem todos em `moeda_analise` (USD).
 
-## 5. Work Units
+2. **Capacidade só entra com o custo correspondente** (`services/billing_aggregator.py`).
+   Invariante: *custo só entra no pool se a capacidade entrou*. Linha com papel de
+   compute sem quantidade de uso (Savings Plan, RI, CUD) vai para o balde
+   `commitment`. Foi o que unificou os bugs de Cloud Run (GCP) e Savings Plans (AWS).
 
-| # | Unidade | Toca | Onda |
-|---|---|---|---|
-| P1 | `exchange_rates` + conversão no pipeline + `premissas.fx` | migração, `equivalence_matcher`, `run_analysis_pipeline` | 1 |
-| P2 | Bin-packing custo-total c/ penalidade (fix OCI 14×) | `equivalence_matcher.match_pool` | 1 |
-| P3 | Golden CI gate (`e2e_accuracy_report` no CI) | `.github/workflows` | 1 |
-| P4 | Worker Azure Retail Prices → `cloud_price_points` | novo worker + migração | 2 |
-| P5 | Workers AWS Price List / GCP Catalog / OCI | novos workers | 2 |
-| P6 | Commitment tiers no payload (cenários) | serialização, schema V2 | 2 |
-| P7 | `family_equivalence` + perf_coef no matching | migração + matcher | 3 |
-| P8 | `ICategoryCalculator` registry + 6 calculadoras | domínio + DI | 3 |
-| P9 | Ledger `premissas` end-to-end | serialização, schema V2, docs | 4 |
-| P10 | Custo one-time + payback backend (6R) | novo serviço + metadata L3 | 4 |
-| P11 | `fator_utilizacao` knob | config + aggregator | 4 |
-| P12 | Telemetria de acurácia por report + property tests | nova tabela/campos + tests | 4 |
+3. **Família por forma, não por lista.** `sku_matcher.extract_family` usa um shape
+   estrutural (`<letras><dígito><sufixo>` + separador de tamanho); antes era uma
+   whitelist só-GCP e a AWS inteira colapsava num pool `general`.
 
-## 6. Acceptance Criteria
+4. **Packing por custo total** com penalidade de desperdício e teto de instâncias
+   **relativo** (`max(12, menor_mix × 3)`) — teto absoluto impedia mix para pools
+   grandes (228 vCPU).
 
-- Report BRL (golden `d8be966a`): todos os `delta_custo` em USD com `premissas.fx`
-  preenchido; economia E2 na ordem de **dezenas de USD**, não milhares (valida fix 5,7×).
-- Mix OCI para pool 13,2 vCPU/52,7 GiB: ≤ 4 instâncias e RAM alvo ≤ 79 GiB (1,5×).
-- ≥90% do custo comparado com `confianca_preco=high` após P4–P5.
-- `payback_period_months` idêntico entre duas execuções (determinístico, backend).
-- Suíte verde + golden CI gate obrigatório no merge.
+5. **Nome casa por `squash_key`.** Parsers emitem `AmazonRDS`; o catálogo curado
+   usa `Amazon RDS`. `domain/services/sku_normalization.squash_key` remove espaço
+   e pontuação. Sem essa ponte o casamento falhava e o `service_type` vinha do
+   classificador de SKU — foi assim que object storage virou block storage.
+   Desambiguação 1:N (um serviço aparece uma vez por capacidade) prefere a
+   capacidade sugerida pelo classificador.
 
-## 7. Riscos
+6. **Backend manda no número** (`use_cases/analysis/backend_authority.py`).
+   Após o parse da resposta, os campos numéricos e o provedor recomendado são
+   sobrescritos com `resumo_executivo`; o qualitativo do modelo é preservado.
+   Provedor alucinado é descartado; provedor omitido entra com o número.
+
+7. **Instrumento financeiro não migra.** Serviço com custo e nenhuma quantidade de
+   uso não recebe DE-PARA nem expectativa de migração.
+
+## 5. Pilar E — Reconciliação (não estava no plano)
+
+`domain/services/reconciliation.py`, executado em toda análise, grava em
+`premissas.reconciliacao`. Cinco checagens que são **propriedades do modelo de
+pool** — nenhuma cita nome de nuvem:
+
+| Código | Severidade | O que pega |
+|---|---|---|
+| `conservacao_custo_violada` | violação | soma dos baldes ≠ gasto total |
+| `preco_vcpu_implausivel` | suspeita | $/vCPU-mês fora da banda [2, 120] |
+| `familia_generica_concentrada` | suspeita | gasto concentrado em família genérica (extração falhou) |
+| `provedor_sem_base_preco` | info | alvo sem preço para dimensionar |
+| `capacidade_sem_custo_direto` | info | vCPU real coberto por commitment |
+| `cobertura_classificacao_baixa` | suspeita | abaixo de 95% |
+
+**Ponto cego conhecido:** valida consistência **interna**, não validade
+**externa**. Não pega taxa de referência otimista nem viés sistemático (ver §7).
+
+## 6. Estado medido (2026-07-28, sobre os 2 CSVs reais)
+
+| Métrica | Antes da fase | Agora |
+|---|---|---|
+| Cobertura de classificação | 36% GCP / 31% AWS | 98,6% / 96,0% |
+| Cobertura de análise (com equivalente) | ~18% | 78,7% |
+| DE-PARA por custo (AWS) | 26,5% | 86,3% |
+| Custo com `service_type` divergente do catálogo | 77,7% ($71.590) | 0,0% ($1) |
+| Suspeitas de reconciliação (AWS) | 12 | 0 |
+| Testes | ~130 | 241 (214 unitários + 27 gates) |
+
+Payload: `pools_computacao`, `custos_auxiliares`, `servicos` (nomeados, com
+DE-PARA e `migracao`), `premissas`, `resumo_executivo`, `confianca_classificacao`.
+
+## 7. Pendente
+
+| Item | Por que ainda não |
+|---|---|
+| Preços AWS | bulk de 480 MB — exige job offline |
+| Preços GCP | Cloud Billing Catalog exige API key |
+| `family_equivalence` + `perf_coef` | matching segue casando burstable com compute-opt |
+| Commitment tiers (1yr/3yr) | custo é segregado, mas não há cenário |
+| `payback_period_months` | falta input de custo one-time de migração |
+| `ICategoryCalculator` pleno | falta modelo de unidade fino por categoria |
+| **Validade externa das taxas** | 61% do custo AWS é reprecificado por taxa `reference` digitada; a reconciliação não pega viés (ex.: um provedor mais barato em *todas* as categorias) |
+| `fator_utilizacao` por telemetria | knob existe fixo em 1.0 |
+
+## 8. Verificação contínua
+
+`app/tests/integration/` roda a pipeline inteira sobre os 2 CSVs reais
+versionados e trava cada invariante acima. Pula graciosamente sem Postgres;
+no CI (`.github/workflows/tests.yml`) um skip é **falha** de ambiente.
+
+`scripts/measure_request_quality.py` mede a qualidade de conteúdo do request
+(DE-PARA por custo, divergência vs catálogo, cobertura de expectativa).
+
+⚠️ **Ordem dos seeds importa.** `seed_service_metadata` também grava em
+`cloud_services_comparation` a partir de uma lista inline com tipos grosseiros;
+a fonte autoritativa é `cloud_services_mapping.csv` (816 linhas), carregada por
+`seed_from_csv`, que **limpa e recarrega**. Ele tem que rodar **por último** —
+senão um ambiente novo (inclusive produção) fica com o tipo grosseiro e o DE-PARA
+perde precisão. Ver [`dev-setup.md`](../dev-setup.md).
+
+## 9. Riscos
 
 | Risco | Mitigação |
 |---|---|
-| APIs de preço mudam formato | workers isolados por fonte + `fonte`/`coletado_em` versionados |
-| Volume de price points (milhões) | ingestão filtrada por regiões/serviços em uso; índice de lookup |
-| perf_coef vira opinião | usar coeficientes publicados/benchmarks citados; default 1.0 conservador |
-| FX manual desatualiza | data da taxa no ledger + flag se > 7 dias |
+| APIs de preço mudam formato | clients isolados por fonte; `source`/`captured_at` no registro |
+| Taxas de referência enviesadas | §7 — falta checagem de plausibilidade externa |
+| FX desatualizado | data no ledger; `SEM_TAXA_CAMBIO` quando ausente |
+| Lint/CI não reprodutível | `ruff` pinado; local == CI |

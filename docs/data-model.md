@@ -261,6 +261,64 @@ CREATE TABLE unmapped_billing_lines (
 );
 ```
 
+
+### `exchange_rates` (Precision Engine v3 — migration `f5a6b7c8d9e0`)
+
+Taxa de câmbio por par e data. Existe porque comparar BRL de origem com USD de
+catálogo superestimava a economia ~5,7× e podia **inverter** a recomendação.
+
+```sql
+CREATE TABLE exchange_rates (
+    par    VARCHAR(7)    NOT NULL,      -- 'BRL/USD'
+    data   DATE          NOT NULL,
+    taxa   NUMERIC(18,8) NOT NULL,      -- unidades da origem por 1 do destino
+    fonte  VARCHAR(40)   NOT NULL DEFAULT 'manual',
+    PRIMARY KEY (par, data)
+);
+```
+
+Fallback por env `FX_BRL_USD` quando o par não está na tabela. Sem taxa conhecida,
+a análise marca `fonte = "SEM_TAXA_CAMBIO"` no ledger — sinaliza em vez de mentir.
+
+### `cloud_price_points` (Precision Engine v3 — migration `a6b7c8d9e0f1`)
+
+Preço **oficial** buscado da API do provedor, com proveniência. Diferente do
+`cloud_sku_catalog` (seed, preço aproximado), cada linha é autossuficiente:
+carrega os próprios specs, vindos da mesma resposta da API — então o matcher a
+consome sem precisar casar chave com o catálogo.
+
+```sql
+CREATE TABLE cloud_price_points (
+    provider     VARCHAR(10)   NOT NULL,
+    sku_key      VARCHAR(120)  NOT NULL,  -- chave nativa (armSkuName, partNumber…)
+    region       VARCHAR(60)   NOT NULL,
+    service_name VARCHAR(200)  NOT NULL,
+    service_type VARCHAR(100)  NOT NULL,  -- 'virtual_server' | categoria não-compute
+    price        NUMERIC(18,8) NOT NULL,
+    currency     VARCHAR(3)    NOT NULL,
+    unit         VARCHAR(30)   NOT NULL DEFAULT 'instance_hour',
+    vcpus        NUMERIC(6,2),
+    ram_gib      NUMERIC(8,2),
+    source       VARCHAR(40)   NOT NULL DEFAULT 'manual',
+    confidence   VARCHAR(10)   NOT NULL DEFAULT 'official',
+    captured_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (provider, sku_key, region)
+);
+CREATE INDEX ix_price_points_provider_type
+    ON cloud_price_points (provider, service_type);
+```
+
+| Campo | Observação |
+|---|---|
+| `service_type` | `virtual_server` para compute; para não-compute guarda a **categoria** (`storage_ssd`, `network_egress`, `database`) |
+| `unit` | `instance_hour` (compute) · `gb_month` (storage) · `gb` (egress) · `db_vcpu_month` |
+| `confidence` | `official` (API do provedor) · `reference` (taxa publicada, digitada) · `low` |
+| `source` | `azure_retail_api`, `oci_cetools_api`, `published_reference_2026` |
+
+Populado offline por `python scripts/sync_prices.py` — **nunca** no caminho
+crítico da análise. O matcher prefere estes preços e rebaixa a confiança quando
+cai no `cloud_sku_catalog`.
+
 > **Sobre `raw_payload`:** o schema canônico do parser inclui um campo
 > `raw_payload: dict`, mas a **migration 0001 não persiste essa coluna** ainda
 > (decisão MVP — adiada para uma migration futura). Atualmente vive só no

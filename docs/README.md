@@ -33,7 +33,7 @@ agentes de IA.
 
 | Arquivo | Para quê |
 |---|---|---|
-| [`data-model.md`](data-model.md) | DDL das tabelas (`billing_reports`, `billing_items`), schema canônico do parser, convenções de `raw_payload`, queries comuns. |
+| [`data-model.md`](data-model.md) | DDL das tabelas (`billing_reports`, `billing_items`, `exchange_rates`, `cloud_price_points`), schema canônico do parser, convenções de `raw_payload`, queries comuns. |
 | [`parsers.md`](parsers.md) | Guia por provider (AWS CUR/CE, Azure, GCP, OCI) + política `global_zero` do Cost Explorer + como adicionar parser novo. |
 | [`billing-ingestion-pipeline.md`](billing-ingestion-pipeline.md) | Pipeline completa: detecção, 7 parsers, schema canônico, edge cases (NaN, locale, correções). |
 | [`refactor/Refactor-plan.md`](refactor/Refactor-plan.md) | Plano de refatoração (SDD), fases, metas e critérios de aceitação. |
@@ -42,7 +42,7 @@ agentes de IA.
 | [`refactor/focus-alignment.md`](refactor/focus-alignment.md) | Alinhamento FOCUS: taxonomia universal, buckets de capacidade, agregação por (Project, Family, Region). |
 | [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) | Spec SDD de assertividade do SKU matching: Matching Ladder (L0–L5), `component_type`, `sku_classification_rules`, gate `sku_coverage_ratio ≥ 95%`. |
 | [`refactor/pool-equivalence-spec.md`](refactor/pool-equivalence-spec.md) | Spec SDD de equivalência cross-cloud por Capacity Pool (DE-PARA): `match_pool`, `equivalents` aninhados, alinhamento FOCUS, LLM seleciona em vez de inventar. |
-| [`refactor/precision-engine-v3-spec.md`](refactor/precision-engine-v3-spec.md) | **Spec-mestre da fase PRECISÃO**: Truth Layer (FX, preços de API oficial, commitment tiers), calculadoras por categoria de serviço, bin-packing ótimo, ledger de premissas, payback calculado no backend. |
+| [`refactor/precision-engine-v3-spec.md`](refactor/precision-engine-v3-spec.md) | **Spec-mestre da fase PRECISÃO — AS-BUILT**: o que existe hoje (FX, preços oficiais Azure/OCI, shape de instância, razão de taxa por categoria, consolidação por provedor, autoridade do backend sobre o LLM, camada de reconciliação) e o que segue pendente. Divergências do plano original estão marcadas. |
 
 ### Operação
 

@@ -65,6 +65,9 @@ class BillingItemSummary:
     currency: str = "USD"
     line_count: int = 0
     equivalents: list[EquivalentService] = field(default_factory=list)
+    # Expectativa de migração derivada da metadata curada (classe 6R + esforço).
+    # Calculada no backend; a IA apenas narra. None quando não há dado curado.
+    migration_expectation: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -119,3 +122,5 @@ class MigrationContext:
     analysis_currency: str = "USD"
     # Ledger de premissas: fx aplicado, fonte de preços, janela, cobertura.
     premissas: dict[str, Any] = field(default_factory=dict)
+    # Roll-up por provedor + recomendação (backend calcula, LLM narra).
+    resumo_executivo: dict[str, Any] = field(default_factory=dict)

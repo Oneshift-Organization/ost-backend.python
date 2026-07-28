@@ -87,16 +87,27 @@ app/
 │   ├── exceptions.py       # DomainError + subclasses
 │   └── logging.py          # structlog JSON
 ├── domain/                 # PURO — zero framework imports
-│   ├── entities/           # BillingReport, BillingItem, CloudSku
+│   ├── entities/           # BillingReport, BillingItem, CloudSku,
+│   │                       #   WorkloadPool/FamilyPool, CloudPricePoint
 │   ├── value_objects/      # Money, CloudProvider, BillingRecord
-│   ├── services/           # EquivalenceMatcher (matching cross-cloud por hardware)
-│   └── repositories/       # IBillingReportRepository, IBillingItemRepository, ICloudSkuRepository
-├── use_cases/billing/
-│   ├── upload_billing_file.py
-│   ├── ingest_billing_file.py
-│   ├── get_billing_job_status.py
-│   ├── list_billing_reports.py
-│   └── list_billing_items.py
+│   ├── services/           # ── Precision Engine v3 (todos puros, sem I/O) ──
+│   │   ├── currency.py            # FxRate, convert — FX antes de qualquer delta
+│   │   ├── sku_normalization.py   # match_key, squash_key (AmazonRDS == Amazon RDS)
+│   │   ├── sku_matcher.py         # Matching Ladder L0–L5 + extract_family
+│   │   ├── instance_shape.py      # AWS: instance-hours → vCPU/RAM (por shape)
+│   │   ├── azure_shape.py         # Azure: armSkuName → vCPU/RAM
+│   │   ├── pool_aggregation.py    # agrega por família ANTES do matching
+│   │   ├── equivalence_matcher.py # packing por custo total + preço real
+│   │   ├── category_calculator.py # não-compute por razão de taxa
+│   │   ├── migration_expectation.py # classe 6R (rehost/replatform/refactor)
+│   │   ├── provider_consolidation.py # roll-up + recomendação determinística
+│   │   └── reconciliation.py      # a análise auditando a si mesma
+│   └── repositories/       # I*Repository (billing, sku, exchange_rate, price_point)
+├── use_cases/
+│   ├── billing/            # upload, ingest, status, list_reports, list_items
+│   ├── analysis/           # build_billing_enriched, build_migration_context,
+│   │                       #   run_analysis_pipeline, backend_authority
+│   └── catalog/            # sync_cloud_prices, sync_gcp_catalog
 ├── infrastructure/
 │   ├── database/
 │   │   ├── base.py         # DeclarativeBase
@@ -104,6 +115,10 @@ app/
 │   │   ├── models/         # ORM (billing_reports, billing_items)
 │   │   └── migrations/     # Alembic
 │   ├── repositories/       # Pg* implementations
+│   ├── pricing/            # clients de preço oficial (offline, nunca no
+│   │                       #   caminho crítico): azure_price_client,
+│   │                       #   oci_price_client, category_rate_client
+│   ├── llm/                # orchestrator + clients (claude, gemini, openrouter, mock)
 │   └── file_ingestion/
 │       ├── base_parser.py
 │       ├── detector.py     # detect_parser por conteúdo
@@ -115,8 +130,16 @@ app/
 │   ├── auth.py             # UserClaims
 │   └── billing.py          # *Request / *Response
 ├── main.py                 # create_app() + CORS + lifespan
-└── tests/                  # unit/ + integration/ + fixtures/
+└── tests/
+    ├── unit/               # rápidos, sem I/O (214)
+    ├── integration/        # pipeline inteira sobre CSVs reais versionados (27
+    │                       #   gates). Pulam sem Postgres; no CI um skip é FALHA
+    └── fixtures/
 ```
+
+**Regra de dependência dos serviços novos:** todos os `domain/services/` acima são
+funções/dataclasses puras — recebem dados e devolvem dados. Quem faz I/O é o use
+case, que os injeta. É o que permite testá-los sem banco e sem LLM.
 
 Pós-MVP, ressuscitar `infrastructure/cloud_clients/<provider>/` e
 `infrastructure/messaging/` (Celery tasks + DLX).

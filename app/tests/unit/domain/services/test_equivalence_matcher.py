@@ -44,6 +44,7 @@ class _MockSkuRepo(ICloudSkuRepository):
 
 def _source_sku(
     sku_id: str = "BoxUsage:t3a.medium",
+    *,
     provider: str = "aws",
     service_type: str = "virtual_machine",
     vcpus: Decimal | None = Decimal("2"),

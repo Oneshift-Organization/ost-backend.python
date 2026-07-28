@@ -2,7 +2,7 @@
 pytest>=8.2
 pytest-asyncio>=0.23
 pytest-cov>=5.0
-ruff>=0.4
+ruff==0.16.0  # pinado: lint precisa ser reproduzível (local == CI)
 mypy>=1.10
 factory-boy>=3.3
 testcontainers[postgresql]>=4.0
