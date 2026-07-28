@@ -82,11 +82,21 @@ jobs:
         # Os gates exigem DE-PARA curado, metadata, catálogo e regras — sem eles
         # os testes mediriam o vazio e passariam por acidente (o conftest pula
         # declarando qual seed faltou, então a ausência apareceria como skip).
+        #
+        # ORDEM IMPORTA: `seed_service_metadata` também grava em
+        # `cloud_services_comparation`, mas a partir de uma lista inline de 120
+        # tuplas com tipos GROSSEIROS (`relational`). A fonte autoritativa é
+        # `cloud_services_mapping.csv` (816 linhas, tipos finos como
+        # `managed_relational_database`), carregada por `seed_from_csv`, que
+        # limpa e recarrega a tabela. Por isso ele vem POR ÚLTIMO — com a ordem
+        # invertida, um ambiente novo (inclusive produção) fica com o tipo
+        # grosseiro e o DE-PARA por serviço perde precisão.
         run: |
           python -m app.infrastructure.database.seed_refactor
           python -m app.infrastructure.database.seed_service_metadata
           python -m app.infrastructure.database.seed_catalog_pareto
           python -m app.infrastructure.database.seed_classification_rules
+          python -m app.infrastructure.database.seed_from_csv
 
       - name: Taxas de categoria (referência, sem rede)
         run: python scripts/sync_prices.py --providers categories
