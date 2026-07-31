@@ -319,7 +319,7 @@ def _best_packing(
     cap = max(_MIN_INSTANCE_ALLOWANCE, min_feasible * _FRAGMENTATION_FACTOR)
 
     best: tuple[CloudSku, int, Decimal] | None = None
-    best_score: Decimal | None = None
+    best_key: tuple[Decimal, int, str] | None = None
 
     for cand, instances in priced:
         if instances > cap:
@@ -331,8 +331,16 @@ def _best_packing(
         )
         score = monthly * (Decimal("1") + _WASTE_PENALTY * waste)
 
-        if best_score is None or score < best_score:
-            best_score = score
+        # Desempate explícito. Provedores costumam ter SKUs com preço/vCPU
+        # idêntico em tamanhos diferentes (16vCPU x2 e 4vCPU x8 cobrem 32 vCPU
+        # pelo MESMO custo e com o MESMO desperdício), então o score empata.
+        # Sem critério, o vencedor era quem viesse primeiro do banco — decisão
+        # incidental e não-reproduzível. Menos instâncias é objetivamente
+        # melhor para o mesmo custo: menos máquinas para provisionar, atualizar
+        # e monitorar. `sku_id` fecha a ordem total.
+        chave = (score, instances, cand.sku_id)
+        if best_key is None or chave < best_key:
+            best_key = chave
             best = (cand, instances, monthly)
 
     return best

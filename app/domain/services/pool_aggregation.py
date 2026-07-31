@@ -55,7 +55,7 @@ def aggregate_by_family(pools: tuple[WorkloadPool, ...]) -> tuple[FamilyPool, ..
         if p.pool_key.project_id not in b["projects"]:
             b["projects"].append(p.pool_key.project_id)
 
-    return tuple(
+    pools = tuple(
         FamilyPool(
             pool_key=key,
             capacity=PoolCapacity(vcpus=b["vcpus"], ram_gib=b["ram_gib"]),
@@ -67,4 +67,15 @@ def aggregate_by_family(pools: tuple[WorkloadPool, ...]) -> tuple[FamilyPool, ..
             source_projects=tuple(b["projects"]),
         )
         for key, b in buckets.items()
+    )
+    # Ordem estável definida NA ORIGEM (maior gasto primeiro, desempate
+    # alfabético): todos os consumidores — serialização, reconciliação e o
+    # tally da consolidação — enxergam a mesma sequência. Ordenar só no
+    # serializador deixaria os `achados` da reconciliação em ordem variável,
+    # e a request deixaria de ser reproduzível.
+    return tuple(
+        sorted(
+            pools,
+            key=lambda p: (-p.monthly_cost, p.pool_key.machine_family, p.pool_key.region),
+        )
     )

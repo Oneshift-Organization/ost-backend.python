@@ -54,7 +54,15 @@ class PgBillingEnrichedRepository:
                 BillingEnrichedModel.report_id == report_id,
                 BillingEnrichedModel.user_id == user_id,
             )
-            .order_by(BillingEnrichedModel.cost.desc(), BillingEnrichedModel.service_name)
+            .order_by(
+                BillingEnrichedModel.cost.desc(),
+                BillingEnrichedModel.service_name,
+                # Desempate final: (cost, service_name) NÃO é ordem total —
+                # centenas de linhas empatam (ex.: várias com custo 0 do mesmo
+                # serviço) e o desempate arbitrário do Postgres mudava a ordem
+                # de inserção dos pools, vazando para o payload.
+                BillingEnrichedModel.id,
+            )
             .offset(offset)
             .limit(limit)
         )

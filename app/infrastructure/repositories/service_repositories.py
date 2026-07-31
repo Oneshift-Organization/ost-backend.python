@@ -45,8 +45,17 @@ class PGServiceMetadataRepository(IServiceMetadataRepository):
     async def list_by_providers(
         self, providers: list[str]
     ) -> list[ServiceMetadata]:
-        stmt = select(CloudServiceMetadataModel).where(
-            CloudServiceMetadataModel.provider.in_(providers)
+        # Ordem explícita: o resultado alimenta dicts indexados por
+        # (provider, service_name) — sem ORDER BY, qual linha "vence" numa
+        # duplicata dependeria da ordem que o Postgres devolveu, que não é
+        # garantida. Isso vazava para o payload e o tornava não-reproduzível.
+        stmt = (
+            select(CloudServiceMetadataModel)
+            .where(CloudServiceMetadataModel.provider.in_(providers))
+            .order_by(
+                CloudServiceMetadataModel.provider,
+                CloudServiceMetadataModel.service_name,
+            )
         )
         result = await self._session.execute(stmt)
         rows: Sequence[CloudServiceMetadataModel] = result.scalars().all()

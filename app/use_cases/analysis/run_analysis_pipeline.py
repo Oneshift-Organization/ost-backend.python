@@ -64,7 +64,13 @@ def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
     out: list[dict] = []
     missing: list[str] = []
 
-    for fp in family_pools:
+    # Ordem explícita e estável: maior gasto primeiro, desempate alfabético.
+    # Garante request reproduzível independente da ordem que o banco devolveu, e
+    # coloca o que importa no topo para quem lê (humano ou modelo).
+    for fp in sorted(
+        family_pools,
+        key=lambda p: (-p.monthly_cost, p.pool_key.machine_family, p.pool_key.region),
+    ):
         key = fp.pool_key.as_str()
         equivs = family_equivalents.get(key, [])
         if not equivs:
