@@ -244,9 +244,123 @@ async def get_agents_payload(
     return _build_response(ctx)
 
 
+# ── Request de análise — a superfície que um agente consome ──────────────
+#
+# Devolve o payload determinístico da análise (pools, serviços com DE-PARA,
+# premissas com reconciliação e resumo executivo já calculado) SEM chamar LLM.
+# É o contrato pensado para consumo por agente/MCP.
+#
+# Erros são estruturados com código estável para que o consumidor saiba se deve
+# RE-TENTAR ou DESISTIR — a distinção que um agente não consegue fazer a partir
+# de um 422 com texto livre.
+
+_ESTADOS_EM_ANDAMENTO = {"queued", "processing"}
+
+
+def _erro(status_code: int, codigo: str, mensagem: str, *, retryable: bool, **extra) -> HTTPException:
+    """Erro com código estável. `retryable` diz ao agente se insiste ou desiste."""
+    corpo: dict = {"codigo": codigo, "mensagem": mensagem, "retryable": retryable}
+    corpo.update(extra)
+    return HTTPException(status_code=status_code, detail=corpo)
+
+
+@router.get(
+    "/{report_id}/request",
+    status_code=status.HTTP_200_OK,
+    summary="Request de análise pronta para consumo por agente (não chama LLM)",
+)
+async def get_analysis_request(
+    report_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+    recalcular: bool = False,
+) -> dict:
+    """Payload da análise no corpo, metadados em `_meta`.
+
+    Por padrão devolve o payload **persistido** de uma análise anterior quando
+    existe (estável e reproduzível); `recalcular=true` força recomputar a partir
+    do estado atual do billing.
+    """
+    user_uuid = UUID(user.sub)
+
+    # Estado do report ANTES de montar: é o que permite distinguir
+    # "ainda processando" (re-tente) de "inválido" (desista).
+    rep = (
+        await session.execute(
+            select(BillingReportModel).where(
+                BillingReportModel.id == report_id,
+                BillingReportModel.user_id == user_uuid,
+            )
+        )
+    ).scalars().first()
+
+    if rep is None:
+        raise _erro(
+            status.HTTP_404_NOT_FOUND, "REPORT_NAO_ENCONTRADO",
+            f"report {report_id} não existe para este usuário",
+            retryable=False,
+        )
+    if rep.status in _ESTADOS_EM_ANDAMENTO:
+        raise _erro(
+            status.HTTP_409_CONFLICT, "REPORT_NAO_PRONTO",
+            f"ingestão ainda em andamento (status={rep.status})",
+            retryable=True, status_report=rep.status,
+        )
+    if rep.status != "done":
+        raise _erro(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "REPORT_FALHOU",
+            f"ingestão não concluiu (status={rep.status})",
+            retryable=False, status_report=rep.status,
+        )
+
+    if not recalcular:
+        row = (
+            await session.execute(
+                select(AnalysisJobModel)
+                .where(
+                    AnalysisJobModel.report_id == report_id,
+                    AnalysisJobModel.user_id == user_uuid,
+                    AnalysisJobModel.llm_input_payload.isnot(None),
+                )
+                .order_by(AnalysisJobModel.created_at.desc())
+                .limit(1)
+            )
+        ).scalars().first()
+        if row is not None and row.llm_input_payload:
+            return {
+                **dict(row.llm_input_payload),
+                "_meta": {
+                    "origem": "persistida",
+                    "report_id": str(report_id),
+                    "job_id": str(row.job_id),
+                },
+            }
+
+    try:
+        ctx = await _build_ctx(user_uuid, report_id, session)
+    except HTTPException as e:
+        # `_build_ctx` traduz NotFoundError/ValueError para HTTP com texto livre;
+        # aqui re-embrulhamos no envelope estruturado.
+        raise _erro(
+            e.status_code, "CONTEXTO_INDISPONIVEL", str(e.detail), retryable=False
+        ) from e
+
+    payload, sem_equivalente = build_pipeline_llm_input_payload(ctx)
+    return {
+        **payload,
+        "_meta": {
+            "origem": "recalculada",
+            "report_id": str(report_id),
+            "pools_sem_equivalente": sem_equivalente,
+        },
+    }
+
+
 @router.get(
     "/{report_id}/llm-input-preview",
     status_code=status.HTTP_200_OK,
+    deprecated=True,
+    summary="DEPRECADO — use GET /{report_id}/request",
 )
 async def get_llm_input_preview(
     report_id: UUID,

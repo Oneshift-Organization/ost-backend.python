@@ -103,10 +103,10 @@ async def _db_ready() -> None:
         pytest.skip(f"integração pulada — {reason}")
 
 
-async def _ingest(csv: Path) -> UUID:
+async def _ingest(csv: Path, user_id: UUID = TEST_USER) -> UUID:
     sm = get_sessionmaker()
     async with sm() as session:
-        report = BillingReport(user_id=TEST_USER, source_filename=csv.name)
+        report = BillingReport(user_id=user_id, source_filename=csv.name)
         await PgBillingReportRepository(session).save(report)
         await session.commit()
 
@@ -125,7 +125,7 @@ async def _ingest(csv: Path) -> UUID:
         )
         await uc.execute(
             IngestBillingFileInput(
-                user_id=TEST_USER, report_id=report.id, file_path=csv
+                user_id=user_id, report_id=report.id, file_path=csv
             )
         )
         await session.commit()
