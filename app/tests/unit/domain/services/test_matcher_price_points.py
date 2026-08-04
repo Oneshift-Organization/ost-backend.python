@@ -114,3 +114,29 @@ async def test_works_without_price_repo() -> None:
     )
     assert len(opts) == 1
     assert opts[0].financials.pricing_confidence == "low"
+
+
+@pytest.mark.asyncio
+async def test_empate_prefere_menos_instancias() -> None:
+    """Dois SKUs cobrem a mesma capacidade pelo MESMO custo: 16vCPU x2 e
+    4vCPU x8. O score empata; o desempate tem que ser por menos máquinas —
+    sem isso o vencedor era quem viesse primeiro do banco (não-reproduzível)."""
+    grande = CloudPricePoint(
+        provider="azure", sku_key="Standard_D16", service_name="Azure VM",
+        service_type="virtual_server", region="eastus", price=Decimal("0.40"),
+        currency="USD", unit="instance_hour", vcpus=Decimal("16"), ram_gib=Decimal("64"),
+    )
+    pequeno = CloudPricePoint(
+        provider="azure", sku_key="Standard_D4", service_name="Azure VM",
+        service_type="virtual_server", region="eastus", price=Decimal("0.10"),
+        currency="USD", unit="instance_hour", vcpus=Decimal("4"), ram_gib=Decimal("16"),
+    )
+    # Nas duas ordens de entrada o resultado tem que ser o mesmo.
+    for candidatos in ([grande, pequeno], [pequeno, grande]):
+        matcher = EquivalenceMatcher(_SkuRepo({}), _PriceRepo({"azure": candidatos}))
+        opts = await matcher.match_pool(
+            vcpus=Decimal("32"), ram_gib=Decimal("128"), monthly_cost=Decimal("1000"),
+            service_type="virtual_server", target_providers=["azure"],
+        )
+        assert opts[0].instances == 2, "deveria preferir 2x16vCPU a 8x4vCPU"
+        assert opts[0].sku_id == "Standard_D16"

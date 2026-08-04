@@ -68,6 +68,9 @@ temp/
 # ── Runtime (PID do servidor de dev, etc.) ────────────────────────────────
 *.pid
 
+# ── Relatórios de auditoria (documentos de trabalho, não versionados) ─────
+AUDITORIA_PRONTIDAO_AGENTE.md
+
 # ── Brain do arquiteto (local-only, não versionado) ───────────────────────
 ost-docs.backend.plan/
 

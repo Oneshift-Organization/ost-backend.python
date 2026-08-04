@@ -180,7 +180,12 @@ class BuildMigrationContextUseCase:
         meta_squashed = {squash_key(m.service_name): m for m in source_metadata}
 
         # ── 3. Load target provider metadata ─────────────────────
-        target_providers = list(
+        # `sorted`, não `list(set(...))`: a ordem de iteração de um set varia
+        # entre processos (randomização de hash) e se propaga para a ordem dos
+        # `equivalentes` de TODOS os pools do payload. Isso tornava a request
+        # não-reproduzível e injetava ruído na entrada do modelo — dois runs do
+        # mesmo CSV produziam a mesma verdade em ordem diferente.
+        target_providers = sorted(
             {c.provider for c in await self._comparison_repo.list_all()
              if c.provider != source_provider}
         )

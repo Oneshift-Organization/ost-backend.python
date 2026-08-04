@@ -45,12 +45,17 @@ class PgCloudPricePointRepository:
         )
         if region is not None:
             stmt = stmt.where(CloudPricePointModel.region == region)
+        # Ordem explícita: sem ORDER BY o Postgres não garante ordem estável, e
+        # empates de score no packer resolveriam de forma diferente entre runs.
+        stmt = stmt.order_by(CloudPricePointModel.price, CloudPricePointModel.sku_key)
         result = await self._session.execute(stmt)
         return [_to_entity(r) for r in result.scalars().all()]
 
     async def rates_for_category(self, category: str) -> list[CloudPricePoint]:
-        stmt = select(CloudPricePointModel).where(
-            CloudPricePointModel.service_type == category
+        stmt = (
+            select(CloudPricePointModel)
+            .where(CloudPricePointModel.service_type == category)
+            .order_by(CloudPricePointModel.provider, CloudPricePointModel.sku_key)
         )
         result = await self._session.execute(stmt)
         return [_to_entity(r) for r in result.scalars().all()]
