@@ -16,13 +16,18 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 
+from app.api.deps import _DEV_USER
+from app.domain.entities.billing_report import BillingReport
+from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.repositories.pg_billing_report_repo import (
+    PgBillingReportRepository,
+)
 from app.main import create_app
 from app.use_cases.analysis.run_analysis_pipeline import (
     build_pipeline_llm_input_payload,
 )
-
-from app.api.deps import _DEV_USER
 
 from .conftest import FIXTURES, _cleanup, _ingest
 
@@ -74,7 +79,10 @@ async def test_conteudo_bate_com_o_que_vai_ao_modelo(_app, aws_context) -> None:
         esperado, _ = build_pipeline_llm_input_payload(aws_context)
         assert set(body) == set(esperado)
         assert body["gasto_total"] == esperado["gasto_total"]
-        assert body["resumo_executivo"]["recomendado"] == esperado["resumo_executivo"]["recomendado"]
+        assert (
+            body["resumo_executivo"]["recomendado"]
+            == esperado["resumo_executivo"]["recomendado"]
+        )
     finally:
         await _cleanup(rid)
 
@@ -93,14 +101,6 @@ async def test_report_inexistente_e_terminal(_app, _db_ready) -> None:
 async def test_ingestao_em_andamento_e_retryable(_app, _db_ready) -> None:
     """409 com `retryable: true` + status atual — o agente sabe que deve
     voltar a perguntar, em vez de tratar como falha."""
-    from sqlalchemy import text
-
-    from app.domain.entities.billing_report import BillingReport
-    from app.infrastructure.database.session import get_sessionmaker
-    from app.infrastructure.repositories.pg_billing_report_repo import (
-        PgBillingReportRepository,
-    )
-
     sm = get_sessionmaker()
     async with sm() as s:
         rep = BillingReport(user_id=HTTP_USER, source_filename="em_andamento.csv")
