@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
 
+    # Tempo além do qual um job de análise ativo é considerado perdido. A
+    # análise roda em BackgroundTasks no processo web, então um restart deixa
+    # órfãos; o reaper do startup os encerra usando este limite.
+    analysis_job_timeout_minutes: int = 30
+
     # ── Precision Engine v3 — câmbio ────────────────────────────────────
     # Fallback usado quando `exchange_rates` não tem taxa para o par.
     # Formato: unidades da moeda de origem por 1 USD (BRL/USD = 5.70).

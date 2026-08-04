@@ -510,7 +510,15 @@ class RunAnalysisPipelineUseCase:
 
     async def execute(self, job: AnalysisJob) -> None:
         job.mark_processing()
-        await self._job_repo.update(job)
+        # Transação própria e curta ANTES de qualquer I/O externo: o estado
+        # intermediário precisa existir no banco enquanto o LLM roda, senão quem
+        # faz polling não distingue "na fila" de "executando" — e um processo
+        # morto no meio deixa o job preso sem sinal nenhum.
+        marcar = getattr(self._job_repo, "marcar_processando", None)
+        if marcar is not None:
+            await marcar(job.job_id)
+        else:  # repositórios de teste sem a otimização
+            await self._job_repo.update(job)
 
         try:
             context_uc = BuildMigrationContextUseCase(

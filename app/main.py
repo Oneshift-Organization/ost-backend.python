@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import timedelta
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,12 +7,38 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
+
+
+async def _expirar_jobs_travados() -> int:
+    """Encerra jobs de análise presos em estado ativo.
+
+    A análise roda em BackgroundTasks no próprio processo web: um deploy, um
+    OOM ou um restart no meio da execução deixa o job ativo para sempre. Como o
+    índice único parcial impede um segundo job ativo para o mesmo report, sem
+    esta varredura o report ficaria bloqueado permanentemente — o reaper é a
+    válvula que torna a idempotência segura.
+    """
+    limite = timedelta(minutes=get_settings().analysis_job_timeout_minutes)
+    sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
+        return await PgAnalysisJobRepository(session).expirar_travados(limite)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     configure_logging()
-    get_logger(__name__).info("app_startup", env=get_settings().app_env)
+    log = get_logger(__name__)
+    log.info("app_startup", env=get_settings().app_env)
+    # Jobs órfãos do processo anterior: quem estava executando quando o processo
+    # caiu não tem mais dono.
+    try:
+        expirados = await _expirar_jobs_travados()
+        if expirados:
+            log.warning("jobs_travados_expirados", quantidade=expirados)
+    except Exception:  # startup nunca falha por causa do reaper
+        log.exception("reaper_falhou_no_startup")
     yield
 
 

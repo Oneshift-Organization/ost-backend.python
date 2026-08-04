@@ -5,6 +5,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
@@ -478,20 +479,54 @@ async def start_analysis(
     background: BackgroundTasks,
     external_id: UUID | None = None,
 ) -> AnalysisJobResponse:
+    user_uuid = UUID(user.sub)
+    repo = PgAnalysisJobRepository(session)
+
+    # IDEMPOTÊNCIA: um retry do agente é comportamento normal, e antes cada
+    # chamada criava um job novo — ou seja, uma segunda análise PAGA. Se já
+    # existe um job em andamento para este report, devolvemos o mesmo em vez de
+    # disparar outro. O índice único parcial no banco é a garantia final, para
+    # o caso de duas requisições chegarem juntas.
+    existente = await repo.buscar_ativo_por_report(report_id, user_uuid)
+    if existente is not None:
+        return AnalysisJobResponse(
+            job_id=existente.job_id,
+            report_id=existente.report_id,
+            external_id=existente.external_id,
+            status=existente.status,
+            created_at=existente.created_at,
+        )
+
     job = AnalysisJob(
         job_id=uuid4(),
-        user_id=UUID(user.sub),
+        user_id=user_uuid,
         report_id=report_id,
         external_id=external_id,
     )
-    repo = PgAnalysisJobRepository(session)
-    await repo.create(job)
-    await session.commit()
+    try:
+        await repo.create(job)
+        await session.commit()
+    except IntegrityError as e:
+        # Corrida: outra requisição criou o job entre a consulta e o insert.
+        await session.rollback()
+        concorrente = await repo.buscar_ativo_por_report(report_id, user_uuid)
+        if concorrente is None:
+            raise _erro(
+                status.HTTP_409_CONFLICT, "ANALISE_DUPLICADA",
+                "já existe uma análise para este report", retryable=False,
+            ) from e
+        return AnalysisJobResponse(
+            job_id=concorrente.job_id,
+            report_id=concorrente.report_id,
+            external_id=concorrente.external_id,
+            status=concorrente.status,
+            created_at=concorrente.created_at,
+        )
 
     sm = get_sessionmaker()
     background.add_task(
         _run_analysis_pipeline,
-        UUID(user.sub),
+        user_uuid,
         report_id,
         job.job_id,
         sm,
