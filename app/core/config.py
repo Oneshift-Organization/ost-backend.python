@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # (no network needed). Leave empty to fetch from supabase_url at startup.
     supabase_jwks_json: str = ""
 
+    # Swagger/ReDoc/openapi.json. Ligado inclusive em produção — ver comentário
+    # em `create_app`. Desligue com DOCS_ENABLED=false se a superfície da API
+    # precisar deixar de ser pública.
+    docs_enabled: bool = True
+
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:3000",

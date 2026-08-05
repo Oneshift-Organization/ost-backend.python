@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
+from app.core import config
 from app.core.config import get_settings
 from app.main import ErroInternoMiddleware, create_app
 
@@ -88,3 +89,26 @@ def test_ordem_dos_middlewares_esta_correta() -> None:
     assert tipos.index(CORSMiddleware) < tipos.index(ErroInternoMiddleware), (
         "CORSMiddleware precisa ser mais externo que ErroInternoMiddleware"
     )
+
+
+# ── docs ────────────────────────────────────────────────────────────────
+
+
+def test_docs_ligadas_por_padrao() -> None:
+    """O contrato da API é público de propósito: é o que o time do agente/MCP
+    consome para integrar."""
+    c = TestClient(create_app())
+    assert c.get("/docs").status_code == 200
+    assert c.get("/openapi.json").status_code == 200
+
+
+def test_docs_podem_ser_desligadas(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`DOCS_ENABLED=false` fecha a superfície sem alterar código."""
+    monkeypatch.setenv("DOCS_ENABLED", "false")
+    config.get_settings.cache_clear()
+    try:
+        c = TestClient(create_app())
+        assert c.get("/docs").status_code == 404
+        assert c.get("/openapi.json").status_code == 404
+    finally:
+        config.get_settings.cache_clear()
