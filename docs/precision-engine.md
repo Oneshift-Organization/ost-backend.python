@@ -1,8 +1,8 @@
-# Precision Engine v3 — SDD Spec (master)
+# Precision Engine — arquitetura de precisão dos números
 
 > Documento guarda-chuva da fase de PRECISÃO. Sucede — sem invalidar — as specs
-> [`sku-accuracy-spec.md`](sku-accuracy-spec.md) (implementada: coverage GCP 98,6% /
-> AWS 96,0%) e [`pool-equivalence-spec.md`](pool-equivalence-spec.md) (E1–E7
+> [`sku-matching.md`](sku-matching.md) (implementada: coverage GCP 98,6% /
+> AWS 96,0%) e [`cross-cloud-equivalence.md`](cross-cloud-equivalence.md) (E1–E7
 > implementados). Plano de execução vivo: `ost-docs.backend.plan/precision_engine_execution_plan.md`
 > (local-only). Benchmark de referência: AWS Migration Evaluator, Azure Migrate,
 > Google Migration Center, Infracost, Cloudamize, Densify, CAST Highlight, FOCUS.
@@ -266,7 +266,7 @@ no CI (`.github/workflows/tests.yml`) um skip é **falha** de ambiente.
 a fonte autoritativa é `cloud_services_mapping.csv` (816 linhas), carregada por
 `seed_from_csv`, que **limpa e recarrega**. Ele tem que rodar **por último** —
 senão um ambiente novo (inclusive produção) fica com o tipo grosseiro e o DE-PARA
-perde precisão. Ver [`dev-setup.md`](../dev-setup.md).
+perde precisão. Ver [`dev-setup.md`](dev-setup.md).
 
 ## 9. Riscos
 

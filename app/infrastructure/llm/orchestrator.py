@@ -4,7 +4,7 @@ The prompt contains only the billing data and the expected output schema.
 No instructions, no rules, no tone guidance. The model reasons from the
 data and returns a JSON that matches ``AnalysisV2Response``.
 
-See ``docs/refactor/analysis-v2-spec.md`` §4.
+See ``docs/precision-engine.md``.
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ matcher is **pure**: it receives the catalog + rules already loaded, so it is
 fully unit-testable without a database. Wiring (loading from repositories) is
 the caller's job.
 
-See ``docs/refactor/sku-accuracy-spec.md`` §4 (the ladder) and §5 (behavior).
+See ``docs/sku-matching.md`` §4 (the ladder) and §5 (behavior).
 """
 
 from __future__ import annotations

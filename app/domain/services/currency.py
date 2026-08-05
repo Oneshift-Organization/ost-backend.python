@@ -4,7 +4,7 @@ Regra inegociável: nunca comparar custos em moedas diferentes. Todo
 ``cost_delta`` é calculado depois de normalizar origem e destino para a
 **moeda de análise**. A taxa usada e sua origem viajam no ledger ``premissas``.
 
-Ver ``docs/refactor/precision-engine-v3-spec.md`` §3.1 e §4.1.
+Ver ``docs/precision-engine.md`` §3.1 e §4.1.
 """
 
 from __future__ import annotations

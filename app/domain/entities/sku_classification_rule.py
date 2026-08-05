@@ -15,7 +15,7 @@ class SkuClassificationRule:
     - ``glob``  — ``fnmatch`` against the (case-folded) descriptor
     - ``regex`` — ``re.search`` against the (case-folded) descriptor
 
-    See ``docs/refactor/sku-accuracy-spec.md`` §4.1.
+    See ``docs/sku-matching.md`` §4.1.
     """
 
     provider: str

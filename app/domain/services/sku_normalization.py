@@ -4,7 +4,7 @@ Pure domain helpers (zero framework imports). The single choke point for
 provider casing and for the ``match_key`` used by the Matching Ladder (L1+),
 so trivial textual variance never blocks a match.
 
-See ``docs/refactor/sku-accuracy-spec.md`` §3.3 and §5.
+See ``docs/sku-matching.md`` §3.3 and §5.
 """
 
 from __future__ import annotations

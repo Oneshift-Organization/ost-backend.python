@@ -9,7 +9,7 @@ Cada achado tem um `codigo` estável (para o front/telemetria), uma `severidade`
 (`violacao` > `suspeita` > `info`) e os números que o sustentam. O resultado é
 gravado em `premissas["reconciliacao"]`.
 
-Função pura, sem I/O. Ver ``docs/refactor/precision-engine-v3-spec.md``.
+Função pura, sem I/O. Ver ``docs/precision-engine.md``.
 """
 
 from __future__ import annotations
