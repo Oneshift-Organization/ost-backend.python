@@ -1,8 +1,11 @@
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import timedelta
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
@@ -42,6 +45,47 @@ async def lifespan(_app: FastAPI):
     yield
 
 
+class ErroInternoMiddleware(BaseHTTPMiddleware):
+    """Converte exceção não tratada em resposta HTTP normal.
+
+    Duas coisas dependem disso. A primeira é o CORS: uma resposta 500 gerada pelo
+    ServerErrorMiddleware nunca atravessa o CORSMiddleware, então o browser não vê
+    `Access-Control-Allow-Origin` e culpa o CORS por um erro que é de servidor —
+    o front fica caçando configuração de origem enquanto o defeito está no
+    endpoint. A segunda é o contrato de erro: um agente precisa distinguir
+    RE-TENTE de DESISTA, e 500 sem corpo estruturado não diz nada.
+
+    O `X-Request-ID` do cliente é ecoado para casar o erro visto no browser com a
+    linha de log do servidor.
+    """
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        try:
+            return await call_next(request)
+        except Exception:
+            request_id = request.headers.get("X-Request-ID", "")
+            get_logger(__name__).exception(
+                "erro_nao_tratado",
+                path=request.url.path,
+                method=request.method,
+                request_id=request_id,
+            )
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "detail": {
+                        "codigo": "ERRO_INTERNO",
+                        "mensagem": "erro interno ao processar a requisição",
+                        # Erro de servidor é transitório até prova em contrário:
+                        # o cliente pode repetir. O que não pode é repetir em loop
+                        # apertado — daí o campo existir em vez de ficar implícito.
+                        "retryable": True,
+                    }
+                },
+                headers={"X-Request-ID": request_id} if request_id else None,
+            )
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
 
@@ -56,6 +100,15 @@ def create_app() -> FastAPI:
 
     if "*" in settings.cors_origins:
         raise RuntimeError("CORS allow_origins=['*'] is forbidden")
+
+    # ORDEM IMPORTA. Starlette aplica middlewares na ordem inversa do registro:
+    # o último adicionado é o mais EXTERNO. A captura precisa ficar por DENTRO do
+    # CORS, senão o 500 não passa pelo CORSMiddleware e sai sem
+    # `Access-Control-Allow-Origin` — o browser então reporta "blocked by CORS
+    # policy" para o que na verdade é um erro interno, escondendo a causa real.
+    # Um `@app.exception_handler(Exception)` NÃO resolve: o FastAPI o instala no
+    # ServerErrorMiddleware, que continua sendo a camada mais externa de todas.
+    app.add_middleware(ErroInternoMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
