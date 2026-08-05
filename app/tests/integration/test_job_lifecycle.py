@@ -240,3 +240,43 @@ async def test_reaper_nao_toca_job_recente(_db_ready) -> None:
             assert visto.status == AnalysisStatus.PENDING
     finally:
         await _limpar(rid)
+
+
+# ── resiliência da listagem ─────────────────────────────────────────────
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_registro_corrompido_nao_derruba_a_listagem(_app, _db_ready) -> None:
+    """Era o 500 de produção: `recommendation` como objeto em vez de string
+    fazia o Pydantic recusar, e o usuário perdia acesso a TODAS as análises."""
+    rid = await _report_pronto()
+    try:
+        sm = get_sessionmaker()
+        async with sm() as s:
+            job = AnalysisJob(job_id=uuid4(), user_id=HTTP_USER, report_id=rid)
+            await PgAnalysisJobRepository(s).create(job)
+            await s.commit()
+            # Formato que o LLM pode devolver e o schema não aceita.
+            await s.execute(
+                text(
+                    "update analysis_jobs set status='COMPLETED', "
+                    "ai_structured_output = cast(:p as jsonb) where job_id = :j"
+                ),
+                {
+                    "p": '{"recommendation": {"texto": "migrar"}, '
+                    '"viability_score": 7.5, "analysis_confidence": 0.9}',
+                    "j": job.job_id,
+                },
+            )
+            await s.commit()
+
+        transport = ASGITransport(app=_app)
+        async with AsyncClient(transport=transport, base_url="http://t") as c:
+            r = await c.get("/v1/analyses?limit=100")
+
+        assert r.status_code == 200, f"a listagem caiu inteira: {r.text[:200]}"
+        assert any(j["job_id"] == str(job.job_id) for j in r.json()), (
+            "o job corrompido sumiu da lista em vez de degradar"
+        )
+    finally:
+        await _limpar(rid)

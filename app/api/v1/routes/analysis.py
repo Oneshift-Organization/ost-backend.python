@@ -1,9 +1,8 @@
 import logging
 from uuid import UUID, uuid4
 
-logger = logging.getLogger(__name__)
-
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -62,9 +61,36 @@ from app.use_cases.analysis.build_migration_context import (
 )
 from app.use_cases.analysis.run_analysis_pipeline import RunAnalysisPipelineUseCase
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/analyses")
 
 _MAX_ANALYSES_PER_PAGE = 100
+
+
+def _texto(valor: object) -> str | None:
+    """Campo de `ai_structured_output` que o schema declara como texto.
+
+    O LLM devolve JSON livre: `recommendation` já veio como string, mas nada
+    impede que venha como objeto ou lista. O schema declara `str | None` e o
+    Pydantic recusa qualquer outra coisa — o que derrubava a requisição inteira.
+    """
+    if valor is None or isinstance(valor, str):
+        return valor
+    return str(valor)
+
+
+def _inteiro(valor: object) -> int | None:
+    """Idem para os numéricos. Float com parte fracionária não converte para
+    `int` no Pydantic; aqui vira `None` em vez de erro."""
+    if valor is None or isinstance(valor, bool):
+        return None
+    if isinstance(valor, int):
+        return valor
+    try:
+        return int(float(valor))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
 
 
 def _build_response(ctx: MigrationContext) -> MigrationContextResponse:
@@ -164,23 +190,39 @@ async def list_analysis_jobs(
     summaries: list[AnalysisJobSummary] = []
     for job, report in result.all():
         structured = job.ai_structured_output if isinstance(job.ai_structured_output, dict) else {}
-        summaries.append(
-            AnalysisJobSummary(
-                job_id=job.job_id,
-                report_id=job.report_id,
-                external_id=job.external_id,
-                status=job.status,
-                provider=report.provider,
-                source_filename=report.source_filename,
-                row_count=report.row_count,
-                recommended_provider=structured.get("recommended_provider"),
-                recommendation=structured.get("recommendation"),
-                viability_score=structured.get("viability_score"),
-                analysis_confidence=structured.get("analysis_confidence"),
-                error=job.error,
-                created_at=job.created_at,
+        try:
+            summaries.append(
+                AnalysisJobSummary(
+                    job_id=job.job_id,
+                    report_id=job.report_id,
+                    external_id=job.external_id,
+                    status=job.status,
+                    provider=report.provider,
+                    source_filename=report.source_filename,
+                    row_count=report.row_count or 0,
+                    recommended_provider=_texto(structured.get("recommended_provider")),
+                    recommendation=_texto(structured.get("recommendation")),
+                    viability_score=_inteiro(structured.get("viability_score")),
+                    analysis_confidence=_texto(structured.get("analysis_confidence")),
+                    error=job.error,
+                    created_at=job.created_at,
+                )
             )
-        )
+        except ValidationError:
+            # Rede de segurança: um único registro malformado não pode esconder
+            # TODAS as análises do usuário. O job continua na lista, sem os
+            # campos derivados da IA, e o defeito fica registrado no log em vez
+            # de virar um 500 opaco.
+            logger.exception("analysis_summary_invalido job_id=%s", job.job_id)
+            summaries.append(
+                AnalysisJobSummary(
+                    job_id=job.job_id,
+                    report_id=job.report_id,
+                    status=str(job.status),
+                    created_at=job.created_at,
+                    error="resumo indisponível: dados da análise em formato inesperado",
+                )
+            )
 
     return summaries
 
