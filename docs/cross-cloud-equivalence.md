@@ -1,7 +1,7 @@
-# Pool Equivalence & Cross-Cloud DE-PARA — SDD Spec
+# Equivalência Cross-Cloud (DE-PARA por Capacity Pool)
 
-> Companion to [`focus-alignment.md`](focus-alignment.md),
-> [`sku-accuracy-spec.md`](sku-accuracy-spec.md) and [`SDD-spec.md`](SDD-spec.md).
+> Complementa [`capacity-pool-model.md`](capacity-pool-model.md),
+> [`sku-matching.md`](sku-matching.md) and [`architecture.md`](architecture.md).
 > Defines **how** the backend feeds the LLM deterministic cross-cloud
 > alternatives (DE-PARA) for each Capacity Pool, so the model **narrates** a
 > migration instead of **inventing** target instances and prices.
@@ -12,18 +12,18 @@
 The Capacity Pool refactor gave us excellent **resource auto-recognition**: the
 backend aggregates atomic billing lines into `WorkloadPool` objects with real
 `capacity = {vcpus, ram_gib}` and `costs` (see
-[`focus-alignment.md`](focus-alignment.md) §2). But it **dropped the cross-cloud
+[`capacity-pool-model.md`](capacity-pool-model.md) §2). But it **dropped the cross-cloud
 DE-PARA** that the pre-pool design had.
 
-**What the LLM receives today** ([`run_analysis_pipeline.py`](../../app/use_cases/analysis/run_analysis_pipeline.py)
+**What the LLM receives today** ([`run_analysis_pipeline.py`](../app/use_cases/analysis/run_analysis_pipeline.py)
 `_serialize_pools`): `compute_pools` (capacity + cost), `auxiliary_costs`,
 `mapping_confidence`. **Zero** cross-cloud alternatives.
 
-**What the prompt then asks** ([`orchestrator.py:47-48`](../../app/infrastructure/llm/orchestrator.py)),
+**What the prompt then asks** ([`orchestrator.py:47-48`](../app/infrastructure/llm/orchestrator.py)),
 rule #2 verbatim: *"Para cada compute_pool, **desenhe um mix de instâncias** na
 nuvem de destino (AWS, OCI) capaz de suportar a capacidade agregada"*. We are
 **explicitly instructing the LLM to invent** target SKUs and prices — the exact
-hallucination risk [`SDD-spec.md`](SDD-spec.md) §2 forbids ("no math in LLM").
+hallucination risk [`architecture.md`](architecture.md) forbids ("no math in LLM").
 
 **What the old design did.** Pre-refactor, the backend sent an `equivalents`
 array per workload, e.g.:
@@ -48,11 +48,11 @@ The LLM was fed the factual options and only **chose + explained**.
 The old equivalence code is **not** on `dev/feat/billing-data-export` — that
 branch shares this branch's merge-base and never had it. The DE-PARA machinery
 is **intact on the current branch** and still runs:
-[`equivalence_matcher.py`](../../app/domain/services/equivalence_matcher.py)
+[`equivalence_matcher.py`](../app/domain/services/equivalence_matcher.py)
 (`EquivalenceMatcher`, `get_equivalents`), the `EquivalentService` /
 `TechnicalMatch` / `FinancialEstimate` entities
-([`domain/analysis.py:30-53`](../../app/domain/analysis.py)), and
-[`build_migration_context.py:246-303`](../../app/use_cases/analysis/build_migration_context.py)
+([`domain/analysis.py:30-53`](../app/domain/analysis.py)), and
+[`build_migration_context.py:246-303`](../app/use_cases/analysis/build_migration_context.py)
 which **still computes** `ctx.workloads[].equivalents`.
 
 **So this is a re-wiring, not a recovery.** Two precise breaks:
@@ -63,7 +63,7 @@ which **still computes** `ctx.workloads[].equivalents`.
 2. **Wrong granularity / wrong key.** The matcher matches **per SKU** and needs
    a `sku_id` carrying `vcpus`+`ram`. After the SKU-accuracy work, GCP compute
    lines match by **rule (L2)** with `sku_id = None`
-   ([`sku-accuracy-spec.md`](sku-accuracy-spec.md) §4), and cloud providers bill
+   ([`sku-matching.md`](sku-matching.md) §4), and cloud providers bill
    **atomic Core/RAM** lines — there is no single source SKU with full specs. So
    the per-SKU matcher returns **no equivalents** for exactly the workloads we
    care about.
@@ -77,7 +77,7 @@ pool recognition:
 | Layer | Source | What it gives |
 |---|---|---|
 | **L1 — Capacity** | Pools (current) | real `{vcpus, ram_gib}` per project/family |
-| **L2 — Hardware equivalent + `cost_delta`** | [`equivalence_matcher.py`](../../app/domain/services/equivalence_matcher.py) (commit `a6b00cd`) | cheapest target SKU covering the capacity + savings math |
+| **L2 — Hardware equivalent + `cost_delta`** | [`equivalence_matcher.py`](../app/domain/services/equivalence_matcher.py) (commit `a6b00cd`) | cheapest target SKU covering the capacity + savings math |
 | **L3 — Curated knowledge** | service-catalog DE-PARA (commit `7e3b2c6`, still live) | per-service `metadata` + `docs_costs` (portability, lock-in, gotchas) |
 
 The `WorkloadPool` **is** the auto-recognized resource (L1): it holds the
@@ -85,16 +85,16 @@ aggregated `{vcpus, ram_gib}` the per-SKU path could no longer reconstruct.
 
 - **L2** — match equivalents **at the pool level**, reusing the existing repo
   query
-  [`find_equivalents(provider, service_type, min_vcpus, min_ram_gb)`](../../app/infrastructure/repositories/pg_cloud_sku_repo.py#L49)
+  [`find_equivalents(provider, service_type, min_vcpus, min_ram_gb)`](../app/infrastructure/repositories/pg_cloud_sku_repo.py#L49)
   (already returns candidates ≥ capacity, ordered by lowest price).
 - **L3** — enrich each L2 target with the **curated `metadata` + `docs_costs`**
   the original catalog DE-PARA carried. This is what the hardware-only matcher
   *lost*: the qualitative migration knowledge (434 curated rows in
-  [`seed_service_metadata.py`](../../app/infrastructure/database/seed_service_metadata.py))
+  [`seed_service_metadata.py`](../app/infrastructure/database/seed_service_metadata.py))
   that stopped the LLM from guessing portability/lock-in. Reuse the still-live
-  [`PGServiceComparisonRepository.find_equivalents(category, exclude_provider)`](../../app/infrastructure/repositories/service_repositories.py#L70)
+  [`PGServiceComparisonRepository.find_equivalents(category, exclude_provider)`](../app/infrastructure/repositories/service_repositories.py#L70)
   and
-  [`PGServiceMetadataRepository.list_by_provider_and_category(provider, category)`](../../app/infrastructure/repositories/service_repositories.py#L23).
+  [`PGServiceMetadataRepository.list_by_provider_and_category(provider, category)`](../app/infrastructure/repositories/service_repositories.py#L23).
 
 This **merges the new recognition (L1) with both old DE-PARA layers (L2 + L3)**.
 
@@ -111,7 +111,7 @@ This **merges the new recognition (L1) with both old DE-PARA layers (L2 + L3)**.
 [FOCUS](https://focus.finops.org/) gives the shared vocabulary that makes the
 DE-PARA auditable across providers. Each equivalent is emitted with FOCUS-aligned
 fields so source and target are comparable on the same axes (extends the mapping
-table in [`focus-alignment.md`](focus-alignment.md) §3.1):
+table in [`capacity-pool-model.md`](capacity-pool-model.md) §3.1):
 
 | FOCUS column | Source (pool) | Target (equivalent) |
 |---|---|---|
@@ -145,16 +145,16 @@ table in [`focus-alignment.md`](focus-alignment.md) §3.1):
 ## 2. Non-Goals
 
 - No real-time pricing (mock catalog prices stay; `pricing_confidence` carries
-  the caveat — [`SDD-spec.md`](SDD-spec.md) §G3/§Non-Goals).
+  the caveat — [`architecture.md`](architecture.md)-Goals).
 - No change to the SKU **classification** ladder (that is
-  [`sku-accuracy-spec.md`](sku-accuracy-spec.md)); this spec consumes its output.
+  [`sku-matching.md`](sku-matching.md)); this spec consumes its output.
 - No new endpoints — only enrich the payload of the existing analysis flow (§6).
 - No LLM-side math.
 
 ## 3. Existing endpoints (analysis flow — unchanged surface)
 
 `APIRouter(prefix="/analyses")`
-([`app/api/v1/routes/analysis.py`](../../app/api/v1/routes/analysis.py)):
+([`app/api/v1/routes/analysis.py`](../app/api/v1/routes/analysis.py)):
 
 | Method | Path | Role | Touched by this spec |
 |---|---|---|---|
@@ -169,7 +169,7 @@ table in [`focus-alignment.md`](focus-alignment.md) §3.1):
 Per the chosen payload shape, equivalents are **nested inside each
 compute_pool** (contextual; the LLM reasons pool by pool). Reuses the existing
 `EquivalentService`/`TechnicalMatch`/`FinancialEstimate` entities
-([`domain/analysis.py`](../../app/domain/analysis.py)); only a `match_basis`
+([`domain/analysis.py`](../app/domain/analysis.py)); only a `match_basis`
 trace field is added.
 
 ```json
@@ -201,7 +201,7 @@ trace field is added.
 ```
 
 `metadata` and `docs_costs` (L3) come from the curated catalog
-([`seed_service_metadata.py`](../../app/infrastructure/database/seed_service_metadata.py)),
+([`seed_service_metadata.py`](../app/infrastructure/database/seed_service_metadata.py)),
 joined by `(target_provider, category)` — they are **curated, not computed**, and
 absent gracefully when the catalog has no row.
 
@@ -209,7 +209,7 @@ absent gracefully when the catalog has no row.
 when a single SKU does not cover the pool; `estimated_monthly_cost =
 unit_price * 730 * instances`; `cost_delta = estimated_monthly_cost -
 pool.monthly_cost` (negative = saving). All `Decimal`, serialized as strings
-([`api-conventions.md`](../api-conventions.md)).
+([`api-conventions.md`](api-conventions.md)).
 
 ## 5. Design — pool-level equivalence
 
@@ -229,11 +229,11 @@ flowchart TD
    target_providers)`** — new method that does **not** need a source `sku_id`.
    It reuses the existing `find_equivalents` query + the cheapest-candidate +
    `cost_delta` logic already in `get_equivalents`
-   ([`equivalence_matcher.py:56-115`](../../app/domain/services/equivalence_matcher.py)).
+   ([`equivalence_matcher.py:56-115`](../app/domain/services/equivalence_matcher.py)).
    Returns L2 (hardware) equivalents.
 2. **L3 curated enrichment** — for each L2 equivalent, look up the curated row by
    `(target_provider, category)` via
-   [`PGServiceMetadataRepository.list_by_provider_and_category`](../../app/infrastructure/repositories/service_repositories.py#L23)
+   [`PGServiceMetadataRepository.list_by_provider_and_category`](../app/infrastructure/repositories/service_repositories.py#L23)
    and the category-level `PGServiceComparisonRepository.find_equivalents`; attach
    `metadata` + `docs_costs`. If the SKU catalog returns **no** hardware candidate
    for a provider but the curated catalog has a service in that category, still
@@ -252,7 +252,7 @@ flowchart TD
    declare o gap."* + a rule pinning math to backend values.
 6. **`MockLLMClient`** — read `equivalents` and pick `min(cost_delta)` so the
    mock path mirrors the real contract
-   ([`mock_client.py`](../../app/infrastructure/llm/mock_client.py)).
+   ([`mock_client.py`](../app/infrastructure/llm/mock_client.py)).
 
 ## 6. Behavior (key rules)
 
@@ -260,17 +260,17 @@ flowchart TD
    LLM may only select/rank/explain — never compute or invent.
 2. Target providers = all catalog providers except the source
    (`list_providers()` minus source), provider-normalized
-   ([`sku_normalization.py`](../../app/domain/services/sku_normalization.py)).
+   ([`sku_normalization.py`](../app/domain/services/sku_normalization.py)).
 3. `match_basis` records provenance: `pool_capacity` (hardware match, has
    `cost_delta`) or `curated_only` (L3 knowledge, no `cost_delta`).
 4. No hardware candidate **and** no curated row for a provider → emit no
    equivalent for it and add a `MISSING_EQUIVALENT` flag (graceful degradation,
    like `missing_sku_ids` at
-   [`run_analysis_pipeline.py:141`](../../app/use_cases/analysis/run_analysis_pipeline.py)).
+   [`run_analysis_pipeline.py:141`](../app/use_cases/analysis/run_analysis_pipeline.py)).
 5. L3 enrichment is **best-effort**: a missing curated row never blocks an L2
    equivalent (it ships without `metadata`/`docs_costs`).
 6. `pricing_confidence` stays `low` while prices are mock (unchanged enum).
-7. Accounting integrity from [`sku-accuracy-spec.md`](sku-accuracy-spec.md) §7 is
+7. Accounting integrity from [`sku-matching.md`](sku-matching.md) §7 is
    untouched (equivalence is read-only over pools).
 
 ## 7. Work Units (future implementation)

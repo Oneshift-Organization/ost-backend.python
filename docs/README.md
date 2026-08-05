@@ -36,13 +36,10 @@ agentes de IA.
 | [`data-model.md`](data-model.md) | DDL das tabelas (`billing_reports`, `billing_items`, `exchange_rates`, `cloud_price_points`), schema canônico do parser, convenções de `raw_payload`, queries comuns. |
 | [`parsers.md`](parsers.md) | Guia por provider (AWS CUR/CE, Azure, GCP, OCI) + política `global_zero` do Cost Explorer + como adicionar parser novo. |
 | [`billing-ingestion-pipeline.md`](billing-ingestion-pipeline.md) | Pipeline completa: detecção, 7 parsers, schema canônico, edge cases (NaN, locale, correções). |
-| [`refactor/Refactor-plan.md`](refactor/Refactor-plan.md) | Plano de refatoração (SDD), fases, metas e critérios de aceitação. |
-| [`refactor/mvp-mock-engine.md`](refactor/mvp-mock-engine.md) | Contrato arquitetural do Mock Engine MVP: matching por hardware (vCPU/RAM), troubleshooting de 0 equivalents, dead-letter com IA. |
-| [`refactor/capacity-pool-model-implementation.md`](refactor/capacity-pool-model-implementation.md) | Plano de implementação do Capacity Pool Model: agregação por pool, novos domínios WorkloadPool. |
-| [`refactor/focus-alignment.md`](refactor/focus-alignment.md) | Alinhamento FOCUS: taxonomia universal, buckets de capacidade, agregação por (Project, Family, Region). |
-| [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) | Spec SDD de assertividade do SKU matching: Matching Ladder (L0–L5), `component_type`, `sku_classification_rules`, gate `sku_coverage_ratio ≥ 95%`. |
-| [`refactor/pool-equivalence-spec.md`](refactor/pool-equivalence-spec.md) | Spec SDD de equivalência cross-cloud por Capacity Pool (DE-PARA): `match_pool`, `equivalents` aninhados, alinhamento FOCUS, LLM seleciona em vez de inventar. |
-| [`refactor/precision-engine-v3-spec.md`](refactor/precision-engine-v3-spec.md) | **Spec-mestre da fase PRECISÃO — AS-BUILT**: o que existe hoje (FX, preços oficiais Azure/OCI, shape de instância, razão de taxa por categoria, consolidação por provedor, autoridade do backend sobre o LLM, camada de reconciliação) e o que segue pendente. Divergências do plano original estão marcadas. |
+| [`capacity-pool-model.md`](capacity-pool-model.md) | Alinhamento FOCUS: taxonomia universal, buckets de capacidade, agregação por (Project, Family, Region). |
+| [`sku-matching.md`](sku-matching.md) | Acurácia do SKU matching: Matching Ladder (L0–L5), `component_type`, `sku_classification_rules`, gate `sku_coverage_ratio ≥ 95%`. |
+| [`cross-cloud-equivalence.md`](cross-cloud-equivalence.md) | Equivalência cross-cloud por Capacity Pool (DE-PARA): `match_pool`, `equivalents` aninhados, alinhamento FOCUS, LLM seleciona em vez de inventar. |
+| [`precision-engine.md`](precision-engine.md) | **Motor de precisão — o que está construído**: o que existe hoje (FX, preços oficiais Azure/OCI, shape de instância, razão de taxa por categoria, consolidação por provedor, autoridade do backend sobre o LLM, camada de reconciliação) e o que segue pendente. Divergências do plano original estão marcadas. |
 
 ### Operação
 
@@ -70,10 +67,8 @@ agentes de IA.
 |---|---|---|
 | Adicionar rota nova | [`api-conventions.md`](api-conventions.md) |
 | Adicionar parser de cloud | [`parsers.md`](parsers.md#como-adicionar-um-parser-novo) |
-| Refatoração SDD | [`refactor/Refactor-plan.md`](refactor/Refactor-plan.md) |
 | Entender pipeline de ingestão | [`billing-ingestion-pipeline.md`](billing-ingestion-pipeline.md) |
-| Mock Engine MVP / matching | [`refactor/mvp-mock-engine.md`](refactor/mvp-mock-engine.md) |
-| Acurácia do SKU matching / orphan rate | [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) |
+| Acurácia do SKU matching / orphan rate | [`sku-matching.md`](sku-matching.md) |
 | Alterar schema/migration | [`data-model.md`](data-model.md) |
 | Entender regra de negócio | [`product.md`](product.md) |
 | Debug de detecção de formato | [`parsers.md`](parsers.md#como-debugar-uma-detecção-que-falha) |

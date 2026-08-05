@@ -44,7 +44,7 @@ class BuildBillingEnrichedUseCase:
     into a ``component_type`` with a traceable ``match_layer`` /
     ``mapping_confidence``, and the structured SKU id (when matched) is stored
     in ``sku_id`` (no longer the raw descriptor). See
-    ``docs/refactor/sku-accuracy-spec.md`` §5.
+    ``docs/sku-matching.md`` §5.
     """
 
     def __init__(

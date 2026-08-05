@@ -1,4 +1,4 @@
-# FOCUS Alignment & Capacity Pool Model
+# Capacity Pool Model (alinhamento FOCUS)
 
 This document outlines the alignment of the Cloud Intelligence Platform with the **FinOps Open Cost and Usage Specification (FOCUS)** and the architectural transition to the **Capacity Pool Model**.
 
@@ -82,18 +82,18 @@ The LLM no longer receives raw SKUs. It receives structured `WorkloadPool` objec
 ### Next Steps
 
 The orphan rate (51.9%) is now treated as a **matching accuracy** problem with its
-own spec: [`sku-accuracy-spec.md`](sku-accuracy-spec.md). The accuracy levers
+own spec: [`sku-matching.md`](sku-matching.md). The accuracy levers
 replace the old "expand coverage / detect GKE" bullets:
 
 1. **Matching Ladder (L0–L5)** — deterministic, data-driven cascade
    (exact → normalized → regex/glob → token/family → fuzzy → dead-letter) so the
    aggregator receives a populated `component_type` instead of regex over an empty
-   `description`. See `sku-accuracy-spec.md` §4.
+   `description`. See `sku-matching.md` §4.
 2. **`sku_classification_rules` + `component_type`** — classification by data, zero
    `if/else` per cloud; fixes the `sku_id` key mismatch and the `attributes="{}"`
    empty-description bug.
 3. **Accuracy gate** — `sku_coverage_ratio ≥ 95%` (orphan ≤ 5%) enforced by a golden
-   `5d9bc55e` test (`sku-accuracy-spec.md` §8).
+   `5d9bc55e` test (`sku-matching.md` §8).
 
 Still pending (orthogonal to accuracy):
 4. Implement `usage_start`/`usage_end` based hours window calculation.

@@ -2,7 +2,7 @@
 
 ``AnalysisV2Response.resilient_parse(raw)`` tolerates field-name variants from
 the LLM (aliases, camelCase, partial responses) without raising. See
-``docs/refactor/analysis-v2-spec.md`` §3.
+``docs/api-conventions.md``.
 """
 
 from __future__ import annotations

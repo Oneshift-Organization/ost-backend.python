@@ -13,7 +13,7 @@ para ``m7g``, ``c8g`` ou qualquer família futura sem enumerá-las. O resultado 
 uma **estimativa** (``confidence="estimado"``); a camada de reconciliação depois
 revalida o preço/vCPU e mantém a suspeita se a estimativa não fechar.
 
-Função pura, sem I/O. Ver ``docs/refactor/precision-engine-v3-spec.md``.
+Função pura, sem I/O. Ver ``docs/precision-engine.md``.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Seed initial SKU classification rules (Matching Ladder L2).
 
 Patterns are written case-folded; the SkuMatcher case-folds the billing
-descriptor before matching (see ``docs/refactor/sku-accuracy-spec.md`` §4).
+descriptor before matching (see ``docs/sku-matching.md`` §4).
 Lower ``priority`` is evaluated first, so specific service rules precede the
 generic compute core/ram rules. ``family=None`` means the matcher extracts the
 machine family from the descriptor.

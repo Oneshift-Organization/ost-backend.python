@@ -388,7 +388,7 @@ def serialize_as_legacy(ctx) -> dict:
 
     Converts capacity pools + pool_equivalents into the ``workloads[]`` schema
     that was the original LLM input format, so the legacy pipeline sends a
-    familiar payload to the model. See docs/refactor/analysis-v2-spec.md §5.
+    familiar payload to the model. See docs/precision-engine.md.
     """
     workloads: list[dict] = []
     pool_equivalents: dict = getattr(ctx, "pool_equivalents", {})

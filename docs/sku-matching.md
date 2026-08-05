@@ -1,9 +1,9 @@
-# SKU Matching Accuracy — SDD Spec
+# Acurácia do SKU Matching
 
-> Companion to [`SDD-spec.md`](SDD-spec.md) and
-> [`focus-alignment.md`](focus-alignment.md). This spec defines **how** billing
+> Complementa [`architecture.md`](architecture.md) e
+> [`capacity-pool-model.md`](capacity-pool-model.md). Descreve **como** billing
 > lines are matched to SKU metadata / service ontology so that the Capacity Pool
-> Model receives correctly classified input. **Scope of this document: spec only.**
+> Model receives correctly classified input. 
 > Implementation is broken into independent work units (§6) for a future batch.
 
 ## 0. Context
@@ -11,7 +11,7 @@
 The billing pipeline currently classifies only **~48% of cost** correctly. On the
 reference GCP report (`5d9bc55e`, $27,825) the **orphan rate is 51.9%** ($14,430,
 98 orphan SKUs) and only **16.9%** becomes real compute pools
-([`focus-alignment.md`](focus-alignment.md) §4, "E2E Test Results"). With more than
+([`capacity-pool-model.md`](capacity-pool-model.md) §4, "E2E Test Results"). With more than
 half of spend landing in the orphan bucket, the portability score and migration
 recommendations are not trustworthy.
 
@@ -19,43 +19,43 @@ The cause is **not** missing data — it is **how** we match a billing line to t
 ontology / catalog. Root-causes, confirmed by reading the code:
 
 1. **The SKU catalog is never consulted during enrichment.**
-   [`build_billing_enriched.py:144-146`](../../app/use_cases/analysis/build_billing_enriched.py)
+   [`build_billing_enriched.py:144-146`](../app/use_cases/analysis/build_billing_enriched.py)
    writes `sku_metadata=None`, `pricing_source="missing"`,
    `pricing_confidence="low"` *hardcoded*. Enriched rows leave the stage with no
    vcpus / ram / role.
 2. **Ontology lookup is an exact string match**
-   ([`pg_service_ontology_repo.py:18-19`](../../app/infrastructure/repositories/pg_service_ontology_repo.py),
+   ([`pg_service_ontology_repo.py:18-19`](../app/infrastructure/repositories/pg_service_ontology_repo.py),
    `usage_type == ...`). GCP SKUs are long free-text strings ("E2 Instance Core
    running in Americas") → almost nothing matches. No normalization, regex, token,
    or fuzzy layer exists.
 3. **`sku_id` key mismatch.** Enrichment sets `sku_id = raw_payload["UsageType"]`
    (a description —
-   [`build_billing_enriched.py:113-119`](../../app/use_cases/analysis/build_billing_enriched.py)),
+   [`build_billing_enriched.py:113-119`](../app/use_cases/analysis/build_billing_enriched.py)),
    but the catalog is keyed by **structured machine-type**
    (`e2-standard-2`, `BoxUsage:m7g.medium` —
-   [`seed_catalog_pareto.py:13,86`](../../app/infrastructure/database/seed_catalog_pareto.py)).
+   [`seed_catalog_pareto.py:13,86`](../app/infrastructure/database/seed_catalog_pareto.py)).
    So `catalog.get(item.sku_id)`
-   ([`billing_aggregator.py:137`](../../app/services/billing_aggregator.py)) misses
+   ([`billing_aggregator.py:137`](../app/services/billing_aggregator.py)) misses
    → `desc=None` → every classifier (`_is_gke_control_plane`, `_is_gcp_core`, …)
    falls through to **orphan**.
 4. **Catalog `description` is always empty.** The seed writes `attributes="{}"`
    hardcoded
-   ([`seed_catalog_pareto.py:165`](../../app/infrastructure/database/seed_catalog_pareto.py)),
+   ([`seed_catalog_pareto.py:165`](../app/infrastructure/database/seed_catalog_pareto.py)),
    so `_load_catalog` reads `description=""`
-   ([`billing_aggregator.py:220`](../../app/services/billing_aggregator.py)). The
+   ([`billing_aggregator.py:220`](../app/services/billing_aggregator.py)). The
    regex-over-`description` classification never has text to match. There is no
    `component_type` (role) field on
-   [`cloud_sku.py`](../../app/domain/entities/cloud_sku.py) that would replace this
+   [`cloud_sku.py`](../app/domain/entities/cloud_sku.py) that would replace this
    fragile regex.
 5. **Provider case mismatch.** Catalog uses `'GCP'`
-   ([`seed_catalog_pareto.py:84`](../../app/infrastructure/database/seed_catalog_pareto.py));
+   ([`seed_catalog_pareto.py:84`](../app/infrastructure/database/seed_catalog_pareto.py));
    `item.provider.value` uses `'gcp'`. `_load_catalog(source_provider)` does a
    case-sensitive lookup, so even a correct key would miss across providers.
 6. **Small catalog coverage** (AWS-centric seeds); ~110 GCP SKUs from the report
    have no structured entry.
 
 **Why it matters:** the score and recommendations are downstream of this matching.
-If 52% of cost is orphan, the LLM (`focus-alignment.md` §3) reasons over a
+If 52% of cost is orphan, the LLM (`capacity-pool-model.md` §3) reasons over a
 half-empty picture and emits directional, low-confidence migrations.
 
 ## 1. Goals
@@ -64,23 +64,23 @@ half-empty picture and emits directional, low-confidence migrations.
   (orphan ≤ 5%) on report `5d9bc55e`.
 - **G2 — Deterministic & data-driven.** Matching is driven by versioned data
   (catalog + rules table), **zero `if/else` per cloud in Python** — consistent with
-  the repo's non-negotiable rules ([`architecture.md`](../architecture.md) and the
+  the repo's non-negotiable rules ([`architecture.md`](architecture.md) and the
   existing `equivalence_matcher` precedent).
 - **G3 — Traceable confidence.** Every enriched line carries `mapping_confidence`
   and `match_layer` (which ladder rung matched), propagated to `migration_context`.
 - **G4 — Accounting integrity.** No regression: `Σpools + Σauxiliary + Σorphan ==
   total_spend` for every report (preserves the FOCUS guarantee in
-  [`focus-alignment.md`](focus-alignment.md) §2.4).
+  [`capacity-pool-model.md`](capacity-pool-model.md) §2.4).
 
 ## 2. Non-Goals
 
 - No real pricing. The mock pricing path stays (`pricing_source` enums from
-  [`SDD-spec.md`](SDD-spec.md) §3.2 unchanged); accuracy is about **classification**,
+  [`architecture.md`](architecture.md) unchanged); accuracy is about **classification**,
   not price collection.
 - No LLM for classification when a rule or catalog entry exists. LLM remains a
-  last-resort fallback only (aligns with [`SDD-spec.md`](SDD-spec.md) §2 and §5.7).
-- No runtime scraping (aligns with [`SDD-spec.md`](SDD-spec.md) §G3).
-- No change to the scoring model ([`SDD-spec.md`](SDD-spec.md) §7).
+  last-resort fallback only (aligns with [`architecture.md`](architecture.md)).
+- No runtime scraping (aligns with [`architecture.md`](architecture.md)).
+- No change to the scoring model ([`architecture.md`](architecture.md)).
 
 ## 3. Data Contracts
 
@@ -114,7 +114,7 @@ mapping_confidence ∈ { high | medium | low }
 match_layer        ∈ { L0 | L1 | L2 | L3 | L4 | L5 }
 ```
 
-Relationship to existing enums ([`SDD-spec.md`](SDD-spec.md) §3.2): `match_layer`
+Relationship to existing enums ([`architecture.md`](architecture.md)): `match_layer`
 is *orthogonal* to `pricing_source`/`pricing_confidence`. `mapping_confidence`
 describes **classification** certainty (did we identify the role/family?);
 `pricing_confidence` describes **price** certainty. A line can be
@@ -213,7 +213,7 @@ CREATE INDEX ix_sku_rules_provider_priority
 ```
 
 Evaluation order is `priority ASC`; first matching rule wins. This mirrors
-`service_ontology`'s versioning model ([`data-model.md`](../data-model.md)).
+`service_ontology`'s versioning model ([`data-model.md`](data-model.md)).
 
 ## 5. Behavior (Key Rules)
 
@@ -221,10 +221,10 @@ Evaluation order is `priority ASC`; first matching rule wins. This mirrors
    hit.
 2. **Separate `catalog key` from `raw usage descriptor`.** Stop overloading
    `sku_id` with `raw_payload["UsageType"]`
-   ([`build_billing_enriched.py:113-119`](../../app/use_cases/analysis/build_billing_enriched.py)).
+   ([`build_billing_enriched.py:113-119`](../app/use_cases/analysis/build_billing_enriched.py)).
    The descriptor feeds the ladder; the **matched** structured SKU id is what gets
    stored in `sku_id`. This removes the `catalog.get(sku_id)` dependency in
-   [`billing_aggregator.py:137-182`](../../app/services/billing_aggregator.py).
+   [`billing_aggregator.py:137-182`](../app/services/billing_aggregator.py).
 3. **Aggregator classifies by `component_type`**, not by regex over a (usually
    empty) `description`. The `_is_gcp_core` / `_is_gcp_ram` / `_is_gke_control_plane`
    helpers become a dispatch on `component_type`.
@@ -236,9 +236,9 @@ Evaluation order is `priority ASC`; first matching rule wins. This mirrors
    each line is).
 6. **Graceful degradation.** A line that reaches L5 goes to `unmapped_billing_lines`
    with a `reason` and **never** breaks the pipeline (aligns with
-   [`SDD-spec.md`](SDD-spec.md) §5.3).
+   [`architecture.md`](architecture.md)).
 7. **No LLM override.** When L0–L3 produce a deterministic result, the LLM must not
-   reclassify ([`SDD-spec.md`](SDD-spec.md) §5.7).
+   reclassify ([`architecture.md`](architecture.md)).
 
 ## 6. Required Changes (future implementation work units)
 
@@ -260,7 +260,7 @@ batch. Dependency order is roughly U5 → (U1, U4) → U2/U3 → U6 → U7/U8.
 
 - `sku_coverage_ratio = mapped_cost / total_cost ≥ 0.95` on report `5d9bc55e`.
 - `orphan_ratio ≤ 0.05` (aligns with the 5% governance flag already in
-  [`focus-alignment.md`](focus-alignment.md) §2.3 / §4).
+  [`capacity-pool-model.md`](capacity-pool-model.md) §2.3 / §4).
 - Breakdown of mapped cost by `mapping_confidence` is reported (high/medium/low).
 - Accounting integrity preserved: `Σpools + Σauxiliary + Σorphan == total_spend`.
 - **GKE control plane** and **Cloud SQL** lines no longer fall into orphan (they
@@ -281,8 +281,7 @@ orphan_ratio = orphan_cost / total_cost
 **Golden test (contract).** Fixture = parsed `5d9bc55e` GCP report. The test asserts
 `coverage ≥ 0.95`, `orphan_ratio ≤ 0.05`, the accounting-integrity equality, and a
 non-empty `database`/`gke_control_plane` bucket. This becomes a **merge gate**,
-replacing the qualitative ">90% mapped" criterion in
-[`Refactor-plan.md`](Refactor-plan.md) Phase 2.
+replacing the earlier qualitative ">90% mapped" criterion.
 
 ## 9. Risks & Mitigations
 

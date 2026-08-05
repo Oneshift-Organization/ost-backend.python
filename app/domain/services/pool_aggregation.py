@@ -6,7 +6,7 @@ equivalente com ``technical_match`` de um projeto e ``financeiro`` de dezenove
 (hardware 2,1x subdimensionado em relação ao custo). Agregando primeiro, o
 matcher vê a capacidade real da família e dimensiona uma única vez.
 
-Função pura, sem I/O. Ver ``docs/refactor/precision-engine-v3-spec.md``.
+Função pura, sem I/O. Ver ``docs/precision-engine.md``.
 """
 
 from __future__ import annotations

@@ -134,7 +134,7 @@ CREATE TABLE billing_enriched (
     pricing_source      VARCHAR(50),
     pricing_confidence  VARCHAR(20),
 
-    -- Rastreabilidade do matching (ver refactor/sku-accuracy-spec.md §3.2):
+    -- Rastreabilidade do matching (ver sku-matching.md §3.2):
     -- mapping_confidence = certeza da CLASSIFICAÇÃO (role/family);
     -- match_layer = qual rung da Matching Ladder (L0–L5) casou.
     mapping_confidence  VARCHAR(10),
@@ -177,7 +177,7 @@ CREATE TABLE cloud_sku_catalog (
     ram_gb            NUMERIC(8, 2),
 
     -- Papel do SKU (role), consumido pelo aggregator no lugar de regex sobre
-    -- description. Enum em refactor/sku-accuracy-spec.md §3.1. Coluna dedicada
+    -- description. Enum em sku-matching.md §3.1. Coluna dedicada
     -- (indexável) preferida a guardar em attributes JSONB.
     component_type    VARCHAR(30)     NOT NULL DEFAULT 'unclassified',
 
@@ -218,7 +218,7 @@ CREATE TABLE service_ontology (
 Regras data-driven da **Matching Ladder** (rungs L2/L3): casam a `description`
 livre do SKU a um `component_type` (role) sem `if/else` por cloud em Python.
 Versionada e avaliada por `priority ASC` (primeira regra que casa vence). Spec
-completa em [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md#41-sku_classification_rules-new-table).
+completa em [`sku-matching.md`](sku-matching.md#41-sku_classification_rules-new-table).
 
 ```sql
 CREATE TABLE sku_classification_rules (
@@ -483,4 +483,4 @@ HAVING MAX(m_cost) > 0 AND MIN(m_cost) = 0;
 - [`parsers.md`](parsers.md) — como cada provider produz o schema canônico.
 - [`endpoints/billing.md`](endpoints/billing.md) — serialização Decimal→string no JSON.
 - [`api-conventions.md`](api-conventions.md) — paginação, envelopes, status codes.
-- [`refactor/sku-accuracy-spec.md`](refactor/sku-accuracy-spec.md) — `component_type`, `mapping_confidence`, `match_layer`, `sku_classification_rules` e a Matching Ladder.
+- [`sku-matching.md`](sku-matching.md) — `component_type`, `mapping_confidence`, `match_layer`, `sku_classification_rules` e a Matching Ladder.

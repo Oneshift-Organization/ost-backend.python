@@ -28,9 +28,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Regras de arquitetura / Clean Arch / proibições | [`docs/architecture.md`](docs/architecture.md) |
 | Schema do banco / DDL / `raw_payload` conventions | [`docs/data-model.md`](docs/data-model.md) |
 | Parsers de cloud / adicionar novo / política `global_zero` | [`docs/parsers.md`](docs/parsers.md) |
-| Mock Engine MVP / matching hardware / troubleshooting | [`docs/refactor/mvp-mock-engine.md`](docs/refactor/mvp-mock-engine.md) |
-| Capacity Pool Model / FOCUS alignment | [`docs/refactor/focus-alignment.md`](docs/refactor/focus-alignment.md) |
-| WorkloadPool entities / aggregator / pool design | [`docs/refactor/focus-alignment.md`](docs/refactor/focus-alignment.md#2-the-solution-capacity-pool-model) |
+| Capacity Pool Model / FOCUS / WorkloadPool / aggregator | [`docs/capacity-pool-model.md`](docs/capacity-pool-model.md) |
 | Convenções de rota / paginação / serialização | [`docs/api-conventions.md`](docs/api-conventions.md) |
 | Catálogo `/v1/billing-files` | [`docs/endpoints/billing.md`](docs/endpoints/billing.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
@@ -147,10 +145,10 @@ existe").
   `PgCloudSkuRepository` para evitar mismatch.
 - **Assertividade do SKU matching:** classificação linha→SKU usa a **Matching
   Ladder** (L0–L5, data-driven via `sku_classification_rules`, sem `if/else` por
-  cloud). Gate de acurácia: `sku_coverage_ratio ≥ 95%` (orphan ≤ 5%). Spec em
-  [`docs/refactor/sku-accuracy-spec.md`](docs/refactor/sku-accuracy-spec.md).
-- **Fase atual — PRECISÃO (Precision Engine v3):** spec-mestre AS-BUILT em
-  [`docs/refactor/precision-engine-v3-spec.md`](docs/refactor/precision-engine-v3-spec.md).
+  cloud). Gate de acurácia: `sku_coverage_ratio ≥ 95%` (orphan ≤ 5%). Detalhes em
+  [`docs/sku-matching.md`](docs/sku-matching.md).
+- **Fase atual — PRECISÃO (Precision Engine v3):** documentado em
+  [`docs/precision-engine.md`](docs/precision-engine.md).
   Já construído: FX antes de qualquer `delta_custo` (nunca comparar BRL×USD),
   preços de API oficial em `cloud_price_points` (Azure/OCI), shape de instância
   (instance-hours → vCPU/RAM), packing por custo total, categorias não-compute
