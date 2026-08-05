@@ -92,9 +92,14 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Cloud Intelligence Platform — API",
         version="0.1.0",
-        docs_url=None if settings.is_production else "/docs",
-        redoc_url=None if settings.is_production else "/redoc",
-        openapi_url=None if settings.is_production else "/openapi.json",
+        # Docs ligadas por padrão em TODOS os ambientes, produção inclusive: o
+        # time do agente/MCP precisa do contrato da API para integrar, e um
+        # OpenAPI publicado é a forma menos ambígua de entregar isso. Expõe rotas
+        # e schemas, não dados — a auth continua valendo em cada endpoint.
+        # `DOCS_ENABLED=false` desliga sem alterar código.
+        docs_url="/docs" if settings.docs_enabled else None,
+        redoc_url="/redoc" if settings.docs_enabled else None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
         lifespan=lifespan,
     )
 
