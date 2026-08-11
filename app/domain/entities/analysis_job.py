@@ -49,6 +49,8 @@ class AnalysisJob:
     error: str | None = None
     ai_structured_output: dict | None = None
     llm_input_payload: dict | None = None
+    agent_raw_output: dict | None = None
+    sugestoes: list | None = None
     created_at: datetime = field(default_factory=agora_utc)
     # Quando a execução começou de fato e quando o estado mudou pela última vez.
     # Sem isso não há como distinguir "acabou de entrar na fila" de "travado há
