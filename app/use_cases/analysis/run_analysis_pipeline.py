@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -137,6 +138,16 @@ def _serialize_services(ctx, fx: FxRate) -> list[dict]:
             out.append(entry)
     out.sort(key=lambda d: -float(d["custo"]))
     return out
+
+
+def _naive(dt: datetime) -> datetime:
+    """Normaliza para naive-UTC.
+
+    `captured_at` pode vir aware ou naive dependendo do driver e da coluna. Sem
+    normalizar, a subtração levanta TypeError — e derrubaria a montagem do
+    payload inteiro por causa de um campo cosmético.
+    """
+    return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
 
 
 def _round2(value: Decimal) -> float:
@@ -370,6 +381,18 @@ def _serialize_equivalent(equiv) -> dict:
         if fin.cost_delta is not None:
             fin_dict["delta_custo"] = _round2(fin.cost_delta)
         fin_dict["confianca_preco"] = fin.pricing_confidence
+        # Proveniência: sem ela, "official" pode ser de ontem ou de três meses e
+        # ninguém sabe. A IDADE é o que torna isso acionável — é o número que
+        # deixa um consumidor (tela ou agente) decidir se confia ou contesta.
+        origem = getattr(fin, "price_source", None)
+        if origem:
+            fin_dict["preco_origem"] = origem
+        capturado = getattr(fin, "price_captured_at", None)
+        if capturado is not None:
+            fin_dict["preco_capturado_em"] = capturado.date().isoformat()
+            fin_dict["preco_idade_dias"] = max(
+                0, (datetime.now(UTC).replace(tzinfo=None) - _naive(capturado)).days
+            )
         d["financeiro"] = fin_dict
 
     meta = getattr(equiv, "metadata", None)

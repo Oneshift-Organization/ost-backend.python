@@ -322,3 +322,47 @@ def _find_service(ctx, nome: str):
             if sv.service_name == nome:
                 return sv
     raise AssertionError(f"serviço {nome!r} não encontrado no contexto")
+
+
+# ── frescor e confiança (Blocos B e C) ──────────────────────────────────
+
+
+def test_equivalentes_declaram_a_origem_do_preco(aws_context) -> None:
+    """Sem proveniência, `confianca_preco: "official"` pode ser de ontem ou de
+    três meses e ninguém sabe. Cada equivalente passa a dizer de onde veio."""
+    payload, _ = build_pipeline_llm_input_payload(aws_context)
+    financeiros = [
+        e["financeiro"]
+        for p in payload["pools_computacao"]
+        for e in p.get("equivalentes", [])
+        if "financeiro" in e
+    ]
+    assert financeiros, "o bill AWS tem equivalentes com financeiro"
+    assert all("preco_origem" in f for f in financeiros), (
+        "todo equivalente precisa declarar de onde veio o preço"
+    )
+
+    # Preço oficial vem de coleta datada; catálogo seed não tem data — é seed,
+    # não coleta. Dizer a origem já basta para o consumidor saber a diferença.
+    oficiais = [f for f in financeiros if f["confianca_preco"] == "official"]
+    for f in oficiais:
+        assert "preco_capturado_em" in f, f
+        assert f["preco_idade_dias"] >= 0
+
+
+def test_confianca_da_analise_e_medida_nao_opinada(aws_context) -> None:
+    """A razão de custo com preço oficial entra nas premissas.
+
+    O bill AWS tem alvos GCP sem preço oficial — a confiança NÃO pode ser alta.
+    Se este teste passar a ver "high", ou o sync de preços GCP entrou (ótimo,
+    atualize o teste) ou alguém afrouxou o limiar (não ótimo).
+    """
+    payload, _ = build_pipeline_llm_input_payload(aws_context)
+    conf = payload["premissas"]["confianca_analise"]
+
+    assert conf["nivel"] in {"high", "medium", "low"}
+    assert 0.0 <= conf["razao_custo_confiavel"] <= 1.0
+    assert conf["custo_com_preco_oficial"] <= conf["custo_total_cotado"]
+    assert conf["nivel"] != "high", (
+        f"AWS ainda cota alvos GCP com catálogo seed; razão={conf['razao_custo_confiavel']}"
+    )
