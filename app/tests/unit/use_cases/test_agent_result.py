@@ -1,0 +1,198 @@
+"""Recepção da análise do agente.
+
+O que estes testes protegem: a inteligência do modelo entra como **sinal**, não
+como fonte. Ele contesta um preço, a confiança cai — mas o número não muda,
+porque trocá-lo por um palpite custaria a reprodutibilidade.
+"""
+
+from __future__ import annotations
+
+from app.use_cases.analysis.agent_result import (
+    mapear_verdade,
+    processar_sugestoes,
+    receber_analise_do_agente,
+)
+
+# ── fixtures ────────────────────────────────────────────────────────────
+
+
+def _payload() -> dict:
+    return {
+        "resumo_executivo": {
+            "recomendado": "oci",
+            "custo_mensal_atual": 4881.60,
+            "por_provedor": [
+                {
+                    "provedor": "oci",
+                    "custo_estimado_total": 2394.08,
+                    "economia_mensal": 2487.53,
+                    "confianca": "official",
+                },
+                {
+                    "provedor": "azure",
+                    "custo_estimado_total": 4305.0,
+                    "economia_mensal": 576.6,
+                    "confianca": "reference",
+                },
+            ],
+        },
+        "premissas": {"confianca_analise": {"nivel": "medium"}},
+    }
+
+
+def _agente() -> dict:
+    # Ordem DIFERENTE da do backend, de propósito.
+    return {
+        "recommendation": "migrar para Azure",
+        "recommended_provider": "AZURE",
+        "provider_comparison": [
+            {"provider": "azure", "estimated_monthly_cost": 100.0, "strengths": ["rede"]},
+            {"provider": "oci", "estimated_monthly_cost": 200.0, "strengths": ["preço"]},
+        ],
+        "savings_summary": {"total_monthly_savings_usd": 42.0, "payback_period_months": 4},
+        "cross_cloud_equivalents": [{"estimated_monthly_cost": 111.0}],
+    }
+
+
+# ── mapeamento por nome, não por posição ────────────────────────────────
+
+
+def test_casa_provedor_por_nome_e_nao_por_indice() -> None:
+    """O agente mandou azure em [0] e oci em [1]; o backend tem a ordem oposta.
+
+    Casar por posição escreveria o custo da OCI no item do Azure — número certo
+    no lugar errado, que é pior que número errado, porque parece plausível.
+    """
+    v = mapear_verdade(_payload(), _agente())
+    assert v["provider_comparison.0.estimated_monthly_cost"] == 4305.0   # azure
+    assert v["provider_comparison.1.estimated_monthly_cost"] == 2394.08  # oci
+
+
+def test_provedor_inventado_pelo_agente_e_ignorado() -> None:
+    agente = {**_agente(), "provider_comparison": [{"provider": "ibm_cloud"}]}
+    v = mapear_verdade(_payload(), agente)
+    assert not any(k.startswith("provider_comparison.") for k in v)
+
+
+def test_payload_sem_resumo_nao_produz_verdade() -> None:
+    """Sem base de comparação, sobrescrever às cegas é pior que não sobrescrever."""
+    assert mapear_verdade({}, _agente()) == {}
+
+
+# ── autoridade aplicada ─────────────────────────────────────────────────
+
+
+def test_derivacao_corrigida_e_julgamento_preservado() -> None:
+    r = receber_analise_do_agente(_payload(), _agente())
+
+    assert r.resposta["recommended_provider"] == "OCI", "o agente dizia AZURE"
+    assert r.resposta["savings_summary"]["total_monthly_savings_usd"] == 2487.53
+    assert r.resposta["recommendation"] == "migrar para Azure", "julgamento é dele"
+    assert r.resposta["provider_comparison"][0]["strengths"] == ["rede"]
+
+
+def test_preco_de_equivalente_nao_e_sobrescrito() -> None:
+    """Estimativa: o nosso preço pode estar mais velho que o conhecimento do
+    agente. A discordância vira contestação, não substituição."""
+    r = receber_analise_do_agente(_payload(), _agente())
+    assert r.resposta["cross_cloud_equivalents"][0]["estimated_monthly_cost"] == 111.0
+
+
+def test_payback_do_agente_sobrevive() -> None:
+    """O backend não calcula payback — não temos custo de migração. O controle
+    é exigir a premissa no schema de entrada, não sobrescrever."""
+    r = receber_analise_do_agente(_payload(), _agente())
+    assert r.resposta["savings_summary"]["payback_period_months"] == 4
+
+
+# ── sugestões ───────────────────────────────────────────────────────────
+
+
+def test_contestacao_alta_rebaixa_a_confianca() -> None:
+    r = receber_analise_do_agente(
+        _payload(),
+        _agente(),
+        sugestoes=[
+            {
+                "tipo": "contestacao_preco",
+                "severidade": "alta",
+                "titulo": "preço GCP defasado",
+                "detalhe": "~40% abaixo da tabela",
+            }
+        ],
+    )
+    assert r.confianca_final == "low", "era medium"
+    assert r.sugestoes[0]["efeito_backend"] == "confianca_rebaixada"
+
+
+def test_contestacao_nao_troca_o_numero() -> None:
+    """O ponto central de todo o desenho: a IA vira sinal, não fonte."""
+    r = receber_analise_do_agente(
+        _payload(),
+        _agente(),
+        sugestoes=[
+            {
+                "tipo": "contestacao_preco",
+                "severidade": "alta",
+                "titulo": "x",
+                "detalhe": "y",
+            }
+        ],
+    )
+    assert r.resposta["cross_cloud_equivalents"][0]["estimated_monthly_cost"] == 111.0
+    assert r.resposta["provider_comparison"][1]["estimated_monthly_cost"] == 2394.08
+
+
+def test_oportunidade_e_informativa() -> None:
+    s, conf = processar_sugestoes(
+        [{"tipo": "oportunidade", "severidade": "alta", "titulo": "CUD", "detalhe": "z"}],
+        "high",
+    )
+    assert s[0]["efeito_backend"] == "informativo"
+    assert conf == "high", "oportunidade não põe em dúvida insumo nosso"
+
+
+def test_severidade_baixa_nao_rebaixa() -> None:
+    _, conf = processar_sugestoes(
+        [{"tipo": "contestacao_preco", "severidade": "baixa", "titulo": "x", "detalhe": "y"}],
+        "high",
+    )
+    assert conf == "high"
+
+
+def test_muitas_contestacoes_rebaixam_um_degrau_so() -> None:
+    """Dez contestações não tornam a análise dez vezes menos confiável — e
+    permitir isso daria ao agente um jeito de zerar a confiança repetindo a
+    mesma queixa."""
+    _, conf = processar_sugestoes(
+        [
+            {"tipo": "contestacao_preco", "severidade": "alta", "titulo": f"{i}", "detalhe": "y"}
+            for i in range(10)
+        ],
+        "high",
+    )
+    assert conf == "medium"
+
+
+def test_efeito_backend_enviado_pelo_agente_e_descartado() -> None:
+    """Se ele pudesse preenchê-lo, poderia afirmar na tela que a confiança foi
+    rebaixada quando não foi."""
+    s, _ = processar_sugestoes(
+        [
+            {
+                "tipo": "oportunidade",
+                "severidade": "baixa",
+                "titulo": "x",
+                "detalhe": "y",
+                "efeito_backend": "confianca_rebaixada",
+            }
+        ],
+        "high",
+    )
+    assert s[0]["efeito_backend"] == "informativo"
+
+
+def test_sem_sugestoes_a_confianca_e_a_do_backend() -> None:
+    r = receber_analise_do_agente(_payload(), _agente())
+    assert r.confianca_final == "medium"
+    assert r.sugestoes == []

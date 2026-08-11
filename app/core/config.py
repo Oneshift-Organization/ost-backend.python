@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # provedores continuam funcionando.
     gcp_billing_api_key: str = ""
 
+    # O INTERRUPTOR. Com `false` (default), as rotas `/v1/agent/*` respondem 404
+    # como se não existissem. Ligar NÃO desliga o legado — os dois convivem, e a
+    # virada real é o consumidor parar de chamar o caminho antigo. Reverter é
+    # mudar a variável e reiniciar: sem migration, sem deploy de código.
+    agent_flow_enabled: bool = False
+
     cloud_creds_fernet_key: str = ""
 
     max_upload_size_mb: int = 50
