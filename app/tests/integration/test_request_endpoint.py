@@ -119,3 +119,46 @@ async def test_ingestao_em_andamento_e_retryable(_app, _db_ready) -> None:
                 text("delete from billing_reports where id = :r"), {"r": rep.id}
             )
             await s.commit()
+
+
+# ── report_id aditivo ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_billing_files_expoe_report_id(_app, _db_ready) -> None:
+    """`job_id` e `report_id` são o mesmo valor — e é o `report_id` que o
+    endpoint de análise espera.
+
+    O nome `job_id` é herança do schema: quem integra lê `job_id`, procura onde
+    passá-lo, e `/analyses/{report_id}/request` pede outro nome. Se tentar o
+    `job_id` de uma *análise* leva 404, e nosso 404 é ambíguo de propósito —
+    o cliente conclui "não existe" em vez de "chamei errado".
+    """
+    rid = await _ingest(FIXTURES / "aws_cost_explorer_full.csv", user_id=HTTP_USER)
+    try:
+        r = await _get(_app, "/v1/billing-files?limit=50")
+        assert r.status_code == 200, r.text
+        item = next(i for i in r.json() if i["job_id"] == str(rid))
+
+        assert item["report_id"] == item["job_id"], "os dois têm que ser o mesmo id"
+        assert item["report_id"] == str(rid)
+
+        # E o id realmente serve no endpoint de análise — é o ponto todo.
+        req = await _get(_app, f"/v1/analyses/{item['report_id']}/request?recalcular=true")
+        assert req.status_code == 200, req.text
+    finally:
+        await _cleanup(rid)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_job_id_continua_existindo(_app, _db_ready) -> None:
+    """ADITIVO, não renomeação: quem lê `job_id` hoje não pode quebrar."""
+    rid = await _ingest(FIXTURES / "aws_cost_explorer_full.csv", user_id=HTTP_USER)
+    try:
+        detalhe = await _get(_app, f"/v1/billing-files/{rid}")
+        assert detalhe.status_code == 200
+        corpo = detalhe.json()
+        assert corpo["job_id"] == str(rid)      # campo antigo, intacto
+        assert corpo["report_id"] == str(rid)   # campo novo, mesmo valor
+    finally:
+        await _cleanup(rid)

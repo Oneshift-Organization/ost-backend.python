@@ -122,6 +122,7 @@ async def upload_billing_file(
 
     return BillingFileUploadResponse(
         job_id=report.id,
+        report_id=report.id,
         external_id=report.external_id,
         status=report.status,
         source_filename=report.source_filename or file.filename,
@@ -162,6 +163,7 @@ async def get_billing_by_external_id(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "billing report not found")
     return BillingJobStatusResponse(
         job_id=report.id,
+        report_id=report.id,
         external_id=report.external_id,
         status=report.status,
         provider=report.provider,
@@ -187,6 +189,7 @@ async def get_billing_job_status(
 
     return BillingJobStatusResponse(
         job_id=report.id,
+        report_id=report.id,
         external_id=report.external_id,
         status=report.status,
         provider=report.provider,

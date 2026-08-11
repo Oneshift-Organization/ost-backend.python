@@ -13,6 +13,20 @@ class BillingFileUploadResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     job_id: UUID = Field(..., description="Use this id to poll job status.")
+    # Mesmo valor de `job_id`. Este id é o `BillingReport.id`, que
+    # `GET /v1/analyses/{report_id}/request` espera como `report_id` — mesmo
+    # identificador, dois nomes, por herança do schema.
+    #
+    # Quem integra lê `job_id`, procura onde passá-lo, e o outro endpoint pede
+    # `report_id`. Se tentar o `job_id` de uma *análise* (que existe e é outro
+    # id), leva 404 — e nosso 404 é ambíguo de propósito, então o cliente conclui
+    # "não existe" em vez de "chamei errado".
+    #
+    # Renomear seria a correção limpa e quebraria o frontend hoje. Duplicar não
+    # quebra ninguém: quem lê `job_id` continua igual, quem não conhece
+    # `report_id` ignora. O preço é um campo redundante — mais barato que cada
+    # integração nova tropeçar aqui.
+    report_id: UUID
     external_id: UUID | None = None
     status: JobStatus
     source_filename: str
@@ -23,6 +37,20 @@ class BillingJobStatusResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     job_id: UUID
+    # Mesmo valor de `job_id`. Este id é o `BillingReport.id`, que
+    # `GET /v1/analyses/{report_id}/request` espera como `report_id` — mesmo
+    # identificador, dois nomes, por herança do schema.
+    #
+    # Quem integra lê `job_id`, procura onde passá-lo, e o outro endpoint pede
+    # `report_id`. Se tentar o `job_id` de uma *análise* (que existe e é outro
+    # id), leva 404 — e nosso 404 é ambíguo de propósito, então o cliente conclui
+    # "não existe" em vez de "chamei errado".
+    #
+    # Renomear seria a correção limpa e quebraria o frontend hoje. Duplicar não
+    # quebra ninguém: quem lê `job_id` continua igual, quem não conhece
+    # `report_id` ignora. O preço é um campo redundante — mais barato que cada
+    # integração nova tropeçar aqui.
+    report_id: UUID
     external_id: UUID | None = None
     status: JobStatus
     provider: CloudProvider | None = None
@@ -39,6 +67,20 @@ class BillingReportSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     job_id: UUID
+    # Mesmo valor de `job_id`. Este id é o `BillingReport.id`, que
+    # `GET /v1/analyses/{report_id}/request` espera como `report_id` — mesmo
+    # identificador, dois nomes, por herança do schema.
+    #
+    # Quem integra lê `job_id`, procura onde passá-lo, e o outro endpoint pede
+    # `report_id`. Se tentar o `job_id` de uma *análise* (que existe e é outro
+    # id), leva 404 — e nosso 404 é ambíguo de propósito, então o cliente conclui
+    # "não existe" em vez de "chamei errado".
+    #
+    # Renomear seria a correção limpa e quebraria o frontend hoje. Duplicar não
+    # quebra ninguém: quem lê `job_id` continua igual, quem não conhece
+    # `report_id` ignora. O preço é um campo redundante — mais barato que cada
+    # integração nova tropeçar aqui.
+    report_id: UUID
     external_id: UUID | None = None
     status: JobStatus
     provider: CloudProvider | None = None
@@ -53,6 +95,7 @@ class BillingReportSummary(BaseModel):
     def from_entity(cls, r: BillingReport) -> "BillingReportSummary":
         return cls(
             job_id=r.id,
+            report_id=r.id,
             external_id=r.external_id,
             status=r.status,
             provider=r.provider,
