@@ -43,6 +43,12 @@ class Settings(BaseSettings):
         ]
     )
 
+    # API key de projeto GCP com a Cloud Billing API habilitada. Só o GCP
+    # precisa: Azure, OCI e AWS publicam preço sem autenticação. Sem esta key o
+    # sync de preços do GCP devolve vazio e registra o motivo — os demais
+    # provedores continuam funcionando.
+    gcp_billing_api_key: str = ""
+
     cloud_creds_fernet_key: str = ""
 
     max_upload_size_mb: int = 50
