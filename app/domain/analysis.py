@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -39,6 +40,13 @@ class FinancialEstimate:
     estimated_monthly_cost: Decimal | None = None
     cost_delta: Decimal | None = None
     pricing_confidence: str = "low"
+    # Espelha `services/equivalence_matcher.FinancialEstimate`. São dois tipos
+    # com o mesmo nome — este é o do contexto de análise, aquele é o da saída do
+    # matcher — e a conversão entre eles em `build_migration_context` é onde a
+    # proveniência se perdia: campo que não existe aqui é campo que não chega ao
+    # payload, silenciosamente.
+    price_source: str | None = None
+    price_captured_at: datetime | None = None
 
 
 @dataclass(frozen=True)

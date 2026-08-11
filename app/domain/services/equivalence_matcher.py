@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 
 from app.domain.entities.cloud_price_point import CloudPricePoint
@@ -36,6 +37,12 @@ class FinancialEstimate:
     estimated_monthly_cost: Decimal | None = None
     cost_delta: Decimal | None = None
     pricing_confidence: str = "low"
+    # Proveniência do preço. Sem isto, "official" não quer dizer nada: pode ser
+    # de ontem ou de três meses atrás, e quem lê não tem como saber. É o que
+    # permite ao consumidor (tela ou agente) distinguir preço fresco de preço
+    # velho — e contestar o segundo.
+    price_source: str | None = None
+    price_captured_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -78,20 +85,39 @@ class EquivalenceMatcher:
 
     async def _candidates(
         self, provider: str, service_type: str, default_confidence: str
-    ) -> tuple[list[CloudSku], str]:
-        """Candidatos + confiança do preço: price points oficiais primeiro,
-        catálogo seed como fallback. É o seam que troca preço ~30% errado por
-        preço real sem mudar o algoritmo de packing."""
+    ) -> tuple[list[CloudSku], str, str | None, datetime | None]:
+        """Candidatos + confiança + **proveniência** do preço.
+
+        Price points oficiais primeiro, catálogo seed como fallback. É o seam
+        que troca preço ~30% errado por preço real sem mudar o packing.
+
+        A proveniência é devolvida junto porque é aqui — e só aqui — que se sabe
+        de onde o preço veio. Antes ela morria neste ponto: a função convertia
+        ``CloudPricePoint`` em ``CloudSku`` e devolvia só a string "official",
+        descartando ``source`` e ``captured_at``.
+
+        Quando há vários price points, a captura reportada é a **mais antiga**:
+        num conjunto de candidatos, o mais velho é que limita a confiança.
+        """
         if self._price_repo is not None:
             points = await self._price_repo.find(
                 provider=provider, service_type=service_type
             )
             if points:
-                return [_pricepoint_to_sku(p) for p in points], "official"
+                capturas = [p.captured_at for p in points if p.captured_at is not None]
+                fontes = {p.source for p in points if p.source}
+                return (
+                    [_pricepoint_to_sku(p) for p in points],
+                    "official",
+                    sorted(fontes)[0] if fontes else None,
+                    min(capturas) if capturas else None,
+                )
         catalog = await self._sku_repo.find_equivalents(
             provider=provider, service_type=service_type, limit=_CANDIDATE_LIMIT
         )
-        return catalog, default_confidence
+        # Catálogo seed não tem data de captura — é seed, não coleta. Dizer a
+        # origem já basta para o consumidor saber que não é preço oficial.
+        return catalog, default_confidence, "seed_catalog", None
 
     async def get_equivalents(
         self,
@@ -217,7 +243,7 @@ class EquivalenceMatcher:
             # Candidatos: price points reais primeiro (confiança por-provedor),
             # senão catálogo seed. O packer precisa deles sem filtro de min_vcpus
             # — ele considera SKUs pequenos multiplicados e grandes que cobrem só.
-            candidates, confidence = await self._candidates(
+            candidates, confidence, origem_preco, capturado_em = await self._candidates(
                 provider, service_type, pricing_confidence
             )
 
@@ -245,6 +271,8 @@ class EquivalenceMatcher:
                         estimated_monthly_cost=estimated_monthly,
                         cost_delta=cost_delta,
                         pricing_confidence=confidence,
+                        price_source=origem_preco,
+                        price_captured_at=capturado_em,
                     ),
                 )
             )

@@ -31,6 +31,7 @@ from app.domain.services.category_calculator import (
     CategoryRate,
     estimate_by_cost_ratio,
 )
+from app.domain.services.confidence import avaliar_confianca
 from app.domain.services.currency import (
     ANALYSIS_CURRENCY,
     FxRate,
@@ -391,6 +392,8 @@ class BuildMigrationContextUseCase:
                             estimated_monthly_cost=_f.estimated_monthly_cost,
                             cost_delta=_f.cost_delta,
                             pricing_confidence=_f.pricing_confidence,
+                            price_source=getattr(_f, "price_source", None),
+                            price_captured_at=getattr(_f, "price_captured_at", None),
                         )
                     equiv_items.append(
                         EquivalentService(
@@ -463,6 +466,8 @@ class BuildMigrationContextUseCase:
                             estimated_monthly_cost=opt.financials.estimated_monthly_cost,
                             cost_delta=opt.financials.cost_delta,
                             pricing_confidence=opt.financials.pricing_confidence,
+                            price_source=opt.financials.price_source,
+                            price_captured_at=opt.financials.price_captured_at,
                         )
                     tm = None
                     if opt.technical_match is not None:
@@ -581,6 +586,10 @@ class BuildMigrationContextUseCase:
         # ── 9c. Consolidação por provedor (backend calcula, IA narra) ──
         # Cada provedor só reprecifica o que ELE cobre; o resto fica ao custo atual.
         _tally: dict[str, dict[str, Any]] = {}
+        # Custo cotado agrupado pelo rótulo de confiança do PREÇO. É o insumo da
+        # confiança da análise (domain/services/confidence.py): a pergunta que
+        # ele responde é "que fração do dinheiro cotado veio de preço oficial?".
+        _custo_por_confianca: dict[str, Decimal] = {}
 
         def _add(provider: str, analyzed_cost: Decimal, source_cost: Decimal, conf: str) -> None:
             acc = _tally.setdefault(
@@ -590,6 +599,9 @@ class BuildMigrationContextUseCase:
             acc["analyzed"] += analyzed_cost
             acc["covered"] += source_cost
             acc["confs"].append(conf)
+            _custo_por_confianca[conf] = (
+                _custo_por_confianca.get(conf, Decimal("0")) + analyzed_cost
+            )
 
         family_src = {
             fp.pool_key.as_str(): convert(fp.monthly_cost, fx) or Decimal("0")
@@ -637,6 +649,11 @@ class BuildMigrationContextUseCase:
             "janela_horas": float(family_pools[0].hours_window) if family_pools else 730.0,
             "fonte_precos": "cloud_price_points (oficial) + seed_catalog_pareto (fallback)",
             "confianca_precos": confianca_por_provedor or "low",
+            # Confiança DA ANÁLISE, medida em vez de opinada: razão do custo
+            # cotado com preço oficial sobre o custo total cotado. Antes esse
+            # nível vinha do LLM — um modelo opinando sobre a qualidade dos dados
+            # que ele próprio recebeu.
+            "confianca_analise": avaliar_confianca(_custo_por_confianca).as_ledger(),
             "cobertura_classificacao": cobertura,
             "cobertura_analise": cobertura_analise,
             "fator_utilizacao": 1.0,
