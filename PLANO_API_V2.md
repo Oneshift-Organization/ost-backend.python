@@ -3,6 +3,22 @@
 **Regra number one:** o caminho legado (`Frontend → API → LLM`) **não é tocado**.
 Tudo novo nasce ao lado, desligado, e entra quando alguém virar o interruptor.
 
+> ## Status — 2026-08-11
+>
+> | bloco | estado | onde |
+> |---|---|---|
+> | **0** — preços AWS/GCP | ✅ feito | PR #21 (main) · #23 (develop) |
+> | **A** — trava do legado | ✅ feito | PR #18 · tag `baseline/legado-travado` |
+> | **B** — proveniência e frescor | ✅ feito | PR #20 |
+> | **C** — confiança propagada | ✅ feito | PR #20 |
+> | **D** — autoridade por categoria | ✅ feito | PR #24 |
+> | **E** — recepção + sugestões | ✅ feito | PR #25 |
+> | **F** — `report_id` aditivo | ✅ feito | PR #19 |
+> | **G** — o interruptor | ✅ feito | PR #25 (`AGENT_FLOW_ENABLED`) |
+>
+> **Todos os blocos do plano estão implementados.** O que falta não é código
+> deste repo — está em [§9](#9-o-que-falta-para-o-fluxo-novo-funcionar).
+
 ---
 
 ## 1. Por que o plano anterior estava errado
@@ -342,3 +358,84 @@ sobre 42% de preço mock. Depois destes blocos, o mesmo caso sai com
 `analysis_confidence: low`, cada equivalente dizendo de onde veio o preço e há
 quantos dias, e a IA sinalizando quais números não confia — **sem que nenhum
 valor tenha deixado de ser reprodutível.**
+
+
+---
+
+# 9. O que falta para o fluxo novo funcionar
+
+Os oito blocos estão prontos e mergeados em `develop`. O fluxo MCP+Agente **não
+funciona ponta a ponta** por três motivos, nenhum deles neste repositório.
+
+## 9.1 O MCP precisa implementar as três tools · **bloqueante**
+
+O pacote está pronto em `../MCP.PLAN/` — código TypeScript compilado e testado
+contra um clone real do `ost-mcp.nodejs`, contrato da API campo a campo, deploy
+e testes. **Ainda não foi entregue ao responsável.**
+
+| tool | o que faz |
+|---|---|
+| `list_billing_reports` | descobre os relatórios do usuário |
+| `get_billing_request` | busca a análise pronta |
+| `submit_billing_analysis` | devolve a análise para o backend corrigir |
+
+A terceira é a que fecha o circuito com o `POST /v1/agent/analyses/{id}/result`
+deste repo. Especificada em `MCP.PLAN/08-CONTESTACAO-E-SUGESTOES.md`.
+
+O MCP hoje é só um servidor de prompts: `grep -rn "fetch|axios" src/` não retorna
+nada. Não é ajuste — é capacidade nova.
+
+## 9.2 O cliente MCP precisa mandar a identidade do usuário
+
+Toda query da API isola por `user_id` do JWT, e o MCP não é um usuário. A saída
+é repassar o JWT do usuário final no header `X-OST-User-Token` — implementado no
+pacote, mas exige mudança em **quem hospeda o agente**, possivelmente outro time.
+
+Sem isso as tools respondem `SEM_CREDENCIAL` e nada funciona.
+
+## 9.3 Ligar o interruptor
+
+`AGENT_FLOW_ENABLED=true` no ambiente. Hoje `false` em dev e produção — as rotas
+`/v1/agent/*` respondem 404 como se não existissem.
+
+**Ligar não desliga o legado.** A virada real é o frontend parar de chamar
+`POST /v1/analyses/start`.
+
+---
+
+# 10. Dívida conhecida
+
+## 10.1 `exchange_rates` está vazia
+
+Não existe seed para a tabela (o repositório só tem `get_latest`). O câmbio vem
+do fallback `fx_brl_usd` no env — hoje `5.70`, sem data, que ninguém atualiza.
+
+Metade das linhas do bill GCP está em BRL. Se a variável sumir do ambiente, a
+conversão vira identidade e a análise compara real com dólar **sem avisar** — o
+que é pior que falhar, porque o número sai plausível.
+
+Conferido em 2026-08-11: `fx_brl_usd = 5.70` presente em dev.
+
+## 10.2 A env da key do GCP não persiste no cluster
+
+`GCP_BILLING_API_KEY` está no `.env.dev` local e o sync já rodou contra o banco
+de dev (24 price points de GCP oficiais). Mas o `api-secret` do namespace
+`develop` é gerenciado por Flux — alteração via `kubectl` é revertida no próximo
+reconcile.
+
+**Não bloqueia nada:** o sync é offline, o pod não precisa da key em runtime, a
+análise só *lê* `cloud_price_points`. Só importa para rodar o sync de dentro do
+pod. A correção definitiva é um PR no `ost-infra`.
+
+## 10.3 Build e testes rodam em paralelo no CI
+
+`Build, Push & Deploy` não espera `Tests`. Imagem quebrada sobe mesmo com teste
+vermelho. A correção é um `needs:` no job de build, mas o workflow é mantido por
+outra pessoa — combinar antes.
+
+## 10.4 Preço só de uma região por provedor
+
+Os fetchers coletam `us-east-1` (AWS), `eastus` (Azure), `us-central1` (GCP). Um
+bill com carga em São Paulo é cotado com preço da Virgínia, que é mais barato —
+a economia estimada sai otimista. Corrigir exige mapear a região do bill para a
+do provedor-alvo.
