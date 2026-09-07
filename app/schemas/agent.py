@@ -96,6 +96,15 @@ class SugestaoOut(SugestaoIn):
     efeito_backend: str = Field(
         description="`confianca_rebaixada` ou `informativo`. Preenchido pelo backend."
     )
+    origem: str = Field(
+        default="agente",
+        description=(
+            "Quem levantou: `agente` ou `backend`. O backend contesta os "
+            "próprios insumos (câmbio ausente ou vencido, por exemplo) e essas "
+            "entram na mesma lista — a tela precisa poder distinguir a dúvida "
+            "do modelo da dúvida nossa."
+        ),
+    )
 
 
 class AgentAnalysisOut(BaseModel):

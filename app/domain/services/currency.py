@@ -17,6 +17,16 @@ from decimal import Decimal
 # são feitas. Mudar isto exige reconverter o catálogo inteiro.
 ANALYSIS_CURRENCY = "USD"
 
+# `fonte` quando não há taxa alguma para o par. A taxa vira 1 — não porque as
+# moedas valham o mesmo, mas porque não há número honesto a aplicar. Este rótulo
+# é o que impede a identidade de passar como conversão: quem lê o ledger vê que
+# a comparação está entre moedas diferentes.
+SEM_TAXA = "SEM_TAXA_CAMBIO"
+
+# `fonte` do fallback de ambiente: um número no env, sem data e sem quem o
+# atualize.
+FONTE_CONFIG = "config"
+
 
 @dataclass(frozen=True, slots=True)
 class FxRate:
@@ -31,10 +41,35 @@ class FxRate:
     def is_identity(self) -> bool:
         return self.taxa == Decimal("1")
 
+    @property
+    def sem_taxa(self) -> bool:
+        """Não existe taxa para o par — o valor 1 é ausência, não conversão."""
+        return self.fonte == SEM_TAXA
+
+    def idade_em_dias(self, hoje: date) -> int | None:
+        """Quantos dias desde a cotação. ``None`` quando a taxa não tem data.
+
+        Sem data não há como distinguir uma cotação de ontem de uma de 2023, e
+        `data: null` é exatamente o estado do fallback de ambiente hoje.
+        """
+        if self.data is None:
+            return None
+        return (hoje - self.data).days
+
 
 def identity_rate(currency: str) -> FxRate:
     """Taxa neutra — usada quando origem e análise já são a mesma moeda."""
     return FxRate(par=f"{currency}/{currency}", taxa=Decimal("1"), fonte="identity")
+
+
+def taxa_desconhecida(par: str) -> FxRate:
+    """Sem taxa conhecida para o par.
+
+    Devolve identidade **rotulada**. Converter por 1 compara real com dólar como
+    se fossem a mesma coisa; o rótulo é o que permite a camada de cima rebaixar
+    a confiança e avisar na tela em vez de deixar o número sair plausível.
+    """
+    return FxRate(par=par, taxa=Decimal("1"), fonte=SEM_TAXA)
 
 
 def convert(amount: Decimal | None, rate: FxRate) -> Decimal | None:

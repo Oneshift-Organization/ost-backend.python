@@ -405,16 +405,42 @@ Sem isso as tools respondem `SEM_CREDENCIAL` e nada funciona.
 
 # 10. Dívida conhecida
 
-## 10.1 `exchange_rates` está vazia
+## 10.1 `exchange_rates` está vazia — **resolvido em 07/09/2026**
 
-Não existe seed para a tabela (o repositório só tem `get_latest`). O câmbio vem
-do fallback `fx_brl_usd` no env — hoje `5.70`, sem data, que ninguém atualiza.
+O diagnóstico original desta seção estava errado. O risco não era a variável
+`fx_brl_usd` sumir (ela tem default `5.70` no `config.py`, não some): era o
+caminho `SEM_TAXA_CAMBIO` em `build_migration_context._resolve_fx`. Qualquer par
+sem cotação — EUR, GBP — era convertido por **1**, somando moedas diferentes, e
+o rótulo morria no ledger. `grep -rn SEM_TAXA_CAMBIO app/` retornava uma linha
+só: a que criava o rótulo. Ninguém lia.
 
-Metade das linhas do bill GCP está em BRL. Se a variável sumir do ambiente, a
-conversão vira identidade e a análise compara real com dólar **sem avisar** — o
-que é pior que falhar, porque o número sai plausível.
+E a taxa do env estava mesmo errada: em 07/09/2026 o câmbio de referência do BCE
+era `5.1261` contra os `5.70` do ambiente — **11% de erro** sobre as linhas em
+BRL do bill GCP, sem data para comparar e sem ninguém encarregado de atualizar.
 
-Conferido em 2026-08-11: `fx_brl_usd = 5.70` presente em dev.
+O que passou a existir:
+
+| peça | onde |
+|---|---|
+| alertas do backend contra os próprios insumos | `domain/services/alertas.py` |
+| rebaixamento com motivo declarado | `ConfiancaAnalise.com_rebaixamento` |
+| `SEM_TAXA_CAMBIO` tipado | `currency.taxa_desconhecida` |
+| cotação com data e procedência | `infrastructure/fx/ecb_fx_client.py` |
+| sync offline | `scripts/sync_fx.py` |
+
+A escada de gravidade: **sem taxa** e **cotação vencida (>90 dias)** rebaixam a
+confiança um degrau; **sem data** (o fallback de env) e **>30 dias** avisam sem
+rebaixar. Punir o estado normal esvaziaria o sinal justamente onde ele precisa
+discriminar.
+
+Os alertas saem em `premissas.sugestoes_backend`, no mesmo formato das sugestões
+do agente e com `origem: backend`, e `agent_result` os junta na lista que a tela
+exibe. É o simétrico da contestação: o agente contesta um número nosso, e agora
+o backend contesta os próprios insumos.
+
+**Pendente:** rodar `python scripts/sync_fx.py` contra dev e produção, e agendar
+(cron ou job) — enquanto a tabela estiver vazia o câmbio segue vindo do env, só
+que agora *dizendo* que não tem data.
 
 ## 10.2 A env da key do GCP não persiste no cluster
 
