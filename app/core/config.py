@@ -63,13 +63,34 @@ class Settings(BaseSettings):
     # by `get_current_user` even if this is set to False by mistake.
     auth_enabled: bool = True
 
-    llm_provider: Literal["gemini", "openrouter", "anthropic", "mock"] = "gemini"
+    llm_provider: Literal[
+        "gemini",
+        "openrouter",
+        "anthropic",
+        "nvidia",
+        "mock",
+    ] = "gemini"
+
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
+
     openrouter_api_key: str = ""
     openrouter_model: str = "deepseek/deepseek-v4-flash:free"
+
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
+
+    nvidia_api_key: str = ""
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_model: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    nvidia_timeout_seconds: float = 300.0
+
+    # Servidor MCP que fornece os prompts dos agentes OneShift.
+    mcp_prompts_enabled: bool = False
+    mcp_url: str = ""
+    mcp_token: str = ""
+    mcp_timeout_seconds: float = 30.0
+    mcp_prompt_cache_seconds: int = 300
 
     # Tempo além do qual um job de análise ativo é considerado perdido. A
     # análise roda em BackgroundTasks no processo web, então um restart deixa
@@ -81,9 +102,7 @@ class Settings(BaseSettings):
     # Formato: unidades da moeda de origem por 1 USD (BRL/USD = 5.70).
     fx_brl_usd: Decimal = Decimal("5.70")
 
-    gcp_service_account_path: str = Field(
-        default="", alias="GOOGLE_APPLICATION_CREDENTIALS"
-    )
+    gcp_service_account_path: str = Field(default="", alias="GOOGLE_APPLICATION_CREDENTIALS")
 
     @property
     def is_production(self) -> bool:
