@@ -690,36 +690,74 @@ def _make_llm_client() -> (
             )
 
         case "nvidia":
-            return NvidiaLLMClient(
-                api_key=settings.nvidia_api_key,
-                model=settings.nvidia_model,
-                base_url=settings.nvidia_base_url,
-                timeout_seconds=settings.nvidia_timeout_seconds,
-            )
+            return _make_nvidia_client()
 
         case _:
             return MockLLMClient()
 
 
+def _make_nvidia_client() -> NvidiaLLMClient:
+    settings = get_settings()
+
+    return NvidiaLLMClient(
+        api_key=settings.nvidia_api_key,
+        model=settings.nvidia_model,
+        base_url=settings.nvidia_base_url,
+        timeout_seconds=settings.nvidia_timeout_seconds,
+    )
+
+
 def _make_orchestrator() -> LLMOrchestrator:
     settings = get_settings()
 
-    use_mcp = (
+    primary_client = _make_llm_client()
+
+    primary_uses_mcp = (
         settings.llm_provider == "nvidia"
         and settings.mcp_prompts_enabled
     )
+    primary_mcp_client = (
+        get_mcp_prompt_client()
+        if primary_uses_mcp
+        else None
+    )
 
-    mcp_client = get_mcp_prompt_client() if use_mcp else None
+    fallback_enabled = (
+        settings.llm_provider == "anthropic"
+        and settings.llm_fallback_provider == "nvidia"
+    )
+    fallback_client = (
+        _make_nvidia_client()
+        if fallback_enabled
+        else None
+    )
+
+    fallback_uses_mcp = (
+        fallback_enabled
+        and settings.mcp_prompts_enabled
+    )
+    fallback_mcp_client = (
+        get_mcp_prompt_client()
+        if fallback_uses_mcp
+        else None
+    )
 
     logger.info(
-        "llm_runtime_selected provider=%s mcp_prompts=%s",
+        "llm_runtime_selected primary=%s fallback=%s "
+        "primary_mcp=%s fallback_mcp=%s",
         settings.llm_provider,
-        use_mcp,
+        settings.llm_fallback_provider
+        if fallback_enabled
+        else "none",
+        primary_uses_mcp,
+        fallback_uses_mcp,
     )
 
     return LLMOrchestrator(
-        llm_client=_make_llm_client(),
-        mcp_client=mcp_client,
+        llm_client=primary_client,
+        mcp_client=primary_mcp_client,
+        fallback_client=fallback_client,
+        fallback_mcp_client=fallback_mcp_client,
     )
 
 

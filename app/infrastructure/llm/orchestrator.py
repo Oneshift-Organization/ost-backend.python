@@ -1,10 +1,8 @@
 """Orquestrador da análise gerada por IA.
 
-Sem um cliente MCP, preserva o comportamento anterior: envia somente os
-dados de billing e o schema esperado.
-
-Com um cliente MCP, busca os prompts dos agentes OneShift e os inclui como
-políticas obrigatórias da análise.
+O cliente principal mantém o comportamento normal da aplicação.
+Quando um erro elegível ocorre, o cliente de fallback executa a mesma análise.
+O MCP pode ser configurado separadamente para cada tentativa.
 """
 
 from __future__ import annotations
@@ -12,6 +10,9 @@ from __future__ import annotations
 import json
 import logging
 from typing import TYPE_CHECKING
+
+import anthropic
+from pydantic import ValidationError
 
 from app.domain.interfaces.i_llm_client import ILLMClient
 from app.schemas.analysis_v2 import AnalysisV2Response
@@ -24,8 +25,25 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
 _MCP_VIABILITY_MAX = 100
 _MCP_TO_API_SCALE_FACTOR = 10
+
+_ANTHROPIC_FALLBACK_STATUS_CODES = {
+    402,
+    429,
+    500,
+    502,
+    503,
+    504,
+    529,
+}
+
+_ANTHROPIC_SPEND_LIMIT_ERROR_CODE = (
+    "enforced_spend_limit_reached"
+)
+
+_ANTHROPIC_BAD_REQUEST_STATUS = 400
 
 
 class LLMOrchestrator:
@@ -33,9 +51,13 @@ class LLMOrchestrator:
         self,
         llm_client: ILLMClient,
         mcp_client: OneShiftMCPClient | None = None,
+        fallback_client: ILLMClient | None = None,
+        fallback_mcp_client: OneShiftMCPClient | None = None,
     ) -> None:
         self._client = llm_client
         self._mcp_client = mcp_client
+        self._fallback_client = fallback_client
+        self._fallback_mcp_client = fallback_mcp_client
 
     async def generate_report(  # noqa: PLR0917
         self,
@@ -51,8 +73,12 @@ class LLMOrchestrator:
             context_payload = dict(payload)
         else:
             context_payload = json.loads(pools_json)
-            context_payload["provedor_origem"] = source_provider
-            context_payload["periodo_faturamento"] = billing_period
+            context_payload["provedor_origem"] = (
+                source_provider
+            )
+            context_payload["periodo_faturamento"] = (
+                billing_period
+            )
             context_payload["gasto_total"] = total_spend
             context_payload["moeda"] = currency
 
@@ -67,7 +93,7 @@ class LLMOrchestrator:
         self,
         legacy_payload: dict,
     ) -> AnalysisV2Response:
-        """Executa a análise usando o payload legado já calculado."""
+        """Executa a análise usando o payload legado calculado."""
         log_llm_input_payload(
             "legacy",
             legacy_payload,
@@ -79,15 +105,62 @@ class LLMOrchestrator:
         self,
         billing_data: dict,
     ) -> AnalysisV2Response:
+        try:
+            return await self._generate_with_client(
+                self._client,
+                billing_data,
+                self._mcp_client,
+            )
+        except Exception as error:
+            fallback_client = self._fallback_client
+
+            if (
+                fallback_client is None
+                or not _should_use_anthropic_fallback(
+                    error
+                )
+            ):
+                raise
+
+            logger.warning(
+                "llm_primary_failed_using_fallback "
+                "primary=%s fallback=%s "
+                "error_type=%s status=%s",
+                type(self._client).__name__,
+                type(fallback_client).__name__,
+                type(error).__name__,
+                getattr(error, "status_code", None),
+            )
+
+            try:
+                return await self._generate_with_client(
+                    fallback_client,
+                    billing_data,
+                    self._fallback_mcp_client,
+                )
+            except Exception:
+                logger.exception(
+                    "llm_fallback_failed fallback=%s",
+                    type(fallback_client).__name__,
+                )
+                raise
+
+    async def _generate_with_client(
+        self,
+        client: ILLMClient,
+        billing_data: dict,
+        mcp_client: OneShiftMCPClient | None,
+    ) -> AnalysisV2Response:
         mcp_bundle: MCPPromptBundle | None = None
 
-        if self._mcp_client is not None:
+        if mcp_client is not None:
             mcp_bundle = (
-                await self._mcp_client.get_all_prompts()
+                await mcp_client.get_all_prompts()
             )
 
             logger.info(
-                "mcp_policies_selected contract=%s prompts=%d",
+                "mcp_policies_selected "
+                "contract=%s prompts=%d",
                 mcp_bundle.prompt_contract_version,
                 len(mcp_bundle.prompts),
             )
@@ -97,7 +170,7 @@ class LLMOrchestrator:
             mcp_bundle,
         )
 
-        raw = await self._client.generate(
+        raw = await client.generate(
             prompt,
             AnalysisV2Response,
         )
@@ -105,7 +178,11 @@ class LLMOrchestrator:
         if isinstance(raw, AnalysisV2Response):
             result = raw
         elif isinstance(raw, dict):
-            result = AnalysisV2Response.resilient_parse(raw)
+            result = (
+                AnalysisV2Response.resilient_parse(
+                    raw
+                )
+            )
         else:
             raise TypeError(
                 "Expected AnalysisV2Response or dict, "
@@ -113,9 +190,102 @@ class LLMOrchestrator:
             )
 
         if mcp_bundle is not None:
-            return _normalize_mcp_viability_score(result)
+            return _normalize_mcp_viability_score(
+                result
+            )
 
         return result
+
+
+def _should_use_anthropic_fallback(
+    error: Exception,
+) -> bool:
+    should_fallback = False
+
+    if isinstance(
+        error,
+        anthropic.APIConnectionError,
+    ):
+        should_fallback = True
+
+    elif isinstance(
+        error,
+        anthropic.APIStatusError,
+    ):
+        if (
+            error.status_code
+            in _ANTHROPIC_FALLBACK_STATUS_CODES
+        ):
+            should_fallback = True
+
+        elif (
+            error.status_code
+            == _ANTHROPIC_BAD_REQUEST_STATUS
+        ):
+            should_fallback = (
+                _is_anthropic_spend_limit_error(
+                    error.body
+                )
+            )
+
+    elif isinstance(
+        error,
+        (
+            json.JSONDecodeError,
+            ValidationError,
+        ),
+    ):
+        should_fallback = True
+
+    elif isinstance(error, ValueError):
+        message = str(error).lower()
+
+        should_fallback = (
+            "claude returned no text" in message
+            or (
+                "could not extract json from claude"
+                in message
+            )
+        )
+
+    return should_fallback
+
+
+def _is_anthropic_spend_limit_error(
+    body: object | None,
+) -> bool:
+    if not isinstance(body, dict):
+        return False
+
+    error = body.get("error")
+
+    if not isinstance(error, dict):
+        return False
+
+    details = error.get("details")
+
+    if isinstance(details, dict):
+        error_code = details.get("error_code")
+
+        if (
+            error_code
+            == _ANTHROPIC_SPEND_LIMIT_ERROR_CODE
+        ):
+            return True
+
+    error_type = error.get("type")
+    message = str(
+        error.get("message", "")
+    ).lower()
+
+    return (
+        error_type == "invalid_request_error"
+        and (
+            "api usage limit" in message
+            or "specified usage limit" in message
+            or "spend limit" in message
+        )
+    )
 
 
 def _build_prompt(
@@ -123,7 +293,6 @@ def _build_prompt(
     mcp_bundle: MCPPromptBundle | None = None,
 ) -> str:
     if mcp_bundle is None:
-        # Compatibilidade: mantém exatamente o formato anterior.
         legacy_payload = {
             "billing_data": billing_data,
             "output_schema": (
@@ -139,28 +308,31 @@ def _build_prompt(
     payload = {
         "instructions": [
             (
-                "Use todos os documentos de mcp_prompts como "
-                "políticas obrigatórias da análise."
+                "Use todos os documentos de "
+                "mcp_prompts como políticas "
+                "obrigatórias da análise."
             ),
             (
-                "Analise somente os valores existentes em "
-                "billing_data."
+                "Analise somente os valores "
+                "existentes em billing_data."
             ),
             (
-                "Não invente preços, custos, equivalências "
-                "ou informações ausentes."
+                "Não invente preços, custos, "
+                "equivalências ou informações "
+                "ausentes."
             ),
             (
-                "Retorne exclusivamente um objeto JSON válido "
-                "compatível com output_schema."
+                "Retorne exclusivamente um objeto "
+                "JSON válido compatível com "
+                "output_schema."
             ),
             (
-                "Produza os textos humanos em português "
-                "brasileiro."
+                "Produza os textos humanos em "
+                "português brasileiro."
             ),
             (
-                "Siga a escala de viability_score definida "
-                "pelos prompts do MCP."
+                "Siga a escala de viability_score "
+                "definida pelos prompts do MCP."
             ),
         ],
         "mcp_prompt_contract_version": (
@@ -186,7 +358,7 @@ def _build_prompt(
 def _normalize_mcp_viability_score(
     result: AnalysisV2Response,
 ) -> AnalysisV2Response:
-    """Converte a escala MCP 0..100 para o contrato atual 0..1000."""
+    """Converte a escala MCP 0..100 para 0..1000."""
     score = result.viability_score
 
     if 0 <= score <= _MCP_VIABILITY_MAX:
