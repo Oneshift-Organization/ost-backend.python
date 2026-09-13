@@ -55,11 +55,6 @@ def test_glacier_e_s3_prefixado_sao_objeto() -> None:
     assert _regra(AWS_RULES, "s3:*")[2] == "object_storage"
 
 
-def test_requisicoes_nao_entram_no_dimensionamento_de_disco() -> None:
-    """`Requests-Tier1` é operação de bucket — não tem relação com GB de disco."""
-    assert _regra(AWS_RULES, "*request*")[2] == "object_storage"
-
-
 def test_cloud_storage_do_gcp_e_objeto() -> None:
     for padrao in ("*cloud storage*", "*nearline*", "*coldline*"):
         assert _regra(GCP_RULES, padrao)[2] == "object_storage"
@@ -110,3 +105,27 @@ def test_objeto_e_mais_barato_que_bloco_em_todo_provedor() -> None:
     }
     for provedor in ("aws", "gcp", "azure"):
         assert taxas[(provedor, "object_storage")] < taxas[(provedor, "storage_ssd")]
+
+
+# ── o que NÃO é armazenamento ───────────────────────────────────────────
+#
+# Estes dois casos vieram de olhar os SKUs reais dos CSVs versionados depois da
+# mudança, não de raciocínio abstrato.
+
+
+def test_requisicao_de_api_nao_e_armazenamento() -> None:
+    """`*request*` pega `RequestV2-Tier1` do WAF ($2,7 mil no bill real) e
+    `Requests-FIFO` do SQS, não só o S3.
+
+    Como `storage_hdd` inflava ~66 mil GB de disco; como `object_storage` ficava
+    pior, porque a taxa menor gerava um bucket de 130 mil GB. Requisição é
+    operação, não capacidade — em nenhum dos dois ela cabe.
+    """
+    assert _regra(AWS_RULES, "*request*")[2] == "unclassified"
+
+
+def test_artifact_registry_nao_e_disco() -> None:
+    """$324/mês somavam ~8 mil GB de disco fantasma ao dimensionamento."""
+    regra = _regra(GCP_RULES, "*artifact registry*")
+    assert regra[2] == "object_storage"
+    assert regra[5] < _regra(GCP_RULES, "*storage*")[5], "precisa vir antes do catch-all"

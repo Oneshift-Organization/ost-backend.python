@@ -48,6 +48,10 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     # ── Object storage (ANTES do bloco: o catch-all "*storage*" levava o
     #    Cloud Storage inteiro para `storage_hdd`, reprecificando objeto com
     #    taxa de disco — ~2x a taxa certa) ──
+    # Registry de artefatos é cobrado como armazenamento de objeto, e
+    # definitivamente não é disco anexado a instância: ia para `storage_hdd` e
+    # somava ~8 mil GB de disco fantasma ao dimensionamento.
+    ("*artifact registry*", "glob", "object_storage", None, "medium", 43),
     ("*cloud storage*", "glob", "object_storage", None, "high", 44),
     ("*standard storage*", "glob", "object_storage", None, "high", 45),
     ("*nearline*", "glob", "object_storage", None, "high", 46),
@@ -138,10 +142,17 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*lcuusage*", "glob", "network_egress", None, "medium", 47),
     ("*resolvernetworkinterface*", "glob", "network_egress", None, "medium", 48),
     ("*-bytes", "glob", "network_egress", None, "low", 49),
-    # ── S3 / API requests (ops) ──
-    # `Requests-Tier1` é operação de bucket. Ia para `storage_hdd` e entrava no
-    # dimensionamento de disco, que não tem relação com número de requisições.
-    ("*request*", "glob", "object_storage", None, "low", 50),
+    # ── Requisições de API (ops) ──
+    # NÃO é armazenamento, de nenhum tipo. O padrão pega `RequestV2-Tier1` do
+    # WAF ($2,7 mil no bill real) e `Requests-FIFO` do SQS, além do S3 — e
+    # requisição é operação, não capacidade.
+    #
+    # Ia para `storage_hdd`, o que inflava o disco estimado em ~66 mil GB; tentei
+    # `object_storage` e ficou pior, porque a taxa de objeto é menor e o bucket
+    # saía com 130 mil GB. `unclassified` é a resposta honesta: o custo existe,
+    # aparece em `nao_classificado` com a contagem de SKUs, e não vira recurso
+    # nenhum no Terraform.
+    ("*request*", "glob", "unclassified", None, "low", 50),
 ]
 
 _SEEDS: dict[str, list[tuple[str, str, str, str | None, str, int]]] = {
