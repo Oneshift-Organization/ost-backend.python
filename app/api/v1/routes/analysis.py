@@ -10,7 +10,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.domain.analysis import MigrationContext
-from app.domain.entities.analysis_job import AnalysisJob
+from app.domain.entities.analysis_job import AnalysisJob, DispStatus, agora_utc
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
 from app.infrastructure.database.models.billing_reports import BillingReportModel
 from app.infrastructure.database.session import get_sessionmaker
@@ -45,6 +45,8 @@ from app.schemas.analysis import (
     AnalysisJobResponse,
     AnalysisJobSummary,
     AnalysisRequest,
+    DispStatusIn,
+    DispStatusOut,
     EquivalentServiceItem,
     FinancialEstimateItem,
     MigrationContextResponse,
@@ -170,12 +172,75 @@ def _build_response(ctx: MigrationContext) -> MigrationContextResponse:
     )
 
 
+@router.put(
+    "/{job_id}/disp-status",
+    response_model=DispStatusOut,
+    status_code=status.HTTP_200_OK,
+    summary="Ativa ou depreciada — é o que o front chama no lugar de excluir",
+)
+async def definir_disp_status(
+    job_id: UUID,
+    corpo: DispStatusIn,
+    user: CurrentUser,
+    session: DbSession,
+) -> DispStatusOut:
+    """Depreciar não apaga.
+
+    Um DELETE levaria junto o `llm_input_payload`, que é a fonte do Terraform e
+    de qualquer reanálise — quem excluísse por engano perderia o pacote que já
+    baixou, sem volta. Aqui o registro fica, some da listagem, e o expurgo leva
+    as depreciadas há mais de um mês.
+
+    Idempotente: mandar o mesmo valor duas vezes devolve 200 e só recarimba a
+    data, o que importa porque o front pode reenviar num retry.
+    """
+    user_uuid = UUID(user.sub)
+    job = (
+        await session.execute(
+            select(AnalysisJobModel).where(
+                AnalysisJobModel.job_id == job_id,
+                AnalysisJobModel.user_id == user_uuid,
+            )
+        )
+    ).scalars().first()
+
+    # 404 e não 403: dizer "existe mas não é sua" já entrega a existência.
+    if job is None:
+        raise _erro(
+            status.HTTP_404_NOT_FOUND,
+            "ANALISE_NAO_ENCONTRADA",
+            f"análise {job_id} não existe para este usuário",
+            retryable=False,
+        )
+
+    job.disp_status = int(corpo.disp_status)
+    # Carimbar é o que ancora a carência do expurgo. Sem data, o primeiro
+    # expurgo levaria tudo que já estivesse depreciado.
+    job.disp_status_updated_at = agora_utc()
+    await session.commit()
+
+    logger.info(
+        "disp_status_alterado job_id=%s valor=%s", job_id, corpo.disp_status
+    )
+    return DispStatusOut(
+        job_id=job.job_id,
+        disp_status=job.disp_status,
+        disp_status_updated_at=job.disp_status_updated_at,
+    )
+
+
 @router.get("", response_model=list[AnalysisJobSummary])
 async def list_analysis_jobs(
     user: CurrentUser,
     session: DbSession,
     limit: int = 50,
+    incluir_depreciadas: bool = False,
 ) -> list[AnalysisJobSummary]:
+    """Depreciadas ficam de fora por default.
+
+    É o que faz o `PUT .../disp-status` parecer exclusão para o usuário sem ser
+    uma. `incluir_depreciadas=true` existe para uma tela de lixeira, se houver.
+    """
     if limit < 1 or limit > _MAX_ANALYSES_PER_PAGE:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -189,6 +254,11 @@ async def list_analysis_jobs(
         .where(
             AnalysisJobModel.user_id == user_uuid,
             BillingReportModel.user_id == user_uuid,
+            *(
+                ()
+                if incluir_depreciadas
+                else (AnalysisJobModel.disp_status == DispStatus.ATIVA,)
+            ),
         )
         .order_by(AnalysisJobModel.created_at.desc())
         .limit(limit)

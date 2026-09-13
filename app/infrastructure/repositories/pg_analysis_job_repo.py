@@ -31,6 +31,7 @@ class PgAnalysisJobRepository(IAnalysisJobRepository):
             error=job.error,
             ai_structured_output=job.ai_structured_output,
             llm_input_payload=job.llm_input_payload,
+            disp_status=job.disp_status,
             created_at=job.created_at,
             started_at=job.started_at,
             updated_at=job.updated_at or job.created_at,
@@ -49,6 +50,8 @@ class PgAnalysisJobRepository(IAnalysisJobRepository):
         model.error = job.error
         model.ai_structured_output = job.ai_structured_output
         model.llm_input_payload = job.llm_input_payload
+        model.disp_status = job.disp_status
+        model.disp_status_updated_at = job.disp_status_updated_at
         model.started_at = job.started_at
         model.updated_at = job.updated_at
 
@@ -151,6 +154,8 @@ class PgAnalysisJobRepository(IAnalysisJobRepository):
             ai_structured_output=(
                 dict(model.ai_structured_output) if model.ai_structured_output else None
             ),
+            disp_status=model.disp_status,
+            disp_status_updated_at=model.disp_status_updated_at,
             llm_input_payload=(
                 dict(model.llm_input_payload) if model.llm_input_payload else None
             ),

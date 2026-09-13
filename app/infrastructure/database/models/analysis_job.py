@@ -3,7 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Index, String, Text, Uuid, func, text
+from sqlalchemy import (
+    DateTime,
+    Index,
+    SmallInteger,
+    String,
+    Text,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +35,15 @@ class AnalysisJobModel(Base):
     # dois não há como medir o erro do modelo nem justificar um número que mudou.
     agent_raw_output: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     sugestoes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # 1 = ativa, 0 = depreciada. O front "exclui" mandando 0; o registro fica,
+    # e o expurgo leva as depreciadas há mais de um mês. Ver
+    # `PUT /v1/analyses/{job_id}/disp-status`.
+    disp_status: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default="1", default=1
+    )
+    disp_status_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(
@@ -43,7 +61,14 @@ class AnalysisJobModel(Base):
             "user_id",
             "report_id",
             unique=True,
-            postgresql_where=text("status IN ('PENDING','PROCESSING')"),
+            # `disp_status = 1` faz parte da condição: uma análise depreciada
+            # não ocupa mais o report. Sem isso, depreciar um job travado em
+            # PENDING tirava a análise da tela e ainda assim bloqueava uma nova
+            # para o mesmo relatório — o usuário "excluía" e não conseguia
+            # reanalisar, sem nenhuma mensagem que explicasse por quê.
+            postgresql_where=text(
+                "status IN ('PENDING','PROCESSING') AND disp_status = 1"
+            ),
         ),
         # Chave de idempotência fornecida pelo cliente.
         Index(
