@@ -74,6 +74,12 @@ class AuxiliaryCosts:
     gke_control_plane: Decimal = Decimal("0")
     storage_ssd: Decimal = Decimal("0")
     storage_hdd: Decimal = Decimal("0")
+    # Armazenamento de objetos (S3, Cloud Storage, Blob). Separado do bloco
+    # porque a taxa é ~metade ($0,023/GB contra $0,045) e o recurso é outro:
+    # um bucket não é um disco anexado a instância. Antes disto, `TimedStorage`
+    # da AWS e `Cloud Storage` do GCP caíam em `storage_hdd` e eram
+    # reprecificados com taxa de disco — errando o GB e a comparação.
+    object_storage: Decimal = Decimal("0")
     network_egress: Decimal = Decimal("0")
     database: Decimal = Decimal("0")
     # Custo de linhas com papel de compute (core/ram) que NÃO contribuíram
@@ -91,6 +97,7 @@ class AuxiliaryCosts:
             self.gke_control_plane > 0,
             self.storage_ssd > 0,
             self.storage_hdd > 0,
+            self.object_storage > 0,
             self.network_egress > 0,
             self.database > 0,
             self.commitment > 0,

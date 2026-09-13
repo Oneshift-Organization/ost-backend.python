@@ -24,6 +24,13 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("gcp", "storage_ssd", "gb_month", "0.170"),     # pd-ssd
     ("azure", "storage_ssd", "gb_month", "0.088"),   # premium ssd
     ("oci", "storage_ssd", "gb_month", "0.0255"),    # block balanced
+    # Armazenamento de objetos, tier padrão ($/GB-mês). Cerca de metade da taxa
+    # de bloco — é essa diferença que tornava a classificação errada cara: a
+    # linha de S3 era reprecificada como disco e o GB estimado saía pela metade.
+    ("aws", "object_storage", "gb_month", "0.023"),    # S3 Standard
+    ("gcp", "object_storage", "gb_month", "0.020"),    # Cloud Storage Standard
+    ("azure", "object_storage", "gb_month", "0.018"),  # Blob Hot (LRS)
+    ("oci", "object_storage", "gb_month", "0.0255"),   # Object Storage Standard
     # Storage frio/HDD ($/GB-mês)
     ("aws", "storage_hdd", "gb_month", "0.045"),     # st1
     ("gcp", "storage_hdd", "gb_month", "0.040"),     # pd-standard

@@ -96,6 +96,12 @@ def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
         projetos = [p for p in fp.source_projects if p and p != "_unknown"]
         if projetos:
             entry["qtd_projetos"] = len(projetos)
+        # Capacidade medida e custo zero: as instâncias são cobertas por
+        # compromisso (Savings Plan, RI, CUD) e o custo é faturado na linha dele.
+        # Sem esta marca, qualquer consumidor calcula economia contra zero e
+        # conclui que migrar o pool ADICIONA o custo inteiro.
+        if fp.capacity.vcpus > 0 and fp.monthly_cost <= 0:
+            entry["custo_coberto_por_compromisso"] = True
         out.append(entry)
 
     return out, missing
@@ -285,6 +291,8 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
             aux_payload["armazenamento_ssd"] = _money(auxiliary.storage_ssd, fx)
         if auxiliary.storage_hdd > 0:
             aux_payload["armazenamento_hdd"] = _money(auxiliary.storage_hdd, fx)
+        if auxiliary.object_storage > 0:
+            aux_payload["armazenamento_objetos"] = _money(auxiliary.object_storage, fx)
         if auxiliary.network_egress > 0:
             aux_payload["egresso_rede"] = _money(auxiliary.network_egress, fx)
         if auxiliary.database > 0:
@@ -308,6 +316,7 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
         _cat_key = {
             "storage_ssd": "armazenamento_ssd",
             "storage_hdd": "armazenamento_hdd",
+            "object_storage": "armazenamento_objetos",
             "network_egress": "egresso_rede",
             "database": "banco_dados",
         }
@@ -360,6 +369,12 @@ def _serialize_equivalent(equiv) -> dict:
         "provedor": normalize_provider(equiv.provider).upper(),
         "nome_servico": equiv.service_name,
     }
+    # O shape em si. `nome_servico` é rótulo ("Compute Engine N2"); é o `sku`
+    # que diz `n2-standard-8`, e é ele que vira `machine_type` num Terraform.
+    # Ausente quando o equivalente veio do catálogo curado, que não tem shape —
+    # o mesmo caso em que `base_correspondencia` sai como `curated_only`.
+    if getattr(equiv, "sku_id", None):
+        d["sku"] = equiv.sku_id
     basis = getattr(equiv, "match_basis", "pool_capacity")
     if basis != "pool_capacity":
         d["base_correspondencia"] = basis

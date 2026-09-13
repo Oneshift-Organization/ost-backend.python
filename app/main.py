@@ -5,11 +5,16 @@ from datetime import timedelta
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import update
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.domain.entities.analysis_job import agora_utc
+from app.infrastructure.database.models.terraform_generation_job import (
+    TerraformGenerationJobModel,
+)
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
 
@@ -29,6 +34,38 @@ async def _expirar_jobs_travados() -> int:
         return await PgAnalysisJobRepository(session).expirar_travados(limite)
 
 
+async def _expirar_geracoes_travadas() -> int:
+    """Mesmo problema, mesma solução, outra tabela.
+
+    A geração de Terraform também roda em BackgroundTasks. Sem o reaper, um
+    restart no meio deixa o job em PROCESSING para sempre, e o frontend fica em
+    polling eterno esperando um COMPLETED que nunca vem.
+
+    Aqui não há índice único por análise — gerar duas vezes para ambientes
+    diferentes é uso legítimo —, então o travamento não bloqueia nada. Mas a
+    tela precisa saber que aquilo morreu.
+    """
+    limite = agora_utc() - timedelta(
+        minutes=get_settings().analysis_job_timeout_minutes
+    )
+    sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
+        resultado = await session.execute(
+            update(TerraformGenerationJobModel)
+            .where(
+                TerraformGenerationJobModel.status.in_(("PENDING", "PROCESSING")),
+                TerraformGenerationJobModel.created_at < limite,
+            )
+            .values(
+                status="FAILED",
+                error="geração interrompida por reinício do processo",
+                updated_at=agora_utc(),
+            )
+        )
+        await session.commit()
+        return int(resultado.rowcount or 0)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     configure_logging()
@@ -42,6 +79,12 @@ async def lifespan(_app: FastAPI):
             log.warning("jobs_travados_expirados", quantidade=expirados)
     except Exception:  # startup nunca falha por causa do reaper
         log.exception("reaper_falhou_no_startup")
+    try:
+        geracoes = await _expirar_geracoes_travadas()
+        if geracoes:
+            log.warning("geracoes_terraform_expiradas", quantidade=geracoes)
+    except Exception:
+        log.exception("reaper_terraform_falhou_no_startup")
     yield
 
 

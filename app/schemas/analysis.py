@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -88,6 +88,26 @@ class AnalysisJobResponse(BaseModel):
     created_at: datetime
 
 
+class DispStatusIn(BaseModel):
+    """Corpo do `PUT /v1/analyses/{job_id}/disp-status`.
+
+    Um campo só, de propósito: esta rota muda visibilidade e nada mais. Aceitar
+    outros campos abriria caminho para o front editar resultado de análise.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    disp_status: Literal[0, 1] = Field(
+        description="1 = ativa (visível na listagem); 0 = depreciada (some da lista)."
+    )
+
+
+class DispStatusOut(BaseModel):
+    job_id: UUID
+    disp_status: int
+    disp_status_updated_at: datetime | None = None
+
+
 class AnalysisJobSummary(BaseModel):
     job_id: UUID
     report_id: UUID
@@ -100,5 +120,8 @@ class AnalysisJobSummary(BaseModel):
     recommendation: str | None = None
     viability_score: int | None = None
     analysis_confidence: str | None = None
+    # Só informativo na listagem — a tela de lixeira precisa distinguir. O
+    # `GET /v1/analyses` já esconde as depreciadas por default.
+    disp_status: int = 1
     error: str | None = None
     created_at: datetime

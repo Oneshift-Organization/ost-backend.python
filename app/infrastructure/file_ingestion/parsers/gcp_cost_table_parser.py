@@ -33,6 +33,22 @@ from app.infrastructure.file_ingestion.loaders import read_tabular
 _SIGNATURE_COLS = ("Service description", "Cost (R$)")
 
 
+# `Cost type` que NÃO são linha de consumo.
+#
+# `tax` é imposto: custo real, mas não se migra imposto.
+#
+# `total` é a linha de somatório que o Cost Table põe no fim do arquivo. Ela
+# repete o valor de todas as outras somadas, e ingeri-la como item **dobra** o
+# gasto: no CSV versionado, R$ 55.650 no lugar dos R$ 27.825 reais. O
+# enriquecimento já a descartava, então a análise sempre esteve certa — quem
+# mostrava o dobro era o dashboard e o drill-down, que somam `billing_items`.
+#
+# `rounding error` fica de FORA desta lista de propósito: é ajuste contábil de
+# verdade, na casa dos centavos, e descartá-lo criaria uma diferença inexplicável
+# entre a nossa soma e a fatura do cliente.
+_COST_TYPES_EXCLUIDOS = frozenset({"tax", "total"})
+
+
 class GcpCostTableParser(BaseParser):
     """GCP Cost Table CSV → canonical long-form DataFrame."""
 
@@ -54,7 +70,7 @@ class GcpCostTableParser(BaseParser):
             cost = _br_to_decimal(row.get("Cost (R$)", "0"))
 
             cost_type = _clean_gcp(row.get("Cost type", "")).lower()
-            if cost_type == "tax":
+            if cost_type in _COST_TYPES_EXCLUIDOS:
                 continue
 
             usage_start = _parse_date_gcp(row.get("Usage start date"))

@@ -55,6 +55,13 @@ class EquivalentService:
     service_name: str
     category: str
     service_type: str
+    # Chave nativa do provedor de destino — `n2-standard-8`, `m6i.2xlarge`,
+    # `VM.Standard.E4.Flex`. O matcher já a calcula (`EquivalentOption.sku_id`)
+    # e ela vinha sendo descartada aqui: `service_name` é rótulo humano
+    # ("Compute Engine N2"), não shape. Sem isto não há `machine_type` para
+    # escrever num Terraform, e nenhum consumidor consegue reproduzir a escolha.
+    # `None` quando o equivalente veio do catálogo curado, que não tem shape.
+    sku_id: str | None = None
     # match_basis: "pool_capacity" (L2 hardware) or "curated_only" (L3 only)
     match_basis: str = "pool_capacity"
     instances: int = 1

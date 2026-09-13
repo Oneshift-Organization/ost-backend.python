@@ -69,6 +69,23 @@ class Settings(BaseSettings):
     # mudar a variável e reiniciar: sem migration, sem deploy de código.
     agent_flow_enabled: bool = False
 
+    # O MESMO INTERRUPTOR, para a geração de Terraform. Com `false` (default) as
+    # rotas `/v1/terraform-generations` respondem 404. Desligar não perde dado:
+    # as gerações já feitas continuam na tabela.
+    terraform_generation_enabled: bool = False
+
+    # `terraform validate` contra o schema real do provider. Desligado por
+    # decisão de escopo, não por custo: medido em 2026-09-13, com
+    # `TF_PLUGIN_CACHE_DIR` quente o `init` leva 0,86s e o `validate` 0,35s. O
+    # provider do Google são 99 MB baixados UMA vez, não por geração.
+    #
+    # Ligar exige: binário do Terraform na imagem, `TF_PLUGIN_CACHE_DIR` num
+    # volume que sobreviva ao restart, e egress para registry.terraform.io no
+    # primeiro uso. Sem o cache, cada geração rebaixa 99 MB — daí a checagem
+    # explícita em `terraform/validate.py`.
+    terraform_validate_enabled: bool = False
+    terraform_cli_timeout_seconds: int = 120
+
     cloud_creds_fernet_key: str = ""
 
     max_upload_size_mb: int = 50

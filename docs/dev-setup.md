@@ -82,7 +82,20 @@ python -m app.infrastructure.database.seed_service_metadata
 python -m app.infrastructure.database.seed_catalog_pareto
 python -m app.infrastructure.database.seed_classification_rules
 python -m app.infrastructure.database.seed_from_csv    # <- POR ÚLTIMO
+
+# Taxas de referência por categoria não-compute. NÃO é opcional.
+PYTHONPATH=. python scripts/sync_prices.py --providers categories
 ```
+
+> ⚠️ **As taxas de categoria faltavam nesta lista.** Sem elas, storage, egresso
+> e banco não são reprecificados no destino e `cobertura_analise` cai de ~0,80
+> para **0,17** — sem erro nenhum, só um número pior. Descoberto em 13/09/2026
+> subindo um ambiente do zero seguindo este documento ao pé da letra: três gates
+> de integração falharam e a causa não era código.
+>
+> Elas vivem em `cloud_price_points` (não numa tabela própria), por isso entram
+> pelo `sync_prices.py` e não por um módulo `seed_*`. É a razão de terem passado
+> despercebidas aqui.
 
 > ⚠️ **`seed_from_csv` tem que ser o último.** Ele carrega
 > `cloud_services_mapping.csv` (816 linhas, a fonte autoritativa do DE-PARA, com

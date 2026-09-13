@@ -45,6 +45,19 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*external ip*", "glob", "network_egress", None, "high", 37),
     ("*ip charge*", "glob", "network_egress", None, "medium", 38),
     ("*cloud nat*", "glob", "network_egress", None, "medium", 39),
+    # ── Object storage (ANTES do bloco: o catch-all "*storage*" levava o
+    #    Cloud Storage inteiro para `storage_hdd`, reprecificando objeto com
+    #    taxa de disco — ~2x a taxa certa) ──
+    # Registry de artefatos é cobrado como armazenamento de objeto, e
+    # definitivamente não é disco anexado a instância: ia para `storage_hdd` e
+    # somava ~8 mil GB de disco fantasma ao dimensionamento.
+    ("*artifact registry*", "glob", "object_storage", None, "medium", 43),
+    ("*cloud storage*", "glob", "object_storage", None, "high", 44),
+    ("*standard storage*", "glob", "object_storage", None, "high", 45),
+    ("*nearline*", "glob", "object_storage", None, "high", 46),
+    ("*coldline*", "glob", "object_storage", None, "high", 47),
+    ("*archive storage*", "glob", "object_storage", None, "high", 48),
+    ("*autoclass*", "glob", "object_storage", None, "medium", 49),
     # ── Storage ──
     ("*ssd*", "glob", "storage_ssd", None, "high", 40),
     ("*pd capacity*", "glob", "storage_hdd", None, "medium", 50),
@@ -56,7 +69,12 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*rhel*", "glob", "os_license", None, "high", 61),
     ("*sles*", "glob", "os_license", None, "high", 62),
     ("*ubuntu pro*", "glob", "os_license", None, "high", 63),
-    ("*licensing*", "glob", "os_license", None, "medium", 64),
+    # 69 e não 64: empatava com `*services min instance*`. Move-se este e não o
+    # outro porque `*services min instance*` precisa continuar antes de
+    # `*min instance cpu*` (66) — inverter os dois mudaria a classificação de
+    # Cloud Run. Nenhum SKU casa com `*licensing*` e com os padrões 65–68, então
+    # descer daqui não muda resultado nenhum.
+    ("*licensing*", "glob", "os_license", None, "medium", 69),
     # ── Cloud Run / serverless (second-billed, NOT in VM capacity pools) ──
     ("*services min instance*", "glob", "network_egress", None, "medium", 64),
     ("*cloud run*", "glob", "network_egress", None, "medium", 65),
@@ -95,14 +113,22 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*dedicatedusage:*", "glob", "core", None, "medium", 26),
     ("savingsplan*", "glob", "core", None, "low", 27),
     # ── Containers (EKS/Fargate control plane) ──
-    ("*amazoneks*", "glob", "gke_control_plane", None, "high", 18),
-    ("*eks*percluster*", "glob", "gke_control_plane", None, "high", 19),
+    # 8/9 e não 18/19: lá empatavam com `*elasticsearch*` e `*opensearch*`, e
+    # empate deixa a ordem por conta do banco. Continuam antes de compute e de
+    # database, que é o que a escada exige — nenhum padrão daqui se sobrepõe
+    # aos de lá, então a renumeração não muda classificação nenhuma.
+    ("*amazoneks*", "glob", "gke_control_plane", None, "high", 8),
+    ("*eks*percluster*", "glob", "gke_control_plane", None, "high", 9),
     ("*fargate*", "glob", "core", None, "medium", 28),
     # ── Storage ──
     ("*volumeusage*", "glob", "storage_ssd", None, "high", 30),
     ("ebs:*", "glob", "storage_ssd", None, "high", 31),
-    ("*timedstorage*", "glob", "storage_hdd", None, "high", 32),
-    ("*-bytehrs", "glob", "storage_hdd", None, "medium", 33),
+    # `TimedStorage-ByteHrs` é a linha de armazenamento do S3 — objeto, não
+    # bloco. Ia para `storage_hdd` e era comparada com disco no destino.
+    ("*timedstorage*", "glob", "object_storage", None, "high", 32),
+    ("*-bytehrs", "glob", "object_storage", None, "medium", 33),
+    ("s3:*", "glob", "object_storage", None, "high", 35),
+    ("*glacier*", "glob", "object_storage", None, "high", 36),
     ("*snapshotusage*", "glob", "storage_hdd", None, "medium", 34),
     ("*storage*", "glob", "storage_hdd", None, "low", 39),
     # ── Networking ──
@@ -116,8 +142,17 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*lcuusage*", "glob", "network_egress", None, "medium", 47),
     ("*resolvernetworkinterface*", "glob", "network_egress", None, "medium", 48),
     ("*-bytes", "glob", "network_egress", None, "low", 49),
-    # ── S3 / API requests (ops) ──
-    ("*request*", "glob", "storage_hdd", None, "low", 50),
+    # ── Requisições de API (ops) ──
+    # NÃO é armazenamento, de nenhum tipo. O padrão pega `RequestV2-Tier1` do
+    # WAF ($2,7 mil no bill real) e `Requests-FIFO` do SQS, além do S3 — e
+    # requisição é operação, não capacidade.
+    #
+    # Ia para `storage_hdd`, o que inflava o disco estimado em ~66 mil GB; tentei
+    # `object_storage` e ficou pior, porque a taxa de objeto é menor e o bucket
+    # saía com 130 mil GB. `unclassified` é a resposta honesta: o custo existe,
+    # aparece em `nao_classificado` com a contagem de SKUs, e não vira recurso
+    # nenhum no Terraform.
+    ("*request*", "glob", "unclassified", None, "low", 50),
 ]
 
 _SEEDS: dict[str, list[tuple[str, str, str, str | None, str, int]]] = {

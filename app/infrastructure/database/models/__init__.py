@@ -14,6 +14,9 @@ from app.infrastructure.database.models.cloud_price_point import CloudPricePoint
 from app.infrastructure.database.models.cloud_sku_catalog import CloudSkuCatalogModel
 from app.infrastructure.database.models.exchange_rate import ExchangeRateModel
 from app.infrastructure.database.models.service_ontology import ServiceOntologyModel
+from app.infrastructure.database.models.terraform_generation_job import (
+    TerraformGenerationJobModel,
+)
 from app.infrastructure.database.models.sku_classification_rules import (
     SkuClassificationRuleModel,
 )
@@ -30,6 +33,7 @@ __all__ = [
     "CloudSkuCatalogModel",
     "ExchangeRateModel",
     "ServiceOntologyModel",
+    "TerraformGenerationJobModel",
     "SkuClassificationRuleModel",
     "UnmappedBillingLineModel",
 ]
