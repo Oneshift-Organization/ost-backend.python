@@ -45,6 +45,12 @@ def _payload() -> dict:
                         "sku": "n2-standard-8",
                         "instancias": 4,
                         "correspondencia_tecnica": {"vcpus": 32.0, "ram_gb": 128.0},
+                        # Preço oficial: é o que faz o shape sair como
+                        # "Calculado" em vez de "Estimado".
+                        "financeiro": {
+                            "confianca_preco": "official",
+                            "preco_origem": "cloud_price_points",
+                        },
                     }
                 ],
             }

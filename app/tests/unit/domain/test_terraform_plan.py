@@ -78,12 +78,49 @@ def test_o_shape_vem_do_packer_nao_de_palpite() -> None:
     assert r.configuration["instances"] == 4
 
 
-def test_shape_e_marcado_como_derivacao() -> None:
-    """`derivacao` significa que existe uma resposta certa e esta é ela. Não
-    precisa de ressalva na tela, ao contrário das estimativas."""
-    p = _premissa(_derivar(), "vm_m6i.machine_type")
+def _com_confianca(nivel: str, origem: str = "cloud_price_points") -> dict:
+    payload = _payload()
+    payload["pools_computacao"][0]["equivalentes"][0]["financeiro"] = {
+        "confianca_preco": nivel,
+        "preco_origem": origem,
+    }
+    return payload
+
+
+def test_shape_com_preco_oficial_e_derivacao() -> None:
+    """`derivacao` significa que existe uma resposta certa e esta é ela. Vale
+    quando o preço que sustentou o empacotamento veio da API do provedor."""
+    p = _premissa(_derivar(_com_confianca("official")), "vm_m6i.machine_type")
     assert p.categoria == "derivacao"
     assert "n2-standard-8" in (p.valor or "")
+
+
+def test_shape_com_preco_de_catalogo_e_estimativa() -> None:
+    """O packer escolhe a máquina COMPARANDO PREÇOS. Se o preço é catálogo
+    interno, a escolha herda a fraqueza — e no bill AWS real isso vale para
+    **todos** os 20 pools. Chamar de "Calculado" seria afirmar mais do que
+    sabemos, e o cliente aplicaria a máquina achando que era a resposta certa.
+    """
+    p = _premissa(_derivar(_com_confianca("low", "seed_catalog")), "vm_m6i.machine_type")
+    assert p.categoria == "estimativa"
+    assert "seed_catalog" in p.base
+    assert "não é preço coletado" in p.base
+
+
+def test_preco_de_referencia_tambem_nao_e_derivacao() -> None:
+    """`reference` é taxa publicada pelo provedor — melhor que catálogo, e ainda
+    assim não é preço coletado."""
+    p = _premissa(_derivar(_com_confianca("reference")), "vm_m6i.machine_type")
+    assert p.categoria == "estimativa"
+
+
+def test_idade_do_preco_entra_na_premissa() -> None:
+    """É a idade que torna a proveniência acionável: `official` pode ser de
+    ontem ou de três meses."""
+    payload = _com_confianca("official")
+    payload["pools_computacao"][0]["equivalentes"][0]["financeiro"]["preco_idade_dias"] = 97
+    p = _premissa(_derivar(payload), "vm_m6i.machine_type")
+    assert "97 dias" in p.base
 
 
 def test_equivalente_com_shape_ganha_do_curado() -> None:

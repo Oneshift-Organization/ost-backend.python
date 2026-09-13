@@ -62,6 +62,13 @@ _CATEGORIAS_ARMAZENAMENTO = {
 # enganoso que a omissão.
 _GB_MINIMO = Decimal("10")
 
+# Confiança do preço que sustenta a escolha do shape. Só `official` é preço
+# coletado da API do provedor; `reference` é taxa publicada e `low` é catálogo
+# interno. O packer escolhe a máquina COMPARANDO PREÇOS — se o preço é fraco, a
+# escolha herda a fraqueza, e chamá-la de "calculada" seria afirmar mais do que
+# sabemos.
+_CONFIANCA_OFICIAL = "official"
+
 # Teto de um persistent disk no GCP. O balde de armazenamento é o TOTAL da conta,
 # somando muitos volumes na origem; representá-lo como um disco só já é
 # simplificação, e acima deste limite a simplificação deixa de ser aplicável —
@@ -189,16 +196,33 @@ def _derivar_compute(
                 depends_on=("subnet_principal",),
             )
         )
+        financeiro = equivalente.get("financeiro") or {}
+        confianca = str(financeiro.get("confianca_preco") or "low").strip().lower()
+        oficial = confianca == _CONFIANCA_OFICIAL
+
+        base = (
+            f"Escolhido pelo empacotamento da capacidade do pool '{familia}' "
+            f"({tecnica.get('vcpus')} vCPU, {tecnica.get('ram_gb')} GB)."
+        )
+        if not oficial:
+            origem = financeiro.get("preco_origem") or "origem não declarada"
+            base += (
+                f" O empacotamento compara PREÇOS, e o preço usado tem confiança "
+                f"'{confianca}' ({origem}) — não é preço coletado da API do "
+                "provedor. Outra máquina pode sair melhor com preço oficial."
+            )
+        idade = financeiro.get("preco_idade_dias")
+        if idade is not None:
+            base += f" Preço capturado há {idade} dias."
+
         plano.premissas.append(
             Premissa(
                 campo=f"{nome}.machine_type",
-                categoria="derivacao",
+                # Derivação só quando o insumo sustenta: a conta é exata, mas o
+                # preço que ela compara pode não ser.
+                categoria="derivacao" if oficial else "estimativa",
                 valor=f"{sku} x{max(1, instancias)}",
-                base=(
-                    f"Escolhido pelo empacotamento da capacidade do pool "
-                    f"'{familia}' ({tecnica.get('vcpus')} vCPU, "
-                    f"{tecnica.get('ram_gb')} GB)."
-                ),
+                base=base,
             )
         )
 
