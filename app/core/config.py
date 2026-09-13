@@ -56,6 +56,11 @@ class Settings(BaseSettings):
 
     agent_flow_enabled: bool = False
 
+    # O MESMO INTERRUPTOR, para a geração de Terraform. Com `false` (default) as
+    # rotas `/v1/terraform-generations` respondem 404. Desligar não perde dado:
+    # as gerações já feitas continuam na tabela.
+    terraform_generation_enabled: bool = False
+
     cloud_creds_fernet_key: str = ""
 
     max_upload_size_mb: int = 50
