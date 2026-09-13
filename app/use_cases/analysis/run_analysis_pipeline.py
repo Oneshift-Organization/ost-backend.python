@@ -96,6 +96,12 @@ def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
         projetos = [p for p in fp.source_projects if p and p != "_unknown"]
         if projetos:
             entry["qtd_projetos"] = len(projetos)
+        # Capacidade medida e custo zero: as instâncias são cobertas por
+        # compromisso (Savings Plan, RI, CUD) e o custo é faturado na linha dele.
+        # Sem esta marca, qualquer consumidor calcula economia contra zero e
+        # conclui que migrar o pool ADICIONA o custo inteiro.
+        if fp.capacity.vcpus > 0 and fp.monthly_cost <= 0:
+            entry["custo_coberto_por_compromisso"] = True
         out.append(entry)
 
     return out, missing

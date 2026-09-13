@@ -15,6 +15,7 @@ from typing import Any
 
 from app.domain.services.terraform_plan import PlanoDerivado, derivar_plano
 from app.schemas.terraform import (
+    _BASE_MAXIMA,
     Categoria,
     Premissa,
     ProvedorSuportado,
@@ -164,9 +165,16 @@ def _nome_de_variavel(campo: str, usados: set[str]) -> str:
 
 
 def _premissa(p: Any) -> Premissa:
+    """Trunca a base em vez de deixar o schema derrubar a geração.
+
+    Já aconteceu: a base acumula o raciocínio e passou de 400 caracteres num
+    pool coberto por compromisso, estourando a validação e matando o pacote
+    inteiro. Uma explicação cortada é ruim; perder o `.tf` por causa dela é pior.
+    """
+    base = p.base if len(p.base) <= _BASE_MAXIMA else p.base[: _BASE_MAXIMA - 1] + "…"
     return Premissa(
         campo=p.campo,
         categoria=Categoria(p.categoria),
         valor=p.valor,
-        base=p.base,
+        base=base,
     )

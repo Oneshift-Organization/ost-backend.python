@@ -11,6 +11,7 @@ sem premissa ao lado vira fato aos olhos de quem lê.
 from __future__ import annotations
 
 from app.domain.services.terraform_plan import derivar_plano
+from app.schemas.terraform import _BASE_MAXIMA
 
 # ── payload de referência ───────────────────────────────────────────────
 
@@ -321,3 +322,29 @@ def test_disco_acima_do_maximo_do_provedor_e_limitado_com_aviso() -> None:
     disco = next(r for r in plano.recursos if "size_gb" in r.configuration)
     assert disco.configuration["size_gb"] == 65536
     assert any("excede o máximo" in a for a in plano.avisos)
+
+
+def test_pool_coberto_por_compromisso_carrega_a_ressalva() -> None:
+    """O recurso está certo — a capacidade foi medida. O que não vale é comparar
+    custo contra ele, porque a origem aparece com zero."""
+    payload = _payload()
+    payload["pools_computacao"][0]["custo_coberto_por_compromisso"] = True
+    p = _premissa(_derivar(payload), "vm_m6i.machine_type")
+    assert "compromisso" in p.base
+    assert "Savings Plan" in p.base
+
+
+def test_a_base_da_premissa_cabe_no_schema() -> None:
+    """A base acumula o raciocínio inteiro. Já estourou o limite e derrubou a
+    geração num pool coberto por compromisso — que é justamente o caso que mais
+    precisa de explicação."""
+    payload = _payload()
+    pool = payload["pools_computacao"][0]
+    pool["custo_coberto_por_compromisso"] = True
+    pool["equivalentes"][0]["financeiro"] = {
+        "confianca_preco": "low",
+        "preco_origem": "seed_catalog",
+        "preco_idade_dias": 120,
+    }
+    for premissa in _derivar(payload).premissas:
+        assert len(premissa.base) <= _BASE_MAXIMA, premissa.campo

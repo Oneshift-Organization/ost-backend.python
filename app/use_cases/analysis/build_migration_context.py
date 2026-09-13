@@ -31,6 +31,7 @@ from app.domain.services.category_calculator import (
     CategoryRate,
     estimate_by_cost_ratio,
 )
+from app.domain.services.cobertura_por_compromisso import avaliar_cobertura
 from app.domain.services.confidence import avaliar_confianca
 from app.domain.services.currency import (
     ANALYSIS_CURRENCY,
@@ -645,6 +646,19 @@ class BuildMigrationContextUseCase:
             tallies=tallies,
         )
 
+        # Pools com capacidade medida e custo zero: o bill cobra aquelas
+        # instâncias na linha do compromisso (Savings Plan, RI, CUD), não na
+        # delas. A economia calculada para esses pools sai superestimada, porque
+        # o comparativo assume origem de custo zero. Declarar é o que temos —
+        # ratear o compromisso entre pools seria estimativa vestida de fato.
+        cobertura_compromisso = avaliar_cobertura(
+            {
+                fp.pool_key.as_str(): (fp.capacity.vcpus, fp.monthly_cost)
+                for fp in family_pools
+            },
+            auxiliary.commitment if auxiliary is not None else Decimal("0"),
+        )
+
         premissas: dict[str, Any] = {
             "fx": as_ledger(fx),
             "moeda_origem": currency,
@@ -659,6 +673,13 @@ class BuildMigrationContextUseCase:
             "confianca_analise": avaliar_confianca(_custo_por_confianca).as_ledger(),
             "cobertura_classificacao": cobertura,
             "cobertura_analise": cobertura_analise,
+            # Só aparece quando existe — um bill sem compromisso não precisa
+            # carregar a explicação de um problema que ele não tem.
+            **(
+                {"cobertura_por_compromisso": cobertura_compromisso.as_ledger()}
+                if cobertura_compromisso.existe
+                else {}
+            ),
             "fator_utilizacao": 1.0,
             # Fração do gasto de compute cuja capacidade foi estimada por shape
             # (instance-hours → vCPU/RAM) em vez de faturada por-vCPU.

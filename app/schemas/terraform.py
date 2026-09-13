@@ -29,6 +29,9 @@ _NOME_TERRAFORM = re.compile(r"^[a-z_][a-z0-9_-]*$")
 _PREFIXO_MAXIMO = 24
 _IPV4 = 4
 
+# Teto da explicação de uma premissa. Ver `Premissa.base`.
+_BASE_MAXIMA = 800
+
 CONTRATO_ENTRADA = "oneshift-terraform-input-v1"
 CONTRATO_BLUEPRINT = "oneshift-terraform-v1"
 
@@ -169,7 +172,11 @@ class Premissa(BaseModel):
     campo: str = Field(max_length=120)
     categoria: Categoria
     valor: str | None = Field(default=None, max_length=200)
-    base: str = Field(max_length=400)
+    # 800 e não 400: a base acumula o raciocínio inteiro — como o valor foi
+    # obtido, qual a confiança do preço que o sustenta, a idade dele e as
+    # ressalvas do pool. Com 400 a geração **caía** num pool coberto por
+    # compromisso, que é justamente o caso que mais precisa de explicação.
+    base: str = Field(max_length=_BASE_MAXIMA)
 
 
 class RecursoTerraform(BaseModel):

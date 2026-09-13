@@ -214,6 +214,15 @@ def _derivar_compute(
         idade = financeiro.get("preco_idade_dias")
         if idade is not None:
             base += f" Preço capturado há {idade} dias."
+        if pool.get("custo_coberto_por_compromisso"):
+            # O recurso está certo — a capacidade foi medida. O que não vale é a
+            # comparação de custo contra ele.
+            base += (
+                " ATENÇÃO: na origem este pool aparece com custo zero porque as "
+                "instâncias são cobertas por compromisso (Savings Plan, RI ou "
+                "CUD). O dimensionamento é confiável; qualquer economia "
+                "calculada contra ele, não."
+            )
 
         plano.premissas.append(
             Premissa(
