@@ -255,3 +255,75 @@ def test_duas_geracoes_produzem_os_mesmos_arquivos() -> None:
     a = gerar_pacote(_payload(), _entrada()).arquivos
     b = gerar_pacote(_payload(), _entrada()).arquivos
     assert a == b
+
+
+# ── nomes de recurso na nuvem ───────────────────────────────────────────
+#
+# Os três casos abaixo saíram de um fuzzer rodando `terraform validate` contra o
+# schema real do provider Google. Nenhum deles falhava no nosso código: o pacote
+# era gerado, parecia certo, e só o Terraform recusava.
+
+from app.infrastructure.terraform.gcp_renderer import nome_cloud  # noqa: E402
+
+
+def test_underscore_no_nome_do_projeto_nao_vaza_para_a_nuvem() -> None:
+    """`_` é válido em identificador Terraform e **inválido** em nome de recurso
+    GCP (`^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$`). São dois namespaces diferentes, e
+    confundi-los gerava um pacote que só quebrava no `validate`.
+    """
+    assert nome_cloud("proj_underscore", "vpc") == "proj-underscore-vpc"
+
+
+def test_nome_da_nuvem_comeca_com_letra() -> None:
+    assert nome_cloud("2proj", "vpc").startswith("proj")
+    assert nome_cloud("---", "vpc") == "vpc"
+
+
+def test_nome_da_nuvem_respeita_o_limite_do_provedor() -> None:
+    nome = nome_cloud("x" * 90, "vpc")
+    assert len(nome) <= 63
+    assert not nome.endswith("-")
+
+
+def test_acento_nao_sobrevive_ao_saneamento() -> None:
+    """`"ç".isalnum()` é True em Python, mas o identificador HCL é ASCII."""
+    assert nome_cloud("migração-ção", "vpc") == "migra-o-o-vpc"
+
+
+def test_familia_com_acento_nao_derruba_a_geracao() -> None:
+    payload = {
+        "provedor_origem": "aws",
+        "pools_computacao": [
+            {
+                "familia": "família-ção",
+                "equivalentes": [
+                    {
+                        "provedor": "GCP",
+                        "sku": "n2-standard-2",
+                        "instancias": 1,
+                        "correspondencia_tecnica": {"vcpus": 2, "ram_gb": 8},
+                    }
+                ],
+            }
+        ],
+    }
+    nomes = [r.logical_name for r in gerar_pacote(payload, _entrada()).blueprint.resources]
+    assert all(c.isascii() for n in nomes for c in n)
+
+
+def test_familia_comprida_nao_estoura_o_nome_da_variavel() -> None:
+    """57 caracteres de nome de recurso + `_machine_type` passava do teto de 60
+    e derrubava a geração inteira por causa de um pool com nome comprido."""
+    payload = {
+        "provedor_origem": "aws",
+        "pools_computacao": [
+            {
+                "familia": "x" * 80,
+                "equivalentes": [
+                    {"provedor": "GCP", "base_correspondencia": "curated_only"}
+                ],
+            }
+        ],
+    }
+    bp = gerar_pacote(payload, _entrada()).blueprint
+    assert all(len(v.name) <= 60 for v in bp.variables)

@@ -217,3 +217,55 @@ def test_payload_vazio_nao_explode() -> None:
     plano = derivar_plano({}, provedor_destino="gcp", regiao="us-central1")
     assert plano.recursos == []
     assert plano.avisos, "o pacote vazio tem que dizer por que está vazio"
+
+
+# ── unicidade de nomes ──────────────────────────────────────────────────
+
+
+def _pool(familia: str, regiao: str | None = None) -> dict:
+    d = {
+        "familia": familia,
+        "equivalentes": [
+            {
+                "provedor": "GCP",
+                "sku": "n2-standard-2",
+                "instancias": 1,
+                "correspondencia_tecnica": {"vcpus": 2, "ram_gb": 8},
+            }
+        ],
+    }
+    if regiao:
+        d["regiao"] = regiao
+    return d
+
+
+def _nomes(pools: list[dict]) -> list[str]:
+    plano = _derivar({"provedor_origem": "aws", "pools_computacao": pools})
+    return [r.logical_name for r in plano.recursos]
+
+
+def test_mesma_familia_em_regioes_diferentes_nao_colide() -> None:
+    """O pool é chaveado por (família, região). Nomear só pela família fazia os
+    dois virarem o mesmo identificador — e o Terraform recusa o arquivo inteiro
+    com 'Duplicate resource', não só o bloco repetido."""
+    nomes = _nomes([_pool("M6I", "us-east-1"), _pool("M6I", "sa-east-1")])
+    assert len(nomes) == len(set(nomes))
+    assert "us_east_1" in nomes[0]
+
+
+def test_familias_que_diferem_so_no_casing_nao_colidem() -> None:
+    """`M6I` e `m6i` são distintas na origem e viram o mesmo nome depois do
+    saneamento para minúsculas."""
+    nomes = _nomes([_pool("M6I"), _pool("m6i")])
+    assert len(nomes) == len(set(nomes))
+
+
+def test_muitos_pools_geram_nomes_todos_distintos() -> None:
+    nomes = _nomes([_pool(f"F{i}") for i in range(30)])
+    assert len(nomes) == len(set(nomes)) == 30
+
+
+def test_nome_hostil_nao_vira_sintaxe() -> None:
+    """Um nome de família com aspas e chaves não pode escapar para o HCL."""
+    nomes = _nomes([_pool('x" { evil = "')])
+    assert all(c.isalnum() or c == "_" for c in nomes[0]), nomes[0]

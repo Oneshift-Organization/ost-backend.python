@@ -102,10 +102,11 @@ def derivar_plano(
     """
     plano = PlanoDerivado()
     destino = provedor_destino.lower()
+    nomeador = _Nomeador()
 
-    _derivar_compute(payload, destino, plano)
-    _derivar_armazenamento(payload, destino, regiao, plano)
-    _derivar_banco(payload, destino, plano, alta_disponibilidade)
+    _derivar_compute(payload, destino, plano, nomeador)
+    _derivar_armazenamento(payload, destino, regiao, plano, nomeador)
+    _derivar_banco(payload, destino, plano, alta_disponibilidade, nomeador)
     _registrar_lacunas(payload, plano)
 
     if not plano.recursos:
@@ -120,7 +121,10 @@ def derivar_plano(
 
 
 def _derivar_compute(
-    payload: dict[str, Any], destino: str, plano: PlanoDerivado
+    payload: dict[str, Any],
+    destino: str,
+    plano: PlanoDerivado,
+    nomeador: _Nomeador,
 ) -> None:
     """Um recurso por pool de família, com o shape que o packer escolheu.
 
@@ -140,7 +144,9 @@ def _derivar_compute(
             continue
 
         sku = equivalente.get("sku")
-        nome = _nome_logico("vm", familia)
+        # A região entra no nome porque o pool é chaveado por (família, região):
+        # sem ela, a mesma família em duas regiões vira o mesmo identificador.
+        nome = nomeador.gerar("vm", familia, pool.get("regiao"))
 
         if not sku:
             # Equivalente do catálogo curado: sabemos o serviço, não o shape.
@@ -212,7 +218,11 @@ def _equivalente_do_destino(
 
 
 def _derivar_armazenamento(
-    payload: dict[str, Any], destino: str, regiao: str, plano: PlanoDerivado
+    payload: dict[str, Any],
+    destino: str,
+    regiao: str,
+    plano: PlanoDerivado,
+    nomeador: _Nomeador,
 ) -> None:
     """Volta de dinheiro para tamanho: ``GB = custo ÷ taxa``.
 
@@ -247,7 +257,7 @@ def _derivar_armazenamento(
             continue
 
         if categoria == "object_storage":
-            nome = _nome_logico("bucket", categoria)
+            nome = nomeador.gerar("bucket", categoria)
             plano.recursos.append(
                 RecursoDerivado(
                     logical_name=nome,
@@ -260,7 +270,7 @@ def _derivar_armazenamento(
                 )
             )
         else:
-            nome = _nome_logico("disco", categoria)
+            nome = nomeador.gerar("disco", categoria)
             plano.recursos.append(
                 RecursoDerivado(
                     logical_name=nome,
@@ -297,6 +307,7 @@ def _derivar_banco(
     destino: str,
     plano: PlanoDerivado,
     alta_disponibilidade: bool,
+    nomeador: _Nomeador,
 ) -> None:
     """vCPU de banco por razão de taxa. Engine e versão ninguém sabe."""
     auxiliares = payload.get("custos_auxiliares") or {}
@@ -313,7 +324,7 @@ def _derivar_banco(
         return
 
     vcpus = max(1, int(custo / Decimal(taxa)))
-    nome = "banco_principal"
+    nome = nomeador.gerar("banco", "principal")
 
     plano.recursos.append(
         RecursoDerivado(
@@ -404,12 +415,53 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
 # ── utilidades ──────────────────────────────────────────────────────────
 
 
-def _nome_logico(prefixo: str, bruto: str) -> str:
-    """Nome válido em Terraform. O modelo pode melhorar depois; isto garante que
-    exista um mesmo sem ele."""
-    limpo = "".join(c if c.isalnum() else "_" for c in str(bruto).lower())
-    limpo = "_".join(p for p in limpo.split("_") if p) or "recurso"
-    return f"{prefixo}_{limpo}"[:60]
+class _Nomeador:
+    """Gera nomes de recurso válidos e **únicos**.
+
+    A unicidade não é detalhe: dois blocos com o mesmo nome fazem o Terraform
+    recusar o arquivo inteiro com "Duplicate resource". E a colisão é provável,
+    não teórica — o pool é chaveado por (família, região), então a mesma família
+    em duas regiões chega aqui com o mesmo `familia`. Só isso já bastaria.
+
+    Casing também colide: `M6I` e `m6i` são famílias distintas na origem e o
+    mesmo identificador em HCL, que é case-sensitive mas não distingue depois do
+    saneamento para minúsculas.
+    """
+
+    def __init__(self) -> None:
+        self._usados: set[str] = set()
+
+    def gerar(self, prefixo: str, *partes: object) -> str:
+        base = "_".join(
+            limpo for limpo in (_sanear(p) for p in partes if p) if limpo
+        ) or "recurso"
+        nome = f"{prefixo}_{base}"[:57]
+
+        if nome not in self._usados:
+            self._usados.add(nome)
+            return nome
+
+        # Sufixo numérico em vez de erro: um pool a mais não pode impedir a
+        # geração inteira, e o README carrega a família de origem de cada um.
+        for n in range(2, 1000):
+            candidato = f"{nome}_{n}"
+            if candidato not in self._usados:
+                self._usados.add(candidato)
+                return candidato
+        raise ValueError(f"não foi possível gerar nome único para {nome!r}")
+
+
+def _sanear(bruto: object) -> str:
+    """Só ASCII alfanumérico.
+
+    `"ç".isalnum()` é `True` em Python, então acento sobrevivia ao saneamento e
+    só explodia na validação do identificador HCL, que é ASCII. Um nome de
+    família com acento derrubava a geração inteira.
+    """
+    limpo = "".join(
+        c if (c.isascii() and c.isalnum()) else "_" for c in str(bruto).lower()
+    )
+    return "_".join(p for p in limpo.split("_") if p)
 
 
 def _decimal(valor: object) -> Decimal | None:

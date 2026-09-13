@@ -128,16 +128,39 @@ def _variaveis(plano: PlanoDerivado) -> list[VariavelTerraform]:
                 ),
             )
         )
+    usados = {v.name for v in variaveis}
     for premissa in plano.premissas:
         if premissa.categoria == "sem_base" and premissa.campo.endswith(".machine_type"):
             variaveis.append(
                 VariavelTerraform(
-                    name=premissa.campo.replace(".", "_"),
+                    name=_nome_de_variavel(premissa.campo, usados),
                     type="string",
                     description=premissa.base[:300],
                 )
             )
     return variaveis
+
+
+def _nome_de_variavel(campo: str, usados: set[str]) -> str:
+    """`<recurso>.machine_type` → nome de variável dentro do limite.
+
+    O nome do recurso já pode ter 57 caracteres; somar `_machine_type` passava
+    do teto de 60 e derrubava a geração inteira por causa de um pool com nome
+    comprido. Truncar sozinho criaria colisão entre dois recursos de prefixo
+    igual, daí o sufixo numérico.
+    """
+    bruto = campo.replace(".", "_")
+    nome = bruto[:60]
+    if nome not in usados:
+        usados.add(nome)
+        return nome
+    for n in range(2, 1000):
+        sufixo = f"_{n}"
+        candidato = bruto[: 60 - len(sufixo)] + sufixo
+        if candidato not in usados:
+            usados.add(candidato)
+            return candidato
+    raise ValueError(f"não foi possível nomear variável para {campo!r}")
 
 
 def _premissa(p: Any) -> Premissa:

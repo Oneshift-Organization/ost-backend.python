@@ -42,6 +42,26 @@ _SERVICO_POR_TIPO: dict[TipoRecurso, str] = {
     TipoRecurso.MANAGED_DATABASE: "google_sql_database_instance",
 }
 
+def nome_cloud(*partes: str) -> str:
+    """Nome aceito pelo GCP: `^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$`.
+
+    Não é o mesmo que um identificador Terraform, e confundir os dois foi um bug
+    real: `project_name` aceita `_` (válido em HCL) e o GCP recusa. O erro só
+    aparecia no `terraform validate`, contra o schema do provider.
+    """
+    bruto = "-".join(str(p) for p in partes if p)
+    limpo = "".join(
+        c if (c.isascii() and (c.isalnum() or c == "-")) else "-"
+        for c in bruto.lower()
+    )
+    limpo = "-".join(parte for parte in limpo.split("-") if parte)
+    # Precisa começar com letra e terminar com letra ou dígito.
+    while limpo and not (limpo[0].isascii() and limpo[0].isalpha()):
+        limpo = limpo[1:]
+    limpo = limpo[:63].rstrip("-")
+    return limpo or "oneshift"
+
+
 _ARQUIVOS = (
     "versions.tf",
     "providers.tf",
@@ -209,7 +229,7 @@ def _recurso(r: RecursoTerraform, bp: TerraformBlueprint) -> str | None:
 
 def _rede(r: RecursoTerraform, bp: TerraformBlueprint, servico: str) -> str:
     return bloco("resource", [servico, r.logical_name], [
-        atributo("name", f"{bp.project_name}-vpc"),
+        atributo("name", nome_cloud(bp.project_name, "vpc")),
         # Subnets automáticas criariam uma faixa por região do mundo inteiro,
         # ignorando o CIDR que o usuário informou.
         atributo("auto_create_subnetworks", False),
@@ -220,7 +240,7 @@ def _rede(r: RecursoTerraform, bp: TerraformBlueprint, servico: str) -> str:
 def _subnet(r: RecursoTerraform, bp: TerraformBlueprint, servico: str) -> str:
     cidr = str(r.configuration.get("cidr") or "10.0.0.0/16")
     return bloco("resource", [servico, r.logical_name], [
-        atributo("name", f"{bp.project_name}-subnet"),
+        atributo("name", nome_cloud(bp.project_name, "subnet")),
         atributo("ip_cidr_range", cidr),
         atributo("region", bp.region),
         atributo("network", referencia("google_compute_network.rede_principal.id")),
@@ -241,7 +261,9 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint, servico: str) -> str:
         # `referencia` e não `atributo` com string: aqui a interpolação é
         # desejada, e `_literal` escaparia `${` para literal — o que geraria
         # quatro máquinas com o nome "...-${count.index}".
-        atributo("name", referencia(f'"{bp.project_name}-{slug}-${{count.index}}"')),
+        atributo("name", referencia(
+            f'"{nome_cloud(bp.project_name, slug)}-${{count.index}}"'
+        )),
         atributo("machine_type", str(cfg.get("machine_type"))),
         atributo("zone", f"{bp.region}-a"),
         bloco_aninhado("boot_disk", [
@@ -277,7 +299,7 @@ def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         "Confira contra o uso real antes de aplicar."
     )
     corpo = [
-        atributo("name", f"{bp.project_name}-{r.logical_name.replace('_', '-')}"),
+        atributo("name", nome_cloud(bp.project_name, r.logical_name)),
         atributo("type", str(cfg.get("disk_type") or "pd-standard")),
         atributo("zone", f"{bp.region}-a"),
         atributo("size", int(cfg.get("size_gb") or 10)),
@@ -295,7 +317,7 @@ def _bucket(r: RecursoTerraform, bp: TerraformBlueprint, servico: str) -> str:
         "O bucket não tem tamanho declarado — o número é só referência."
     )
     corpo = [
-        atributo("name", f"{bp.project_name}-{r.logical_name.replace('_', '-')}"),
+        atributo("name", nome_cloud(bp.project_name, r.logical_name)),
         atributo("location", str(cfg.get("location") or bp.region).upper()),
         atributo("storage_class", str(cfg.get("storage_class") or "STANDARD")),
         # Acesso uniforme desliga ACLs por objeto: sem isto, um objeto pode ser
@@ -320,7 +342,7 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint, servico: str) -> str:
         "`deletion_protection` fica ligado; desligue conscientemente."
     )
     corpo = [
-        atributo("name", f"{bp.project_name}-db"),
+        atributo("name", nome_cloud(bp.project_name, "db")),
         atributo("database_version", referencia("var.database_version")),
         atributo("region", bp.region),
         atributo("deletion_protection", True),

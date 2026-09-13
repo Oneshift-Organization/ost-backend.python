@@ -64,8 +64,11 @@ def _literal(valor: Any) -> str:
     if isinstance(valor, (list, tuple)):
         return "[" + ", ".join(_literal(v) for v in valor) + "]"
     if isinstance(valor, dict):
+        # Espaço dentro das chaves: é o que o `terraform fmt` produz para mapa
+        # inline. Sem isso o nosso arquivo diverge do canônico — conferido
+        # rodando o binário de verdade contra a saída.
         itens = ", ".join(f"{_literal(k)} = {_literal(v)}" for k, v in valor.items())
-        return "{" + itens + "}"
+        return "{ " + itens + " }" if itens else "{}"
     texto = str(valor).replace("${", "$${")
     return json.dumps(texto, ensure_ascii=False)
 
