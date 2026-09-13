@@ -285,6 +285,8 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
             aux_payload["armazenamento_ssd"] = _money(auxiliary.storage_ssd, fx)
         if auxiliary.storage_hdd > 0:
             aux_payload["armazenamento_hdd"] = _money(auxiliary.storage_hdd, fx)
+        if auxiliary.object_storage > 0:
+            aux_payload["armazenamento_objetos"] = _money(auxiliary.object_storage, fx)
         if auxiliary.network_egress > 0:
             aux_payload["egresso_rede"] = _money(auxiliary.network_egress, fx)
         if auxiliary.database > 0:
@@ -308,6 +310,7 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
         _cat_key = {
             "storage_ssd": "armazenamento_ssd",
             "storage_hdd": "armazenamento_hdd",
+            "object_storage": "armazenamento_objetos",
             "network_egress": "egresso_rede",
             "database": "banco_dados",
         }
