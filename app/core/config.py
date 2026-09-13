@@ -40,8 +40,13 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
     supabase_jwt_audience: str = "authenticated"
+    # JWKS pré-carregado em JSON. Quando preenchido, a validação do JWT usa as
+    # chaves locais e dispensa rede. Vazio = busca no supabase_url no startup.
     supabase_jwks_json: str = ""
 
+    # Swagger/ReDoc/openapi.json. Ligado inclusive em produção — o time do
+    # agente/MCP consome o contrato daqui. Desligue com DOCS_ENABLED=false se a
+    # superfície da API precisar deixar de ser pública.
     docs_enabled: bool = True
 
     cors_origins: list[str] = Field(
@@ -52,14 +57,24 @@ class Settings(BaseSettings):
         ]
     )
 
+    # API key de projeto GCP com a Cloud Billing API habilitada. Só o GCP
+    # precisa: Azure, OCI e AWS publicam preço sem autenticação. Sem esta key o
+    # sync de preços do GCP devolve vazio e registra o motivo — os demais
+    # provedores continuam funcionando.
     gcp_billing_api_key: str = ""
 
+    # O INTERRUPTOR. Com `false` (default), as rotas `/v1/agent/*` respondem 404
+    # como se não existissem. Ligar NÃO desliga o legado — os dois convivem, e a
+    # virada real é o consumidor parar de chamar o caminho antigo. Reverter é
+    # mudar a variável e reiniciar: sem migration, sem deploy de código.
     agent_flow_enabled: bool = False
 
     cloud_creds_fernet_key: str = ""
 
     max_upload_size_mb: int = 50
 
+    # Bypass da verificação de JWT em dev. Bloqueado em produção pelo
+    # `get_current_user` mesmo que alguém ponha `false` por engano.
     auth_enabled: bool = True
 
     # Provedor principal das análises.
@@ -105,8 +120,25 @@ class Settings(BaseSettings):
     mcp_timeout_seconds: float = 30.0
     mcp_prompt_cache_seconds: int = 300
 
+    # Escala em que os prompts do MCP pedem o `viability_score` ao modelo. A API
+    # publica sempre 0..1000; esta variável diz o que o prompt pediu, para a
+    # conversão ser determinística.
+    #
+    # Existe porque a alternativa — deduzir a escala pela magnitude do valor — é
+    # ambígua na faixa 0..100: um score de 80 na escala da API (migração ruim) é
+    # indistinguível de 80 em 0..100 (ótima). Quem escreve o prompt sabe; o
+    # backend não tem como saber olhando o número.
+    mcp_viability_scale: Literal["0-100", "0-1000"] = "0-100"
+
+    # Tempo além do qual um job de análise ativo é considerado perdido. A
+    # análise roda em BackgroundTasks no processo web, então um restart deixa
+    # órfãos; o reaper do startup os encerra usando este limite.
     analysis_job_timeout_minutes: int = 30
 
+    # ── Precision Engine v3 — câmbio ────────────────────────────────────
+    # Fallback usado quando `exchange_rates` não tem taxa para o par. Formato:
+    # unidades da moeda de origem por 1 USD (BRL/USD = 5.70). Sem data — é por
+    # isso que `alertas.avaliar_cambio` marca a análise; rode `scripts/sync_fx.py`.
     fx_brl_usd: Decimal = Decimal("5.70")
 
     gcp_service_account_path: str = Field(
