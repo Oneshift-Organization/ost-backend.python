@@ -62,6 +62,13 @@ _CATEGORIAS_ARMAZENAMENTO = {
 # enganoso que a omissão.
 _GB_MINIMO = Decimal("10")
 
+# Teto de um persistent disk no GCP. O balde de armazenamento é o TOTAL da conta,
+# somando muitos volumes na origem; representá-lo como um disco só já é
+# simplificação, e acima deste limite a simplificação deixa de ser aplicável —
+# o `terraform validate` passa (ele não confere faixa de valor) e o `apply`
+# falha na cara do cliente.
+_GB_MAXIMO_DISCO = Decimal("65536")
+
 
 @dataclass(frozen=True, slots=True)
 class Premissa:
@@ -271,6 +278,14 @@ def _derivar_armazenamento(
             )
         else:
             nome = nomeador.gerar("disco", categoria)
+            if gb > _GB_MAXIMO_DISCO:
+                plano.avisos.append(
+                    f"O total de {categoria} estimado ({int(gb):,} GB) excede o "
+                    f"máximo de um disco no destino ({int(_GB_MAXIMO_DISCO):,} GB). "
+                    "O recurso saiu no limite; distribua o restante entre volumes "
+                    "adicionais conforme o uso real."
+                )
+                gb = _GB_MAXIMO_DISCO
             plano.recursos.append(
                 RecursoDerivado(
                     logical_name=nome,

@@ -269,3 +269,18 @@ def test_nome_hostil_nao_vira_sintaxe() -> None:
     """Um nome de família com aspas e chaves não pode escapar para o HCL."""
     nomes = _nomes([_pool('x" { evil = "')])
     assert all(c.isalnum() or c == "_" for c in nomes[0]), nomes[0]
+
+
+def test_disco_acima_do_maximo_do_provedor_e_limitado_com_aviso() -> None:
+    """O balde é o TOTAL da conta, somando muitos volumes na origem. No bill AWS
+    real isso dá 71.520 GB de SSD — acima do teto de 65.536 GB de um persistent
+    disk no GCP.
+
+    O `terraform validate` passa (não confere faixa de valor) e o `apply` falha
+    na cara do cliente. Melhor sair no limite, com o aviso dizendo o que sobrou.
+    """
+    payload = {"provedor_origem": "aws", "custos_auxiliares": {"armazenamento_ssd": 5721.57}}
+    plano = _derivar(payload)
+    disco = next(r for r in plano.recursos if "size_gb" in r.configuration)
+    assert disco.configuration["size_gb"] == 65536
+    assert any("excede o máximo" in a for a in plano.avisos)
