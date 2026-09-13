@@ -9,7 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ── Terraform stage ───────────────────────────────────────────────────────────
-# O binário e o provider do Google entram na imagem para que
+# O binário e os providers das quatro nuvens entram na imagem para que
 # `terraform validate` rode SEM REDE em runtime.
 #
 # Um cache de plugin (`TF_PLUGIN_CACHE_DIR`) NÃO basta: ele evita o download,
@@ -24,13 +24,16 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 FROM docker.io/hashicorp/terraform:1.9.8 AS terraform
 
 WORKDIR /warm
+# Os quatro providers: o cliente escolhe a nuvem de destino, e validar o pacote
+# dele exige o schema daquela nuvem. 283 MB no total (aws 147, oci 55, azurerm
+# 54, google 28) — o mirror guarda os zips, bem menores que o cache extraído.
 RUN printf '%s\n' \
       'terraform {' \
       '  required_providers {' \
-      '    google = {' \
-      '      source  = "hashicorp/google"' \
-      '      version = "~> 5.0"' \
-      '    }' \
+      '    google  = { source = "hashicorp/google",  version = "~> 5.0" }' \
+      '    aws     = { source = "hashicorp/aws",     version = "~> 5.0" }' \
+      '    azurerm = { source = "hashicorp/azurerm", version = "~> 3.0" }' \
+      '    oci     = { source = "oracle/oci",        version = "~> 6.0" }' \
       '  }' \
       '}' > versions.tf \
  && terraform providers mirror -platform=linux_amd64 /mirror
@@ -62,10 +65,10 @@ RUN printf '%s\n' \
       'provider_installation {' \
       '  filesystem_mirror {' \
       '    path    = "/opt/terraform-providers"' \
-      '    include = ["registry.terraform.io/hashicorp/*"]' \
+      '    include = ["registry.terraform.io/*/*"]' \
       '  }' \
       '  direct {' \
-      '    exclude = ["registry.terraform.io/hashicorp/*"]' \
+      '    exclude = ["registry.terraform.io/*/*"]' \
       '  }' \
       '}' > /etc/terraform.rc
 

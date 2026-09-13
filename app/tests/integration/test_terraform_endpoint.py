@@ -129,11 +129,27 @@ async def test_cidr_invalido_e_recusado(_app_ligado, _db_ready) -> None:
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_provedor_sem_template_e_recusado(_app_ligado, _db_ready) -> None:
+    """`gcp`, `aws`, `azure` e `oci` têm adaptador. Qualquer outro é recusado na
+    borda — melhor que gerar um pacote que ninguém sabe escrever."""
     async with _cliente(_app_ligado) as c:
         r = await c.post(
-            "/v1/terraform-generations", json=_corpo(uuid4(), target_provider="aws")
+            "/v1/terraform-generations", json=_corpo(uuid4(), target_provider="ibm")
         )
     assert r.status_code == 422
+
+
+@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.parametrize("provedor", ["gcp", "aws", "azure", "oci"])
+async def test_as_quatro_nuvens_sao_aceitas(_app_ligado, _db_ready, provedor) -> None:
+    """Passa da validação de entrada: o 404 é da análise inexistente, não do
+    provedor. Se o provedor fosse recusado viria 422."""
+    async with _cliente(_app_ligado) as c:
+        r = await c.post(
+            "/v1/terraform-generations",
+            json=_corpo(uuid4(), target_provider=provedor, region="us-central1"),
+        )
+    assert r.status_code == 404
+    assert r.json()["detail"]["codigo"] == "ANALISE_NAO_ENCONTRADA"
 
 
 # ── ciclo completo ──────────────────────────────────────────────────────

@@ -17,7 +17,6 @@ from app.infrastructure.terraform.archive import (
     ArquivoNaoPermitidoError,
     montar_zip,
 )
-from app.infrastructure.terraform.gcp_renderer import renderizar
 from app.infrastructure.terraform.hcl import (
     arquivo,
     atributo,
@@ -25,6 +24,7 @@ from app.infrastructure.terraform.hcl import (
     identificador,
     referencia,
 )
+from app.infrastructure.terraform.renderers import renderizar
 from app.schemas.terraform import TerraformGenerationIn
 from app.use_cases.terraform.build_blueprint import montar_blueprint
 from app.use_cases.terraform.generate_terraform import gerar_pacote
@@ -269,7 +269,7 @@ def test_duas_geracoes_produzem_os_mesmos_arquivos() -> None:
 # schema real do provider Google. Nenhum deles falhava no nosso código: o pacote
 # era gerado, parecia certo, e só o Terraform recusava.
 
-from app.infrastructure.terraform.gcp_renderer import nome_cloud  # noqa: E402
+from app.infrastructure.terraform.renderers.base import nome_cloud  # noqa: E402
 
 
 def test_underscore_no_nome_do_projeto_nao_vaza_para_a_nuvem() -> None:

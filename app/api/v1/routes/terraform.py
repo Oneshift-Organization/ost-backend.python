@@ -27,7 +27,7 @@ from app.infrastructure.database.models.terraform_generation_job import (
 )
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.terraform.archive import montar_zip
-from app.infrastructure.terraform.gcp_renderer import arquivos_esperados
+from app.infrastructure.terraform.renderers import arquivos_esperados
 from app.schemas.terraform import (
     ResumoValidacao,
     StatusGeracao,

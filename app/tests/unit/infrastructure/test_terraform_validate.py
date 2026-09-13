@@ -19,7 +19,7 @@ import pytest
 
 from app.core import config
 from app.core.config import Settings
-from app.infrastructure.terraform.gcp_renderer import renderizar
+from app.infrastructure.terraform.renderers import renderizar
 from app.infrastructure.terraform.validate import validar
 from app.schemas.terraform import TerraformGenerationIn
 from app.use_cases.terraform.build_blueprint import montar_blueprint

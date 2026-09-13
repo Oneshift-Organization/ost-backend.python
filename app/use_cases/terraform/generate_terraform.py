@@ -16,7 +16,7 @@ from typing import Any
 
 from app.infrastructure.terraform.archive import montar_zip
 from app.infrastructure.terraform.fmt import formatar
-from app.infrastructure.terraform.gcp_renderer import renderizar
+from app.infrastructure.terraform.renderers import renderizar
 from app.infrastructure.terraform.validate import validar
 from app.schemas.terraform import (
     ResumoValidacao,

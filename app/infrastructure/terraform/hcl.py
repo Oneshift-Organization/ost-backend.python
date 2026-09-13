@@ -188,4 +188,9 @@ def _atribuicao(linha: str) -> tuple[str, str, str] | None:
     chave, separador, valor = resto.partition(" = ")
     if not separador or not _IDENTIFICADOR.match(chave.strip()):
         return None
+    # Valor que ABRE um bloco multilinha (`tags = {`) não entra no alinhamento:
+    # o `terraform fmt` o deixa com um espaço só e quebra o grupo ali. Alinhar
+    # produzia `tags          = {`, que o fmt reverteria.
+    if valor.strip() in ("{", "["):
+        return None
     return prefixo, chave.strip(), valor
