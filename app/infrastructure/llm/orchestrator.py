@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import anthropic
 from pydantic import ValidationError
 
+from app.core.config import get_settings
 from app.domain.interfaces.i_llm_client import ILLMClient
 from app.schemas.analysis_v2 import AnalysisV2Response
 
@@ -26,6 +27,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Escala em que a API publica o score (`AnalysisV2Response.viability_score`
+# declara `ge=0, le=1000`). Os prompts do MCP podem pedir outra ao modelo, e é
+# por isso que a conversão existe.
+_ESCALA_API_MAX = 1000
 _MCP_VIABILITY_MAX = 100
 _MCP_TO_API_SCALE_FACTOR = 10
 
@@ -358,28 +363,65 @@ def _build_prompt(
 def _normalize_mcp_viability_score(
     result: AnalysisV2Response,
 ) -> AnalysisV2Response:
-    """Converte a escala MCP 0..100 para 0..1000."""
+    """Converte o score para a escala da API usando a escala **declarada**.
+
+    A versão anterior inferia a escala pela magnitude do valor::
+
+        if 0 <= score <= 100:
+            score *= 10
+
+    Isso trata a faixa 0..100 como se fosse sempre escala do MCP. Mas ela é
+    ambígua: um score legítimo de 80 **na escala da API** — uma migração ruim —
+    é indistinguível de 80 na escala 0..100, que é ótima. O código escolhia
+    sempre a segunda leitura e multiplicava, transformando 80 em 800. Péssima
+    virava excelente, com log dizendo "normalizado".
+
+    O erro só aparecia nos casos ruins, que são justamente os que a análise
+    precisa acertar para desaconselhar uma migração.
+
+    A correção não é escolher melhor: é **parar de escolher**. A escala passa a
+    vir de `MCP_VIABILITY_SCALE`, uma declaração de quem escreve o prompt. O
+    default preserva o comportamento de hoje (`0-100`), então nada muda para
+    quem já roda — o que muda é que a conversão virou determinística e o valor
+    de entrada deixou de influenciar a regra.
+
+    Um score fora da escala declarada não é convertido: se o prompt pede 0..100
+    e o modelo devolve 150, quem está errado é o modelo, e multiplicar por 10
+    produziria 1500 — acima do teto da API. `model_copy` **não revalida**, então
+    esse valor entraria no payload sem passar pelo `le=1000` do schema.
+    """
+    escala = get_settings().mcp_viability_scale
     score = result.viability_score
 
-    if 0 <= score <= _MCP_VIABILITY_MAX:
-        normalized_score = (
-            score * _MCP_TO_API_SCALE_FACTOR
-        )
+    if escala == "0-1000":
+        return result
 
-        logger.info(
-            "mcp_viability_score_normalized "
-            "source=%d api=%d",
+    if not 0 <= score <= _MCP_VIABILITY_MAX:
+        logger.error(
+            "mcp_viability_fora_da_escala escala=%s score=%d "
+            "(valor preservado, sem conversão)",
+            escala,
             score,
-            normalized_score,
         )
+        return result
 
-        return result.model_copy(
-            update={
-                "viability_score": normalized_score,
-            }
-        )
+    normalized_score = min(
+        score * _MCP_TO_API_SCALE_FACTOR,
+        _ESCALA_API_MAX,
+    )
 
-    return result
+    logger.info(
+        "mcp_viability_score_normalized escala=%s source=%d api=%d",
+        escala,
+        score,
+        normalized_score,
+    )
+
+    return result.model_copy(
+        update={
+            "viability_score": normalized_score,
+        }
+    )
 
 
 def log_llm_input_payload(
