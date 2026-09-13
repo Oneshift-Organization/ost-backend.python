@@ -17,6 +17,7 @@ from typing import Any
 from app.infrastructure.terraform.archive import montar_zip
 from app.infrastructure.terraform.fmt import formatar
 from app.infrastructure.terraform.gcp_renderer import renderizar
+from app.infrastructure.terraform.validate import validar
 from app.schemas.terraform import (
     ResumoValidacao,
     TerraformBlueprint,
@@ -49,6 +50,9 @@ def gerar_pacote(
     arquivos = renderizar(blueprint, procedencia=premissas)
 
     arquivos, validacao = formatar(arquivos)
+    # `validate` vê o que o `fmt` não vê: schema do provider, atributo que não
+    # existe, tipo errado. Desligado por default — ver `terraform/validate.py`.
+    validacao = validar(arquivos, formatado=validacao.formatado)
 
     # Manifesto e validação entram DEPOIS do fmt: são JSON, não HCL, e passá-los
     # pelo formatador do Terraform não faz sentido.

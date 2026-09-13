@@ -14,9 +14,16 @@ atrás de flag, desligado.
 > | **2** — derivador determinístico | ✅ feito |
 > | **3** — renderer GCP + ZIP | ✅ feito |
 > | **4** — rotas + flag + reaper | ✅ feito |
-> | **6** — `terraform fmt` | ✅ feito (`validate` fora do escopo, §6.1) |
+> | **6** — `terraform fmt` | ✅ feito |
+> | **6b** — `terraform validate` | ✅ feito, atrás de flag (ver nota) |
 > | **7** — procedência no pacote | ✅ feito |
 > | **5** — blueprint pelo modelo | ⬜ pendente — **opcional por desenho** |
+>
+> **Correção da §6.1:** eu recomendei pular o `validate` estimando "200 MB por
+> geração". Medindo com o binário real e `TF_PLUGIN_CACHE_DIR` quente: `init`
+> 0,86s, `validate` 0,35s, e os 99 MB do provider são baixados **uma vez**. Está
+> implementado atrás de `TERRAFORM_VALIDATE_ENABLED` (default `false`, mantendo
+> a decisão), e o código **recusa validar** sem cache configurado.
 >
 > O Bloco 5 é o único que falta, e o pacote funciona sem ele: o modelo entra
 > para melhorar nomes lógicos e o texto do README, não para decidir
