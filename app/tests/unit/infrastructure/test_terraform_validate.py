@@ -18,6 +18,7 @@ import shutil
 import pytest
 
 from app.core import config
+from app.core.config import Settings
 from app.infrastructure.terraform.gcp_renderer import renderizar
 from app.infrastructure.terraform.validate import validar
 from app.schemas.terraform import TerraformGenerationIn
@@ -64,12 +65,22 @@ def _ligado(monkeypatch: pytest.MonkeyPatch):
 # ── política: quando NÃO roda ───────────────────────────────────────────
 
 
-def test_desligado_por_padrao() -> None:
-    """Ligar exige binário na imagem, cache em volume e egress. Até lá, o
-    resumo diz que não validou em vez de fingir que validou."""
-    r = validar(_arquivos(), formatado=True)
-    assert r.validado is False
-    assert r.motivo_sem_validacao == "validação desabilitada neste ambiente"
+def test_ligado_por_padrao_desde_a_entrega() -> None:
+    """Default mudou para `True` em 13/09/2026, junto com o Dockerfile que traz
+    o binário e o mirror de provider."""
+    assert Settings(_env_file=None).terraform_validate_enabled is True
+
+
+def test_desligar_explicitamente_e_declarado(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Quando alguém desliga, o resumo diz que não validou em vez de fingir."""
+    monkeypatch.setenv("TERRAFORM_VALIDATE_ENABLED", "false")
+    config.get_settings.cache_clear()
+    try:
+        r = validar(_arquivos(), formatado=True)
+        assert r.validado is False
+        assert r.motivo_sem_validacao == "validação desabilitada neste ambiente"
+    finally:
+        config.get_settings.cache_clear()
 
 
 @pytest.mark.skipif(
@@ -81,14 +92,17 @@ def test_sem_cache_de_provider_recusa(_ligado, monkeypatch: pytest.MonkeyPatch) 
     isso satura a rede do cluster e transforma uma feature barata numa cara sem
     ninguém perceber — recusar é melhor que aceitar."""
     monkeypatch.delenv("TF_PLUGIN_CACHE_DIR", raising=False)
+    monkeypatch.delenv("TF_CLI_CONFIG_FILE", raising=False)
     r = validar(_arquivos(), formatado=True)
     assert r.validado is False
     assert "TF_PLUGIN_CACHE_DIR" in (r.motivo_sem_validacao or "")
+    assert "TF_CLI_CONFIG_FILE" in (r.motivo_sem_validacao or "")
 
 
 def test_o_formatado_atravessa_intacto(_ligado, monkeypatch: pytest.MonkeyPatch) -> None:
     """Qualquer que seja o motivo de não validar, o `fmt` não é apagado."""
     monkeypatch.delenv("TF_PLUGIN_CACHE_DIR", raising=False)
+    monkeypatch.delenv("TF_CLI_CONFIG_FILE", raising=False)
     assert validar(_arquivos(), formatado=True).formatado is True
     assert validar(_arquivos(), formatado=False).formatado is False
 
