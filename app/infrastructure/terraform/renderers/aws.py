@@ -34,8 +34,6 @@ SUBNET = "subnet_principal"
 # provider — ele reserva o resto para o sufixo aleatório. O hífen que separa
 # prefixo e sufixo conta, daí 36 para o nome.
 _MAX_BUCKET = 36
-
-
 class AdaptadorAWS:
     provider_nome = "aws"
     provider_source = "hashicorp/aws"

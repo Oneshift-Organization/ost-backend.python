@@ -69,6 +69,24 @@ _GB_MINIMO = Decimal("10")
 # sabemos.
 _CONFIANCA_OFICIAL = "official"
 
+
+def _tipo_de_maquina(sku: str) -> str:
+    """SKU de faturamento → identificador de deploy.
+
+    O catálogo guarda o SKU como ele aparece no bill — `BoxUsage:m7g.medium`,
+    `USE1-SpotUsage:m7g.2xlarge` — porque é assim que a linha de faturamento
+    casa. Nenhuma nuvem aceita isso como tipo de máquina.
+
+    Atingia 65 dos 71 SKUs de AWS do catálogo. Passava no `terraform validate`
+    (o campo é string livre) e falharia no apply com "Invalid instance type".
+
+    Fica aqui, e não no renderer, para que a **premissa** mostre o mesmo valor
+    que o `.tf`. Com a normalização no renderer, o README dizia
+    `SpotUsage:m7g.2xlarge` e o arquivo dizia `m7g.2xlarge` — o cliente não
+    conseguia reconciliar os dois.
+    """
+    return sku.rsplit(":", 1)[-1].strip() or sku
+
 # Teto de um persistent disk no GCP. O balde de armazenamento é o TOTAL da conta,
 # somando muitos volumes na origem; representá-lo como um disco só já é
 # simplificação, e acima deste limite a simplificação deixa de ser aplicável —
@@ -157,12 +175,13 @@ def _derivar_compute(
             )
             continue
 
-        sku = equivalente.get("sku")
+        sku_bruto = equivalente.get("sku")
+        sku = _tipo_de_maquina(str(sku_bruto)) if sku_bruto else None
         # A região entra no nome porque o pool é chaveado por (família, região):
         # sem ela, a mesma família em duas regiões vira o mesmo identificador.
         nome = nomeador.gerar("vm", familia, pool.get("regiao"))
 
-        if not sku:
+        if not sku_bruto:
             # Equivalente do catálogo curado: sabemos o serviço, não o shape.
             # Vira variável em branco — nunca um shape inventado.
             plano.premissas.append(

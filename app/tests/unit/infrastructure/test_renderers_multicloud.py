@@ -16,6 +16,7 @@ import re
 
 import pytest
 
+from app.domain.services.terraform_plan import _tipo_de_maquina
 from app.infrastructure.terraform.renderers import (
     arquivos_esperados,
     provedores_com_template,
@@ -120,6 +121,22 @@ def test_versao_do_provider_e_fixa(provedor: str) -> None:
 
 
 @pytest.mark.parametrize("provedor", TODAS)
+def test_nenhuma_variavel_de_outra_nuvem_no_pacote(provedor: str) -> None:
+    """`boot_image` é do GCP, `ami_id` da AWS, `image_ocid` da OCI. Declarar
+    todas em todo pacote deixaria o cliente preenchendo variável que não é
+    usada — e duvidando do resto."""
+    variaveis = _arquivos(provedor)["variables.tf"]
+    de_outros = {
+        "gcp": ("ami_id", "image_ocid", "compartment_id"),
+        "aws": ("boot_image", "image_ocid", "compartment_id"),
+        "azure": ("boot_image", "ami_id", "compartment_id"),
+        "oci": ("boot_image", "ami_id", "project_id"),
+    }[provedor]
+    for nome in de_outros:
+        assert f'variable "{nome}"' not in variaveis, f"{provedor} declara {nome}"
+
+
+@pytest.mark.parametrize("provedor", TODAS)
 def test_toda_variavel_sem_default_aparece_no_tfvars(provedor: str) -> None:
     """O que a análise não soube responder tem que ser visível para preencher —
     senão o cliente descobre no `plan`, uma por vez."""
@@ -214,3 +231,47 @@ def test_bucket_privado_por_padrao(provedor: str) -> None:
     }[provedor]
     normalizado = " ".join(main.split())
     assert " ".join(publico.split()) in normalizado
+
+
+# ── tipo de instância na AWS ────────────────────────────────────────────
+
+
+def test_sku_do_catalogo_vira_tipo_de_maquina() -> None:
+    """O catálogo guarda o SKU como ele aparece no bill, porque é assim que a
+    linha de faturamento casa. `instance_type` quer só o tipo.
+
+    Escrever o SKU cru **passa** no `terraform validate` — o campo é string
+    livre — e falha no apply com "Invalid instance type". Atingia 65 dos 71 SKUs
+    de AWS do catálogo.
+    """
+    assert _tipo_de_maquina("BoxUsage:m7g.medium") == "m7g.medium"
+    assert _tipo_de_maquina("SpotUsage:m7g.2xlarge") == "m7g.2xlarge"
+    assert _tipo_de_maquina("USE1-BoxUsage:m7g.large") == "m7g.large"
+
+
+def test_sku_ja_limpo_atravessa_intacto() -> None:
+    assert _tipo_de_maquina("m6i.2xlarge") == "m6i.2xlarge"
+
+
+def test_instance_type_no_tf_nao_tem_prefixo_de_faturamento() -> None:
+    payload = _payload()
+    payload["pools_computacao"][0]["equivalentes"] = [{
+        "provedor": "AWS", "nome_servico": "AmazonEC2", "sku": "BoxUsage:m7g.2xlarge",
+        "instancias": 2, "correspondencia_tecnica": {"vcpus": 16.0, "ram_gb": 64.0},
+        "financeiro": {"confianca_preco": "low"},
+    }]
+    entrada = TerraformGenerationIn(
+        analysis_job_id="62d67cd7-2b80-4e61-9e72-2f17505d262c",
+        project_name="gcp-para-aws", target_provider="aws", region="sa-east-1",
+        network={"cidr": "10.100.0.0/16"},
+    )
+    pacote = montar_blueprint(payload, entrada)
+    main = renderizar(pacote)["main.tf"]
+    tipos = re.findall(r'instance_type\s*=\s*"([^"]+)"', main)
+    assert tipos == ["m7g.2xlarge"]
+    assert "Usage:" not in main
+    # A premissa tem que dizer o MESMO que o arquivo: com a normalização no
+    # renderer, o README dizia `BoxUsage:...` e o `.tf` dizia `m7g...`, e o
+    # cliente não conseguia reconciliar os dois.
+    premissa = next(p for p in pacote.assumptions if p.campo.endswith(".machine_type"))
+    assert "Usage:" not in (premissa.valor or "")
