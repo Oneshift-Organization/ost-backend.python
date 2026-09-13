@@ -37,7 +37,15 @@ class AdaptadorGCP:
             VariavelTerraform(
                 name="project_id",
                 description="ID do projeto GCP onde os recursos serão criados.",
-            )
+            ),
+            VariavelTerraform(
+                name="boot_image",
+                description=(
+                    "Imagem de boot das VMs. O billing não informa o sistema "
+                    "operacional em uso."
+                ),
+                default="debian-cloud/debian-12",
+            ),
         ]
 
     def preambulo(self, bp: TerraformBlueprint) -> list[str]:

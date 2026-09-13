@@ -107,17 +107,10 @@ def _variaveis(plano: PlanoDerivado) -> list[VariavelTerraform]:
     cliente aplicaria um palpite achando que era resultado da análise — que é
     exatamente o que este desenho inteiro existe para evitar.
     """
-    variaveis = [
-        VariavelTerraform(
-            name="boot_image",
-            type="string",
-            description=(
-                "Imagem de boot das VMs. O billing não informa o sistema "
-                "operacional em uso."
-            ),
-            default="debian-cloud/debian-12",
-        )
-    ]
+    # A imagem de boot é específica de cada nuvem (`boot_image` no GCP, `ami_id`
+    # na AWS, `image_ocid` na OCI) e vem do adaptador. Declará-la aqui punha uma
+    # variável de GCP dentro de um pacote de AWS.
+    variaveis: list[VariavelTerraform] = []
     if any(r.resource_type == "managed_database" for r in plano.recursos):
         variaveis.append(
             VariavelTerraform(
