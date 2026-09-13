@@ -76,7 +76,7 @@ Cada item da listagem traz `disp_status`, útil só na tela de lixeira.
 |---|---|---|---|
 | `analysis_job_id` | **sim** | uuid de uma análise `COMPLETED` | — |
 | `project_name` | **sim** | 3–40 chars, minúsculas, dígitos, `-` ou `_`, começa com letra | — |
-| `target_provider` | **sim** | `gcp` *(só ele por enquanto)* | — |
+| `target_provider` | **sim** | `gcp` · `aws` · `azure` · `oci` | — |
 | `region` | **sim** | região do provedor, ex. `southamerica-east1` | — |
 | `environment` | não | `dev` · `staging` · `prod` | `dev` |
 | `network.mode` | não | `create` · `existing` | `create` |

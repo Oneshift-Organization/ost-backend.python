@@ -17,6 +17,7 @@ atrás de flag, desligado.
 > | **6** — `terraform fmt` | ✅ feito |
 > | **6b** — `terraform validate` | ✅ feito, atrás de flag (ver nota) |
 > | **7** — procedência no pacote | ✅ feito |
+> | **8** — AWS, Azure e OCI | ✅ feito (13/09) — as quatro validam contra o schema real |
 > | **5** — blueprint pelo modelo | ⬜ pendente — **opcional por desenho** |
 >
 > **Correção da §6.1:** eu recomendei pular o `validate` estimando "200 MB por
