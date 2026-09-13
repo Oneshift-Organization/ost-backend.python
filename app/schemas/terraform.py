@@ -39,11 +39,15 @@ CONTRATO_BLUEPRINT = "oneshift-terraform-v1"
 class ProvedorSuportado(StrEnum):
     """Provedores com template escrito.
 
-    Só GCP no MVP. O enum existe para o 422 dizer *qual* provedor falta em vez
-    de devolver um erro genérico, e para a lista crescer sem tocar nas rotas.
+    O enum existe para o 422 dizer *qual* provedor falta em vez de devolver um
+    erro genérico. Cada entrada aqui exige um adaptador em
+    `infrastructure/terraform/renderers/` e o provider correspondente na imagem.
     """
 
     GCP = "gcp"
+    AWS = "aws"
+    AZURE = "azure"
+    OCI = "oci"
 
 
 class TipoRecurso(StrEnum):
