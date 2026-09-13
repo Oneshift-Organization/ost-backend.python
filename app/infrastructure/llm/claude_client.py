@@ -64,7 +64,6 @@ class ClaudeLLMClient:
         create_kwargs: dict = {
             "model": self._model,
             "max_tokens": _MAX_OUTPUT_TOKENS,
-            "temperature": 1,
             "messages": [{"role": "user", "content": user_block}],
         }
         # Only set a cached system block when there is actual content to cache.
