@@ -26,6 +26,7 @@ _CATEGORY_BY_COMPONENT: dict[str, tuple[str | None, str | None]] = {
     "network_egress": ("networking", "network"),
     "storage_ssd": ("storage", "block_storage"),
     "storage_hdd": ("storage", "block_storage"),
+    "object_storage": ("storage", "object_storage"),
     "database": ("database", "relational_database"),
     "unclassified": (None, None),
 }

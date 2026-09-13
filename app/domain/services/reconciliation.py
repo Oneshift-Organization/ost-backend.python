@@ -201,6 +201,7 @@ def _check_conservacao(
             auxiliary.gke_control_plane,
             auxiliary.storage_ssd,
             auxiliary.storage_hdd,
+            auxiliary.object_storage,
             auxiliary.network_egress,
             auxiliary.database,
             auxiliary.commitment,

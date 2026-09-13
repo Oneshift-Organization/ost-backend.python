@@ -45,6 +45,15 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*external ip*", "glob", "network_egress", None, "high", 37),
     ("*ip charge*", "glob", "network_egress", None, "medium", 38),
     ("*cloud nat*", "glob", "network_egress", None, "medium", 39),
+    # ── Object storage (ANTES do bloco: o catch-all "*storage*" levava o
+    #    Cloud Storage inteiro para `storage_hdd`, reprecificando objeto com
+    #    taxa de disco — ~2x a taxa certa) ──
+    ("*cloud storage*", "glob", "object_storage", None, "high", 44),
+    ("*standard storage*", "glob", "object_storage", None, "high", 45),
+    ("*nearline*", "glob", "object_storage", None, "high", 46),
+    ("*coldline*", "glob", "object_storage", None, "high", 47),
+    ("*archive storage*", "glob", "object_storage", None, "high", 48),
+    ("*autoclass*", "glob", "object_storage", None, "medium", 49),
     # ── Storage ──
     ("*ssd*", "glob", "storage_ssd", None, "high", 40),
     ("*pd capacity*", "glob", "storage_hdd", None, "medium", 50),
@@ -56,7 +65,12 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*rhel*", "glob", "os_license", None, "high", 61),
     ("*sles*", "glob", "os_license", None, "high", 62),
     ("*ubuntu pro*", "glob", "os_license", None, "high", 63),
-    ("*licensing*", "glob", "os_license", None, "medium", 64),
+    # 69 e não 64: empatava com `*services min instance*`. Move-se este e não o
+    # outro porque `*services min instance*` precisa continuar antes de
+    # `*min instance cpu*` (66) — inverter os dois mudaria a classificação de
+    # Cloud Run. Nenhum SKU casa com `*licensing*` e com os padrões 65–68, então
+    # descer daqui não muda resultado nenhum.
+    ("*licensing*", "glob", "os_license", None, "medium", 69),
     # ── Cloud Run / serverless (second-billed, NOT in VM capacity pools) ──
     ("*services min instance*", "glob", "network_egress", None, "medium", 64),
     ("*cloud run*", "glob", "network_egress", None, "medium", 65),
@@ -95,14 +109,22 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*dedicatedusage:*", "glob", "core", None, "medium", 26),
     ("savingsplan*", "glob", "core", None, "low", 27),
     # ── Containers (EKS/Fargate control plane) ──
-    ("*amazoneks*", "glob", "gke_control_plane", None, "high", 18),
-    ("*eks*percluster*", "glob", "gke_control_plane", None, "high", 19),
+    # 8/9 e não 18/19: lá empatavam com `*elasticsearch*` e `*opensearch*`, e
+    # empate deixa a ordem por conta do banco. Continuam antes de compute e de
+    # database, que é o que a escada exige — nenhum padrão daqui se sobrepõe
+    # aos de lá, então a renumeração não muda classificação nenhuma.
+    ("*amazoneks*", "glob", "gke_control_plane", None, "high", 8),
+    ("*eks*percluster*", "glob", "gke_control_plane", None, "high", 9),
     ("*fargate*", "glob", "core", None, "medium", 28),
     # ── Storage ──
     ("*volumeusage*", "glob", "storage_ssd", None, "high", 30),
     ("ebs:*", "glob", "storage_ssd", None, "high", 31),
-    ("*timedstorage*", "glob", "storage_hdd", None, "high", 32),
-    ("*-bytehrs", "glob", "storage_hdd", None, "medium", 33),
+    # `TimedStorage-ByteHrs` é a linha de armazenamento do S3 — objeto, não
+    # bloco. Ia para `storage_hdd` e era comparada com disco no destino.
+    ("*timedstorage*", "glob", "object_storage", None, "high", 32),
+    ("*-bytehrs", "glob", "object_storage", None, "medium", 33),
+    ("s3:*", "glob", "object_storage", None, "high", 35),
+    ("*glacier*", "glob", "object_storage", None, "high", 36),
     ("*snapshotusage*", "glob", "storage_hdd", None, "medium", 34),
     ("*storage*", "glob", "storage_hdd", None, "low", 39),
     # ── Networking ──
@@ -117,7 +139,9 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*resolvernetworkinterface*", "glob", "network_egress", None, "medium", 48),
     ("*-bytes", "glob", "network_egress", None, "low", 49),
     # ── S3 / API requests (ops) ──
-    ("*request*", "glob", "storage_hdd", None, "low", 50),
+    # `Requests-Tier1` é operação de bucket. Ia para `storage_hdd` e entrava no
+    # dimensionamento de disco, que não tem relação com número de requisições.
+    ("*request*", "glob", "object_storage", None, "low", 50),
 ]
 
 _SEEDS: dict[str, list[tuple[str, str, str, str | None, str, int]]] = {

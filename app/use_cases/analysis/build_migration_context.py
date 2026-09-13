@@ -524,6 +524,7 @@ class BuildMigrationContextUseCase:
             aux_by_category = {
                 "storage_ssd": auxiliary.storage_ssd,
                 "storage_hdd": auxiliary.storage_hdd,
+                "object_storage": auxiliary.object_storage,
                 "network_egress": auxiliary.network_egress,
                 "database": auxiliary.database,
             }

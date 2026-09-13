@@ -33,6 +33,7 @@ _AUX_BUCKET = {
     "network_egress": "network_egress",
     "storage_ssd": "storage_ssd",
     "storage_hdd": "storage_hdd",
+    "object_storage": "object_storage",
     "database": "database",
 }
 
@@ -133,6 +134,7 @@ class BillingAggregator:
                 gke_control_plane=aux_totals["gke_control_plane"],
                 storage_ssd=aux_totals["storage_ssd"],
                 storage_hdd=aux_totals["storage_hdd"],
+                object_storage=aux_totals["object_storage"],
                 network_egress=aux_totals["network_egress"],
                 database=aux_totals["database"],
                 commitment=commitment_cost,
