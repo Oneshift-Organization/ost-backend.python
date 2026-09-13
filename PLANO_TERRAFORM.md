@@ -30,6 +30,19 @@ atrás de flag, desligado.
 > infraestrutura. Precisa da `NVIDIA_API_KEY` no ambiente local para ser
 > testado de verdade.
 >
+> **Verificação executada em 13/09/2026** (Postgres em container + binário do
+> Terraform baixado localmente):
+>
+> | o quê | resultado |
+> |---|---|
+> | testes unitários | 434 |
+> | testes de integração | 70/70, contra Postgres real |
+> | `terraform fmt -check` | canônico, nada a reformatar |
+> | `terraform validate` | válido contra o schema do provider Google |
+> | fuzz (200 payloads, 5 sementes) | 200/200 geram pacote válido |
+> | bill AWS real → `.tf` | 26 recursos, válido |
+> | bill GCP real → `.tf` | 6 recursos, válido |
+>
 > **Antes de ligar em dev:** `alembic upgrade head` (tabela nova), re-seed de
 > `sku_classification_rules` e `scripts/re_enrich_report.py` nos relatórios
 > existentes (object storage mudou de balde), e `TERRAFORM_GENERATION_ENABLED=true`.
