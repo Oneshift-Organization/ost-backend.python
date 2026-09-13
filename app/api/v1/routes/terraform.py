@@ -11,6 +11,7 @@ nuvem; não roda `plan` nem `apply`. Ela escreve arquivos.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from uuid import UUID, uuid4
 
@@ -226,7 +227,13 @@ async def _executar_geracao(
         await session.commit()
 
         try:
-            resultado = gerar_pacote(payload_analise, entrada)
+            # Em thread: `gerar_pacote` chama `terraform fmt` por subprocess, e
+            # `subprocess.run` bloqueia o event loop. BackgroundTasks roda no
+            # mesmo processo que atende requisição — segurar o loop por até 30s
+            # travaria TODA a API, não só esta geração.
+            resultado = await asyncio.to_thread(
+                gerar_pacote, payload_analise, entrada
+            )
             job.blueprint = resultado.blueprint.model_dump(mode="json")
             job.generated_files = resultado.arquivos
             job.validation_result = resultado.validacao.model_dump()
