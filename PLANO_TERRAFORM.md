@@ -4,6 +4,29 @@
 **Regra que continua valendo:** o caminho legado não é tocado. Tudo nasce ao lado,
 atrás de flag, desligado.
 
+> ## Status — 2026-09-13
+>
+> | bloco | estado |
+> |---|---|
+> | **0** — `sku_id` no payload | ✅ feito |
+> | **0b** — object storage como categoria | ✅ feito |
+> | **1** — schemas, entidade, tabela, migration | ✅ feito |
+> | **2** — derivador determinístico | ✅ feito |
+> | **3** — renderer GCP + ZIP | ✅ feito |
+> | **4** — rotas + flag + reaper | ✅ feito |
+> | **6** — `terraform fmt` | ✅ feito (`validate` fora do escopo, §6.1) |
+> | **7** — procedência no pacote | ✅ feito |
+> | **5** — blueprint pelo modelo | ⬜ pendente — **opcional por desenho** |
+>
+> O Bloco 5 é o único que falta, e o pacote funciona sem ele: o modelo entra
+> para melhorar nomes lógicos e o texto do README, não para decidir
+> infraestrutura. Precisa da `NVIDIA_API_KEY` no ambiente local para ser
+> testado de verdade.
+>
+> **Antes de ligar em dev:** `alembic upgrade head` (tabela nova), re-seed de
+> `sku_classification_rules` e `scripts/re_enrich_report.py` nos relatórios
+> existentes (object storage mudou de balde), e `TERRAFORM_GENERATION_ENABLED=true`.
+
 ---
 
 ## 1. Veredito sobre a especificação recebida
