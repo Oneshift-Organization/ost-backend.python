@@ -67,23 +67,30 @@ class Settings(BaseSettings):
     # como se não existissem. Ligar NÃO desliga o legado — os dois convivem, e a
     # virada real é o consumidor parar de chamar o caminho antigo. Reverter é
     # mudar a variável e reiniciar: sem migration, sem deploy de código.
-    agent_flow_enabled: bool = False
+    # Ligado a partir de 13/09/2026 (entrega). Ligar NÃO desliga o legado — os
+    # dois convivem, e a virada real é o consumidor parar de chamar o caminho
+    # antigo. Reverter é `AGENT_FLOW_ENABLED=false` e reiniciar: sem migration,
+    # sem deploy de código.
+    agent_flow_enabled: bool = True
 
-    # O MESMO INTERRUPTOR, para a geração de Terraform. Com `false` (default) as
-    # rotas `/v1/terraform-generations` respondem 404. Desligar não perde dado:
-    # as gerações já feitas continuam na tabela.
-    terraform_generation_enabled: bool = False
+    # O MESMO INTERRUPTOR, para a geração de Terraform. Ligado a partir de
+    # 13/09/2026. Com `false` as rotas `/v1/terraform-generations` respondem 404;
+    # desligar não perde dado, as gerações já feitas continuam na tabela.
+    terraform_generation_enabled: bool = True
 
     # `terraform validate` contra o schema real do provider. Desligado por
     # decisão de escopo, não por custo: medido em 2026-09-13, com
     # `TF_PLUGIN_CACHE_DIR` quente o `init` leva 0,86s e o `validate` 0,35s. O
     # provider do Google são 99 MB baixados UMA vez, não por geração.
     #
-    # Ligar exige: binário do Terraform na imagem, `TF_PLUGIN_CACHE_DIR` num
-    # volume que sobreviva ao restart, e egress para registry.terraform.io no
-    # primeiro uso. Sem o cache, cada geração rebaixa 99 MB — daí a checagem
-    # explícita em `terraform/validate.py`.
-    terraform_validate_enabled: bool = False
+    # Ligado a partir de 13/09/2026, junto com a mudança no Dockerfile que traz o
+    # binário e o provider **pré-baixado** em `/opt/terraform-plugins`. É o cache
+    # pré-aquecido que torna isto seguro: sem ele, cada geração tentaria baixar
+    # 99 MB de dentro do cluster e ficaria pendurada até o timeout num ambiente
+    # sem egress para a HashiCorp. `terraform/validate.py` recusa validar quando
+    # `TF_PLUGIN_CACHE_DIR` não está configurado, justamente para nunca cair
+    # nesse caminho por acidente.
+    terraform_validate_enabled: bool = True
     terraform_cli_timeout_seconds: int = 120
 
     cloud_creds_fernet_key: str = ""

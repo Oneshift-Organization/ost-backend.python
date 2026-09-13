@@ -40,7 +40,10 @@ from app.schemas.terraform import ResumoValidacao
 
 logger = logging.getLogger(__name__)
 
-_CACHE_ENV = "TF_PLUGIN_CACHE_DIR"
+# Duas formas de instalar provider sem rede. `TF_CLI_CONFIG_FILE` aponta para um
+# filesystem mirror (o que a imagem usa) e `TF_PLUGIN_CACHE_DIR` é o cache de
+# plugin (suficiente em máquina de dev, que tem saída para o registry).
+_ENVS_OFFLINE = ("TF_CLI_CONFIG_FILE", "TF_PLUGIN_CACHE_DIR")
 
 
 def validar(arquivos: dict[str, str], *, formatado: bool) -> ResumoValidacao:
@@ -66,16 +69,17 @@ def validar(arquivos: dict[str, str], *, formatado: bool) -> ResumoValidacao:
             motivo_sem_validacao="binário do Terraform ausente na imagem",
         )
 
-    if not os.environ.get(_CACHE_ENV):
-        # Sem cache o `init` rebaixa o provider inteiro a cada geração. Recusar
-        # é melhor que aceitar: com carga, isso satura a rede do cluster e
-        # transforma uma feature barata numa cara sem ninguém perceber.
+    if not any(os.environ.get(e) for e in _ENVS_OFFLINE):
+        # Sem mirror nem cache, o `init` baixa o provider inteiro a cada
+        # geração. Recusar é melhor que aceitar: com carga isso satura a rede do
+        # cluster, e num ambiente sem egress cada geração fica pendurada até o
+        # timeout — uma feature barata virando cara sem ninguém perceber.
         return ResumoValidacao(
             formatado=formatado,
             validado=False,
             motivo_sem_validacao=(
-                f"{_CACHE_ENV} não configurado; sem cache de provider cada "
-                "geração baixaria ~99 MB"
+                f"nenhum de {' ou '.join(_ENVS_OFFLINE)} configurado; sem "
+                "instalação offline de provider cada geração baixaria ~99 MB"
             ),
         )
 
