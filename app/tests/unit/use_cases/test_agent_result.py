@@ -196,3 +196,93 @@ def test_sem_sugestoes_a_confianca_e_a_do_backend() -> None:
     r = receber_analise_do_agente(_payload(), _agente())
     assert r.confianca_final == "medium"
     assert r.sugestoes == []
+
+
+# ── sugestões que o próprio backend levantou ────────────────────────────
+
+
+def _payload_com_alerta() -> dict:
+    """Payload como sai de `build_migration_context` quando falta câmbio.
+
+    A confiança em `premissas` já vem rebaixada de lá — este payload é o
+    resultado, não a entrada.
+    """
+    p = _payload()
+    p["premissas"]["confianca_analise"] = {
+        "nivel": "low",
+        "rebaixada_por": ["Sem taxa de câmbio para EUR/USD"],
+    }
+    p["premissas"]["sugestoes_backend"] = [
+        {
+            "tipo": "contestacao_preco",
+            "severidade": "alta",
+            "titulo": "Sem taxa de câmbio para EUR/USD",
+            "detalhe": "valores somados sem conversão",
+            "referencia": "EUR/USD",
+            "origem": "backend",
+            "efeito_backend": "confianca_rebaixada",
+        }
+    ]
+    return p
+
+
+def test_alerta_do_backend_chega_na_lista_de_tela() -> None:
+    r = receber_analise_do_agente(_payload_com_alerta(), _agente())
+    assert len(r.sugestoes) == 1
+    assert r.sugestoes[0]["origem"] == "backend"
+    assert r.resposta["sugestoes"] == r.sugestoes
+
+
+def test_alerta_do_backend_nao_rebaixa_de_novo() -> None:
+    """O rebaixamento dele já foi aplicado em `build_migration_context`. Passá-lo
+    por `processar_sugestoes` contaria o mesmo problema duas vezes — e com dois
+    alertas a análise cairia ao piso por um problema só."""
+    r = receber_analise_do_agente(_payload_com_alerta(), _agente())
+    assert r.confianca_final == "low", "já era low; não há degrau extra a cobrar"
+
+
+def test_backend_e_agente_convivem_na_mesma_lista() -> None:
+    r = receber_analise_do_agente(
+        _payload_com_alerta(),
+        _agente(),
+        sugestoes=[
+            {
+                "tipo": "oportunidade",
+                "severidade": "baixa",
+                "titulo": "CUD de 1 ano",
+                "detalhe": "z",
+            }
+        ],
+    )
+    assert [s["origem"] for s in r.sugestoes] == ["backend", "agente"]
+
+
+def test_sugestao_do_agente_sai_marcada_como_do_agente() -> None:
+    """Sem `origem`, a tela não distingue 'o modelo desconfia do nosso preço'
+    de 'nós desconfiamos do nosso preço'."""
+    r = receber_analise_do_agente(
+        _payload(),
+        _agente(),
+        sugestoes=[
+            {"tipo": "risco", "severidade": "media", "titulo": "x", "detalhe": "y"}
+        ],
+    )
+    assert r.sugestoes[0]["origem"] == "agente"
+
+
+def test_agente_nao_consegue_assinar_como_backend() -> None:
+    """Mesma razão de `efeito_backend`: uma dúvida do modelo não pode aparecer
+    na tela com o peso de uma verificação nossa."""
+    s, _ = processar_sugestoes(
+        [
+            {
+                "tipo": "risco",
+                "severidade": "baixa",
+                "titulo": "x",
+                "detalhe": "y",
+                "origem": "backend",
+            }
+        ],
+        "high",
+    )
+    assert s[0]["origem"] == "agente"

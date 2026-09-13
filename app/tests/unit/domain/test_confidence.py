@@ -102,7 +102,11 @@ def test_ledger_carrega_os_numeros_da_conta() -> None:
         "custo_com_preco_oficial",
         "custo_total_cotado",
         "custo_por_rotulo",
+        "rebaixada_por",
     }
+    # Vazio quando o nível é puro resultado da conta. Preenchido só quando algo
+    # de fora da razão de preço rebaixou — hoje, o câmbio (ver `alertas`).
+    assert d["rebaixada_por"] == []
     assert d["custo_com_preco_oficial"] == 47259.0
     assert d["custo_total_cotado"] == 81402.0
     # A quebra por rótulo evita que a razão engane para o lado pessimista:

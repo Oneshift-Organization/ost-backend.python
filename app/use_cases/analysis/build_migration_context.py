@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -27,6 +28,7 @@ from app.domain.repositories.i_billing_report_repo import IBillingReportReposito
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
+from app.domain.services.alertas import avaliar_cambio
 from app.domain.services.category_calculator import (
     CategoryRate,
     estimate_by_cost_ratio,
@@ -38,6 +40,7 @@ from app.domain.services.currency import (
     as_ledger,
     convert,
     identity_rate,
+    taxa_desconhecida,
 )
 from app.domain.services.equivalence_matcher import EquivalenceMatcher
 from app.domain.services.migration_expectation import (
@@ -642,6 +645,16 @@ class BuildMigrationContextUseCase:
             tallies=tallies,
         )
 
+        # ── 10b. Alertas do backend contra os próprios insumos ────
+        # O agente pode contestar um número nosso; aqui o backend contesta a si
+        # mesmo. Sem isto, um bill sem taxa de câmbio era convertido por 1 —
+        # somando moedas diferentes — e o rótulo `SEM_TAXA_CAMBIO` morria no
+        # ledger sem que ninguém lesse.
+        alertas = [a for a in (avaliar_cambio(fx, datetime.now(UTC).date()),) if a]
+        confianca = avaliar_confianca(_custo_por_confianca).com_rebaixamento(
+            [a.titulo for a in alertas if a.rebaixa]
+        )
+
         premissas: dict[str, Any] = {
             "fx": as_ledger(fx),
             "moeda_origem": currency,
@@ -653,7 +666,11 @@ class BuildMigrationContextUseCase:
             # cotado com preço oficial sobre o custo total cotado. Antes esse
             # nível vinha do LLM — um modelo opinando sobre a qualidade dos dados
             # que ele próprio recebeu.
-            "confianca_analise": avaliar_confianca(_custo_por_confianca).as_ledger(),
+            "confianca_analise": confianca.as_ledger(),
+            # Sugestões que o backend levanta sozinho. Vão para a mesma lista de
+            # tela que as do agente, com `origem: backend` — quem lê precisa
+            # saber que existe uma dúvida, não quem a levantou.
+            "sugestoes_backend": [a.as_sugestao() for a in alertas],
             "cobertura_classificacao": cobertura,
             "cobertura_analise": cobertura_analise,
             "fator_utilizacao": 1.0,
@@ -738,5 +755,6 @@ class BuildMigrationContextUseCase:
             return FxRate(par=par, taxa=Decimal(str(configured)), fonte="config")
 
         # Sem taxa conhecida: identidade seria comparar moedas diferentes.
-        # Preferimos sinalizar do que devolver número errado.
-        return FxRate(par=par, taxa=Decimal("1"), fonte="SEM_TAXA_CAMBIO")
+        # Preferimos sinalizar do que devolver número errado — `avaliar_cambio`
+        # transforma esse rótulo em rebaixamento de confiança e aviso na tela.
+        return taxa_desconhecida(par)

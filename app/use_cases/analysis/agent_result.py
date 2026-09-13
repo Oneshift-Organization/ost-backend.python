@@ -29,6 +29,13 @@ _CONTESTACOES = frozenset({"contestacao_preco", "contestacao_equivalencia"})
 _EFEITO_REBAIXOU = "confianca_rebaixada"
 _EFEITO_INFO = "informativo"
 
+# Carimbado aqui, nunca aceito do agente — pelo mesmo motivo que
+# `efeito_backend`: ele não pode afirmar na tela que uma dúvida dele é nossa.
+_ORIGEM_AGENTE = "agente"
+
+# Campos que o backend reescreve, descartando o que vier na entrada.
+_CARIMBADOS = frozenset({"efeito_backend", "origem"})
+
 
 @dataclass(frozen=True, slots=True)
 class ResultadoRecepcao:
@@ -105,9 +112,10 @@ def processar_sugestoes(
 ) -> tuple[list[dict[str, Any]], str]:
     """Preenche `efeito_backend` e devolve a confiança após as contestações.
 
-    `efeito_backend` **nunca** vem do agente — se viesse, ele poderia afirmar na
-    tela que "a confiança foi rebaixada" quando não foi. Qualquer valor que
-    chegue nesse campo é descartado e reescrito aqui.
+    `efeito_backend` e `origem` **nunca** vêm do agente — se viessem, ele
+    poderia afirmar na tela que "a confiança foi rebaixada" quando não foi, ou
+    assinar a própria dúvida como se fosse do backend. Qualquer valor que chegue
+    nesses campos é descartado e reescrito aqui.
 
     Só contestação com severidade alta rebaixa, e **um degrau no total**, não um
     por sugestão: dez contestações não tornam a análise dez vezes menos
@@ -124,13 +132,26 @@ def processar_sugestoes(
         houve_contestacao_alta = houve_contestacao_alta or contesta
         processadas.append(
             {
-                **{k: v for k, v in s.items() if k != "efeito_backend"},
+                **{k: v for k, v in s.items() if k not in _CARIMBADOS},
                 "efeito_backend": _EFEITO_REBAIXOU if contesta else _EFEITO_INFO,
+                "origem": _ORIGEM_AGENTE,
             }
         )
 
     final = rebaixar(confianca_inicial) if houve_contestacao_alta else confianca_inicial
     return processadas, final
+
+
+def sugestoes_do_backend(payload_backend: dict[str, Any]) -> list[dict[str, Any]]:
+    """Alertas que o próprio backend levantou ao montar o payload.
+
+    Chegam com `efeito_backend` preenchido na origem (`Alerta.as_sugestao`) —
+    não é promessa, é o que já foi aplicado à confiança. Reescrevê-los aqui
+    perderia o `origem: backend`, e é ele que permite à tela distinguir "o
+    modelo desconfia do nosso preço" de "nós desconfiamos do nosso preço".
+    """
+    premissas = payload_backend.get("premissas") or {}
+    return [dict(s) for s in (premissas.get("sugestoes_backend") or [])]
 
 
 def receber_analise_do_agente(
@@ -151,13 +172,19 @@ def receber_analise_do_agente(
     )
     processadas, conf_final = processar_sugestoes(sugestoes or [], conf_inicial)
 
+    # As do backend vêm primeiro e **já processadas**: o efeito delas foi
+    # aplicado em `build_migration_context`, e `conf_inicial` já sai de lá
+    # rebaixada. Passá-las de novo por `processar_sugestoes` contaria o mesmo
+    # rebaixamento duas vezes.
+    todas = sugestoes_do_backend(payload_backend) + processadas
+
     resposta = dict(autoridade.resposta)
     resposta["analysis_confidence"] = conf_final
-    resposta["sugestoes"] = processadas
+    resposta["sugestoes"] = todas
 
     return ResultadoRecepcao(
         resposta=resposta,
-        sugestoes=processadas,
+        sugestoes=todas,
         confianca_final=conf_final,
         autoridade=autoridade,
     )
