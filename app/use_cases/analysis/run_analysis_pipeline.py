@@ -360,6 +360,12 @@ def _serialize_equivalent(equiv) -> dict:
         "provedor": normalize_provider(equiv.provider).upper(),
         "nome_servico": equiv.service_name,
     }
+    # O shape em si. `nome_servico` é rótulo ("Compute Engine N2"); é o `sku`
+    # que diz `n2-standard-8`, e é ele que vira `machine_type` num Terraform.
+    # Ausente quando o equivalente veio do catálogo curado, que não tem shape —
+    # o mesmo caso em que `base_correspondencia` sai como `curated_only`.
+    if getattr(equiv, "sku_id", None):
+        d["sku"] = equiv.sku_id
     basis = getattr(equiv, "match_basis", "pool_capacity")
     if basis != "pool_capacity":
         d["base_correspondencia"] = basis

@@ -401,6 +401,7 @@ class BuildMigrationContextUseCase:
                             service_name=eq.service_name,
                             category=eq.category,
                             service_type=eq.service_type,
+                            sku_id=getattr(eq, "sku_id", None),
                             technical_match=tm,
                             financials=fin,
                         )
@@ -480,6 +481,7 @@ class BuildMigrationContextUseCase:
                         service_name=opt.service_name,
                         category=opt.category,
                         service_type=opt.service_type,
+                        sku_id=opt.sku_id,
                         match_basis="pool_capacity",
                         instances=opt.instances,
                         metadata=meta,
