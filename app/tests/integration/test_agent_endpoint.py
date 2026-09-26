@@ -140,8 +140,16 @@ async def test_recebe_corrige_e_devolve(_app_ligado, _db_ready) -> None:
         assert r.status_code == 200, r.text
         corpo = r.json()
 
-        # julgamento preservado
-        assert corpo["recommendation"] == "migrar para Azure"
+        # A política v1 passa a ser autoridade também sobre a conclusão.
+        # Não preservar "migrar para Azure" quando o snapshot seleciona OCI.
+        decision = payload["decision_support"]
+        assert corpo["decision_support"] == decision
+        selected = decision["selected_provider"]
+        expected_recommendation = (
+            f"Avaliar {selected.upper()}. {decision['selection_reason']}"
+            if selected else decision["selection_reason"]
+        )
+        assert corpo["recommendation"] == expected_recommendation
         # contestação processada, com efeito do BACKEND
         assert corpo["sugestoes"][0]["efeito_backend"] == "confianca_rebaixada"
         # e o número contestado não mudou
@@ -164,7 +172,8 @@ async def test_recebe_corrige_e_devolve(_app_ligado, _db_ready) -> None:
         async with _cliente(_app_ligado) as c:
             g = await c.get(f"/v1/agent/analyses/{rid}/result")
         assert g.status_code == 200
-        assert g.json()["recommendation"] == "migrar para Azure"
+        assert g.json()["recommendation"] == expected_recommendation
+        assert g.json()["decision_support"] == decision
     finally:
         sm = get_sessionmaker()
         async with sm() as s:
