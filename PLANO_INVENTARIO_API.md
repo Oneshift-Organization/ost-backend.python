@@ -1100,3 +1100,36 @@ vem depois.
 - **Impacto para trás:** nenhum (pacote novo). **Para frente:** a I6 usa
   `unidade_de` e os apelidos; a I7 congela o resultado no payload; a I8 usa
   `Indice.subredes_de` e `Indice.grupos_de` para o posicionamento.
+
+### I5 — persistência e API
+
+- **Entregue:** migração `a1b2c3d4e5f7` (3 tabelas novas, `ON DELETE
+  CASCADE`, testada para cima e para baixo no Postgres local), modelos,
+  `PgInventoryRepository` (lotes de 1.000 linhas, gravação idempotente, regras
+  serializadas na linha do grupo), entidade `InventarioEnviado` com o ciclo
+  `queued → processing → done | failed`, casos de uso e as rotas de
+  `/v1/inventories` atrás de `INVENTORY_ENABLED` (default `false`).
+- **Teste que importa:** o ciclo inteiro pela API com o mock da AWS (5
+  arquivos → 734 recursos → topologia → declaração muda a topologia →
+  `DELETE` apaga tudo em cascata), falha legível para arquivo que não é
+  inventário, isolamento (inventário de outro usuário é 404 em todas as rotas e
+  não aparece na lista) e **ida e volta pelo Postgres nos quatro mocks**: o
+  inventário lido do banco produz a mesma análise que o normalizado.
+- **Decisões tomadas na implementação:**
+  - A normalização roda em `asyncio.to_thread` dentro do caso de uso: é CPU
+    (`json.loads` de dezenas de MB), e a BackgroundTask divide o processo com
+    as requisições.
+  - O envio é gravado em disco em blocos de 1 MB (RNF4), e a pasta temporária
+    é apagada no fim do processamento, com ou sem falha.
+  - O fingerprint do inventário é o do conteúdo, sem declarações; o da
+    topologia inclui as declarações vigentes. Sem declarações os dois são
+    iguais, e isso é teste.
+- **Visto e não é deste trabalho:** o `alembic check` acusa o índice
+  `ix_analysis_jobs_disp`, que existe no banco e não no modelo. É anterior a
+  esta branch.
+- **Impacto para trás:** o roteador ganhou `inventory`, e o `Settings`, a flag.
+  Nenhuma tabela existente mudou. A suíte inteira passa: 1.093 testes, nenhum
+  pulado (com o Terraform no PATH), contra 856 antes do Bloco 3.
+- **Para frente:** a I6 precisa do custo por recurso do billing (método novo no
+  repositório de `billing_enriched`); a I7 carrega o conteúdo pelo mesmo
+  repositório.
