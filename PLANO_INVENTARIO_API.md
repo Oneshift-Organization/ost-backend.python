@@ -942,3 +942,26 @@ ondas **e** da propagação, mas continua nos riscos (um bastion com SSH aberto
 para a internet é `exposicao_administrativa` do mesmo jeito). A natureza
 `dados` pela porta usa a mesma lista da RI11, então os dois pontos não
 divergem. Não sobrou contradição.
+
+---
+
+## 13. Revisão por etapa
+
+Cada etapa fecha com uma revisão lógica e o impacto no que veio antes e no que
+vem depois.
+
+### I1 — domínio e grafo
+
+- **Entregue:** `domain/entities/topologia.py` (tipos, papéis, relação, regra,
+  seletor, recurso, inventário) e `domain/services/grafo.py` (união-busca com
+  representante determinístico, Tarjan iterativo, camadas pelo caminho mais
+  longo, dependentes transitivos). 100% de cobertura nos dois.
+- **Teste que importa:** 40 grafos aleatórios comparados com força bruta
+  (componente = alcance mútuo; camada = `1 + max` das dependências externas do
+  componente; dependentes = alcance reverso), e a mesma saída com a entrada
+  embaralhada. Cadeia de 5.000 nós em ciclo não estoura a pilha.
+- **Convenção fixada:** aresta `(u, v)` = u depende de v. As ondas (RI8), o
+  raio de impacto e a propagação de criticidade (RI10) usam as mesmas funções,
+  então não há como uma divergir da outra na direção.
+- **Impacto:** nenhum no código existente (módulos novos). A I4 depende destas
+  assinaturas; a I2 depende do modelo.
