@@ -12,6 +12,8 @@ from app.core.logging import get_logger
 from app.infrastructure.file_ingestion.base_parser import BaseParser
 from app.infrastructure.file_ingestion.loaders import (
     XLSX_EXTS,
+    is_parquet,
+    ler_colunas,
     read_xlsx_headers_as_csv_bytes,
 )
 from app.infrastructure.file_ingestion.parsers import (
@@ -84,6 +86,10 @@ def _read_sample(file_path: Path, size: int = 8192) -> bytes:
         raise UnsupportedFormatError(f"file not found: {file_path}")
 
     suffix = file_path.suffix.lower()
+    if is_parquet(file_path):
+        # Mesmo truque do XLSX: o cabeçalho vira uma linha CSV, e o `can_parse`
+        # de cada parser continua funcionando sem saber de Parquet.
+        return ",".join(ler_colunas(file_path)).encode("utf-8")
     if suffix in XLSX_EXTS:
         return read_xlsx_headers_as_csv_bytes(file_path)
     if suffix == ".gz":

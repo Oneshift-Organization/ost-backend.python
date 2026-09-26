@@ -69,11 +69,7 @@ class AwsDetailedBillingParser(BaseParser):
 
             service = _clean(row.get("ProductCode", "")) or "unknown"
             usage_type = _clean(row.get("UsageType", "")) or None
-            raw_payload = {
-                k: _clean(v)
-                for k, v in row.items()
-                if _clean(v)
-            }
+            raw_payload = {k: _clean(v) for k, v in row.items() if _clean(v)}
 
             record = {
                 "user_id": str(self.user_id),

@@ -389,8 +389,8 @@ como `TypedDict` (e em `NORMALIZED_COLUMNS` como tuple para ordem de DataFrame).
 
 | Coluna | Tipo Python | Obrigatório | Notas |
 |---|---|---|---|
-| `cost` | `Decimal` | sim | Custo sem descontos. **Pode ser negativo** para créditos/ajustes. |
-| `cost_discounted` | `Decimal` | sim | Custo com descontos/créditos aplicados (`cost + credits` no GCP, p.ex.). Pode ser negativo. |
+| `cost` | `Decimal` | sim | Parsers legados: custo como exportado, sem descontos. **Exports detalhados** (CUR, BigQuery, Azure, OCI): custo **efetivo líquido amortizado** (RN1 do [`PLANO_CUR_BIGQUERY.md`](../PLANO_CUR_BIGQUERY.md)): compromisso distribuído sobre o uso coberto, desconto negociado aplicado. **Pode ser negativo** para créditos/ajustes. |
+| `cost_discounted` | `Decimal` | sim | Custo com descontos/créditos aplicados (`cost + credits` no GCP legado, p.ex.). Nos exports detalhados, igual a `cost`. Pode ser negativo. |
 | `currency` | `str` (3 chars) | sim | ISO-4217 — `USD`, `BRL`, `EUR`, etc. |
 
 ### Uso

@@ -15,6 +15,8 @@ python-multipart>=0.0.9
 cryptography>=42.0
 pandas>=2.2
 pandera>=0.20
+# Parquet: um dos três formatos oficiais do CUR 2.0 (PLANO_CUR_BIGQUERY E3).
+pyarrow>=16
 numpy>=1.26
 openpyxl>=3.1
 rapidfuzz>=3.9

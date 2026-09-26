@@ -16,8 +16,11 @@ def test_aws_parser_produces_decimal_cost(aws_cur2_csv, user_id, job_id):
     df = parser.parse(aws_cur2_csv)
     assert not df.empty
     assert all(isinstance(c, Decimal) for c in df["cost"])
-    # First row: 12.345600 in fixture
-    assert df.iloc[0]["cost"] == Decimal("12.345600")
+    # li-001: unblended 12.3456, net 11.00. RN1 (PLANO_CUR_BIGQUERY): o líquido
+    # é o que o cliente paga e vira `cost`; o faturado bruto fica em
+    # `cost_billed`, para reconciliar com a fatura.
+    assert df.iloc[0]["cost"] == Decimal("11.000000")
+    assert df.iloc[0]["cost_billed"] == Decimal("12.345600")
 
 
 def test_aws_parser_marks_estimate_when_invoice_missing(aws_cur2_csv, user_id, job_id):
