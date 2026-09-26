@@ -159,7 +159,7 @@ class BillingAggregator:
 
         detalhado = False
         armazenamento: dict[str, dict[str, Any]] = defaultdict(
-            lambda: {"gb": _ZERO, "recursos": set()}
+            lambda: {"gb": _ZERO, "recursos": set(), "custo": defaultdict(lambda: _ZERO)}
         )
         bancos: dict[str, dict[str, Any]] = {}
         custo_sob_demanda = _ZERO
@@ -224,7 +224,11 @@ class BillingAggregator:
             inventario = InventarioMedido(
                 horas_periodo=_horas_do_periodo(items),
                 armazenamento={
-                    categoria: ArmazenamentoMedido(gb=v["gb"], recursos=frozenset(v["recursos"]))
+                    categoria: ArmazenamentoMedido(
+                        gb=v["gb"],
+                        recursos=frozenset(v["recursos"]),
+                        custo_por_categoria=dict(v["custo"]),
+                    )
                     for categoria, v in armazenamento.items()
                     if v["gb"] > 0
                 },
@@ -392,6 +396,12 @@ class BillingAggregator:
 
     @staticmethod
     def _family_of(item: BillingEnriched) -> str:
+        # Família informada pelo parser (tamanho da VM Azure, shape OCI) vem
+        # antes: o descritor dessas nuvens não tem o formato `família.tamanho`
+        # e toda VM cairia em "general".
+        informada = (item.attributes or {}).get("instance_family")
+        if isinstance(informada, str) and informada:
+            return informada
         metadata = item.sku_metadata or {}
         family = metadata.get("family")
         if isinstance(family, str) and family:
@@ -469,6 +479,10 @@ def _medir_auxiliar(
         chave = "snapshots" if atributos.get("storage_kind") == "snapshot" else component_type
         destino = armazenamento[chave]
         destino["gb"] += item.usage_amount or _ZERO
+        # Por categoria de ORIGEM: o derivador desconta do balde de disco o que
+        # era snapshot e estima o resto — sem isso, ou o snapshot virava disco,
+        # ou o balde inteiro sumia do pacote.
+        destino["custo"][component_type] += item.cost
         if item.resource_id:
             destino["recursos"].add(item.resource_id)
         return

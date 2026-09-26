@@ -1822,6 +1822,428 @@ def gerar_bigquery_gcp(origem: Path, destino_ndjson: Path, destino_csv: Path) ->
     return resumo
 
 
+# ── Azure e OCI: sintéticos ─────────────────────────────────────────────────
+# Não há bill real dessas nuvens no repositório. Os mocks são pequenos, com
+# preço de varejo APROXIMADO declarado aqui, e o gerador devolve os totais
+# esperados para os invariantes (dinheiro, capacidade, tamanho de disco).
+
+SINT_INICIO = datetime(2026, 3, 1, tzinfo=UTC)
+SINT_DIAS = 31
+
+# Azure — (tamanho, vCPU, quantidade, horas/dia, US$/h PAYG, região, cobertas por reserva)
+_AZ_VMS = (
+    ("Standard_D4s_v5", 4, 6, 24, "0.192", "eastus", 2),
+    ("Standard_E8s_v5", 8, 4, 24, "0.504", "eastus", 0),
+    ("Standard_B2ms", 2, 8, 12, "0.0832", "brazilsouth", 0),
+    ("Standard_F16s_v2", 16, 2, 24, "0.677", "eastus", 0),
+)
+_AZ_DESCONTO_RESERVA = Decimal("0.40")
+_AZ_OCIOSIDADE = Decimal("0.10")
+# (subcategoria, medidor, quantidade, US$/disco-mês, GiB do tier)
+_AZ_DISCOS = (
+    ("Premium SSD Managed Disks", "P30 LRS Disk", 12, "135.17", 1024),
+    ("Standard HDD Managed Disks", "S20 LRS Disk", 6, "21.76", 512),
+)
+_AZ_BLOB = (3, 2048, "0.0184")  # buckets, GB cada, US$/GB-mês
+_AZ_BANDA_GB, _AZ_BANDA_PRECO = 4200, "0.087"
+_AZ_PG = (2, 4, "0.1368")  # servidores, vCores, US$/vCore-h
+_AZ_AKS = (2, "0.10")  # clusters, US$/h
+_AZ_ASSINATURAS = (
+    ("00000000-0000-4000-8000-00000000a001", "producao"),
+    ("00000000-0000-4000-8000-00000000a002", "homologacao"),
+)
+_AZ_COLUNAS = [
+    "BillingAccountId", "BillingAccountName", "BillingPeriodStartDate", "BillingPeriodEndDate",
+    "BillingProfileId", "BillingProfileName", "SubscriptionId", "SubscriptionName", "Date",
+    "Product", "MeterId", "ServiceFamily", "MeterCategory", "MeterSubCategory", "MeterRegion",
+    "MeterName", "Quantity", "EffectivePrice", "CostInBillingCurrency", "UnitPrice",
+    "ResourceLocation", "ConsumedService", "ResourceId", "Tags", "AdditionalInfo",
+    "ResourceGroup", "UnitOfMeasure", "ChargeType", "PricingModel", "BillingCurrency",
+    "PayGPrice", "ReservationId", "ReservationName", "Frequency", "PublisherType",
+]
+
+
+@dataclass
+class ResumoSintetico:
+    total: Decimal
+    linhas: int
+    vcpu_horas: Decimal
+    gb_disco: dict[str, Decimal]
+    esperado: dict[str, object] = field(default_factory=dict)
+
+
+def gerar_azure(destino: Path) -> ResumoSintetico:
+    """Cost details EA, dataset AMORTIZADO: a reserva já distribuída no uso."""
+    linhas: list[dict[str, str]] = []
+    total = _ZERO
+    vcpu_horas = _ZERO
+
+    def linha(**campos: str) -> None:
+        nonlocal total
+        base = dict.fromkeys(_AZ_COLUNAS, "")
+        base.update(
+            {
+                "BillingAccountId": "12345678",
+                "BillingAccountName": "OneShift Demo EA",
+                "BillingPeriodStartDate": "2026-03-01",
+                "BillingPeriodEndDate": "2026-03-31",
+                "BillingProfileId": "12345678",
+                "BillingProfileName": "OneShift Demo",
+                "BillingCurrency": "USD",
+                "PublisherType": "Azure",
+                "Frequency": "UsageBased",
+                "ChargeType": "Usage",
+                "PricingModel": "OnDemand",
+            }
+        )
+        base.update(campos)
+        total += _d(base["CostInBillingCurrency"])
+        linhas.append(base)
+
+    def recurso(tipo: str, nome: str, grupo: str, sub: str) -> str:
+        return (f"/subscriptions/{sub}/resourceGroups/{grupo}/providers/{tipo}/{nome}").lower()
+
+    reservado_usado = _ZERO
+    for tamanho, vcpu, qtd, horas_dia, preco, regiao, cobertas in _AZ_VMS:
+        for i in range(qtd):
+            sub, nome_sub = _escolha(list(_AZ_ASSINATURAS), tamanho, i)
+            app = _escolha(APPS, tamanho, i)
+            rid = recurso("Microsoft.Compute/virtualMachines", f"vm-{app}-{tamanho[9:].lower()}-{i}",
+                          f"rg-{app}", sub)
+            coberta = i < cobertas
+            for dia in range(SINT_DIAS):
+                momento = SINT_INICIO + timedelta(days=dia)
+                horas = Decimal(horas_dia)
+                custo_payg = horas * Decimal(preco)
+                custo = custo_payg * (1 - _AZ_DESCONTO_RESERVA) if coberta else custo_payg
+                if coberta:
+                    reservado_usado += custo
+                vcpu_horas += horas * vcpu
+                linha(
+                    SubscriptionId=sub, SubscriptionName=nome_sub,
+                    Date=momento.strftime("%m/%d/%Y"),
+                    Product=f"Virtual Machines {tamanho[9:]} Series - {tamanho} - {regiao}",
+                    MeterId=_hash("az", tamanho)[:36], ServiceFamily="Compute",
+                    MeterCategory="Virtual Machines",
+                    MeterSubCategory=f"{tamanho[9:].split('_')[0]} Series",
+                    MeterRegion=regiao, MeterName=tamanho[9:].replace("_", " "),
+                    Quantity=_fmt(horas), EffectivePrice=_fmt(custo / horas),
+                    CostInBillingCurrency=_fmt(custo),
+                    UnitPrice="0" if coberta else preco,
+                    ResourceLocation=regiao, ConsumedService="Microsoft.Compute",
+                    ResourceId=rid,
+                    Tags=f'"env": "{"prod" if nome_sub == "producao" else "staging"}","app": "{app}"',
+                    AdditionalInfo=json.dumps({"UsageType": "ComputeHR", "ImageType": "Canonical",
+                                               "ServiceType": tamanho, "VCPUs": vcpu}),
+                    ResourceGroup=f"rg-{app}", UnitOfMeasure="1 Hour",
+                    PricingModel="Reservation" if coberta else "OnDemand",
+                    PayGPrice=preco,
+                    ReservationName="reserva-d4sv5" if coberta else "",
+                    ReservationId=_hash("reserva")[:36] if coberta else "",
+                )
+    # Reserva: 10% dela sem uso aparece como UnusedReservation no fim do mês.
+    ociosa = reservado_usado * _AZ_OCIOSIDADE / (1 - _AZ_OCIOSIDADE)
+    linha(
+        SubscriptionId=_AZ_ASSINATURAS[0][0], SubscriptionName=_AZ_ASSINATURAS[0][1],
+        Date="03/31/2026", MeterCategory="Virtual Machines", MeterSubCategory="Dsv5 Series",
+        MeterName="D4s v5", Quantity="0", CostInBillingCurrency=_fmt(ociosa),
+        ChargeType="UnusedReservation", PricingModel="Reservation", UnitOfMeasure="1 Hour",
+        ReservationName="reserva-d4sv5", ReservationId=_hash("reserva")[:36],
+        ResourceLocation="eastus",
+    )
+
+    gb_disco: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+    for subcat, medidor, qtd, preco_mes, gib in _AZ_DISCOS:
+        for i in range(qtd):
+            sub, nome_sub = _escolha(list(_AZ_ASSINATURAS), medidor, i)
+            rid = recurso("Microsoft.Compute/disks", f"disk-{medidor.split()[0].lower()}-{i}",
+                          "rg-dados", sub)
+            for dia in range(SINT_DIAS):
+                fracao = Decimal(1) / SINT_DIAS
+                linha(
+                    SubscriptionId=sub, SubscriptionName=nome_sub,
+                    Date=(SINT_INICIO + timedelta(days=dia)).strftime("%m/%d/%Y"),
+                    MeterCategory="Storage", MeterSubCategory=subcat, MeterName=medidor,
+                    MeterRegion="eastus", Quantity=_fmt(fracao),
+                    CostInBillingCurrency=_fmt(Decimal(preco_mes) * fracao),
+                    UnitPrice=preco_mes, ResourceLocation="eastus",
+                    ConsumedService="Microsoft.Compute", ResourceId=rid,
+                    ResourceGroup="rg-dados", UnitOfMeasure="1/Month", PayGPrice=preco_mes,
+                )
+            chave = "storage_ssd" if "SSD" in subcat else "storage_hdd"
+            gb_disco[chave] += Decimal(gib)
+
+    buckets, gb_bucket, preco_gb = _AZ_BLOB
+    for i in range(buckets):
+        rid = recurso("Microsoft.Storage/storageAccounts", f"stdados{i}", "rg-dados",
+                      _AZ_ASSINATURAS[0][0])
+        for dia in range(SINT_DIAS):
+            gb_dia = Decimal(gb_bucket) / SINT_DIAS
+            linha(
+                SubscriptionId=_AZ_ASSINATURAS[0][0], SubscriptionName=_AZ_ASSINATURAS[0][1],
+                Date=(SINT_INICIO + timedelta(days=dia)).strftime("%m/%d/%Y"),
+                MeterCategory="Storage", MeterSubCategory="General Block Blob v2",
+                MeterName="Hot LRS Data Stored", MeterRegion="eastus", Quantity=_fmt(gb_dia),
+                CostInBillingCurrency=_fmt(gb_dia * Decimal(preco_gb)), UnitPrice=preco_gb,
+                ResourceLocation="eastus", ConsumedService="Microsoft.Storage", ResourceId=rid,
+                ResourceGroup="rg-dados", UnitOfMeasure="1 GB/Month", PayGPrice=preco_gb,
+            )
+    gb_disco["object_storage"] += Decimal(buckets * gb_bucket)
+
+    for dia in range(SINT_DIAS):
+        gb = Decimal(_AZ_BANDA_GB) / SINT_DIAS
+        linha(
+            SubscriptionId=_AZ_ASSINATURAS[0][0], SubscriptionName=_AZ_ASSINATURAS[0][1],
+            Date=(SINT_INICIO + timedelta(days=dia)).strftime("%m/%d/%Y"),
+            MeterCategory="Bandwidth", MeterSubCategory="Rtn Preference: MGN",
+            MeterName="Standard Data Transfer Out", MeterRegion="Zone 1", Quantity=_fmt(gb),
+            CostInBillingCurrency=_fmt(gb * Decimal(_AZ_BANDA_PRECO)), UnitPrice=_AZ_BANDA_PRECO,
+            ResourceLocation="eastus", UnitOfMeasure="1 GB", PayGPrice=_AZ_BANDA_PRECO,
+        )
+
+    servidores, vcores, preco_vcore = _AZ_PG
+    for i in range(servidores):
+        rid = recurso("Microsoft.DBforPostgreSQL/flexibleServers", f"pg-{i}", "rg-dados",
+                      _AZ_ASSINATURAS[0][0])
+        for dia in range(SINT_DIAS):
+            qtd = Decimal(vcores * 24)
+            linha(
+                SubscriptionId=_AZ_ASSINATURAS[0][0], SubscriptionName=_AZ_ASSINATURAS[0][1],
+                Date=(SINT_INICIO + timedelta(days=dia)).strftime("%m/%d/%Y"),
+                MeterCategory="Azure Database for PostgreSQL",
+                MeterSubCategory="Flexible Server General Purpose Dsv3 Series Compute",
+                MeterName="vCore", MeterRegion="eastus", Quantity=_fmt(qtd),
+                CostInBillingCurrency=_fmt(qtd * Decimal(preco_vcore)), UnitPrice=preco_vcore,
+                ResourceLocation="eastus", ResourceId=rid, ResourceGroup="rg-dados",
+                UnitOfMeasure="1 Hour", PayGPrice=preco_vcore,
+            )
+
+    clusters, preco_aks = _AZ_AKS
+    for i in range(clusters):
+        rid = recurso("Microsoft.ContainerService/managedClusters", f"aks-{i}", "rg-plataforma",
+                      _AZ_ASSINATURAS[0][0])
+        for dia in range(SINT_DIAS):
+            linha(
+                SubscriptionId=_AZ_ASSINATURAS[0][0], SubscriptionName=_AZ_ASSINATURAS[0][1],
+                Date=(SINT_INICIO + timedelta(days=dia)).strftime("%m/%d/%Y"),
+                MeterCategory="Azure Kubernetes Service", MeterSubCategory="Standard",
+                MeterName="Standard Uptime SLA", MeterRegion="eastus", Quantity="24",
+                CostInBillingCurrency=_fmt(Decimal(24) * Decimal(preco_aks)),
+                UnitPrice=preco_aks, ResourceLocation="eastus", ResourceId=rid,
+                ResourceGroup="rg-plataforma", UnitOfMeasure="1 Hour", PayGPrice=preco_aks,
+            )
+
+    linha(
+        Date="03/31/2026", MeterCategory="RoundingAdjustment",
+        MeterSubCategory="RoundingAdjustment", CostInBillingCurrency="-0.013",
+        ChargeType="RoundingAdjustment",
+    )
+
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with destino.open("w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=_AZ_COLUNAS, lineterminator="\n")
+        w.writeheader()
+        w.writerows(linhas)
+    return ResumoSintetico(
+        total=total,
+        linhas=len(linhas),
+        vcpu_horas=vcpu_horas,
+        gb_disco=dict(gb_disco),
+        esperado={"ociosa": ociosa, "arredondamento": Decimal("-0.013")},
+    )
+
+
+# OCI — (família, OCPU, GB de memória, quantidade, horas/dia, SKU OCPU, US$/OCPU-h,
+#        SKU memória, US$/GB-h, vCPU por OCPU)
+_OCI_INSTANCIAS = (
+    ("E4", 4, 64, 6, 24, "B93113", "0.025", "B93114", "0.0015", 2),
+    ("A1", 2, 12, 4, 24, "B93297", "0.01", "B93298", "0.0015", 1),
+    ("E5", 8, 128, 2, 24, "B97384", "0.03", "B97385", "0.002", 2),
+)
+_OCI_VOLUMES = (10, 500, "0.0255")
+_OCI_OBJETO = (3, 2048, "0.0255")
+_OCI_ADB = (4, "0.336")  # ECPUs, US$/ECPU-h
+_OCI_SAIDA_GB, _OCI_SAIDA_PRECO = 12000, "0.0085"
+_OCI_LB = (2, "0.0113")
+_OCI_TENANCY = "ocid1.tenancy.oc1..aaaaaaaaoneshiftdemo"
+_OCI_COMPARTIMENTOS = (
+    ("ocid1.compartment.oc1..aaaaaaaaprod", "producao"),
+    ("ocid1.compartment.oc1..aaaaaaaadev", "desenvolvimento"),
+)
+_OCI_COLUNAS = [
+    "lineItem/referenceNo", "lineItem/tenantId", "lineItem/intervalUsageStart",
+    "lineItem/intervalUsageEnd", "product/service", "product/compartmentId",
+    "product/compartmentName", "product/region", "product/availabilityDomain",
+    "product/resourceId", "usage/billedQuantity", "usage/billedQuantityOverage",
+    "cost/subscriptionId", "cost/productSku", "product/Description", "cost/unitPrice",
+    "cost/unitPriceOverage", "cost/myCost", "cost/myCostOverage", "cost/currencyCode",
+    "cost/billingUnitReadable", "cost/skuUnitDescription", "cost/overageFlag",
+    "lineItem/isCorrection", "lineItem/backReferenceNo", "tags/Oracle-Tags.CreatedBy",
+    "tags/env", "tags/app",
+]
+
+
+def gerar_oci(destino: Path) -> ResumoSintetico:
+    """Cost report: uma linha por recurso, SKU e dia; uma correção de preço."""
+    linhas: list[dict[str, str]] = []
+    vcpu_horas = _ZERO
+
+    def linha(**campos: str) -> dict[str, str]:
+        base = dict.fromkeys(_OCI_COLUNAS, "")
+        base.update(
+            {
+                "lineItem/referenceNo": _hash("oci", len(linhas), campos.get("product/resourceId"))[:24],
+                "lineItem/tenantId": _OCI_TENANCY,
+                "cost/subscriptionId": "12345",
+                "cost/currencyCode": "USD",
+                "cost/overageFlag": "N",
+                "lineItem/isCorrection": "false",
+                "tags/Oracle-Tags.CreatedBy": "terraform",
+            }
+        )
+        base.update(campos)
+        linhas.append(base)
+        return base
+
+    def dia(n: int) -> tuple[str, str]:
+        inicio = SINT_INICIO + timedelta(days=n)
+        return inicio.strftime("%Y-%m-%dT%H:%MZ"), (inicio + timedelta(days=1)).strftime(
+            "%Y-%m-%dT%H:%MZ"
+        )
+
+    corrigir: dict[str, str] | None = None
+    for fam, ocpu, mem, qtd, horas_dia, sku_o, preco_o, sku_m, preco_m, vpo in _OCI_INSTANCIAS:
+        for i in range(qtd):
+            comp, nome_comp = _escolha(list(_OCI_COMPARTIMENTOS), fam, i)
+            rid = f"ocid1.instance.oc1.sa-saopaulo-1.{_hash('oci-vm', fam, i)[:20]}"
+            app = _escolha(APPS, fam, i)
+            descricao_base = "Compute - Ampere A1" if fam == "A1" else f"Compute - Standard - {fam}"
+            for n in range(SINT_DIAS):
+                inicio, fim = dia(n)
+                comum = {
+                    "lineItem/intervalUsageStart": inicio, "lineItem/intervalUsageEnd": fim,
+                    "product/service": "COMPUTE", "product/compartmentId": comp,
+                    "product/compartmentName": nome_comp, "product/region": "sa-saopaulo-1",
+                    "product/availabilityDomain": "SA-SAOPAULO-1-AD-1", "product/resourceId": rid,
+                    "tags/env": "prod" if nome_comp == "producao" else "dev", "tags/app": app,
+                }
+                ocpu_h = Decimal(ocpu * horas_dia)
+                gerada = linha(
+                    **comum, **{
+                        "usage/billedQuantity": _fmt(ocpu_h), "cost/productSku": sku_o,
+                        "product/Description": f"{descricao_base} - OCPU",
+                        "cost/unitPrice": preco_o, "cost/myCost": _fmt(ocpu_h * Decimal(preco_o)),
+                        "cost/billingUnitReadable": "OCPU Hours",
+                        "cost/skuUnitDescription": "OCPU Per Hour",
+                    }
+                )
+                if fam == "E4" and i == 0 and n == 14:
+                    corrigir = gerada
+                vcpu_horas += ocpu_h * vpo
+                mem_h = Decimal(mem * horas_dia)
+                linha(
+                    **comum, **{
+                        "usage/billedQuantity": _fmt(mem_h), "cost/productSku": sku_m,
+                        "product/Description": f"{descricao_base} - Memory",
+                        "cost/unitPrice": preco_m, "cost/myCost": _fmt(mem_h * Decimal(preco_m)),
+                        "cost/billingUnitReadable": "GB Hours",
+                        "cost/skuUnitDescription": "Gigabyte Per Hour",
+                    }
+                )
+
+    gb_disco: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+    for tipo, (qtd, gb, preco), descricao, sku, chave in (
+        ("volume", _OCI_VOLUMES, "Block Volume - Storage", "B91961", "storage_ssd"),
+        ("bucket", _OCI_OBJETO, "Object Storage - Storage", "B91628", "object_storage"),
+    ):
+        for i in range(qtd):
+            rid = f"ocid1.{tipo}.oc1.sa-saopaulo-1.{_hash('oci', tipo, i)[:20]}"
+            for n in range(SINT_DIAS):
+                inicio, fim = dia(n)
+                gb_mes = Decimal(gb) / SINT_DIAS
+                linha(**{
+                    "lineItem/intervalUsageStart": inicio, "lineItem/intervalUsageEnd": fim,
+                    "product/service": "BLOCK_STORAGE" if tipo == "volume" else "OBJECT_STORAGE",
+                    "product/compartmentId": _OCI_COMPARTIMENTOS[0][0],
+                    "product/compartmentName": _OCI_COMPARTIMENTOS[0][1],
+                    "product/region": "sa-saopaulo-1", "product/resourceId": rid,
+                    "usage/billedQuantity": _fmt(gb_mes), "cost/productSku": sku,
+                    "product/Description": descricao, "cost/unitPrice": preco,
+                    "cost/myCost": _fmt(gb_mes * Decimal(preco)),
+                    "cost/billingUnitReadable": "GB Month",
+                })
+            gb_disco[chave] += Decimal(gb)
+
+    ecpus, preco_ecpu = _OCI_ADB
+    for n in range(SINT_DIAS):
+        inicio, fim = dia(n)
+        qtd = Decimal(ecpus * 24)
+        linha(**{
+            "lineItem/intervalUsageStart": inicio, "lineItem/intervalUsageEnd": fim,
+            "product/service": "DATABASE", "product/compartmentId": _OCI_COMPARTIMENTOS[0][0],
+            "product/compartmentName": _OCI_COMPARTIMENTOS[0][1], "product/region": "sa-saopaulo-1",
+            "product/resourceId": "ocid1.autonomousdatabase.oc1.sa-saopaulo-1.adbprod",
+            "usage/billedQuantity": _fmt(qtd), "cost/productSku": "B95702",
+            "product/Description": "Oracle Autonomous Transaction Processing - ECPU",
+            "cost/unitPrice": preco_ecpu, "cost/myCost": _fmt(qtd * Decimal(preco_ecpu)),
+            "cost/billingUnitReadable": "ECPU Hours",
+        })
+        gb = Decimal(_OCI_SAIDA_GB) / SINT_DIAS
+        linha(**{
+            "lineItem/intervalUsageStart": inicio, "lineItem/intervalUsageEnd": fim,
+            "product/service": "NETWORK", "product/compartmentId": _OCI_COMPARTIMENTOS[0][0],
+            "product/compartmentName": _OCI_COMPARTIMENTOS[0][1], "product/region": "sa-saopaulo-1",
+            "usage/billedQuantity": _fmt(gb), "cost/productSku": "B88327",
+            "product/Description": "Outbound Data Transfer Zone 1",
+            "cost/unitPrice": _OCI_SAIDA_PRECO, "cost/myCost": _fmt(gb * Decimal(_OCI_SAIDA_PRECO)),
+            "cost/billingUnitReadable": "GB",
+        })
+        lbs, preco_lb = _OCI_LB
+        for i in range(lbs):
+            linha(**{
+                "lineItem/intervalUsageStart": inicio, "lineItem/intervalUsageEnd": fim,
+                "product/service": "LOAD_BALANCER",
+                "product/compartmentId": _OCI_COMPARTIMENTOS[0][0],
+                "product/compartmentName": _OCI_COMPARTIMENTOS[0][1],
+                "product/region": "sa-saopaulo-1",
+                "product/resourceId": f"ocid1.loadbalancer.oc1.sa-saopaulo-1.lb{i}",
+                "usage/billedQuantity": "24", "cost/productSku": "B93030",
+                "product/Description": "Load Balancer - Flexible Base",
+                "cost/unitPrice": preco_lb, "cost/myCost": _fmt(24 * Decimal(preco_lb)),
+                "cost/billingUnitReadable": "Hours",
+            })
+
+    # Correção de preço: SUBSTITUI a linha original (metade do custo).
+    assert corrigir is not None
+    original = _d(corrigir["cost/myCost"])
+    corrigida = dict(corrigir)
+    corrigida.update({
+        "lineItem/referenceNo": _hash("correcao")[:24],
+        "lineItem/isCorrection": "true",
+        "lineItem/backReferenceNo": corrigir["lineItem/referenceNo"],
+        "cost/myCost": _fmt(original / 2),
+    })
+    linhas.append(corrigida)
+
+    total = sum((_d(x["cost/myCost"]) for x in linhas), _ZERO) - original
+    buffer = io.StringIO()
+    w = csv.DictWriter(buffer, fieldnames=_OCI_COLUNAS, lineterminator="\n")
+    w.writeheader()
+    w.writerows(linhas)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with destino.open("wb") as bruto, gzip.GzipFile(
+        fileobj=bruto, mode="wb", mtime=0, filename=""
+    ) as gz:
+        gz.write(buffer.getvalue().encode("utf-8"))
+    return ResumoSintetico(
+        total=total,
+        linhas=len(linhas),
+        vcpu_horas=vcpu_horas,
+        gb_disco=dict(gb_disco),
+        esperado={"corrigida_original": original, "corrigida_nova": original / 2},
+    )
+
+
 # ── entrada de linha de comando ─────────────────────────────────────────────
 
 
@@ -1853,6 +2275,14 @@ def main() -> None:
         f"GCP BigQuery: {gcp.linhas:,} linhas, {gcp.vms} VMs, {gcp.discos} discos, "
         f"bill real R$ {gcp.total_real:,.2f}"
     )
+    for nome, gerar, arquivo in (
+        ("Azure", gerar_azure, "mock_azure_cost_details_2026-03.csv"),
+        ("OCI", gerar_oci, "mock_oci_cost_report_2026-03.csv.gz"),
+    ):
+        r = gerar(args.destino / arquivo)
+        print(  # noqa: T201
+            f"{nome}: {r.linhas:,} linhas, US$ {r.total:,.2f}, {r.vcpu_horas:,.0f} vCPU-hora"
+        )
 
 
 if __name__ == "__main__":

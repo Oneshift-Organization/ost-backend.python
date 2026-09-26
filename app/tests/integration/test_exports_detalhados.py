@@ -251,3 +251,64 @@ async def test_cur_e_legado_concordam_na_capacidade(ctx_cur, aws_context) -> Non
         fp for fp in aws_context.family_pools if fp.pool_key.machine_family == "C7G"
     ).capacity.vcpus
     assert abs(cur - legado) < Decimal("0.5")
+
+
+# ── E9: Azure e OCI ─────────────────────────────────────────────────────────
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="session")
+async def azure(_db_ready, mocks_billing):
+    rid = await _ingest(mocks_billing.azure)
+    try:
+        yield await _enriquecidas(rid), await _context(rid), mocks_billing.resumo_azure
+    finally:
+        await _cleanup(rid)
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="session")
+async def oci(_db_ready, mocks_billing):
+    rid = await _ingest(mocks_billing.oci)
+    try:
+        yield await _enriquecidas(rid), await _context(rid), mocks_billing.resumo_oci
+    finally:
+        await _cleanup(rid)
+
+
+def _vcpu_horas(ctx) -> Decimal:
+    return sum((fp.capacity.vcpus * fp.hours_window for fp in ctx.family_pools), Decimal("0"))
+
+
+async def test_azure_pipeline(azure) -> None:
+    linhas, ctx, esperado = azure
+    total = sum((x.cost for x in linhas), Decimal("0"))
+    # O ajuste de arredondamento fica fora da base (RN3).
+    assert abs(total - (esperado.total - esperado.esperado["arredondamento"])) < Decimal("0.01")
+    assert _orfao(linhas) == 0
+    assert abs(_vcpu_horas(ctx) - esperado.vcpu_horas) < Decimal("0.01")
+    assert abs(ctx.auxiliary.commitment - esperado.esperado["ociosa"]) < Decimal("0.01")
+    assert {fp.pool_key.machine_family for fp in ctx.family_pools} == {
+        "DSV5",
+        "ESV5",
+        "BMS",
+        "FSV2",
+    }
+    armazenamento = ctx.inventario.armazenamento
+    # 1/31 de disco-mês por dia, somado em NUMERIC(18,6): diferença de milésimos.
+    for chave in ("storage_ssd", "storage_hdd"):
+        assert abs(armazenamento[chave].gb - esperado.gb_disco[chave]) < Decimal("0.01")
+    payload = _payload(ctx)
+    desconto = payload["premissas"]["desconto_origem_sobre_lista"]["fracao"]
+    assert 0 < desconto < 0.05  # só as 2 VMs reservadas têm desconto
+
+
+async def test_oci_pipeline(oci) -> None:
+    linhas, ctx, esperado = oci
+    total = sum((x.cost for x in linhas), Decimal("0"))
+    assert abs(total - esperado.total) < Decimal("0.01")
+    assert _orfao(linhas) == 0
+    # OCPU x86 conta 2 vCPU; Ampere A1, 1.
+    assert abs(_vcpu_horas(ctx) - esperado.vcpu_horas) < Decimal("0.01")
+    assert {fp.pool_key.machine_family for fp in ctx.family_pools} == {"E4", "E5", "A1"}
+    medido = ctx.inventario.armazenamento["storage_ssd"].gb
+    assert abs(medido - esperado.gb_disco["storage_ssd"]) < Decimal("0.01")
+    assert ctx.premissas["reconciliacao"]["conservacao_custo"]["bate"] is True

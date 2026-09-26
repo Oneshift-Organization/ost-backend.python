@@ -94,6 +94,10 @@ _MOTORES_POR_DESTINO: dict[str, frozenset[str]] = {
 # Tempo ligada abaixo disto sugere agendamento (dev, horário comercial).
 _TEMPO_ATIVO_BAIXO = 0.6
 
+# Custo que sobra num balde de disco depois de tirar o snapshot e que ainda
+# justificaria um volume. Abaixo disto é arredondamento.
+_CUSTO_RESIDUAL = Decimal("1")
+
 # Quantos itens listar num aviso antes de resumir com reticências.
 _MAX_LISTADOS = 5
 
@@ -374,10 +378,13 @@ def _derivar_armazenamento(
         if custo is None or custo <= 0:
             continue
 
-        # Com inventário medido, categoria sem GB medido não tem disco por trás
-        # (ex.: HDD que é só snapshot): estimar pelo custo inventaria um volume.
-        if medido and chave not in medido:
-            continue
+        # Snapshot medido nesta categoria sai do custo antes de estimar: ele é
+        # backup, não disco. Se sobrar ~nada, a categoria não tem volume por trás.
+        snapshot = _decimal(((medido.get("snapshots") or {}).get("custo") or {}).get(chave))
+        if snapshot is not None:
+            custo = custo - snapshot
+            if custo <= _CUSTO_RESIDUAL:
+                continue
         tamanho = _tamanho_armazenamento(medido.get(chave) or {}, custo, taxas_origem, categoria)
         if tamanho is None:
             continue

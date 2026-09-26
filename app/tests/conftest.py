@@ -32,6 +32,11 @@ class MocksBilling:
     cur: Path
     bigquery: Path
     bigquery_csv: Path
+    azure: Path
+    oci: Path
+    # Totais esperados dos mocks sintéticos (Azure/OCI), devolvidos pelo gerador.
+    resumo_azure: object = None
+    resumo_oci: object = None
 
 
 def gerar_mocks(destino: Path) -> MocksBilling:
@@ -41,16 +46,24 @@ def gerar_mocks(destino: Path) -> MocksBilling:
     o gerador é determinístico — gerar é tão reproduzível quanto guardar.
     """
     gerador = carregar_gerador_de_mocks()
-    mocks = MocksBilling(
-        cur=destino / "mock_aws_cur2_2026-03.csv.gz",
-        bigquery=destino / "mock_gcp_bigquery_2025-12.json.gz",
-        bigquery_csv=destino / "mock_gcp_bigquery_achatado_2025-12.csv",
-    )
-    gerador.gerar_cur_aws(FIXTURES_INTEGRACAO / "aws_cost_explorer_full.csv", mocks.cur)
+    cur = destino / "mock_aws_cur2_2026-03.csv.gz"
+    bigquery = destino / "mock_gcp_bigquery_2025-12.json.gz"
+    bigquery_csv = destino / "mock_gcp_bigquery_achatado_2025-12.csv"
+    azure = destino / "mock_azure_cost_details_2026-03.csv"
+    oci = destino / "mock_oci_cost_report_2026-03.csv.gz"
+    gerador.gerar_cur_aws(FIXTURES_INTEGRACAO / "aws_cost_explorer_full.csv", cur)
     gerador.gerar_bigquery_gcp(
-        FIXTURES_INTEGRACAO / "gcp_cost_table_full.csv", mocks.bigquery, mocks.bigquery_csv
+        FIXTURES_INTEGRACAO / "gcp_cost_table_full.csv", bigquery, bigquery_csv
     )
-    return mocks
+    return MocksBilling(
+        cur=cur,
+        bigquery=bigquery,
+        bigquery_csv=bigquery_csv,
+        azure=azure,
+        oci=oci,
+        resumo_azure=gerador.gerar_azure(azure),
+        resumo_oci=gerador.gerar_oci(oci),
+    )
 
 
 @pytest.fixture(scope="session")

@@ -181,9 +181,67 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*request*", "glob", "unclassified", None, "low", 50),
 ]
 
+# (pattern, kind, component_type, family, confidence, priority) — Azure.
+# Descritor: "MeterCategory | MeterSubCategory | MeterName" (ver azure_parser).
+# A família da VM vem do tamanho (`instance_family` nos atributos), não daqui.
+AZURE_RULES: list[tuple[str, str, str, str | None, str, int]] = [
+    ("azure kubernetes service*", "glob", "gke_control_plane", None, "high", 8),
+    ("azure database for*", "glob", "database", None, "high", 10),
+    ("sql database*", "glob", "database", None, "high", 11),
+    ("sql managed instance*", "glob", "database", None, "high", 12),
+    ("azure cosmos db*", "glob", "database", None, "medium", 13),
+    ("redis cache*", "glob", "database", None, "medium", 14),
+    ("virtual machines licenses*", "glob", "os_license", None, "high", 18),
+    ("virtual machines*", "glob", "core", None, "high", 20),
+    ("storage | *snapshot*", "glob", "storage_hdd", None, "medium", 29),
+    ("storage | premium ssd*", "glob", "storage_ssd", None, "high", 30),
+    ("storage | standard ssd*", "glob", "storage_ssd", None, "high", 31),
+    ("storage | *managed disks*", "glob", "storage_hdd", None, "medium", 32),
+    ("storage | *blob*", "glob", "object_storage", None, "high", 33),
+    ("storage | *data lake*", "glob", "object_storage", None, "medium", 34),
+    ("storage | *files*", "glob", "storage_hdd", None, "medium", 35),
+    ("storage*", "glob", "storage_hdd", None, "low", 39),
+    ("bandwidth*", "glob", "network_egress", None, "high", 40),
+    ("virtual network*", "glob", "network_egress", None, "high", 41),
+    ("load balancer*", "glob", "network_egress", None, "high", 42),
+    ("vpn gateway*", "glob", "network_egress", None, "high", 43),
+    ("nat gateway*", "glob", "network_egress", None, "high", 44),
+    ("ip addresses*", "glob", "network_egress", None, "high", 45),
+    ("application gateway*", "glob", "network_egress", None, "high", 46),
+    ("azure front door*", "glob", "network_egress", None, "medium", 47),
+    ("azure dns*", "glob", "network_egress", None, "medium", 48),
+    ("content delivery network*", "glob", "network_egress", None, "medium", 49),
+]
+
+# (pattern, kind, component_type, family, confidence, priority) — OCI.
+# Descritor: `product/description` ("Compute - Standard - E4 - OCPU").
+OCI_RULES: list[tuple[str, str, str, str | None, str, int]] = [
+    ("container engine*", "glob", "gke_control_plane", None, "high", 8),
+    ("database*", "glob", "database", None, "high", 10),
+    ("*autonomous*", "glob", "database", None, "high", 11),
+    ("mysql*", "glob", "database", None, "high", 12),
+    ("*heatwave*", "glob", "database", None, "medium", 13),
+    ("compute*ocpu*", "glob", "core", None, "high", 20),
+    ("compute*ecpu*", "glob", "core", None, "high", 21),
+    ("compute*memory*", "glob", "ram", None, "high", 22),
+    ("*backup*", "glob", "storage_hdd", None, "medium", 29),
+    ("block volume*", "glob", "storage_ssd", None, "high", 30),
+    ("object storage*", "glob", "object_storage", None, "high", 31),
+    ("archive storage*", "glob", "object_storage", None, "high", 32),
+    ("file storage*", "glob", "storage_hdd", None, "medium", 33),
+    ("*outbound data transfer*", "glob", "network_egress", None, "high", 40),
+    ("*data transfer*", "glob", "network_egress", None, "medium", 41),
+    ("load balancer*", "glob", "network_egress", None, "high", 42),
+    ("networking*", "glob", "network_egress", None, "medium", 43),
+    ("fastconnect*", "glob", "network_egress", None, "medium", 44),
+    ("*vpn*", "glob", "network_egress", None, "medium", 45),
+]
+
 _SEEDS: dict[str, list[tuple[str, str, str, str | None, str, int]]] = {
     "GCP": GCP_RULES,
     "AWS": AWS_RULES,
+    "AZURE": AZURE_RULES,
+    "OCI": OCI_RULES,
 }
 
 

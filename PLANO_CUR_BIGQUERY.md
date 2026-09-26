@@ -24,7 +24,7 @@ continuam produzindo exatamente o mesmo payload; o teste de caracterização
 > | E6 — agregador + fatos medidos | ✅ |
 > | E7 — payload e premissas | ✅ |
 > | E8 — Terraform usando fatos medidos | ✅ |
-> | E9 — Azure e OCI | ⬜ |
+> | E9 — Azure e OCI | ✅ |
 > | E10 — E2E + auditoria de coerência | ⬜ |
 
 > **Antes de ligar em dev/produção:** `alembic upgrade head` (colunas novas),
@@ -529,6 +529,8 @@ corrigidos lá (os gates de integração seguem verdes).
 | 26 | Snapshot EBS medido virava 9 "discos" no Terraform | backup provisionado como volume | `storage_kind = snapshot` no parser; medido à parte; declarado fora do pacote |
 | 27 | Banco "principal" único para uma frota de 165 instâncias | o pacote gerava 1 db.t4g.small e escondia um Aurora de 64 vCPU nos avisos | um recurso por grupo medido (classe, motor), com `count`, 8 grupos mais caros; variável de versão por motor; motor medido literal na AWS |
 | 28 | Destino que não suporta o motor (Azure só gera PostgreSQL) descartava o recurso em silêncio | banco sumia do pacote sem menção | recusa no derivador, declarada em "O que ficou de fora"; OCI avisa troca de motor (Autonomous = Oracle) |
+| 29 | Disco gerenciado Azure é cobrado por disco-mês do TIER (P30), não por GB | sem GB medido, a regra da linha 26 fazia os discos Azure sumirem do pacote | parser converte tier → GB-mês (tabela publicada); derivador desconta só o custo de SNAPSHOT medido da categoria, em vez de pular a categoria |
+| 30 | Sob demanda da Azure multiplicava o preço de lista (por disco-mês) pela quantidade já em GB | "sob demanda" de US$ 1,7 milhão num bill de US$ 6,7 mil | sob demanda calculado na unidade do medidor, antes da conversão |
 | 25 | Parser da fatura AWS legada dava unidade `hours` só a `BoxUsage` sem prefixo | Spot, Dedicated e `SAE1-BoxUsage` sem capacidade: no bill REAL, ~150 vCPU a menos (C7G −18%, M7G −15%) e US$ 1,7 mil de Spot contados como compromisso | padrão de instância-hora com prefixo; achado comparando CUR × legado — os dois parsers agora dão a mesma capacidade para o C7G |
 
 **Reanálise depois das mudanças de regra:** RN1 (free tier fora dos créditos

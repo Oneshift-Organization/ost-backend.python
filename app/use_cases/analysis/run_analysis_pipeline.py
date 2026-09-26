@@ -146,13 +146,16 @@ def _inventario_do_pool(fp, ctx) -> dict[str, object]:
 def _serialize_inventario(inv, fx: FxRate) -> dict[str, object]:
     """Armazenamento e bancos medidos (export detalhado)."""
     saida: dict[str, object] = {"horas_periodo": float(inv.horas_periodo)}
-    armazenamento = {
-        _NOMES_ARMAZENAMENTO.get(categoria, categoria): {
-            "gb": round(float(medido.gb)),
-            "recursos": medido.quantidade,
-        }
-        for categoria, medido in sorted(inv.armazenamento.items())
-    }
+    armazenamento: dict[str, dict[str, object]] = {}
+    for categoria, medido in sorted(inv.armazenamento.items()):
+        entrada: dict[str, object] = {"gb": round(float(medido.gb)), "recursos": medido.quantidade}
+        if categoria == "snapshots" and medido.custo_por_categoria:
+            # De qual balde de disco o custo do snapshot saiu (ver derivador).
+            entrada["custo"] = {
+                _NOMES_ARMAZENAMENTO.get(c, c): _money(v, fx)
+                for c, v in sorted(medido.custo_por_categoria.items())
+            }
+        armazenamento[_NOMES_ARMAZENAMENTO.get(categoria, categoria)] = entrada
     if armazenamento:
         saida["armazenamento"] = armazenamento
     if inv.bancos:

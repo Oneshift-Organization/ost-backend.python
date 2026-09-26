@@ -265,5 +265,7 @@ def test_gerador_e_deterministico(tmp_path, mocks_billing) -> None:
         (mocks_billing.cur, de_novo.cur),
         (mocks_billing.bigquery, de_novo.bigquery),
         (mocks_billing.bigquery_csv, de_novo.bigquery_csv),
+        (mocks_billing.azure, de_novo.azure),
+        (mocks_billing.oci, de_novo.oci),
     ):
         assert hashlib.sha256(a.read_bytes()).digest() == hashlib.sha256(b.read_bytes()).digest()

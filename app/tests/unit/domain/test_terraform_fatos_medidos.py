@@ -53,7 +53,7 @@ def _payload() -> dict:
             "armazenamento": {
                 "armazenamento_ssd": {"gb": 48626, "recursos": 99},
                 "armazenamento_objetos": {"gb": 307564, "recursos": 24},
-                "snapshots": {"gb": 7406, "recursos": 9},
+                "snapshots": {"gb": 7406, "recursos": 9, "custo": {"armazenamento_hdd": 376.0}},
             },
             "bancos": [
                 {"classe": "db.t4g.small", "motor": "PostgreSQL", "multi_az": True,
@@ -103,6 +103,16 @@ def test_snapshot_nao_vira_disco() -> None:
     # estimar pelo custo inventaria um disco.
     assert not _recurso(plano, "disco_storage_hdd")
     assert any("Snapshots (7,406 GB em 9 recursos" in x for x in plano.nao_suportado)
+
+
+def test_balde_misto_estima_so_o_que_nao_e_snapshot() -> None:
+    payload = _payload()
+    payload["custos_auxiliares"]["armazenamento_hdd"] = 826.0  # 376 de snapshot + 450
+    plano = _derivar(payload)
+    [disco] = _recurso(plano, "disco_storage_hdd")
+    assert disco.configuration["size_source"] == "estimado"
+    premissa = next(p for p in plano.premissas if p.campo == "disco_storage_hdd.size_gb")
+    assert "450" in premissa.base  # só o residual, sem o snapshot
 
 
 def test_bucket_com_volume_medido() -> None:

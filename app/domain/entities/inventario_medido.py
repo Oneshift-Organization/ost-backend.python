@@ -79,6 +79,8 @@ class ArmazenamentoMedido:
 
     gb: Decimal = _ZERO
     recursos: frozenset[str] = frozenset()
+    # Custo das linhas medidas, por componente de origem (storage_hdd…).
+    custo_por_categoria: dict[str, Decimal] = field(default_factory=dict)
 
     @property
     def quantidade(self) -> int:
