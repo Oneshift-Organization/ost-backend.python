@@ -1863,6 +1863,10 @@ _AZ_COLUNAS = [
 ]
 
 
+def _ambiente(nome_assinatura: str) -> str:
+    return "prod" if nome_assinatura == "producao" else "staging"
+
+
 @dataclass
 class ResumoSintetico:
     total: Decimal
@@ -1872,7 +1876,7 @@ class ResumoSintetico:
     esperado: dict[str, object] = field(default_factory=dict)
 
 
-def gerar_azure(destino: Path) -> ResumoSintetico:
+def gerar_azure(destino: Path) -> ResumoSintetico:  # noqa: PLR0912, PLR0915 - seções do mock
     """Cost details EA, dataset AMORTIZADO: a reserva já distribuída no uso."""
     linhas: list[dict[str, str]] = []
     total = _ZERO
@@ -1908,7 +1912,8 @@ def gerar_azure(destino: Path) -> ResumoSintetico:
         for i in range(qtd):
             sub, nome_sub = _escolha(list(_AZ_ASSINATURAS), tamanho, i)
             app = _escolha(APPS, tamanho, i)
-            rid = recurso("Microsoft.Compute/virtualMachines", f"vm-{app}-{tamanho[9:].lower()}-{i}",
+            nome_vm = f"vm-{app}-{tamanho[9:].lower()}-{i}"
+            rid = recurso("Microsoft.Compute/virtualMachines", nome_vm,
                           f"rg-{app}", sub)
             coberta = i < cobertas
             for dia in range(SINT_DIAS):
@@ -1932,7 +1937,8 @@ def gerar_azure(destino: Path) -> ResumoSintetico:
                     UnitPrice="0" if coberta else preco,
                     ResourceLocation=regiao, ConsumedService="Microsoft.Compute",
                     ResourceId=rid,
-                    Tags=f'"env": "{"prod" if nome_sub == "producao" else "staging"}","app": "{app}"',
+                    # Formato do export: SEM as chaves externas.
+                    Tags=f'"env": "{_ambiente(nome_sub)}","app": "{app}"',
                     AdditionalInfo=json.dumps({"UsageType": "ComputeHR", "ImageType": "Canonical",
                                                "ServiceType": tamanho, "VCPUs": vcpu}),
                     ResourceGroup=f"rg-{app}", UnitOfMeasure="1 Hour",
@@ -2066,6 +2072,8 @@ _OCI_ADB = (4, "0.336")  # ECPUs, US$/ECPU-h
 _OCI_SAIDA_GB, _OCI_SAIDA_PRECO = 12000, "0.0085"
 _OCI_LB = (2, "0.0113")
 _OCI_TENANCY = "ocid1.tenancy.oc1..aaaaaaaaoneshiftdemo"
+# Dia (0-based) da linha de OCPU que recebe a correção de preço.
+_OCI_DIA_CORRIGIDO = 14
 _OCI_COMPARTIMENTOS = (
     ("ocid1.compartment.oc1..aaaaaaaaprod", "producao"),
     ("ocid1.compartment.oc1..aaaaaaaadev", "desenvolvimento"),
@@ -2083,7 +2091,7 @@ _OCI_COLUNAS = [
 ]
 
 
-def gerar_oci(destino: Path) -> ResumoSintetico:
+def gerar_oci(destino: Path) -> ResumoSintetico:  # noqa: PLR0915 - seções do mock
     """Cost report: uma linha por recurso, SKU e dia; uma correção de preço."""
     linhas: list[dict[str, str]] = []
     vcpu_horas = _ZERO
@@ -2092,7 +2100,9 @@ def gerar_oci(destino: Path) -> ResumoSintetico:
         base = dict.fromkeys(_OCI_COLUNAS, "")
         base.update(
             {
-                "lineItem/referenceNo": _hash("oci", len(linhas), campos.get("product/resourceId"))[:24],
+                "lineItem/referenceNo": _hash(
+                    "oci", len(linhas), campos.get("product/resourceId")
+                )[:24],
                 "lineItem/tenantId": _OCI_TENANCY,
                 "cost/subscriptionId": "12345",
                 "cost/currencyCode": "USD",
@@ -2137,7 +2147,7 @@ def gerar_oci(destino: Path) -> ResumoSintetico:
                         "cost/skuUnitDescription": "OCPU Per Hour",
                     }
                 )
-                if fam == "E4" and i == 0 and n == 14:
+                if fam == "E4" and i == 0 and n == _OCI_DIA_CORRIGIDO:
                     corrigir = gerada
                 vcpu_horas += ocpu_h * vpo
                 mem_h = Decimal(mem * horas_dia)
