@@ -48,6 +48,17 @@ class BillingItemModel(Base):
     is_estimate: Mapped[bool] = mapped_column(default=False, nullable=False)
     line_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
+    # Exports detalhados (migração f6a7b8c9d0e1). Nulos no caminho legado.
+    usage_type: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    resource_type: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    charge_kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cost_billed: Mapped[Decimal | None] = mapped_column(NUMERIC_18_6, nullable=True)
+    # `none_as_null`: sem ele o SQLAlchemy grava None como o JSON `null`, e a
+    # linha legada ficaria indistinguível de "atributos vazios" numa query.
+    attributes: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

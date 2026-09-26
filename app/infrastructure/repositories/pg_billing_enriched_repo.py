@@ -96,6 +96,8 @@ class PgBillingEnrichedRepository:
             pricing_confidence=model.pricing_confidence,
             scope=model.scope,
             source_line_hash=model.source_line_hash,
+            resource_id=model.resource_id,
+            attributes=model.attributes,
             created_at=model.created_at,
         )
 
@@ -126,4 +128,6 @@ class PgBillingEnrichedRepository:
             "pricing_confidence": item.pricing_confidence,
             "scope": item.scope,
             "source_line_hash": item.source_line_hash,
+            "resource_id": item.resource_id,
+            "attributes": item.attributes or None,
         }

@@ -90,6 +90,13 @@ CREATE TABLE billing_items (
     is_estimate      BOOLEAN         NOT NULL DEFAULT FALSE,
     line_hash        VARCHAR(64)     NOT NULL,
 
+    -- Exports detalhados (migração f6a7b8c9d0e1). NULL no caminho legado.
+    usage_type       VARCHAR(500),   -- descritor por SKU (o que a escada casa)
+    resource_type    VARCHAR(200),   -- tipo medido: m7g.2xlarge, n2-standard-8, Standard_D4s_v5
+    charge_kind      VARCHAR(20),    -- natureza: usage|commitment|tax|credit|refund|adjustment|other
+    cost_billed      NUMERIC(18, 6), -- valor da fatura (unblended); `cost` é o amortizado
+    attributes       JSONB,          -- SÓ fato medido pelo provedor (vcpus, memory_gib, project_id…)
+
     created_at       TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
@@ -142,6 +149,10 @@ CREATE TABLE billing_enriched (
 
     scope               VARCHAR(20)     NOT NULL DEFAULT 'line_item',
     source_line_hash    VARCHAR(64)     NOT NULL,
+
+    -- Exports detalhados (migração f6a7b8c9d0e1). NULL no caminho legado.
+    resource_id         VARCHAR(500),   -- sem ele, ninguém a jusante conta instâncias
+    attributes          JSONB,          -- fatos medidos herdados do billing_items
 
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
@@ -404,6 +415,18 @@ como `TypedDict` (e em `NORMALIZED_COLUMNS` como tuple para ordem de DataFrame).
 | `raw_payload` | `dict` | sim | Linha original preservada — replay e auditoria. Hoje só em memória; persistência adiada. |
 | `source_file` | `str` | sim | Nome do arquivo que originou a linha. |
 | `line_hash` | `str` | sim | SHA-256 de `raw_payload` ordenado. Chave de dedup. |
+
+### Exports detalhados (CUR, BigQuery, Azure, OCI)
+
+Opcionais. Parser legado não os emite e segue exatamente como antes. Ver
+[`PLANO_CUR_BIGQUERY.md`](../PLANO_CUR_BIGQUERY.md) (RN1–RN6).
+
+| Coluna | Tipo Python | Notas |
+|---|---|---|
+| `usage_type` | `str \| None` | Descritor por SKU: `BoxUsage:m7g.2xlarge`, `N2 Instance Core running in Americas`. É o que a escada de SKU casa. Antes o enriquecimento procurava isso no `raw_payload` pelo nome da coluna de cada formato. |
+| `charge_kind` | `str \| None` | Natureza da linha ([`charge_kind.py`](../app/domain/value_objects/charge_kind.py)). `tax`, `credit`, `refund`, `adjustment` ficam fora da base; `commitment` nunca vira capacidade. Vocabulário fechado, validado pelo Pandera. |
+| `cost_billed` | `Decimal \| None` | Valor como aparece na fatura. Nos exports detalhados, `cost` é o **amortizado** (RN1). |
+| `attributes` | `dict` | **Só fato medido** pelo provedor: `vcpus`, `memory_gib`, `instance_type`, `project_id`, `first_usage`… Estimativa nunca entra aqui, porque chegaria a jusante como fato. |
 
 ## Convenções de `raw_payload`
 

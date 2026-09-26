@@ -53,6 +53,14 @@ class BillingEnrichedModel(Base):
 
     source_line_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
+    # Exports detalhados (migração f6a7b8c9d0e1). Nulos no caminho legado.
+    resource_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # `none_as_null`: sem ele o SQLAlchemy grava None como o JSON `null`, e a
+    # linha legada ficaria indistinguível de "atributos vazios" numa query.
+    attributes: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

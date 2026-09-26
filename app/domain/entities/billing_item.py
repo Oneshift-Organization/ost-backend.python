@@ -37,6 +37,12 @@ class BillingItem:
     is_correction: bool = False
     is_estimate: bool = False
     line_hash: str = ""
+    # Exports detalhados — ver `value_objects/billing_record.py`.
+    usage_type: str | None = None
+    resource_type: str | None = None
+    charge_kind: str | None = None
+    cost_billed: Decimal | None = None
+    attributes: dict[str, Any] = field(default_factory=dict)
     id: UUID = field(default_factory=uuid4)
 
     def __post_init__(self) -> None:
