@@ -992,3 +992,34 @@ vem depois.
 - **Impacto para frente:** a I5 precisa persistir as regras separadas dos
   atributos (no modelo são `Inventario.regras`, não atributo do grupo); a I3
   precisa gerar os quatro formatos exatamente como estes testes os descrevem.
+
+### I3 — mocks de inventário
+
+- **Entregue:** `scripts/gerar_mocks_inventario.py`, que lê os **arquivos** de
+  billing gerados e monta o inventário das mesmas contas: 5 snapshots do
+  Config (3 contas, 3 regiões; a conta `333333333333` fica de fora de
+  propósito), o export do Asset Inventory em NDJSON com as chaves do proto, 2
+  páginas do Resource Graph com ids em caixa mista e o canônico da OCI.
+  Fixture de sessão `mocks_inventario` e 14 testes de invariante.
+- **Invariantes que passam:** os quatro normalizam sem nenhuma referência
+  pendente, relação inválida ou grupo externo; todo ID de billing incluído
+  aparece nos apelidos (o GCP pelo ID numérico); nenhum ID da conta excluída
+  aparece; os IDs incluídos são exatamente os do arquivo CUR bruto; dois
+  geradores rodando dão os mesmos bytes (o gzip leva `mtime=0`).
+- **Por que ler o arquivo e não o gerador:** o gerador de billing continua
+  intocado (o teste de determinismo dele segue verde), e a coerência é medida
+  contra o que foi gravado, não contra uma estrutura interna que poderia
+  divergir do arquivo.
+- **Achados do próprio mock, que valem para o dado real:**
+  - O billing mock do GCP tem 55 discos para 26 VMs; no inventário sobram 38
+    discos sem anexo. Com dado real isso seria desperdício de verdade (RI12);
+    aqui é efeito de como o mock reparte o armazenamento.
+  - O mock do CUR usa o mesmo ID de "bucket" em linhas de S3, ECR, EFS e
+    CloudWatch. No inventário cada serviço vira o seu recurso, com o mesmo
+    apelido. A correlação (I6) precisa aceitar um ID de billing casando com
+    mais de um recurso, de forma determinística.
+  - O Resource Graph não diz quando foi capturado: `capturado_em` fica nulo.
+    A persistência (I5) usa a data do envio como estimativa, marcada assim.
+- **Impacto para trás:** nenhum. **Para frente:** a I4 tem o cenário completo
+  para testar cada regra da RI5 a RI12 com dado que também passa pelo
+  normalizador.

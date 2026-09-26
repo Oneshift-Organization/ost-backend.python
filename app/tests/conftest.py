@@ -72,6 +72,46 @@ def mocks_billing(tmp_path_factory) -> MocksBilling:
     return gerar_mocks(tmp_path_factory.mktemp("mocks_billing"))
 
 
+def carregar_gerador_de_inventario() -> ModuleType:
+    """`scripts/gerar_mocks_inventario.py` como módulo."""
+    nome = "gerar_mocks_inventario"
+    if nome in sys.modules:
+        return sys.modules[nome]
+    spec = importlib.util.spec_from_file_location(nome, _RAIZ / "scripts/gerar_mocks_inventario.py")
+    assert spec is not None and spec.loader is not None
+    modulo = importlib.util.module_from_spec(spec)
+    sys.modules[nome] = modulo
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+@dataclass(frozen=True)
+class MocksInventario:
+    """Inventário das mesmas contas dos mocks de billing, com os mesmos IDs."""
+
+    aws: list[Path]
+    gcp: list[Path]
+    azure: list[Path]
+    oci: list[Path]
+    resumos: dict
+
+
+def gerar_mocks_inventario(billing: MocksBilling, destino: Path) -> MocksInventario:
+    resumos = carregar_gerador_de_inventario().gerar_todos(billing.cur.parent, destino)
+    return MocksInventario(
+        aws=resumos["aws"].arquivos,
+        gcp=resumos["gcp"].arquivos,
+        azure=resumos["azure"].arquivos,
+        oci=resumos["oci"].arquivos,
+        resumos=resumos,
+    )
+
+
+@pytest.fixture(scope="session")
+def mocks_inventario(mocks_billing, tmp_path_factory) -> MocksInventario:
+    return gerar_mocks_inventario(mocks_billing, tmp_path_factory.mktemp("mocks_inventario"))
+
+
 def _csv_to_xlsx(csv_path: Path, target: Path) -> Path:
     """Round-trip a CSV fixture as XLSX so we can validate xlsx ingestion
     without committing binary fixtures to the repo."""
