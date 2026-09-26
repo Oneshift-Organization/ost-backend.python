@@ -1133,3 +1133,38 @@ vem depois.
 - **Para frente:** a I6 precisa do custo por recurso do billing (método novo no
   repositório de `billing_enriched`); a I7 carrega o conteúdo pelo mesmo
   repositório.
+
+### I6 — correlação com o billing
+
+- **Entregue:** `domain/services/correlacao_inventario.py` (casamento por
+  apelido, sub-recurso da Azure pelo pai, ambíguo resolvido pelo papel do
+  recurso, lacunas por conta/região e por serviço, sem cobrança por tipo,
+  custo dos ociosos, alinhamento no tempo), leitor de custo por recurso no
+  repositório de `billing_items`, caso de uso e `GET
+  /v1/inventories/{id}/correlation?report_id=`.
+- **Por que `billing_items` e não `billing_enriched`:** o enriquecido não tem a
+  conta, e "a conta X não foi exportada" é a lacuna mais útil. A base é a
+  mesma da análise: sem imposto, crédito, reembolso nem ajuste.
+- **Números lidos pela API, com os mocks ingeridos de verdade:**
+
+  | | base | com recurso | encontrado | fração | maior lacuna |
+  |---|---|---|---|---|---|
+  | AWS | US$ 92.103,48 | US$ 70.891,99 | US$ 58.215,42 | 82,1% | conta `333333333333` (136 recursos, US$ 12.265) |
+  | GCP | R$ 27.874,13 | R$ 9.729,90 | R$ 9.729,90 | 100% | — |
+  | Azure | US$ 6.710,82 | US$ 6.326,38 | US$ 6.326,38 | 100% | — |
+  | OCI | US$ 3.127,80 | US$ 3.025,80 | US$ 3.025,80 | 100% | — |
+
+  A base da AWS e a do GCP são os totais conhecidos dos mocks. Fora a conta
+  excluída, as lacunas da AWS são snapshots de EBS (o Config não os registra).
+  Os 3 ambíguos são os ids de "bucket" que o mock repete em S3 e ECR. As 14
+  instâncias sem cobrança são as que só existem no inventário (bastions,
+  monitoramentos, paradas). O custo dos ociosos aparece: máquina parada leva o
+  custo dos discos dela.
+- **Achado ao ler o resultado:** na Azure disparava `inventario_desalinhado`
+  com 178 dias, mas a data de captura é a do envio (o Resource Graph não diz
+  quando foi capturado). O alinhamento agora carrega `estimado`, e o risco diz
+  que a data é estimada e o desalinhamento pode não existir.
+- **Impacto para trás:** um método novo em `PgBillingItemRepository`; os
+  existentes não mudaram (o formatador tinha reescrito uma linha antiga, e ela
+  foi restaurada). **Para frente:** a I7 usa a mesma correlação para congelar
+  cobertura e custo no payload.

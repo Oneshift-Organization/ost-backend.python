@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
@@ -5,6 +6,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.billing_item import BillingItem
+from app.domain.services.correlacao_inventario import CustoDeRecurso, CustosDoBilling
+from app.domain.value_objects.charge_kind import FORA_DA_BASE
 from app.domain.value_objects.cloud_provider import CloudProvider
 from app.infrastructure.database.models.billing_items import BillingItemModel
 
@@ -136,3 +139,59 @@ class PgBillingItemRepository:
             # não veio de export detalhado, em vez de fingir "sem atributos".
             "attributes": item.attributes or None,
         }
+
+    async def custos_por_recurso(self, report_id: UUID, user_id: UUID) -> CustosDoBilling:
+        """Custo de base por recurso, para a correlação com o inventário (RI13).
+
+        Base = o que a análise usa: sem imposto, crédito, reembolso nem ajuste.
+        Linha sem natureza (caminho legado) entra, como na análise.
+        """
+        fora = [k.value for k in FORA_DA_BASE]
+        base = (
+            BillingItemModel.report_id == report_id,
+            BillingItemModel.user_id == user_id,
+            (BillingItemModel.charge_kind.is_(None)) | (BillingItemModel.charge_kind.not_in(fora)),
+        )
+        total_moeda = (
+            await self._session.execute(
+                select(
+                    func.coalesce(func.sum(BillingItemModel.cost), 0),
+                    func.min(BillingItemModel.currency),
+                    func.min(BillingItemModel.billing_period),
+                ).where(*base)
+            )
+        ).one()
+        linhas = await self._session.execute(
+            select(
+                BillingItemModel.resource_id,
+                BillingItemModel.account_id,
+                BillingItemModel.region,
+                BillingItemModel.service,
+                func.sum(BillingItemModel.cost),
+            )
+            .where(
+                *base, BillingItemModel.resource_id.is_not(None), BillingItemModel.resource_id != ""
+            )
+            .group_by(
+                BillingItemModel.resource_id,
+                BillingItemModel.account_id,
+                BillingItemModel.region,
+                BillingItemModel.service,
+            )
+            .order_by(BillingItemModel.resource_id)
+        )
+        return CustosDoBilling(
+            periodo=total_moeda[2],
+            moeda=total_moeda[1] or "USD",
+            custo_da_base=Decimal(str(total_moeda[0])),
+            por_recurso=tuple(
+                CustoDeRecurso(
+                    resource_id=rid,
+                    conta=conta,
+                    regiao=regiao,
+                    servico=servico,
+                    custo=Decimal(str(custo)),
+                )
+                for rid, conta, regiao, servico, custo in linhas.tuples()
+            ),
+        )

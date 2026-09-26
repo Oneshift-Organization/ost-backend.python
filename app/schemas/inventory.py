@@ -141,3 +141,24 @@ class TopologyResponse(_Aberto):
     riscos: list[dict[str, Any]]
     ociosos: list[dict[str, Any]]
     limites: dict[str, Any]
+
+
+class CorrelationResponse(_Aberto):
+    """RI13. Dinheiro na moeda do billing, sem conversão."""
+
+    inventory_id: UUID
+    report_id: UUID
+    moeda: str
+    custo_da_base: float
+    custo_com_recurso: float
+    custo_encontrado: float
+    fracao_encontrada: float | None
+    recursos_do_billing: int
+    recursos_encontrados: int
+    ambiguos: int
+    lacunas_por_escopo: list[dict[str, Any]]
+    lacunas_por_servico: list[dict[str, Any]]
+    sem_cobranca: dict[str, int]
+    ociosos: list[dict[str, Any]]
+    alinhamento: dict[str, Any]
+    riscos: list[dict[str, Any]]

@@ -42,8 +42,11 @@ from app.infrastructure.inventory_ingestion.processar import (
     ResultadoDaNormalizacao,
     normalizar_arquivos,
 )
+from app.infrastructure.repositories.pg_billing_item_repo import PgBillingItemRepository
+from app.infrastructure.repositories.pg_billing_report_repo import PgBillingReportRepository
 from app.infrastructure.repositories.pg_inventory_repo import PgInventoryRepository
 from app.schemas.inventory import (
+    CorrelationResponse,
     DeclaracoesIn,
     InventoryDetail,
     InventorySummary,
@@ -65,6 +68,13 @@ from app.use_cases.inventory.consultas import (
     InventarioNaoProcessadoError,
     ListarRecursosUseCase,
     obter_do_usuario,
+)
+from app.use_cases.inventory.correlacao import (
+    BillingNaoEncontradoError,
+    BillingNaoProntoError,
+    CorrelacionarInventarioUseCase,
+    ProvedorDiferenteError,
+    serializar_correlacao,
 )
 from app.use_cases.inventory.serializacao import serializar_topologia
 
@@ -106,6 +116,12 @@ def _usuario(user: CurrentUser) -> UUID:
 
 
 def _traduzir(exc: Exception) -> HTTPException:
+    if isinstance(exc, BillingNaoEncontradoError):
+        return _erro(status.HTTP_404_NOT_FOUND, "REPORT_NAO_ENCONTRADO", str(exc))
+    if isinstance(exc, BillingNaoProntoError):
+        return _erro(status.HTTP_409_CONFLICT, "REPORT_NAO_PRONTO", str(exc), retryable=True)
+    if isinstance(exc, ProvedorDiferenteError):
+        return _erro(status.HTTP_422_UNPROCESSABLE_ENTITY, "INVENTARIO_DE_OUTRA_NUVEM", str(exc))
     if isinstance(exc, NotFoundError):
         return _erro(status.HTTP_404_NOT_FOUND, "INVENTARIO_NAO_ENCONTRADO", str(exc))
     if isinstance(exc, InventarioNaoProcessadoError):
@@ -363,6 +379,37 @@ async def obter_topologia(
         provider=calculada.inventario.provedor,
         captured_at=calculada.inventario.capturado_em,
         **serializar_topologia(calculada.analise),
+    )
+
+
+@router.get(
+    "/{inventory_id}/correlation",
+    response_model=CorrelationResponse,
+    summary="Cobertura do billing pelo inventário, lacunas e custo do que está ocioso",
+)
+async def correlacionar_com_billing(
+    inventory_id: UUID,
+    report_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+) -> CorrelationResponse:
+    _exigir_flag()
+    uc = CorrelacionarInventarioUseCase(
+        PgInventoryRepository(session),
+        PgBillingReportRepository(session),
+        PgBillingItemRepository(session),
+    )
+    try:
+        correlacao = await uc.execute(inventory_id, report_id, _usuario(user))
+    except (
+        NotFoundError,
+        InventarioNaoProcessadoError,
+        ValidationError,
+        BillingNaoProntoError,
+    ) as e:
+        raise _traduzir(e) from e
+    return CorrelationResponse(
+        inventory_id=inventory_id, report_id=report_id, **serializar_correlacao(correlacao)
     )
 
 
