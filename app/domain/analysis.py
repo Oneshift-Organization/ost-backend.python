@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from app.domain.entities.inventario_medido import InventarioMedido
 from app.domain.entities.workload_pool import AuxiliaryCosts, FamilyPool, WorkloadPool
 
 
@@ -146,3 +147,6 @@ class MigrationContext:
     premissas: dict[str, Any] = field(default_factory=dict)
     # Roll-up por provedor + recomendação (backend calcula, LLM narra).
     resumo_executivo: dict[str, Any] = field(default_factory=dict)
+    # Fatos medidos de export detalhado (armazenamento, bancos). None no
+    # caminho agregado — e o payload dele não ganha a seção.
+    inventario: InventarioMedido | None = None

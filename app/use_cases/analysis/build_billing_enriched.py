@@ -16,6 +16,8 @@ from app.domain.repositories.i_sku_classification_rule_repo import (
 from app.domain.repositories.i_unmapped_billing_repo import IUnmappedBillingRepository
 from app.domain.services.sku_matcher import SkuMatch, SkuMatcher
 from app.domain.services.sku_normalization import normalize_provider
+from app.domain.value_objects.charge_kind import ChargeKind, fora_da_base
+from app.use_cases.analysis.leitura_completa import listar_todos
 
 # component_type -> (category, service_type) for the migration context.
 _CATEGORY_BY_COMPONENT: dict[str, tuple[str | None, str | None]] = {
@@ -28,8 +30,25 @@ _CATEGORY_BY_COMPONENT: dict[str, tuple[str | None, str | None]] = {
     "storage_hdd": ("storage", "block_storage"),
     "object_storage": ("storage", "object_storage"),
     "database": ("database", "relational_database"),
+    # Instrumento financeiro: tem custo, não tem capacidade nem equivalente.
+    "commitment": ("commitment", "commitment"),
     "unclassified": (None, None),
 }
+
+# Linha de compromisso vinda de export detalhado. A natureza vem do próprio
+# provedor (`SavingsPlanRecurringFee`, SKU `Commitment…`), então é classificação
+# certa — mais que qualquer casamento de texto. `LN` = pela natureza, fora da
+# escada L0 a L5: pela escada, `ComputeSP:3yrNoUpfront` casava `computesp:*` como
+# `core`, e as horas do plano viravam vCPU.
+_COMPROMISSO = SkuMatch(
+    component_type="commitment",
+    match_layer="LN",
+    mapping_confidence="high",
+)
+
+# Crédito do Cost Table legado que não é preço (RN3 do PLANO_CUR_BIGQUERY):
+# promoção acaba; free tier não migra. Os exports detalhados tratam isso no parser.
+_CREDITO_TEMPORARIO_LEGADO = frozenset({"PROMOTION", "FREE_TIER"})
 
 
 @dataclass(frozen=True)
@@ -72,9 +91,7 @@ class BuildBillingEnrichedUseCase:
             raise ValueError(
                 f"report {payload.report_id} status is {report.status}, expected done or processing"
             )
-        items = await self._items.list_by_report(
-            payload.report_id, payload.user_id, limit=100000, offset=0
-        )
+        items = await listar_todos(self._items.list_by_report, payload.report_id, payload.user_id)
         if not items:
             raise ValueError(f"report {payload.report_id} has no billing items")
 
@@ -93,34 +110,39 @@ class BuildBillingEnrichedUseCase:
             if not isinstance(raw_payload, dict):
                 raw_payload = {}
 
-            # ── Skip financial metadata / summary lines ──────────
-            record_type = raw_payload.get("RecordType", "")
-            cost_type = raw_payload.get("Cost type", "").lower()
-            if (
-                record_type in ("StatementTotal", "InvoiceTotal")
-                or raw_payload.get("ProductCode") == "Tax"
-                or cost_type in ("tax", "total", "rounding error")
-            ):
+            # ── Fora da base: imposto, crédito, reembolso, ajuste ──
+            # Export detalhado traz a natureza; legado, só o raw_payload.
+            if item.charge_kind is not None:
+                if fora_da_base(item.charge_kind):
+                    continue
+            elif _linha_financeira_legado(raw_payload):
                 continue
 
-            # The discriminating descriptor is the per-SKU text in raw_payload
-            # (GCP "SKU description" / AWS "UsageType"), not the coarse service
-            # name in service_raw/service.
+            # O descritor discriminante é o texto por SKU (`BoxUsage:m7g.2xlarge`,
+            # `N2 Instance Core running in Americas`), não o nome do serviço.
+            # Export detalhado o entrega em `usage_type`; o legado, no raw_payload
+            # com o nome de coluna de cada formato.
             descriptor = (
-                raw_payload.get("SKU description")
+                item.usage_type
+                or raw_payload.get("SKU description")
                 or raw_payload.get("UsageType")
                 or raw_payload.get("sku_description")
                 or raw_payload.get("usage_type")
                 or getattr(item, "service_raw", None)
                 or item.service
             )
-            match = matcher.match(descriptor, usage_unit=item.usage_unit)
+            if item.charge_kind == ChargeKind.COMMITMENT:
+                match = _COMPROMISSO
+            else:
+                match = matcher.match(descriptor, usage_unit=item.usage_unit)
 
             category, service_type = self._resolve_taxonomy(match)
             scope = "global_zero" if raw_payload.get("scope") == "global_zero" else "line_item"
+            atributos = dict(item.attributes or {})
             project_id = (
-                raw_payload.get("Project ID")
-                or raw_payload.get("project", {}).get("id")
+                atributos.get("project_id")
+                or raw_payload.get("Project ID")
+                or (raw_payload.get("project") or {}).get("id")
                 or raw_payload.get("project_id")
             )
 
@@ -165,6 +187,8 @@ class BuildBillingEnrichedUseCase:
                     pricing_confidence="low",
                     scope=scope,
                     source_line_hash=item.line_hash,
+                    resource_id=item.resource_id,
+                    attributes=_atributos_enriquecidos(item, atributos),
                 )
             )
 
@@ -178,6 +202,34 @@ class BuildBillingEnrichedUseCase:
         if match.category is not None or match.service_type is not None:
             return match.category, match.service_type
         return _CATEGORY_BY_COMPONENT.get(match.component_type, (None, None))
+
+
+def _linha_financeira_legado(raw_payload: dict) -> bool:
+    """Filtro do caminho legado, pelas colunas dos dois CSVs versionados."""
+    record_type = raw_payload.get("RecordType", "")
+    cost_type = str(raw_payload.get("Cost type", "")).lower()
+    return bool(
+        record_type in ("StatementTotal", "InvoiceTotal")
+        or raw_payload.get("ProductCode") == "Tax"
+        or cost_type in ("tax", "total", "rounding error")
+        or raw_payload.get("Credit type") in _CREDITO_TEMPORARIO_LEGADO
+        # SKU de desconto de free tier (custo negativo, horas positivas): sem
+        # isto, vira pool fantasma de custo negativo marcado como "coberto por
+        # compromisso".
+        or "free tier" in str(raw_payload.get("SKU description", "")).casefold()
+    )
+
+
+def _atributos_enriquecidos(item, atributos: dict) -> dict | None:
+    """Fatos medidos seguem para o agregador; a natureza vai junto para
+    auditoria (billing_enriched não tem coluna própria para ela)."""
+    if not atributos and item.charge_kind is None:
+        return None
+    if item.charge_kind is not None:
+        atributos["charge_kind"] = item.charge_kind
+    if item.resource_type and "instance_type" not in atributos:
+        atributos["instance_type"] = item.resource_type
+    return atributos
 
 
 def _build_metadata(match: SkuMatch) -> dict[str, object] | None:

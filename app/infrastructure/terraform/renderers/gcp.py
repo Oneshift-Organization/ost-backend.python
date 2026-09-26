@@ -9,7 +9,17 @@ from app.infrastructure.terraform.hcl import (
     comentario,
     referencia,
 )
-from app.infrastructure.terraform.renderers.base import nome_cloud
+from app.infrastructure.terraform.renderers.base import (
+    com_indice,
+    instancias_banco,
+    nome_banco,
+    nome_cloud,
+    quantidade_volumes,
+    texto_banco,
+    texto_tamanho_disco,
+    texto_volume_bucket,
+    var_versao,
+)
 from app.schemas.terraform import (
     RecursoTerraform,
     TerraformBlueprint,
@@ -132,11 +142,12 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
-    return comentario(
-        "TAMANHO ESTIMADO a partir do custo mensal — veja a premissa no README.\n"
-        "Confira contra o uso real antes de aplicar."
-    ) + "\n" + bloco("resource", ["google_compute_disk", r.logical_name], [
-        atributo("name", nome_cloud(bp.project_name, r.logical_name)),
+    n = quantidade_volumes(cfg)
+    nome = nome_cloud(bp.project_name, r.logical_name)
+    return comentario(texto_tamanho_disco(cfg)) + "\n" + bloco(
+        "resource", ["google_compute_disk", r.logical_name],
+        ([atributo("count", n)] if n > 1 else []) + [
+        atributo("name", referencia(f'"{nome}-${{count.index}}"') if n > 1 else nome),
         atributo("type", str(cfg.get("disk_type") or "pd-standard")),
         atributo("zone", f"{bp.region}-a"),
         atributo("size", int(cfg.get("size_gb") or 10)),
@@ -147,8 +158,8 @@ def _bucket(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
     publico = bool(cfg.get("public_access"))
     return comentario(
-        f"Volume estimado: ~{cfg.get('estimated_gb')} GB (derivado do custo).\n"
-        "O bucket não tem tamanho declarado — o número é só referência."
+        texto_volume_bucket(cfg)
+        + "O bucket não tem tamanho declarado — o número é só referência."
     ) + "\n" + bloco("resource", ["google_storage_bucket", r.logical_name], [
         atributo("name", nome_cloud(bp.project_name, r.logical_name)),
         atributo("location", str(cfg.get("location") or bp.region).upper()),
@@ -168,13 +179,12 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     vcpus = int(cfg.get("vcpus") or 1)
     ha = bool(cfg.get("high_availability"))
     return comentario(
-        f"vCPU ESTIMADO ({vcpus}) a partir do custo mensal — veja o README.\n"
-        "Motor e versão NÃO foram deduzidos: o billing não os informa.\n"
-        "Preencha `database_version` antes de aplicar.\n"
+        texto_banco(cfg, vcpus) + "\n"
         "`deletion_protection` fica ligado; desligue conscientemente."
     ) + "\n" + bloco("resource", ["google_sql_database_instance", r.logical_name], [
-        atributo("name", nome_cloud(bp.project_name, "db")),
-        atributo("database_version", referencia("var.database_version")),
+        *([atributo("count", n)] if (n := instancias_banco(cfg)) > 1 else []),
+        atributo("name", com_indice(nome_banco(bp, r), n)),
+        atributo("database_version", var_versao(cfg)),
         atributo("region", bp.region),
         atributo("deletion_protection", True),
         bloco_aninhado("settings", [

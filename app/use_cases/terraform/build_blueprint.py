@@ -133,13 +133,23 @@ def _variaveis(plano: PlanoDerivado) -> list[VariavelTerraform]:
     # na AWS, `image_ocid` na OCI) e vem do adaptador. Declará-la aqui punha uma
     # variável de GCP dentro de um pacote de AWS.
     variaveis: list[VariavelTerraform] = []
-    if any(r.resource_type == "managed_database" for r in plano.recursos):
+    # Uma variável de versão por motor: com bancos medidos de motores diferentes,
+    # uma variável só obrigaria o MySQL a receber a versão do PostgreSQL.
+    versoes: dict[str, object] = {}
+    for r in plano.recursos:
+        if r.resource_type == "managed_database":
+            nome = str(r.configuration.get("version_var") or "database_version")
+            versoes.setdefault(nome, r.configuration.get("engine_measured"))
+    for nome, motor in versoes.items():
         variaveis.append(
             VariavelTerraform(
-                name="database_version",
+                name=nome,
                 type="string",
                 description=(
-                    "Motor e versão do banco (ex.: POSTGRES_15, MYSQL_8_0). "
+                    f"Versão do {motor} (motor medido na origem). O billing informa o "
+                    "motor, não a versão."
+                    if motor
+                    else "Motor e versão do banco (ex.: POSTGRES_15, MYSQL_8_0). "
                     "O billing informa o custo, não o motor."
                 ),
             )

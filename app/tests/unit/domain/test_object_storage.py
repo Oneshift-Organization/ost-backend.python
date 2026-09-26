@@ -71,7 +71,8 @@ def test_objeto_e_avaliado_antes_do_catch_all_de_storage() -> None:
 def test_disco_continua_disco() -> None:
     """A correção não pode arrastar bloco junto: EBS e PD seguem onde estavam."""
     assert _regra(AWS_RULES, "*volumeusage*")[2] == "storage_ssd"
-    assert _regra(AWS_RULES, "ebs:*")[2] == "storage_ssd"
+    # `*ebs:*` (com prefixo de região) desde a E5 do PLANO_CUR_BIGQUERY.
+    assert _regra(AWS_RULES, "*ebs:*")[2] == "storage_ssd"
     assert _regra(GCP_RULES, "*pd capacity*")[2] == "storage_hdd"
     assert _regra(GCP_RULES, "*ssd*")[2] == "storage_ssd"
 

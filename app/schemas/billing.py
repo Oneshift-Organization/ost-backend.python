@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -132,6 +133,12 @@ class BillingItemResponse(BaseModel):
     is_correction: bool = False
     is_estimate: bool = False
     line_hash: str
+    # Só em exports detalhados (CUR, BigQuery, Azure, OCI); nulos no legado.
+    usage_type: str | None = None
+    resource_type: str | None = None
+    charge_kind: str | None = None
+    cost_billed: Decimal | None = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def from_entity(cls, i: BillingItem) -> "BillingItemResponse":
@@ -155,6 +162,11 @@ class BillingItemResponse(BaseModel):
             is_correction=i.is_correction,
             is_estimate=i.is_estimate,
             line_hash=i.line_hash,
+            usage_type=i.usage_type,
+            resource_type=i.resource_type,
+            charge_kind=i.charge_kind,
+            cost_billed=i.cost_billed,
+            attributes=i.attributes or {},
         )
 
 

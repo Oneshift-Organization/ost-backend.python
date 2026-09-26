@@ -43,8 +43,9 @@ def test_aws_xlsx_round_trip(aws_cur2_xlsx: Path, aws_cur2_csv: Path, user_id, j
 
     assert len(df_xlsx) == len(df_csv)
     assert all(isinstance(c, Decimal) for c in df_xlsx["cost"])
-    # 12.345600 stays exact through XLSX round-trip
-    assert df_xlsx.iloc[0]["cost"] == Decimal("12.345600")
+    # 12.345600 (faturado) e 11.000000 (líquido) passam exatos pelo XLSX.
+    assert df_xlsx.iloc[0]["cost_billed"] == Decimal("12.345600")
+    assert df_xlsx.iloc[0]["cost"] == Decimal("11.000000")
 
 
 def test_azure_xlsx_decimal_preserved(azure_payg_xlsx, user_id, job_id):

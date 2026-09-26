@@ -30,9 +30,12 @@ Módulo puro: entra dict, sai dataclass. Sem I/O, sem framework.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
+
+from app.domain.services.instance_shape import parse_instance_shape
 
 # Taxas de referência por GB-mês, usadas para voltar de dinheiro para tamanho.
 # São as mesmas de `seed_category_rates`; ficam aqui porque a derivação é pura e
@@ -61,6 +64,42 @@ _CATEGORIAS_ARMAZENAMENTO = {
 # arredondamento da divisão por taxa, e um volume de 2 GB no `.tf` seria mais
 # enganoso que a omissão.
 _GB_MINIMO = Decimal("10")
+
+# Motores de CACHE: aparecem no inventário de bancos (ElastiCache, Memorystore),
+# mas não viram banco relacional gerenciado — seria outro produto.
+_MOTORES_DE_CACHE = frozenset({"redis", "memcached", "valkey"})
+
+# Grupos de banco medidos que viram recurso; o resto é listado nos avisos.
+_MAX_GRUPOS_BANCO = 8
+
+# Motor medido → família (decide a variável de versão e a compatibilidade).
+_FAMILIAS_DE_MOTOR = (
+    ("postgres", "postgresql"),
+    ("mysql", "mysql"),
+    ("mariadb", "mysql"),
+    ("sql server", "sqlserver"),
+    ("sqlserver", "sqlserver"),
+    ("oracle", "oracle"),
+)
+
+# O que o renderer de cada destino sabe gerar. Ausente = aceita qualquer um
+# (com aviso quando é troca de motor). Recusar aqui, e não no renderer, é o que
+# faz a recusa aparecer no README em vez de sumir em silêncio.
+_MOTORES_POR_DESTINO: dict[str, frozenset[str]] = {
+    "azure": frozenset({"postgresql"}),
+    "gcp": frozenset({"postgresql", "mysql", "sqlserver"}),
+    "aws": frozenset({"postgresql", "mysql", "sqlserver", "oracle"}),
+}
+
+# Tempo ligada abaixo disto sugere agendamento (dev, horário comercial).
+_TEMPO_ATIVO_BAIXO = 0.6
+
+# Custo que sobra num balde de disco depois de tirar o snapshot e que ainda
+# justificaria um volume. Abaixo disto é arredondamento.
+_CUSTO_RESIDUAL = Decimal("1")
+
+# Quantos itens listar num aviso antes de resumir com reticências.
+_MAX_LISTADOS = 5
 
 # Confiança do preço que sustenta a escolha do shape. Só `official` é preço
 # coletado da API do provedor; `reference` é taxa publicada e `low` é catálogo
@@ -233,6 +272,7 @@ def _derivar_compute(
         idade = financeiro.get("preco_idade_dias")
         if idade is not None:
             base += f" Preço capturado há {idade} dias."
+        base += _origem_medida(pool, familia, max(1, instancias), plano)
         if pool.get("custo_coberto_por_compromisso"):
             # O recurso está certo — a capacidade foi medida. O que não vale é a
             # comparação de custo contra ele.
@@ -253,6 +293,33 @@ def _derivar_compute(
                 base=base,
             )
         )
+
+
+def _origem_medida(
+    pool: dict[str, Any], familia: str, instancias_destino: int, plano: PlanoDerivado
+) -> str:
+    """O que o export detalhado mediu na origem, dito na premissa.
+
+    O shape de destino continua o do empacotamento — é o que foi cotado (RN10).
+    Mas quando ele junta N máquinas em menos, isso é uma decisão de arquitetura,
+    não só de preço: vira aviso explícito.
+    """
+    instancias = pool.get("instancias_medidas")
+    if not instancias:
+        return ""
+    tipos = pool.get("tipos_origem") or {}
+    lista = ", ".join(f"{n}x {t}" for t, n in list(tipos.items())[:3])
+    texto = f" Origem medida: {instancias} instâncias ({lista})."
+    if instancias_destino < int(instancias):
+        plano.avisos.append(
+            f"Pool '{familia}': {instancias} instâncias na origem viram "
+            f"{instancias_destino} no destino (consolidação do empacotamento). "
+            "Confirme que as aplicações podem dividir máquina antes de aplicar."
+        )
+    ativo = pool.get("fracao_tempo_ativo")
+    if isinstance(ativo, (int, float)) and ativo < _TEMPO_ATIVO_BAIXO:
+        texto += f" Ficam ligadas {ativo:.0%} do tempo em média: avalie agendamento no destino."
+    return texto
 
 
 def _equivalente_do_destino(
@@ -292,8 +359,10 @@ def _derivar_armazenamento(
     auxiliares = payload.get("custos_auxiliares") or {}
     origem = str(payload.get("provedor_origem") or "").lower()
     taxas_origem = _TAXA_GB_MES.get(origem)
+    medido = (payload.get("inventario_medido") or {}).get("armazenamento") or {}
+    _registrar_snapshots(medido, plano)
 
-    if taxas_origem is None:
+    if taxas_origem is None and not medido:
         # Sem a taxa da ORIGEM não há como voltar de dinheiro para GB. Avisa só
         # quando havia custo a dimensionar — senão o pacote de um bill sem
         # armazenamento sairia com um aviso sobre nada.
@@ -309,11 +378,17 @@ def _derivar_armazenamento(
         if custo is None or custo <= 0:
             continue
 
-        taxa = Decimal(taxas_origem[categoria])
-        gb = (custo / taxa).quantize(Decimal("1"))
-
-        if gb < _GB_MINIMO:
+        # Snapshot medido nesta categoria sai do custo antes de estimar: ele é
+        # backup, não disco. Se sobrar ~nada, a categoria não tem volume por trás.
+        snapshot = _decimal(((medido.get("snapshots") or {}).get("custo") or {}).get(chave))
+        if snapshot is not None:
+            custo = custo - snapshot
+            if custo <= _CUSTO_RESIDUAL:
+                continue
+        tamanho = _tamanho_armazenamento(medido.get(chave) or {}, custo, taxas_origem, categoria)
+        if tamanho is None:
             continue
+        gb, taxa, volumes, gb_medido = tamanho
 
         if categoria == "object_storage":
             nome = nomeador.gerar("bucket", categoria)
@@ -325,6 +400,24 @@ def _derivar_armazenamento(
                         "location": regiao.upper(),
                         "storage_class": "STANDARD",
                         "estimated_gb": int(gb),
+                        "size_source": "medido" if gb_medido is not None else "estimado",
+                    },
+                )
+            )
+        elif volumes > 1:
+            # Volumes medidos: N discos do tamanho médio, não um disco gigante.
+            nome = nomeador.gerar("disco", categoria)
+            por_volume = min(Decimal(math.ceil(gb / volumes)), _GB_MAXIMO_DISCO)
+            plano.recursos.append(
+                RecursoDerivado(
+                    logical_name=nome,
+                    resource_type="compute",
+                    configuration={
+                        "disk_only": True,
+                        "size_gb": int(max(por_volume, Decimal("1"))),
+                        "volumes": volumes,
+                        "size_source": "medido",
+                        "disk_type": ("pd-ssd" if categoria == "storage_ssd" else "pd-standard"),
                     },
                 )
             )
@@ -345,25 +438,93 @@ def _derivar_armazenamento(
                     configuration={
                         "disk_only": True,
                         "size_gb": int(gb),
-                        "disk_type": (
-                            "pd-ssd" if categoria == "storage_ssd" else "pd-standard"
-                        ),
+                        "size_source": "medido" if gb_medido is not None else "estimado",
+                        "disk_type": ("pd-ssd" if categoria == "storage_ssd" else "pd-standard"),
                     },
                 )
             )
 
         plano.premissas.append(
-            Premissa(
-                campo=f"{nome}.size_gb",
-                categoria="estimativa",
-                valor=f"{int(gb)} GB",
-                base=(
-                    f"${custo} por mês ÷ ${taxa}/GB-mês (taxa de {categoria} em "
-                    f"{origem.upper()}). Assume a tier padrão para o balde "
-                    "inteiro; volume com tier fria sai superdimensionado."
-                ),
+            _premissa_armazenamento(
+                nome,
+                categoria,
+                origem,
+                gb=gb,
+                custo=custo,
+                taxa=taxa,
+                volumes=volumes,
+                medido=gb_medido is not None,
             )
         )
+
+
+def _registrar_snapshots(medido: dict[str, Any], plano: PlanoDerivado) -> None:
+    fato = medido.get("snapshots") or {}
+    gb = _decimal(fato.get("gb"))
+    if gb is None:
+        return
+    plano.nao_suportado.append(
+        f"Snapshots ({int(gb):,} GB em {int(fato.get('recursos') or 0)} recursos, medidos) "
+        "não viram disco: são backup. Recrie a política de snapshot no destino."
+    )
+
+
+def _tamanho_armazenamento(
+    fato: dict[str, Any],
+    custo: Decimal,
+    taxas_origem: dict[str, str] | None,
+    categoria: str,
+) -> tuple[Decimal, Decimal | None, int, Decimal | None] | None:
+    """(GB, taxa usada, volumes, GB medido) — ou None se não há o que declarar.
+
+    RN10: GB medido no billing (soma de GB-mês) prevalece sobre custo ÷ taxa.
+    Um disco medido pequeno é real e fica; um estimado pequeno é ruído de
+    arredondamento da divisão e sai (`_GB_MINIMO`).
+    """
+    gb_medido = _decimal(fato.get("gb"))
+    if gb_medido is not None:
+        gb = gb_medido.quantize(Decimal("1"))
+        return (gb, None, int(fato.get("recursos") or 0), gb_medido) if gb >= 1 else None
+    if taxas_origem is None:
+        return None
+    taxa = Decimal(taxas_origem[categoria])
+    gb = (custo / taxa).quantize(Decimal("1"))
+    return (gb, taxa, 0, None) if gb >= _GB_MINIMO else None
+
+
+def _premissa_armazenamento(
+    nome: str,
+    categoria: str,
+    origem: str,
+    *,
+    gb: Decimal,
+    custo: Decimal,
+    taxa: Decimal | None,
+    volumes: int,
+    medido: bool,
+) -> Premissa:
+    if medido:
+        return Premissa(
+            campo=f"{nome}.size_gb",
+            categoria="derivacao",
+            valor=f"{int(gb)} GB" + (f" em {volumes} volumes" if volumes > 1 else ""),
+            base=(
+                f"Soma de GB-mês de {categoria} medida no billing da origem"
+                + (f" ({volumes} recursos)" if volumes else "")
+                + ". Num mês inteiro é o tamanho médio provisionado; GB e GiB "
+                "tratados como equivalentes (~7%)."
+            ),
+        )
+    return Premissa(
+        campo=f"{nome}.size_gb",
+        categoria="estimativa",
+        valor=f"{int(gb)} GB",
+        base=(
+            f"${custo} por mês ÷ ${taxa}/GB-mês (taxa de {categoria} em "
+            f"{origem.upper()}). Assume a tier padrão para o balde "
+            "inteiro; volume com tier fria sai superdimensionado."
+        ),
+    )
 
 
 # ── banco ───────────────────────────────────────────────────────────────
@@ -376,11 +537,18 @@ def _derivar_banco(
     alta_disponibilidade: bool,
     nomeador: _Nomeador,
 ) -> None:
-    """vCPU de banco por razão de taxa. Engine e versão ninguém sabe."""
+    """vCPU de banco por razão de taxa. Engine e versão ninguém sabe.
+
+    Com export detalhado, o banco principal sai do inventário medido: classe,
+    motor e multi-AZ são fatos. Só a versão continua sem base.
+    """
     auxiliares = payload.get("custos_auxiliares") or {}
     custo = _decimal(auxiliares.get("banco_dados"))
     if custo is None or custo <= 0:
         return
+    if _banco_medido(payload, destino, plano, alta_disponibilidade, nomeador):
+        return
+
 
     origem = str(payload.get("provedor_origem") or "").lower()
     taxa = _TAXA_DB_VCPU_MES.get(origem)
@@ -426,6 +594,178 @@ def _derivar_banco(
             base=(
                 "O billing informa custo de banco, não o motor nem a versão. "
                 "Preencha `database_engine` e `database_version` antes de aplicar."
+            ),
+        )
+    )
+
+
+def _familia_motor(motor: object) -> str | None:
+    """`Aurora PostgreSQL` → `postgresql`: a família decide compatibilidade e a
+    variável de versão. Aurora vira o motor base — o destino não tem Aurora."""
+    texto = str(motor or "").casefold()
+    for chave, familia in _FAMILIAS_DE_MOTOR:
+        if chave in texto:
+            return familia
+    return None
+
+
+def _banco_medido(
+    payload: dict[str, Any],
+    destino: str,
+    plano: PlanoDerivado,
+    alta_disponibilidade: bool,
+    nomeador: _Nomeador,
+) -> bool:
+    """Um recurso por grupo medido (classe, motor, multi-AZ), com a contagem.
+
+    Um banco "principal" só enganava: num bill com 165 instâncias de banco, o
+    pacote gerava uma. Os grupos mais caros viram recursos com ``instances``;
+    o resto é listado. Cache (Redis, Memcached) é outro produto e fica fora.
+    """
+    inventario = payload.get("inventario_medido") or {}
+    grupos = inventario.get("bancos") or []
+    relacionais = [
+        g for g in grupos if str(g.get("motor") or "").casefold() not in _MOTORES_DE_CACHE
+    ]
+    caches = [g for g in grupos if g not in relacionais]
+    if caches:
+        nos = sum(int(g.get("quantidade") or 1) for g in caches)
+        plano.nao_suportado.append(
+            f"Cache gerenciado ({nos} nós medidos: "
+            + ", ".join(f"{g.get('quantidade')}x {g.get('classe')}" for g in caches[:3])
+            + ") fora do MVP: exige escolher o produto de cache do destino."
+        )
+    aceitos = _MOTORES_POR_DESTINO.get(destino)
+    gerados = 0
+    multi_az: list[str] = []
+    incompativeis: list[dict[str, Any]] = []
+    restantes: list[dict[str, Any]] = []
+    for g in relacionais:
+        classe = str(g.get("classe") or "")
+        forma = parse_instance_shape(classe)
+        familia = _familia_motor(g.get("motor"))
+        if forma is None:
+            restantes.append(g)
+            continue
+        if aceitos is not None and familia not in aceitos:
+            incompativeis.append(g)
+            continue
+        if gerados >= _MAX_GRUPOS_BANCO:
+            restantes.append(g)
+            continue
+        _banco_do_grupo(
+            g,
+            classe=classe,
+            vcpus=int(forma.vcpus),
+            familia=familia,
+            plano=plano,
+            alta_disponibilidade=alta_disponibilidade,
+            nomeador=nomeador,
+        )
+        gerados += 1
+        if g.get("multi_az") and not alta_disponibilidade:
+            multi_az.append(classe)
+
+    if gerados == 0:
+        return False
+    if multi_az:
+        plano.avisos.append(
+            "Bancos Multi-AZ na origem (" + ", ".join(multi_az[:_MAX_LISTADOS]) + ") saíram "
+            "sem alta disponibilidade porque a requisição pediu assim."
+        )
+    if restantes:
+        total = sum(int(g.get("quantidade") or 1) for g in restantes)
+        plano.avisos.append(
+            f"Outros {len(restantes)} grupos de banco medidos ({total} instâncias) não "
+            "viraram recurso: "
+            + ", ".join(
+                f"{g.get('quantidade')}x {g.get('classe')} ({g.get('motor')})"
+                for g in restantes[:_MAX_LISTADOS]
+            )
+            + ("…" if len(restantes) > _MAX_LISTADOS else "")
+            + "."
+        )
+    if incompativeis:
+        plano.nao_suportado.append(
+            f"Banco em {destino.upper()} só é gerado para "
+            + "/".join(sorted(aceitos or ()))
+            + "; ficaram de fora: "
+            + ", ".join(
+                f"{g.get('quantidade')}x {g.get('classe')} ({g.get('motor')})"
+                for g in incompativeis[:_MAX_LISTADOS]
+            )
+            + "."
+        )
+    detalhados = sum(int(g.get("quantidade") or 1) for g in grupos)
+    total = int(inventario.get("total_bancos") or detalhados)
+    if total > detalhados:
+        plano.avisos.append(
+            f"{total - detalhados} instâncias de banco em grupos menores não aparecem "
+            "no resumo da análise e não viraram recurso."
+        )
+    if destino == "oci":
+        plano.avisos.append(
+            "Na OCI o banco é gerado como Autonomous Database (motor Oracle). Com a "
+            "origem em PostgreSQL/MySQL isso é troca de motor, não lift-and-shift: "
+            "avalie o OCI Database with PostgreSQL / MySQL HeatWave."
+        )
+    return True
+
+
+def _banco_do_grupo(
+    g: dict[str, Any],
+    *,
+    classe: str,
+    vcpus: int,
+    familia: str | None,
+    plano: PlanoDerivado,
+    alta_disponibilidade: bool,
+    nomeador: _Nomeador,
+) -> None:
+    quantidade = int(g.get("quantidade") or 1)
+    motor = g.get("motor")
+    nome = nomeador.gerar("banco", familia or "motor", classe)
+    plano.recursos.append(
+        RecursoDerivado(
+            logical_name=nome,
+            resource_type="managed_database",
+            configuration={
+                "vcpus": vcpus,
+                "instances": quantidade,
+                "high_availability": alta_disponibilidade,
+                "engine_var": "database_engine",
+                "version_var": f"database_version_{familia}" if familia else "database_version",
+                "vcpu_source": "medido",
+                "source_class": classe,
+                "engine_measured": motor,
+                "engine_family": familia,
+                "instances_measured": quantidade,
+            },
+            depends_on=("rede_principal",),
+        )
+    )
+    plano.premissas.append(
+        Premissa(
+            campo=f"{nome}.vcpus",
+            categoria="derivacao",
+            valor=f"{vcpus} x{quantidade}",
+            base=(
+                f"Classe medida na origem: {classe} ({quantidade} instância(s), motor "
+                f"{motor or 'não informado'}); {vcpus} vCPU pela especificação da classe."
+            ),
+        )
+    )
+    plano.premissas.append(
+        Premissa(
+            campo=f"{nome}.engine",
+            categoria="derivacao" if motor else "sem_base",
+            valor=str(motor) if motor else None,
+            base=(
+                f"Motor medido no billing: {motor}. A versão não aparece no billing: "
+                "preencha a variável de versão antes de aplicar."
+                if motor
+                else "O billing não informou o motor. Preencha `database_engine` e "
+                "`database_version` antes de aplicar."
             ),
         )
     )

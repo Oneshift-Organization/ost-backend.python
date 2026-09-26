@@ -45,6 +45,9 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*external ip*", "glob", "network_egress", None, "high", 37),
     ("*ip charge*", "glob", "network_egress", None, "medium", 38),
     ("*cloud nat*", "glob", "network_egress", None, "medium", 39),
+    # Cloud DNS (consulta e zona gerenciada): rede, não "não classificado".
+    ("dns query*", "glob", "network_egress", None, "medium", 76),
+    ("managedzone", "glob", "network_egress", None, "medium", 77),
     # ── Object storage (ANTES do bloco: o catch-all "*storage*" levava o
     #    Cloud Storage inteiro para `storage_hdd`, reprecificando objeto com
     #    taxa de disco — ~2x a taxa certa) ──
@@ -93,13 +96,21 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
 # (pattern, kind, component_type, family, confidence, priority) — AWS UsageType.
 AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     # ── Database (before storage so RDS:*-Storage maps to database) ──
-    ("rds:*", "glob", "database", None, "high", 10),
-    ("aurora:*", "glob", "database", None, "high", 11),
+    # `*` na frente: o tipo de uso fora de us-east-1 vem com prefixo de região
+    # (`SAE1-RDS:GP2-Storage`). Com `rds:*`, o storage do RDS em São Paulo caía
+    # em `*storage*` e virava disco de instância.
+    ("*rds:*", "glob", "database", None, "high", 10),
+    ("*aurora:*", "glob", "database", None, "high", 11),
+    ("*cpucredits:db*", "glob", "database", None, "high", 6),
     ("*instanceusage:db*", "glob", "database", None, "high", 12),
     ("*multi-az*", "glob", "database", None, "medium", 13),
-    ("elasticache:*", "glob", "database", None, "medium", 14),
+    ("*elasticache:*", "glob", "database", None, "medium", 14),
     ("dynamodb*", "glob", "database", None, "medium", 15),
     ("*nodeusage:cache*", "glob", "database", None, "high", 16),
+    # Aurora I/O-Optimized: `InstanceUsageIOOptimized:db.r8g.4xl` não casa
+    # `*instanceusage:db*` (não há `:` logo depois de `instanceusage`) e caía em
+    # L5 — US$ 1,7 mil no bill real e 2,5 mil no mock CUR, sem classificação.
+    ("*instanceusageiooptimized:db*", "glob", "database", None, "high", 5),
     ("*kafka*", "glob", "database", None, "medium", 17),
     ("*elasticsearch*", "glob", "database", None, "medium", 18),
     ("*opensearch*", "glob", "database", None, "medium", 19),
@@ -120,16 +131,24 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*amazoneks*", "glob", "gke_control_plane", None, "high", 8),
     ("*eks*percluster*", "glob", "gke_control_plane", None, "high", 9),
     ("*fargate*", "glob", "core", None, "medium", 28),
+    # Suporte estendido de motor (RDS PostgreSQL 13, ElastiCache): taxa sobre o
+    # banco que já existe. 29, depois das regras de EKS (8/9), que também têm
+    # `extendedSupport` no tipo de uso e são plano de controle, não banco.
+    ("*extendedsupport*", "glob", "database", None, "medium", 29),
     # ── Storage ──
     ("*volumeusage*", "glob", "storage_ssd", None, "high", 30),
-    ("ebs:*", "glob", "storage_ssd", None, "high", 31),
+    # `*` na frente pelo mesmo motivo do RDS: prefixo de região.
+    ("*ebs:*", "glob", "storage_ssd", None, "high", 31),
     # `TimedStorage-ByteHrs` é a linha de armazenamento do S3 — objeto, não
     # bloco. Ia para `storage_hdd` e era comparada com disco no destino.
     ("*timedstorage*", "glob", "object_storage", None, "high", 32),
     ("*-bytehrs", "glob", "object_storage", None, "medium", 33),
     ("s3:*", "glob", "object_storage", None, "high", 35),
     ("*glacier*", "glob", "object_storage", None, "high", 36),
-    ("*snapshotusage*", "glob", "storage_hdd", None, "medium", 34),
+    # Prioridade 2, antes de `*ebs:*`: `EBS:SnapshotUsage` casava a regra de
+    # volume e virava SSD, enquanto `SAE1-EBS:SnapshotUsage` virava HDD — o mesmo
+    # snapshot classificado de dois jeitos conforme a região.
+    ("*snapshotusage*", "glob", "storage_hdd", None, "medium", 2),
     ("*storage*", "glob", "storage_hdd", None, "low", 39),
     # ── Networking ──
     ("natgateway*", "glob", "network_egress", None, "high", 40),
@@ -142,6 +161,13 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*lcuusage*", "glob", "network_egress", None, "medium", 47),
     ("*resolvernetworkinterface*", "glob", "network_egress", None, "medium", 48),
     ("*-bytes", "glob", "network_egress", None, "low", 49),
+    # Rede cobrada por hora de recurso ou por endereço — caíam todos em L5.
+    ("*vpn-usage-hours*", "glob", "network_egress", None, "high", 37),
+    ("*vpcendpoint-hours*", "glob", "network_egress", None, "high", 38),
+    ("*publicipv4*", "glob", "network_egress", None, "high", 51),
+    ("dns-queries", "glob", "network_egress", None, "medium", 52),
+    # Performance Insights do RDS (`USE1:PI_LTR_FMR:Provisioned`).
+    ("*:pi_*", "glob", "database", None, "medium", 53),
     # ── Requisições de API (ops) ──
     # NÃO é armazenamento, de nenhum tipo. O padrão pega `RequestV2-Tier1` do
     # WAF ($2,7 mil no bill real) e `Requests-FIFO` do SQS, além do S3 — e
@@ -155,9 +181,67 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*request*", "glob", "unclassified", None, "low", 50),
 ]
 
+# (pattern, kind, component_type, family, confidence, priority) — Azure.
+# Descritor: "MeterCategory | MeterSubCategory | MeterName" (ver azure_parser).
+# A família da VM vem do tamanho (`instance_family` nos atributos), não daqui.
+AZURE_RULES: list[tuple[str, str, str, str | None, str, int]] = [
+    ("azure kubernetes service*", "glob", "gke_control_plane", None, "high", 8),
+    ("azure database for*", "glob", "database", None, "high", 10),
+    ("sql database*", "glob", "database", None, "high", 11),
+    ("sql managed instance*", "glob", "database", None, "high", 12),
+    ("azure cosmos db*", "glob", "database", None, "medium", 13),
+    ("redis cache*", "glob", "database", None, "medium", 14),
+    ("virtual machines licenses*", "glob", "os_license", None, "high", 18),
+    ("virtual machines*", "glob", "core", None, "high", 20),
+    ("storage | *snapshot*", "glob", "storage_hdd", None, "medium", 29),
+    ("storage | premium ssd*", "glob", "storage_ssd", None, "high", 30),
+    ("storage | standard ssd*", "glob", "storage_ssd", None, "high", 31),
+    ("storage | *managed disks*", "glob", "storage_hdd", None, "medium", 32),
+    ("storage | *blob*", "glob", "object_storage", None, "high", 33),
+    ("storage | *data lake*", "glob", "object_storage", None, "medium", 34),
+    ("storage | *files*", "glob", "storage_hdd", None, "medium", 35),
+    ("storage*", "glob", "storage_hdd", None, "low", 39),
+    ("bandwidth*", "glob", "network_egress", None, "high", 40),
+    ("virtual network*", "glob", "network_egress", None, "high", 41),
+    ("load balancer*", "glob", "network_egress", None, "high", 42),
+    ("vpn gateway*", "glob", "network_egress", None, "high", 43),
+    ("nat gateway*", "glob", "network_egress", None, "high", 44),
+    ("ip addresses*", "glob", "network_egress", None, "high", 45),
+    ("application gateway*", "glob", "network_egress", None, "high", 46),
+    ("azure front door*", "glob", "network_egress", None, "medium", 47),
+    ("azure dns*", "glob", "network_egress", None, "medium", 48),
+    ("content delivery network*", "glob", "network_egress", None, "medium", 49),
+]
+
+# (pattern, kind, component_type, family, confidence, priority) — OCI.
+# Descritor: `product/description` ("Compute - Standard - E4 - OCPU").
+OCI_RULES: list[tuple[str, str, str, str | None, str, int]] = [
+    ("container engine*", "glob", "gke_control_plane", None, "high", 8),
+    ("database*", "glob", "database", None, "high", 10),
+    ("*autonomous*", "glob", "database", None, "high", 11),
+    ("mysql*", "glob", "database", None, "high", 12),
+    ("*heatwave*", "glob", "database", None, "medium", 13),
+    ("compute*ocpu*", "glob", "core", None, "high", 20),
+    ("compute*ecpu*", "glob", "core", None, "high", 21),
+    ("compute*memory*", "glob", "ram", None, "high", 22),
+    ("*backup*", "glob", "storage_hdd", None, "medium", 29),
+    ("block volume*", "glob", "storage_ssd", None, "high", 30),
+    ("object storage*", "glob", "object_storage", None, "high", 31),
+    ("archive storage*", "glob", "object_storage", None, "high", 32),
+    ("file storage*", "glob", "storage_hdd", None, "medium", 33),
+    ("*outbound data transfer*", "glob", "network_egress", None, "high", 40),
+    ("*data transfer*", "glob", "network_egress", None, "medium", 41),
+    ("load balancer*", "glob", "network_egress", None, "high", 42),
+    ("networking*", "glob", "network_egress", None, "medium", 43),
+    ("fastconnect*", "glob", "network_egress", None, "medium", 44),
+    ("*vpn*", "glob", "network_egress", None, "medium", 45),
+]
+
 _SEEDS: dict[str, list[tuple[str, str, str, str | None, str, int]]] = {
     "GCP": GCP_RULES,
     "AWS": AWS_RULES,
+    "AZURE": AZURE_RULES,
+    "OCI": OCI_RULES,
 }
 
 

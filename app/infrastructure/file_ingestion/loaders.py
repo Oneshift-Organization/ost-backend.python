@@ -14,15 +14,23 @@ Pandas' python engine.
 
 from __future__ import annotations
 
+import csv
 import gzip
+import json
+import math
 import zipfile
+from collections.abc import Callable, Iterator
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
+import pyarrow.parquet as pq
 
 XLSX_EXTS: frozenset[str] = frozenset({".xlsx", ".xlsm"})
 CSV_EXTS: frozenset[str] = frozenset({".csv", ".tsv", ".txt"})
 
+_PARQUET_MAGIC = b"PAR1"
 _ZIP_MAGIC = b"PK\x03\x04"
 _ZIP_EMPTY_MAGIC = b"PK\x05\x06"
 
@@ -89,10 +97,13 @@ def is_real_zip_file(file_path: Path) -> bool:
 def read_tabular(file_path: Path, *, encoding: str = "utf-8") -> pd.DataFrame:
     """Read any supported tabular format with `dtype=str` and NaN→"" normalization.
 
-    Supports: .csv, .tsv, .txt, .csv.gz, .csv.zip, real .xlsx/.xlsm.
+    Supports: .csv, .tsv, .txt, .csv.gz, .csv.zip, real .xlsx/.xlsm, .parquet.
     `.xlsx` extension with non-ZIP content is treated as text (sniffs delimiter).
     """
     suffix = file_path.suffix.lower()
+
+    if is_parquet(file_path):
+        return normalize_columns(_parquet_para_texto(pq.read_table(file_path).to_pandas()))
 
     if suffix in XLSX_EXTS and is_real_zip_file(file_path):
         df = pd.read_excel(file_path, dtype=str, sheet_name=0).fillna("")
@@ -147,6 +158,151 @@ def _read_csv_sniffed(source, *, encoding: str = "utf-8") -> pd.DataFrame:
     if last_error:
         raise last_error
     return pd.DataFrame()
+
+
+def is_parquet(file_path: Path) -> bool:
+    """Parquet pelo conteúdo (magic `PAR1`), não só pela extensão."""
+    try:
+        with open(file_path, "rb") as f:
+            return f.read(4) == _PARQUET_MAGIC
+    except OSError:
+        return False
+
+
+def _parquet_para_texto(df: pd.DataFrame) -> pd.DataFrame:
+    """Parquet traz tipos; o contrato do loader é texto.
+
+    Número vira ``str(valor)`` — a representação mais curta que volta ao mesmo
+    double, que é o que ``Decimal(str(x))`` do parser espera. Mapa (tags,
+    `product`) vira JSON, o mesmo formato do CSV do CUR 2.0.
+    """
+
+    def _texto(valor: object) -> str:  # noqa: PLR0911 - um retorno por tipo
+        if valor is None:
+            return ""
+        if isinstance(valor, float):
+            return "" if math.isnan(valor) else repr(valor)
+        if isinstance(valor, list):  # map<string,string> chega como lista de pares
+            try:
+                return json.dumps(dict(valor), ensure_ascii=False, sort_keys=True)
+            except (TypeError, ValueError):
+                return json.dumps(valor, ensure_ascii=False, default=str)
+        if isinstance(valor, dict):
+            return json.dumps(valor, ensure_ascii=False, sort_keys=True, default=str)
+        if isinstance(valor, (datetime, pd.Timestamp)):
+            return pd.Timestamp(valor).isoformat()
+        return str(valor)
+
+    return pd.DataFrame({c: [_texto(v) for v in df[c].tolist()] for c in df.columns})
+
+
+def ler_colunas(file_path: Path) -> list[str]:
+    """Só o cabeçalho, já normalizado. Para decidir o que ler antes de ler."""
+    suffix = file_path.suffix.lower()
+    if is_parquet(file_path):
+        return [c.strip() for c in pq.ParquetFile(file_path).schema_arrow.names]
+    if suffix in XLSX_EXTS and is_real_zip_file(file_path):
+        return list(normalize_columns(pd.read_excel(file_path, dtype=str, nrows=0)).columns)
+    primeira = _primeira_linha(file_path)
+    sep = _sniff_sep(primeira)
+    nomes = next(csv.reader([primeira], delimiter=sep), [])
+    return list(normalize_columns(pd.DataFrame(columns=nomes)).columns)
+
+
+def iter_tabular(
+    file_path: Path,
+    *,
+    colunas: set[str] | None = None,
+    tamanho: int = 200_000,
+) -> Iterator[pd.DataFrame]:
+    """Lê em blocos, só as colunas pedidas, tudo como texto.
+
+    Um CUR tem ~125 colunas e o parser usa ~40; um CUR horário tem milhões de
+    linhas. Ler tudo de uma vez (como ``read_tabular``) não cabe na memória de
+    um pod. Colunas pedidas que não existem no arquivo são ignoradas — quem
+    decide se uma coluna ausente é degradação ou erro é o parser.
+    """
+    if is_parquet(file_path):
+        yield from _iter_parquet(file_path, colunas, tamanho)
+        return
+    suffix = file_path.suffix.lower()
+    if suffix in XLSX_EXTS and is_real_zip_file(file_path):
+        df = read_tabular(file_path)
+        yield df[[c for c in df.columns if colunas is None or c in colunas]]
+        return
+
+    primeira = _primeira_linha(file_path)
+    sep = _sniff_sep(primeira)
+
+    def _usar(nome: str) -> bool:
+        return colunas is None or _limpar_nome(nome) in colunas
+
+    fonte: Any
+    if suffix == ".zip" and is_real_zip_file(file_path):
+        with zipfile.ZipFile(file_path) as z:
+            csvs = [n for n in z.namelist() if n.lower().endswith(".csv")]
+            if not csvs:
+                return
+            with z.open(csvs[0]) as fonte:
+                yield from _blocos_csv(fonte, sep, _usar, tamanho)
+        return
+    fonte = file_path
+    yield from _blocos_csv(fonte, sep, _usar, tamanho)
+
+
+def _blocos_csv(
+    fonte: Any, sep: str, usar: Callable[[str], bool], tamanho: int
+) -> Iterator[pd.DataFrame]:
+    leitor = pd.read_csv(
+        fonte,
+        dtype=str,
+        sep=sep,
+        usecols=usar,
+        keep_default_na=False,
+        chunksize=tamanho,
+        encoding="utf-8-sig",
+        encoding_errors="replace",
+        compression="infer",
+    )
+    for bloco in leitor:
+        yield normalize_columns(bloco)
+
+
+def _iter_parquet(
+    file_path: Path, colunas: set[str] | None, tamanho: int
+) -> Iterator[pd.DataFrame]:
+    arquivo = pq.ParquetFile(file_path)
+    nomes = arquivo.schema_arrow.names
+    escolhidas = [n for n in nomes if colunas is None or n.strip() in colunas]
+    for lote in arquivo.iter_batches(batch_size=tamanho, columns=escolhidas):
+        yield normalize_columns(_parquet_para_texto(lote.to_pandas()))
+
+
+def _primeira_linha(file_path: Path) -> str:
+    suffix = file_path.suffix.lower()
+    if suffix == ".gz":
+        with gzip.open(file_path, "rt", encoding="utf-8-sig", errors="replace") as f:
+            return f.readline()
+    if suffix == ".zip" and is_real_zip_file(file_path):
+        with zipfile.ZipFile(file_path) as z:
+            csvs = [n for n in z.namelist() if n.lower().endswith(".csv")]
+            if not csvs:
+                return ""
+            with z.open(csvs[0]) as f:
+                return f.readline().decode("utf-8-sig", errors="replace")
+    with open(file_path, encoding="utf-8-sig", errors="replace") as f:
+        return f.readline()
+
+
+def _sniff_sep(linha: str) -> str:
+    """Delimitador pela contagem no cabeçalho. `csv.Sniffer` erra com cabeçalho
+    de 125 colunas cheio de `_` e `/`; contar é suficiente e previsível."""
+    contagem = {sep: linha.count(sep) for sep in (",", ";", "\t")}
+    return max(contagem, key=lambda s: contagem[s]) if any(contagem.values()) else ","
+
+
+def _limpar_nome(nome: str) -> str:
+    return str(next(iter(normalize_columns(pd.DataFrame(columns=[nome])).columns)))
 
 
 def read_xlsx_headers_as_csv_bytes(file_path: Path) -> bytes:

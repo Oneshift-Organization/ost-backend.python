@@ -19,7 +19,17 @@ from app.infrastructure.terraform.hcl import (
     comentario,
     referencia,
 )
-from app.infrastructure.terraform.renderers.base import nome_cloud
+from app.infrastructure.terraform.renderers.base import (
+    com_indice,
+    instancias_banco,
+    nome_banco,
+    nome_cloud,
+    quantidade_volumes,
+    texto_banco,
+    texto_tamanho_disco,
+    texto_volume_bucket,
+    var_versao,
+)
 from app.schemas.terraform import (
     RecursoTerraform,
     TerraformBlueprint,
@@ -134,15 +144,17 @@ def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     # gp3 e st1 são os equivalentes diretos do que o pool classificou como
     # SSD e HDD na origem.
     tipo = "gp3" if str(cfg.get("disk_type", "")).endswith("ssd") else "st1"
-    return comentario(
-        "TAMANHO ESTIMADO a partir do custo mensal — veja a premissa no README.\n"
-        "Confira contra o uso real antes de aplicar."
-    ) + "\n" + bloco("resource", ["aws_ebs_volume", r.logical_name], [
+    n = quantidade_volumes(cfg)
+    nome = nome_cloud(bp.project_name, r.logical_name)
+    return comentario(texto_tamanho_disco(cfg)) + "\n" + bloco(
+        "resource", ["aws_ebs_volume", r.logical_name],
+        ([atributo("count", n)] if n > 1 else []) + [
         atributo("availability_zone", f"{bp.region}a"),
         atributo("size", int(cfg.get("size_gb") or 10)),
         atributo("type", tipo),
         atributo("encrypted", True),
-        atributo("tags", {"Name": nome_cloud(bp.project_name, r.logical_name)}),
+        atributo("tags", referencia(f'{{\n    Name = "{nome}-${{count.index}}"\n  }}')
+                 if n > 1 else {"Name": nome}),
     ])
 
 
@@ -153,8 +165,8 @@ def _bucket(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
     partes = [
         comentario(
-            f"Volume estimado: ~{cfg.get('estimated_gb')} GB (derivado do custo).\n"
-            "`bucket_prefix` e não `bucket`: nome de S3 é GLOBAL, e um nome fixo\n"
+            texto_volume_bucket(cfg)
+            + "`bucket_prefix` e não `bucket`: nome de S3 é GLOBAL, e um nome fixo\n"
             "colidiria com outro cliente — erro que só apareceria no apply."
         ),
         bloco("resource", ["aws_s3_bucket", r.logical_name], [
@@ -197,14 +209,13 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     # de propósito geral; o número de vCPU vira o tamanho mais próximo.
     classe = _classe_rds(vcpus)
     return comentario(
-        f"vCPU ESTIMADO ({vcpus}) a partir do custo mensal — veja o README.\n"
+        texto_banco(cfg, vcpus) + "\n"
         f"Traduzido para a classe {classe}, a mais próxima acima.\n"
-        "Motor e versão NÃO foram deduzidos: o billing não os informa.\n"
-        "Preencha `database_version` antes de aplicar.\n"
         "`deletion_protection` fica ligado; desligue conscientemente."
     ) + "\n" + bloco("resource", ["aws_db_instance", r.logical_name], [
-        atributo("identifier", nome_cloud(bp.project_name, "db")),
-        atributo("engine", referencia("var.database_version")),
+        *([atributo("count", n)] if (n := instancias_banco(cfg)) > 1 else []),
+        atributo("identifier", com_indice(nome_banco(bp, r), n)),
+        *_motor(cfg),
         atributo("instance_class", classe),
         atributo("allocated_storage", 100),
         atributo("storage_encrypted", True),
@@ -212,8 +223,27 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("publicly_accessible", False),
         atributo("deletion_protection", True),
         atributo("skip_final_snapshot", False),
-        atributo("final_snapshot_identifier", nome_cloud(bp.project_name, "db", "final")),
+        atributo("final_snapshot_identifier", com_indice(nome_banco(bp, r, "final"), n)),
     ])
+
+
+# Família do motor medido → `engine` do RDS. Aurora vira o motor base: o pacote
+# gera `aws_db_instance`, não cluster Aurora.
+_MOTOR_RDS = {
+    "postgresql": "postgres",
+    "mysql": "mysql",
+    "sqlserver": "sqlserver-se",
+    "oracle": "oracle-se2",
+}
+
+
+def _motor(cfg: dict) -> list[str]:
+    """Motor medido vira literal e a variável fica só com a versão; sem medida,
+    a variável segue carregando o motor, como no caminho agregado."""
+    motor = _MOTOR_RDS.get(str(cfg.get("engine_family") or ""))
+    if motor is None:
+        return [atributo("engine", referencia("var.database_version"))]
+    return [atributo("engine", motor), atributo("engine_version", var_versao(cfg))]
 
 
 _CLASSES_RDS = ((2, "db.m6g.large"), (4, "db.m6g.xlarge"), (8, "db.m6g.2xlarge"),

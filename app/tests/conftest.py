@@ -1,10 +1,75 @@
+import importlib.util
+import sys
+from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from uuid import UUID
 
 import pandas as pd
 import pytest
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "billing"
+_RAIZ = Path(__file__).resolve().parents[2]
+FIXTURES_INTEGRACAO = _RAIZ / "app/tests/integration/fixtures"
+
+
+def carregar_gerador_de_mocks() -> ModuleType:
+    """`scripts/gerar_mocks_billing.py` como módulo (scripts/ não é pacote)."""
+    nome = "gerar_mocks_billing"
+    if nome in sys.modules:
+        return sys.modules[nome]
+    spec = importlib.util.spec_from_file_location(nome, _RAIZ / "scripts/gerar_mocks_billing.py")
+    assert spec is not None and spec.loader is not None
+    modulo = importlib.util.module_from_spec(spec)
+    # `@dataclass` procura o módulo em sys.modules durante a execução.
+    sys.modules[nome] = modulo
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+@dataclass(frozen=True)
+class MocksBilling:
+    cur: Path
+    bigquery: Path
+    bigquery_csv: Path
+    azure: Path
+    oci: Path
+    # Totais esperados dos mocks sintéticos (Azure/OCI), devolvidos pelo gerador.
+    resumo_azure: object = None
+    resumo_oci: object = None
+
+
+def gerar_mocks(destino: Path) -> MocksBilling:
+    """Gera os mocks de export detalhado em ``destino``.
+
+    Não são versionados: passam de 500 KB (limite do pre-commit do projeto) e
+    o gerador é determinístico — gerar é tão reproduzível quanto guardar.
+    """
+    gerador = carregar_gerador_de_mocks()
+    cur = destino / "mock_aws_cur2_2026-03.csv.gz"
+    bigquery = destino / "mock_gcp_bigquery_2025-12.json.gz"
+    bigquery_csv = destino / "mock_gcp_bigquery_achatado_2025-12.csv"
+    azure = destino / "mock_azure_cost_details_2026-03.csv"
+    oci = destino / "mock_oci_cost_report_2026-03.csv.gz"
+    gerador.gerar_cur_aws(FIXTURES_INTEGRACAO / "aws_cost_explorer_full.csv", cur)
+    gerador.gerar_bigquery_gcp(
+        FIXTURES_INTEGRACAO / "gcp_cost_table_full.csv", bigquery, bigquery_csv
+    )
+    return MocksBilling(
+        cur=cur,
+        bigquery=bigquery,
+        bigquery_csv=bigquery_csv,
+        azure=azure,
+        oci=oci,
+        resumo_azure=gerador.gerar_azure(azure),
+        resumo_oci=gerador.gerar_oci(oci),
+    )
+
+
+@pytest.fixture(scope="session")
+def mocks_billing(tmp_path_factory) -> MocksBilling:
+    """Mocks gerados uma vez por sessão de testes (~7 s)."""
+    return gerar_mocks(tmp_path_factory.mktemp("mocks_billing"))
 
 
 def _csv_to_xlsx(csv_path: Path, target: Path) -> Path:

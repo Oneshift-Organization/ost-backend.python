@@ -46,6 +46,7 @@ def aggregate_by_family(pools: tuple[WorkloadPool, ...]) -> tuple[FamilyPool, ..
                 "os_licensing": Decimal("0"),
                 "projects": [],
                 "hours_window": p.hours_window,
+                "inventario": None,
             },
         )
         b["vcpus"] += p.capacity.vcpus
@@ -54,6 +55,10 @@ def aggregate_by_family(pools: tuple[WorkloadPool, ...]) -> tuple[FamilyPool, ..
         b["os_licensing"] += p.costs.os_licensing
         if p.pool_key.project_id not in b["projects"]:
             b["projects"].append(p.pool_key.project_id)
+        if p.inventario is not None:
+            b["inventario"] = (
+                p.inventario if b["inventario"] is None else b["inventario"].juntar(p.inventario)
+            )
 
     pools = tuple(
         FamilyPool(
@@ -65,6 +70,7 @@ def aggregate_by_family(pools: tuple[WorkloadPool, ...]) -> tuple[FamilyPool, ..
             ),
             hours_window=b["hours_window"],
             source_projects=tuple(b["projects"]),
+            inventario=b["inventario"],
         )
         for key, b in buckets.items()
     )

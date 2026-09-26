@@ -59,7 +59,12 @@ from app.use_cases.billing.upload_billing_file import UploadBillingFileInput
 router = APIRouter(prefix="/billing-files")
 _log = get_logger(__name__)
 
-_ALLOWED_EXT = {".csv", ".tsv", ".txt", ".gz", ".zip", ".json", ".ndjson", ".xlsx", ".xlsm"}
+# `.parquet`: um dos três formatos oficiais do CUR 2.0. `.jsonl`: NDJSON com
+# a outra extensão usual (o `bq extract` e ferramentas de ETL usam as duas).
+_ALLOWED_EXT = {
+    ".csv", ".tsv", ".txt", ".gz", ".zip", ".json", ".ndjson", ".jsonl",
+    ".xlsx", ".xlsm", ".parquet",
+}
 
 _MAX_REPORTS_PER_PAGE = 500
 _MAX_ITEMS_PER_PAGE = 1000

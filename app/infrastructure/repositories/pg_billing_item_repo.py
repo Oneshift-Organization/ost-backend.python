@@ -62,7 +62,11 @@ class PgBillingItemRepository:
                 BillingItemModel.report_id == report_id,
                 BillingItemModel.user_id == user_id,
             )
-            .order_by(BillingItemModel.cost.desc(), BillingItemModel.service)
+            # `id` desempata: sem ordem total, a paginação por offset repete
+            # e pula linhas (centenas empatam em custo zero no mesmo serviço).
+            .order_by(
+                BillingItemModel.cost.desc(), BillingItemModel.service, BillingItemModel.id
+            )
             .offset(offset)
             .limit(limit)
         )
@@ -93,6 +97,11 @@ class PgBillingItemRepository:
             is_correction=model.is_correction,
             is_estimate=model.is_estimate,
             line_hash=model.line_hash,
+            usage_type=model.usage_type,
+            resource_type=model.resource_type,
+            charge_kind=model.charge_kind,
+            cost_billed=model.cost_billed,
+            attributes=model.attributes or {},
         )
 
     @staticmethod
@@ -119,4 +128,11 @@ class PgBillingItemRepository:
             "is_correction": item.is_correction,
             "is_estimate": item.is_estimate,
             "line_hash": item.line_hash,
+            "usage_type": item.usage_type,
+            "resource_type": item.resource_type,
+            "charge_kind": item.charge_kind,
+            "cost_billed": item.cost_billed,
+            # NULL em vez de `{}` no legado: deixa claro no banco que a linha
+            # não veio de export detalhado, em vez de fingir "sem atributos".
+            "attributes": item.attributes or None,
         }

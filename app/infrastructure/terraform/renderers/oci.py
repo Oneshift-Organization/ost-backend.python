@@ -13,6 +13,8 @@ Duas particularidades:
 
 from __future__ import annotations
 
+import hashlib
+
 from app.infrastructure.terraform.hcl import (
     atributo,
     bloco,
@@ -20,7 +22,16 @@ from app.infrastructure.terraform.hcl import (
     comentario,
     referencia,
 )
-from app.infrastructure.terraform.renderers.base import nome_cloud
+from app.infrastructure.terraform.renderers.base import (
+    com_indice,
+    instancias_banco,
+    nome_banco,
+    nome_cloud,
+    quantidade_volumes,
+    texto_banco,
+    texto_tamanho_disco,
+    texto_volume_bucket,
+)
 from app.schemas.terraform import (
     RecursoTerraform,
     TerraformBlueprint,
@@ -195,13 +206,14 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
-    return comentario(
-        "TAMANHO ESTIMADO a partir do custo mensal — veja a premissa no README.\n"
-        "Confira contra o uso real antes de aplicar."
-    ) + "\n" + bloco("resource", ["oci_core_volume", r.logical_name], [
+    n = quantidade_volumes(cfg)
+    nome = nome_cloud(bp.project_name, r.logical_name)
+    return comentario(texto_tamanho_disco(cfg)) + "\n" + bloco(
+        "resource", ["oci_core_volume", r.logical_name],
+        ([atributo("count", n)] if n > 1 else []) + [
         _compartimento(),
         atributo("availability_domain", referencia("var.availability_domain")),
-        atributo("display_name", nome_cloud(bp.project_name, r.logical_name)),
+        atributo("display_name", referencia(f'"{nome}-${{count.index}}"') if n > 1 else nome),
         atributo("size_in_gbs", int(cfg.get("size_gb") or 50)),
     ])
 
@@ -210,7 +222,7 @@ def _bucket(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
     publico = bool(cfg.get("public_access"))
     return comentario(
-        f"Volume estimado: ~{cfg.get('estimated_gb')} GB (derivado do custo).\n"
+        texto_volume_bucket(cfg) +
         "O bucket não tem tamanho declarado — o número é só referência."
     ) + "\n" + bloco("resource", ["oci_objectstorage_bucket", r.logical_name], [
         _compartimento(),
@@ -221,20 +233,33 @@ def _bucket(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     ])
 
 
+def _db_name(bp: TerraformBlueprint, r: RecursoTerraform, n: int) -> str:
+    """`db_name`: só alfanumérico, até 14, único no compartimento.
+
+    Um banco (caminho agregado): o nome de sempre. Grupos medidos: prefixo +
+    4 hex do nome lógico (dois grupos truncados para o mesmo prefixo
+    colidiriam) + índice do `count` — 6 + 4 + 3 dígitos cabem em 14.
+    """
+    if not r.configuration.get("source_class"):
+        return nome_cloud(bp.project_name, maximo=14, separador="").upper()
+    prefixo = nome_cloud(bp.project_name, maximo=6, separador="").upper()
+    prefixo += hashlib.sha256(r.logical_name.encode()).hexdigest()[:4].upper()
+    return referencia(f'"{prefixo}${{count.index}}"') if n > 1 else prefixo
+
+
 def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
     vcpus = max(1, int(cfg.get("vcpus") or 1))
     return comentario(
-        f"vCPU ESTIMADO ({vcpus}) a partir do custo mensal — veja o README.\n"
+        texto_banco(cfg, vcpus) + "\n"
         "Autonomous Database: a OCI cobra por OCPU, que casa com o vCPU derivado.\n"
         "A senha de admin NÃO é gerada aqui — preencha `db_admin_password`."
     ) + "\n" + bloco(
         "resource", ["oci_database_autonomous_database", r.logical_name], [
+            *([atributo("count", n)] if (n := instancias_banco(cfg)) > 1 else []),
             _compartimento(),
-            atributo("db_name", nome_cloud(
-                bp.project_name, maximo=14, separador=""
-            ).upper()),
-            atributo("display_name", nome_cloud(bp.project_name, "db")),
+            atributo("db_name", _db_name(bp, r, n)),
+            atributo("display_name", com_indice(nome_banco(bp, r), n)),
             atributo("cpu_core_count", vcpus),
             atributo("data_storage_size_in_tbs", 1),
             atributo("admin_password", referencia("var.db_admin_password")),
