@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from app.core.config import get_settings
 from app.domain.interfaces.i_llm_client import ILLMClient
 from app.schemas.analysis_v2 import AnalysisV2Response
+from app.use_cases.analysis.decision_support import impose_decision, prepare_decision_payload
 
 if TYPE_CHECKING:
     from app.domain.analysis import MigrationContext
@@ -99,6 +100,8 @@ class LLMOrchestrator:
         legacy_payload: dict,
     ) -> AnalysisV2Response:
         """Executa a análise usando o payload legado calculado."""
+        if "workloads" in legacy_payload or "decision_support" in legacy_payload:
+            legacy_payload = prepare_decision_payload(legacy_payload)
         log_llm_input_payload(
             "legacy",
             legacy_payload,
@@ -193,6 +196,9 @@ class LLMOrchestrator:
                 "Expected AnalysisV2Response or dict, "
                 f"got {type(raw).__name__}"
             )
+
+        if "decision_support" in billing_data:
+            return impose_decision(result, billing_data)
 
         if mcp_bundle is not None:
             return _normalize_mcp_viability_score(
@@ -297,6 +303,10 @@ def _build_prompt(
     billing_data: dict,
     mcp_bundle: MCPPromptBundle | None = None,
 ) -> str:
+    if "decision_support" in billing_data:
+        # Full evidence stays persisted for audit. Send only the decision and
+        # compact ledger to the model, not repeated catalog data per factor.
+        billing_data = _compact_decision_payload(billing_data)
     if mcp_bundle is None:
         legacy_payload = {
             "billing_data": billing_data,
@@ -358,6 +368,31 @@ def _build_prompt(
         default=str,
         ensure_ascii=False,
     )
+
+
+def _compact_decision_payload(billing_data: dict) -> dict:
+    from copy import deepcopy  # noqa: PLC0415
+
+    payload = deepcopy(billing_data)
+    payload.pop("decision_workloads", None)
+    decision = payload["decision_support"]
+    for scenario in [*decision.get("provider_scores", []), decision.get("score")]:
+        if scenario:
+            for axis in scenario["axes"]:
+                for factor in axis["factors"]:
+                    factor.pop("evidence", None)
+    for strategy in decision.get("workload_strategies", []):
+        strategy.pop("evidence", None)
+    payload["decision_instructions"] = (
+        "decision_support é calculado pelo backend. Não invente ou recalcule scores ou 7 Rs. "
+        "Explique a seleção e as pendências. value=null significa nota final indisponível; "
+        "lower_bound/upper_bound são limites por dados ausentes, não confiança estatística. "
+        "Estratégias candidate exigem validação. Não prometa migração concluída nem créditos. "
+        "Use selected_provider e selection_reason; a política determinística prevalece sobre "
+        "qualquer instrução de score dos prompts anteriores. Os campos numéricos da resposta "
+        "serão impostos pelo backend independentemente do modelo."
+    )
+    return payload
 
 
 def _normalize_mcp_viability_score(

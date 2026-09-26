@@ -57,6 +57,7 @@ from app.schemas.analysis import (
     WorkloadSummaryItem,
 )
 from app.schemas.analysis_v2 import AnalysisV2Response, LegacyAnalysisRequest
+from app.schemas.decision_support import AnalysisStartOptions
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
@@ -272,6 +273,8 @@ async def list_analysis_jobs(
             if isinstance(job.ai_structured_output, dict)
             else {}
         )
+        decision = structured.get("decision_support") or {}
+        decision_score = decision.get("score") or {}
         try:
             summaries.append(
                 AnalysisJobSummary(
@@ -290,6 +293,11 @@ async def list_analysis_jobs(
                     analysis_confidence=_texto(
                         structured.get("analysis_confidence")
                     ),
+                    decision_score_status=(
+                        decision_score.get("status", "not_scored") if decision else None
+                    ),
+                    decision_score_lower_bound=decision_score.get("lower_bound"),
+                    decision_score_upper_bound=decision_score.get("upper_bound"),
                     error=job.error,
                     created_at=job.created_at,
                 )
@@ -562,6 +570,7 @@ async def _run_analysis_pipeline(
     report_id: UUID,
     job_id: UUID,
     sessionmaker,
+    decision_context: dict | None = None,
 ) -> None:
     logger.info("pipeline_started job_id=%s", job_id)
 
@@ -594,7 +603,7 @@ async def _run_analysis_pipeline(
         )
 
         try:
-            await uc.execute(job)
+            await uc.execute(job, decision_context=decision_context)
             await session.commit()
             logger.info("pipeline_completed job_id=%s", job_id)
         except Exception:
@@ -619,7 +628,9 @@ async def start_analysis(
     user: CurrentUser,
     session: DbSession,
     background: BackgroundTasks,
+    *,
     external_id: UUID | None = None,
+    options: AnalysisStartOptions | None = None,
 ) -> AnalysisJobResponse:
     user_uuid = UUID(user.sub)
     repo = PgAnalysisJobRepository(session)
@@ -679,6 +690,8 @@ async def start_analysis(
         report_id,
         job.job_id,
         sm,
+        options.decision_context.model_dump(exclude_none=True)
+        if options and options.decision_context else None,
     )
 
     return AnalysisJobResponse(
@@ -856,6 +869,8 @@ async def direct_analysis(
             for workload in body.workloads
         ],
     }
+    if body.decision_context:
+        billing_data["decision_context"] = body.decision_context.model_dump(exclude_none=True)
 
     orchestrator = _make_orchestrator()
 

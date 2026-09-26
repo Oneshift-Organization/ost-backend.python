@@ -12,6 +12,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.decision_support import DecisionContext, DecisionSupport
+
 logger = logging.getLogger(__name__)
 
 # ── Output schema ─────────────────────────────────────────────────────────────
@@ -115,6 +117,7 @@ class AnalysisV2Response(BaseModel):
     flags: dict[str, list[Any]] = Field(default_factory=dict)
     strategic_notes: list[str] = Field(default_factory=list)
     action_plan: list[str] = Field(default_factory=list)
+    decision_support: DecisionSupport | None = None
 
     @classmethod
     def resilient_parse(cls, raw: dict[str, Any]) -> AnalysisV2Response:
@@ -270,3 +273,4 @@ class LegacyAnalysisRequest(BaseModel):
     total_spend: float
     company_context: CompanyContext | None = None
     workloads: list[LegacyWorkload] = Field(default_factory=list)
+    decision_context: DecisionContext | None = None

@@ -27,6 +27,7 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
 )
+from app.use_cases.analysis.decision_support import impose_decision, prepare_decision_payload
 
 # Shorthand used inside _add_financials to silently ignore bad Decimal conversions
 _suppress = contextlib.suppress
@@ -333,7 +334,9 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
     return json.dumps(payload, default=str), missing_equiv_pool_ids
 
 
-def build_pipeline_llm_input_payload(ctx) -> tuple[dict, list[str]]:
+def build_pipeline_llm_input_payload(
+    ctx, decision_context: dict | None = None
+) -> tuple[dict, list[str]]:
     pools_json, missing_equiv_ids = _serialize_pools(ctx)
     context_payload = json.loads(pools_json)
     fx = _fx_from_premissas(ctx)
@@ -352,7 +355,28 @@ def build_pipeline_llm_input_payload(ctx) -> tuple[dict, list[str]]:
     resumo = getattr(ctx, "resumo_executivo", {}) or {}
     if resumo:
         context_payload["resumo_executivo"] = resumo
-    return context_payload, missing_equiv_ids
+    context_payload["decision_workloads"] = _decision_workloads(ctx, fx)
+    if decision_context:
+        context_payload["decision_context"] = decision_context
+    return prepare_decision_payload(context_payload), missing_equiv_ids
+
+
+def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
+    """Persist catalog evidence before the model can reinterpret any of it."""
+    return [{
+        "name": service.service_name,
+        "category": category.category,
+        "cost": _money(service.total_cost, fx),
+        "migration": getattr(service, "migration_expectation", None) or {},
+        "source_metadata": getattr(service, "migration_metadata", None) or {},
+        "type_source": getattr(service, "type_source", "inferido"),
+        "evidence_source": "catalog_snapshot",
+        "targets": [{
+            "provider": normalize_provider(eq.provider),
+            "service_name": eq.service_name,
+            "metadata": eq.metadata or {},
+        } for eq in service.equivalents],
+    } for category in getattr(ctx, "categories", []) or [] for service in category.services]
 
 
 def _serialize_equivalent(equiv) -> dict:
@@ -473,7 +497,7 @@ def serialize_as_legacy(ctx) -> dict:
             "equivalents": [_equiv_to_legacy(e) for e in db_equivalents],
         })
 
-    return {
+    result = {
         "source_provider": ctx.source_provider,
         "billing_period": ctx.billing_period,
         "currency": ctx.currency,
@@ -492,6 +516,14 @@ def serialize_as_legacy(ctx) -> dict:
         },
         "workloads": workloads,
     }
+    # The direct/legacy narrative keeps its format but shares exactly the same
+    # deterministic snapshot and policy as the primary pipeline.
+    result.update({
+        key: value
+        for key, value in build_pipeline_llm_input_payload(ctx)[0].items()
+        if key in {"decision_workloads", "decision_support", "resumo_executivo", "premissas"}
+    })
+    return result
 
 
 def _equiv_to_legacy(e) -> dict:
@@ -524,7 +556,7 @@ class RunAnalysisPipelineUseCase:
     4. Persiste o resultado (structured + text) como COMPLETED ou FAILED.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0917 -- preserve the existing dependency-injection contract
         self,
         analysis_job_repo: IAnalysisJobRepository,
         report_repo: IBillingReportRepository,
@@ -546,7 +578,7 @@ class RunAnalysisPipelineUseCase:
         self._sku_repo = sku_repo
         self._orchestrator = llm_orchestrator
 
-    async def execute(self, job: AnalysisJob) -> None:
+    async def execute(self, job: AnalysisJob, *, decision_context: dict | None = None) -> None:
         job.mark_processing()
         # Transação própria e curta ANTES de qualquer I/O externo: o estado
         # intermediário precisa existir no banco enquanto o LLM roda, senão quem
@@ -578,7 +610,7 @@ class RunAnalysisPipelineUseCase:
 
             pools_json, missing_equiv_ids = _serialize_pools(ctx)
             # Capture payload for persistence before sending to LLM
-            llm_input, _ = build_pipeline_llm_input_payload(ctx)
+            llm_input, _ = build_pipeline_llm_input_payload(ctx, decision_context)
 
             ui_report = await self._orchestrator.generate_report(
                 context=ctx,
@@ -601,8 +633,9 @@ class RunAnalysisPipelineUseCase:
             # é preservado. Sem isto a resposta da API poderia contradizer a
             # própria reconciliação.
             ui_report = apply_backend_authority(
-                ui_report, getattr(ctx, "resumo_executivo", None)
+                ui_report, llm_input.get("resumo_executivo")
             )
+            ui_report = impose_decision(ui_report, llm_input)
 
             flags = ui_report.flags
             if ctx.missing_sku_ids:
@@ -620,8 +653,14 @@ class RunAnalysisPipelineUseCase:
                     for pool_id in missing_equiv_ids
                 )
 
+            decision_score = ui_report.decision_support.score
+            score_description = (
+                f"{decision_score.value}/100"
+                if decision_score and decision_score.value is not None
+                else "parcial ou indisponível; consulte decision_support"
+            )
             llm_output = (
-                f"Viability score: {ui_report.viability_score}/1000. "
+                f"Score determinístico: {score_description}. "
                 f"Recommendation: {ui_report.recommendation}. "
                 f"Recommended provider: {ui_report.recommended_provider}. "
                 f"Rationale: {ui_report.recommendation_rationale}. "

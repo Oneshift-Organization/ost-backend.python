@@ -18,8 +18,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.domain.services.authority import ResultadoAutoridade, aplicar_autoridade
+from app.domain.services.authority import ResultadoAutoridade, Substituicao, aplicar_autoridade
 from app.domain.services.confidence import rebaixar
+from app.schemas.analysis_v2 import AnalysisV2Response
+from app.use_cases.analysis.decision_support import impose_decision
 
 # Tipos de sugestão que afetam a confiança quando a severidade é alta. Os demais
 # (oportunidade, risco, dado_faltante) são informativos — o agente comentando o
@@ -162,6 +164,17 @@ def receber_analise_do_agente(
     """Aplica autoridade e sugestões. Função pura — persistência é da rota."""
     verdade = mapear_verdade(payload_backend, resposta_agente)
     autoridade = aplicar_autoridade(resposta_agente, verdade)
+
+    if "decision_support" in payload_backend:
+        imposed = impose_decision(
+            AnalysisV2Response.resilient_parse(autoridade.resposta), payload_backend,
+        ).model_dump(mode="json")
+        # Preserve other agent-surface fields (payback, provenance, etc.).
+        corrected = {**autoridade.resposta, **imposed}
+        overrides = tuple(Substituicao(key, autoridade.resposta.get(key), value)
+                          for key, value in imposed.items()
+                          if autoridade.resposta.get(key) != value)
+        autoridade = ResultadoAutoridade(corrected, autoridade.substituicoes + overrides)
 
     conf_inicial = str(
         autoridade.resposta.get("analysis_confidence")

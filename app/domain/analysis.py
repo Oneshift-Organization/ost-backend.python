@@ -88,6 +88,8 @@ class BillingItemSummary:
     # inferido pode gerar DE-PARA errado (foi assim que object storage virou
     # block storage) — quem lê precisa saber a diferença.
     type_source: str = "curado"
+    # Raw evidence preserves missing values that legacy expectation rules default.
+    migration_metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

@@ -19,6 +19,7 @@ from app.domain.analysis import (
     TechnicalMatch,
     WorkloadSummary,
 )
+from app.domain.entities.workload_pool import AuxiliaryCosts, WorkloadPool
 from app.domain.interfaces.i_service_repositories import (
     IServiceComparisonRepository,
     IServiceMetadataRepository,
@@ -97,7 +98,7 @@ _COMPUTE_SERVICE_TYPES = frozenset({"virtual_server", "relational_database", "co
 
 
 class BuildMigrationContextUseCase:
-    def __init__(
+    def __init__(  # noqa: PLR0917 -- existing dependency-injection contract
         self,
         report_repo: IBillingReportRepository,
         item_repo: IBillingEnrichedRepository,
@@ -166,7 +167,9 @@ class BuildMigrationContextUseCase:
             service_agg[key]["items"].append(item)
 
         billing_period = max(period_costs, key=lambda p: period_costs[p])
-        currency = max(currency_counts, key=lambda c: currency_counts[c]) if currency_counts else "USD"
+        currency = (
+            max(currency_counts, key=lambda c: currency_counts[c]) if currency_counts else "USD"
+        )
 
         # ── 2. Load source catalog ───────────────────────────────
         source_comparisons = await self._comparison_repo.list_by_provider(source_provider)
@@ -242,7 +245,9 @@ class BuildMigrationContextUseCase:
             aliases = PROVIDER_SERVICE_ALIASES.get(source_provider, {})
             return aliases.get(name, name)
 
-        def _match(svc_name: str, hint_type: str | None = None) -> ServiceComparison | None:
+        def _match(  # noqa: PLR0911 -- existing ordered catalog-matching fallbacks
+            svc_name: str, hint_type: str | None = None
+        ) -> ServiceComparison | None:
             name = _canonical_name(svc_name)
             n = _normalize(name)
             comp = canonicals.get(n)
@@ -325,6 +330,7 @@ class BuildMigrationContextUseCase:
                 equivalents=equivs,
                 migration_expectation=expectation.as_dict() if expectation else None,
                 type_source="curado" if comp is not None else "inferido",
+                migration_metadata=svc_meta.metadata if svc_meta and not sem_uso else None,
             )
 
             if category_name not in categories:
@@ -369,7 +375,10 @@ class BuildMigrationContextUseCase:
 
                 has_specs = (
                     matched.source_specs is not None
-                    and (matched.source_specs.vcpus is not None or matched.source_specs.ram_gb is not None)
+                    and (
+                        matched.source_specs.vcpus is not None
+                        or matched.source_specs.ram_gb is not None
+                    )
                 )
                 if not has_specs and matched.canonical_service in _COMPUTE_SERVICE_TYPES:
                     missing_sku_set.add(agg["sku_id"])

@@ -120,6 +120,9 @@ class AnalysisJobSummary(BaseModel):
     recommendation: str | None = None
     viability_score: int | None = None
     analysis_confidence: str | None = None
+    decision_score_status: str | None = None
+    decision_score_lower_bound: float | None = None
+    decision_score_upper_bound: float | None = None
     # Só informativo na listagem — a tela de lixeira precisa distinguir. O
     # `GET /v1/analyses` já esconde as depreciadas por default.
     disp_status: int = 1

@@ -37,6 +37,7 @@ def montar_blueprint(
     entrada: TerraformGenerationIn,
 ) -> TerraformBlueprint:
     """Derivação + escolhas do usuário → blueprint pronto para renderizar."""
+    validate_migration_strategy(payload_analise, entrada.target_provider.value)
     plano = derivar_plano(
         payload_analise,
         provedor_destino=entrada.target_provider.value,
@@ -58,6 +59,27 @@ def montar_blueprint(
         unsupported_items=plano.nao_suportado,
         warnings=plano.avisos,
     )
+
+
+def validate_migration_strategy(payload: dict[str, Any], provider: str) -> None:
+    """Do not provision a generic migration when saved evidence forbids that scenario."""
+    decision = payload.get("decision_support") or {}
+    governance = (payload.get("decision_context") or {}).get("governance") or []
+    for evidence in governance:
+        if evidence.get("provider") == provider and (
+            evidence.get("region_approved") is False
+            or evidence.get("compliance_approved") is False
+        ):
+            raise ValueError("Destino bloqueado por requisito declarado de região ou conformidade.")
+    for item in decision.get("workload_strategies") or []:
+        if item.get("provider") == provider and (
+            item.get("strategy") in {"retain", "retire", "repurchase", "relocate"}
+            or item.get("rule") == "7r.conflicting_declarations"
+        ):
+            raise ValueError(
+                "Estratégia dos 7 Rs exige blueprint específico; "
+                "o gerador atual não deve provisionar uma migração genérica."
+            )
 
 
 def _rede(entrada: TerraformGenerationIn) -> list[RecursoTerraform]:

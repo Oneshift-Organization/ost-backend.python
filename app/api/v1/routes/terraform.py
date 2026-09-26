@@ -34,6 +34,7 @@ from app.schemas.terraform import (
     TerraformGenerationIn,
     TerraformGenerationOut,
 )
+from app.use_cases.terraform.build_blueprint import validate_migration_strategy
 from app.use_cases.terraform.generate_terraform import gerar_pacote
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,16 @@ async def iniciar_geracao(
             "a análise não tem payload determinístico gravado; refaça a análise",
             retryable=False,
         )
+
+    try:
+        validate_migration_strategy(analise.llm_input_payload, entrada.target_provider.value)
+    except ValueError as error:
+        raise _erro(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "ESTRATEGIA_REQUER_REVISAO",
+            str(error),
+            retryable=False,
+        ) from error
 
     job = TerraformGenerationJobModel(
         generation_id=uuid4(),
