@@ -62,7 +62,11 @@ class PgBillingItemRepository:
                 BillingItemModel.report_id == report_id,
                 BillingItemModel.user_id == user_id,
             )
-            .order_by(BillingItemModel.cost.desc(), BillingItemModel.service)
+            # `id` desempata: sem ordem total, a paginação por offset repete
+            # e pula linhas (centenas empatam em custo zero no mesmo serviço).
+            .order_by(
+                BillingItemModel.cost.desc(), BillingItemModel.service, BillingItemModel.id
+            )
             .offset(offset)
             .limit(limit)
         )

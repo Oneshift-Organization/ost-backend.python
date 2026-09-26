@@ -58,6 +58,7 @@ from app.domain.services.provider_consolidation import (
 from app.domain.services.reconciliation import reconcile
 from app.domain.services.sku_normalization import squash_key
 from app.services.billing_aggregator import BillingAggregator
+from app.use_cases.analysis.leitura_completa import listar_todos
 
 
 @dataclass(frozen=True)
@@ -130,8 +131,8 @@ class BuildMigrationContextUseCase:
 
         source_provider = report.provider.value
 
-        items = await self._item_repo.list_by_report(
-            payload.report_id, payload.user_id, limit=100000, offset=0,
+        items = await listar_todos(
+            self._item_repo.list_by_report, payload.report_id, payload.user_id
         )
         if not items:
             raise ValueError(f"report {payload.report_id} has no billing items")

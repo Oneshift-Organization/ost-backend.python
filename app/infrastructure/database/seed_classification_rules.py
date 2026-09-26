@@ -45,6 +45,9 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*external ip*", "glob", "network_egress", None, "high", 37),
     ("*ip charge*", "glob", "network_egress", None, "medium", 38),
     ("*cloud nat*", "glob", "network_egress", None, "medium", 39),
+    # Cloud DNS (consulta e zona gerenciada): rede, não "não classificado".
+    ("dns query*", "glob", "network_egress", None, "medium", 76),
+    ("managedzone", "glob", "network_egress", None, "medium", 77),
     # ── Object storage (ANTES do bloco: o catch-all "*storage*" levava o
     #    Cloud Storage inteiro para `storage_hdd`, reprecificando objeto com
     #    taxa de disco — ~2x a taxa certa) ──
@@ -93,13 +96,21 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
 # (pattern, kind, component_type, family, confidence, priority) — AWS UsageType.
 AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     # ── Database (before storage so RDS:*-Storage maps to database) ──
-    ("rds:*", "glob", "database", None, "high", 10),
-    ("aurora:*", "glob", "database", None, "high", 11),
+    # `*` na frente: o tipo de uso fora de us-east-1 vem com prefixo de região
+    # (`SAE1-RDS:GP2-Storage`). Com `rds:*`, o storage do RDS em São Paulo caía
+    # em `*storage*` e virava disco de instância.
+    ("*rds:*", "glob", "database", None, "high", 10),
+    ("*aurora:*", "glob", "database", None, "high", 11),
+    ("*cpucredits:db*", "glob", "database", None, "high", 6),
     ("*instanceusage:db*", "glob", "database", None, "high", 12),
     ("*multi-az*", "glob", "database", None, "medium", 13),
-    ("elasticache:*", "glob", "database", None, "medium", 14),
+    ("*elasticache:*", "glob", "database", None, "medium", 14),
     ("dynamodb*", "glob", "database", None, "medium", 15),
     ("*nodeusage:cache*", "glob", "database", None, "high", 16),
+    # Aurora I/O-Optimized: `InstanceUsageIOOptimized:db.r8g.4xl` não casa
+    # `*instanceusage:db*` (não há `:` logo depois de `instanceusage`) e caía em
+    # L5 — US$ 1,7 mil no bill real e 2,5 mil no mock CUR, sem classificação.
+    ("*instanceusageiooptimized:db*", "glob", "database", None, "high", 5),
     ("*kafka*", "glob", "database", None, "medium", 17),
     ("*elasticsearch*", "glob", "database", None, "medium", 18),
     ("*opensearch*", "glob", "database", None, "medium", 19),
@@ -120,6 +131,10 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*amazoneks*", "glob", "gke_control_plane", None, "high", 8),
     ("*eks*percluster*", "glob", "gke_control_plane", None, "high", 9),
     ("*fargate*", "glob", "core", None, "medium", 28),
+    # Suporte estendido de motor (RDS PostgreSQL 13, ElastiCache): taxa sobre o
+    # banco que já existe. 29, depois das regras de EKS (8/9), que também têm
+    # `extendedSupport` no tipo de uso e são plano de controle, não banco.
+    ("*extendedsupport*", "glob", "database", None, "medium", 29),
     # ── Storage ──
     ("*volumeusage*", "glob", "storage_ssd", None, "high", 30),
     ("ebs:*", "glob", "storage_ssd", None, "high", 31),
@@ -142,6 +157,13 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*lcuusage*", "glob", "network_egress", None, "medium", 47),
     ("*resolvernetworkinterface*", "glob", "network_egress", None, "medium", 48),
     ("*-bytes", "glob", "network_egress", None, "low", 49),
+    # Rede cobrada por hora de recurso ou por endereço — caíam todos em L5.
+    ("*vpn-usage-hours*", "glob", "network_egress", None, "high", 37),
+    ("*vpcendpoint-hours*", "glob", "network_egress", None, "high", 38),
+    ("*publicipv4*", "glob", "network_egress", None, "high", 51),
+    ("dns-queries", "glob", "network_egress", None, "medium", 52),
+    # Performance Insights do RDS (`USE1:PI_LTR_FMR:Provisioned`).
+    ("*:pi_*", "glob", "database", None, "medium", 53),
     # ── Requisições de API (ops) ──
     # NÃO é armazenamento, de nenhum tipo. O padrão pega `RequestV2-Tier1` do
     # WAF ($2,7 mil no bill real) e `Requests-FIFO` do SQS, além do S3 — e

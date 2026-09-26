@@ -20,12 +20,16 @@ continuam produzindo exatamente o mesmo payload; o teste de caracterização
 > | E2 — mocks + invariantes | ✅ |
 > | E3 — parser CUR 2.0 | ✅ |
 > | E4 — parser BigQuery | ✅ |
-> | E5 — enriquecimento | ⬜ |
+> | E5 — enriquecimento | ✅ |
 > | E6 — agregador + fatos medidos | ⬜ |
 > | E7 — payload e premissas | ⬜ |
 > | E8 — Terraform usando fatos medidos | ⬜ |
 > | E9 — Azure e OCI | ⬜ |
 > | E10 — E2E + auditoria de coerência | ⬜ |
+
+> **Antes de ligar em dev/produção:** `alembic upgrade head` (colunas novas),
+> re-seed de `sku_classification_rules` (regras novas e `*rds:*` com prefixo de
+> região) e `scripts/re_enrich_report.py` nos relatórios existentes.
 
 ---
 

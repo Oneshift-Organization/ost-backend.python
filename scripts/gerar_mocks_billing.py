@@ -483,6 +483,13 @@ def _iso(momento: datetime) -> str:
 
 
 def _unidade(usage_type: str) -> str:  # noqa: PLR0911 - cascata de padrões
+    # Instância e load balancer são cobrados por hora no CUR real. Sem este
+    # atalho, `InstanceUsageIOOptimized:` e `LoadBalancerUsage` (sem `usage:`
+    # colado) caíam em "Units".
+    if (_INSTANCIA.search(usage_type) and "ExtendedSupport" not in usage_type) or (
+        "LoadBalancerUsage" in usage_type
+    ):
+        return "Hrs"
     ut = usage_type.lower()
     if "cpucredits" in ut:
         return "vCPU-Hours"
