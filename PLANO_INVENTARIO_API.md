@@ -488,20 +488,31 @@ só:
    dela saem do acoplamento, das ondas e da propagação de criticidade. Ela sai
    numa lista à parte: precisa alcançar as duas nuvens durante a migração e
    migra por último. Achado `ferramenta_administrativa`.
-2. **Balanceador compartilhado:** balanceador com encaminhamento para 2 ou mais
-   unidades tem esses encaminhamentos rebaixados a fraco. Ele depende das
-   aplicações e migra depois delas. Achado `balanceador_compartilhado`.
-3. **Hub de dados:** unidade com acesso `dados` a 3 ou mais bancos/caches que
-   **também são acessados por outra unidade** tem esses acessos rebaixados a
-   fraco. Achado `hub_de_dados`. Uma aplicação com três bancos só dela não é
-   hub: esses bancos não têm outro consumidor.
+2. **Balanceador compartilhado:** balanceador que encaminha para 2 ou mais
+   unidades, **contando a dele** (com tag de aplicação, o balanceador e as VMs
+   da aplicação estão na mesma unidade), tem os encaminhamentos para fora
+   rebaixados a fraco. Ele depende das aplicações e migra depois delas. Achado
+   `balanceador_compartilhado`.
+3. **Hub de dados:** unidade com acesso `dados` a 3 ou mais unidades que são
+   **de outra aplicação** (têm recurso que não é banco nem cache) ou são banco
+   **também acessado por outra unidade** tem esses acessos rebaixados a fraco.
+   Achado `hub_de_dados`. Uma aplicação com três bancos só dela não é hub:
+   esses bancos não têm outro consumidor nem aplicação dentro.
 
 O que sobra de forte junta. Banco compartilhado por aplicações que não são
 ferramenta nem hub junta todas: é acoplamento real, e sai o risco
-`banco_compartilhado` com os consumidores. Grupo com 5 ou mais unidades e 40%
-ou mais de todas dá o risco `grupo_acoplado_grande`. O que as heurísticas não
-pegam (um monitoramento que só acessa dois bancos pela porta do banco) aparece
-nesses dois riscos, e o cliente corrige declarando a ferramenta.
+`banco_compartilhado` quando o banco serve 2 ou mais aplicações (os
+consumidores de fora, mais a aplicação dona quando o banco está na unidade
+dela **ou quando a tag de aplicação diz de quem ele é**). Grupo com 5 ou mais unidades e 40% ou mais de todas dá o risco
+`grupo_acoplado_grande`. O que as heurísticas não pegam (um monitoramento que
+só acessa dois bancos pela porta do banco) aparece nesses dois riscos, e o
+cliente corrige declarando a ferramenta.
+
+Toda dependência que toca uma ferramenta (dela ou para ela) sai do
+acoplamento, das ondas e da propagação. Natureza de uma regra, pela ordem:
+`administrativo` quando ela só libera porta de administração; `encaminhamento`
+quando a origem é balanceador; `dados` quando o alvo é banco ou cache ou a
+porta é de banco; `servico` no resto.
 
 ### RI8 — Ondas
 
@@ -564,6 +575,7 @@ de conectividade híbrida (VPN ou interconexão) durante a migração.
 | `critico_sem_ha` | grupo com criticidade efetiva `alta` contendo banco ou cache sem alta disponibilidade | media |
 | `banco_compartilhado` | banco ou cache que juntou 2 ou mais unidades não-hub no mesmo grupo (RI7) | media |
 | `grupo_acoplado_grande` | RI7 | media |
+| `dependencia_entre_ambientes` | dependência entre unidades de ambientes diferentes (produção que depende de dev, dev que acessa o banco de produção) | media |
 | `inventario_desalinhado` | **só com billing:** captura antes do início do período menos 30 dias, ou depois do fim mais 45 dias | media |
 | `cobertura_baixa` | **só com billing:** menos de 80% do custo com `resource_id` encontrado no inventário | media |
 | `recurso_com_ip_publico` | VM com IP público fora de balanceador | informativa |
@@ -943,6 +955,27 @@ para a internet é `exposicao_administrativa` do mesmo jeito). A natureza
 `dados` pela porta usa a mesma lista da RI11, então os dois pontos não
 divergem. Não sobrou contradição.
 
+### Rodada 5: as regras de acoplamento contra o mock (antes da I4)
+
+Passando o cenário do mock da AWS pela RI7 no papel, com o agrupamento por tag
+de aplicação ligado (o caso comum):
+
+| # | falha | correção |
+|---|---|---|
+| 27 | Com a tag de aplicação, o banco de cada aplicação fica **dentro** da unidade dela. O critério de hub ("bancos também acessados por outra unidade") nunca disparava para o monitoramento: nenhuma aresta chega ao banco além da dele. O monitoramento juntaria todas as aplicações num grupo | o alvo conta como de outra aplicação quando a unidade dele tem recurso que não é banco (RI7.3) |
+| 28 | O balanceador compartilhado não era detectado: o balanceador do catálogo e as VMs do catálogo estão na mesma unidade, então só o encaminhamento para a busca vira aresta (1, não 2) | conta as unidades de destino **incluindo a dele** (RI7.2) |
+| 29 | Banco compartilhado entre o `auth` (dono) e um consumidor de fora não virava risco: o limiar era "2 consumidores" contando só arestas | dono conta como consumidor quando o banco está na unidade da aplicação (RI7) |
+| 30 | Uma regra que libera a porta 22 para um balanceador seria `encaminhamento` ou `administrativo`? A ordem não estava escrita | ordem explícita: administrativo, encaminhamento, dados, serviço (RI7) |
+
+Análise geral depois do ajuste (as regras mudaram, então as funcionalidades
+foram criticadas de novo): sem tag de aplicação, cada banco é unidade própria,
+e os três critérios continuam valendo (banco exclusivo junta com a
+aplicação; bastion vira ferramenta pela porta; monitoramento vira hub pelos
+bancos com outro consumidor). Com a tag, os três passam a funcionar também. A
+propagação de criticidade e as ondas só enxergam o que sobrou depois dos
+filtros, então não mudam de definição. O Terraform (RI15) não depende de
+grupo nem de onda, só de posicionamento: não é afetado.
+
 ---
 
 ## 13. Revisão por etapa
@@ -1023,3 +1056,47 @@ vem depois.
 - **Impacto para trás:** nenhum. **Para frente:** a I4 tem o cenário completo
   para testar cada regra da RI5 a RI12 com dado que também passa pelo
   normalizador.
+
+### I4 — análise de topologia
+
+- **Entregue:** `domain/services/topologia/` (índice, unidades, dependências,
+  acoplamento, ondas, criticidade, riscos, análise). Puro. 124 testes: um por
+  regra com inventário escrito à mão, e a análise inteira sobre os quatro
+  mocks. Cobertura de 88% a 100% por módulo. 25 ms no mock da AWS (734
+  recursos).
+- **Resultado sobre o mock da AWS, lido criticamente:** 29 unidades, 24 grupos,
+  3 ondas. `auth`, `checkout` e `pagamentos` saem num grupo só (o banco do
+  `auth` é acessado pelos outros dois); `catalogo` e `busca` ficam na mesma
+  onda por um ciclo real (o balanceador do catálogo encaminha para a busca, e
+  a busca chama o catálogo); o monitoramento, hub de dados, fica na última
+  onda; os três bastions saem como ferramenta. Todos os dez riscos montados no
+  mock disparam.
+- **Achados ao ler o resultado (e corrigidos):**
+  - Em `sa-east-1` o único banco é o da `ingestao`, e o monitoramento acessa
+    só ele: com um banco, não é hub, e os dois se juntavam **em silêncio** — o
+    risco que deveria denunciar isso não disparava. Correção: banco com tag de
+    aplicação tem dono, então o acesso de outra aplicação já é
+    `banco_compartilhado` (RI7). Agora aparece: "ingestao (prod) · sa-east-1 é
+    acessado também por monitoramento (prod) · sa-east-1".
+  - A mesma aplicação em regiões diferentes saía com o mesmo nome em ondas
+    diferentes. Nomes agora são únicos (acrescenta região, depois conta).
+  - Com a entrada embaralhada, as evidências de uma dependência mudavam:
+    dependiam da ordem das regras no arquivo. Regras, relações e listas do
+    índice são ordenadas dentro do domínio; há teste de embaralhamento nos
+    quatro mocks.
+  - Mocks: no GCP nenhum projeto tinha as duas pontas de uma chamada (zero
+    dependências); na Azure as NICs de `brazilsouth` estavam numa VNet de
+    `eastus` (impossível: ASG e NIC são regionais). Os dois geradores foram
+    corrigidos; há teste de que toda dependência fica na mesma região.
+- **Regra nova:** `dependencia_entre_ambientes` (média). Apareceu ao ler o
+  resultado: no GCP a `busca` de produção chama o `auth` de dev; na OCI, dev
+  acessa o banco de produção. A regra de rede permite, e migrar um ambiente sem
+  o outro quebraria o que ninguém esperava que dependesse. Análise geral depois
+  da mudança: é só um risco; não altera unidade, grupo, onda nem criticidade.
+- **Erros meus nos testes, não no código:** dois testes esperavam o contrário
+  da RI (um CIDR `/23` que normaliza para uma subrede só; um grupo crítico com
+  dois bancos sem alta disponibilidade). O código seguia a regra; os testes
+  foram corrigidos e o caso que eu queria testar ganhou teste próprio.
+- **Impacto para trás:** nenhum (pacote novo). **Para frente:** a I6 usa
+  `unidade_de` e os apelidos; a I7 congela o resultado no payload; a I8 usa
+  `Indice.subredes_de` e `Indice.grupos_de` para o posicionamento.

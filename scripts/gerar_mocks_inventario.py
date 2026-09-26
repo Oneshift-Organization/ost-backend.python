@@ -879,7 +879,12 @@ def gerar_inventario_gcp(  # noqa: PLR0912, PLR0915 - uma seção por tipo de as
                 },
             ),
         ]
-        for chamador, chamado in CHAMADAS:
+        # As chamadas conhecidas, e — num projeto com várias aplicações e nenhuma
+        # chamada conhecida entre elas — uma em cadeia, para haver dependência.
+        chamadas = [(a, b) for a, b in CHAMADAS if a in apps and b in apps]
+        if not chamadas and len(apps) > 1:
+            chamadas = [(apps[i + 1], apps[i]) for i in range(len(apps) - 1)]
+        for chamador, chamado in chamadas:
             if chamador in apps and chamado in apps:
                 firewalls.append(
                     (
@@ -1116,7 +1121,6 @@ def gerar_inventario_azure(  # noqa: PLR0912, PLR0915 - uma seção por tipo
                 "nome_assinatura": r.get("SubscriptionName", ""),
             }
     linhas: list[dict[str, Any]] = []
-    assinaturas = sorted({r["assinatura"] for r in recursos.values()})
 
     def linha(ident: str, tipo: str, props: dict[str, Any], **extra: Any) -> None:
         linhas.append(
@@ -1136,21 +1140,26 @@ def gerar_inventario_azure(  # noqa: PLR0912, PLR0915 - uma seção por tipo
             }
         )
 
-    por_assinatura: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    # VNet, NSG e ASG são regionais: a NIC só entra em VNet e ASG da região
+    # dela. Um ambiente por (assinatura, região).
+    por_ambiente: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in sorted(recursos.values(), key=lambda r: r["id"]):
-        por_assinatura[r["assinatura"]].append(r)
+        por_ambiente[(r["assinatura"], r["local"])].append(r)
 
-    for s_idx, assinatura in enumerate(assinaturas):
+    for s_idx, ((assinatura, local), itens) in enumerate(sorted(por_ambiente.items())):
         base = f"/subscriptions/{assinatura}/resourceGroups/rg-rede/providers/Microsoft.Network"
-        vnet = f"{base}/virtualNetworks/vnet-{s_idx}"
+        vnet = f"{base}/virtualNetworks/vnet-{local}"
         sub_app, sub_dados, sub_aks = (f"{vnet}/subnets/{n}" for n in ("app", "dados", "aks"))
         nsg_app, nsg_dados = (
-            f"{base}/networkSecurityGroups/nsg-app",
-            f"{base}/networkSecurityGroups/nsg-dados",
+            f"{base}/networkSecurityGroups/nsg-app-{local}",
+            f"{base}/networkSecurityGroups/nsg-dados-{local}",
         )
-        itens = por_assinatura[assinatura]
         apps = sorted({r["tags"].get("app", "") for r in itens} - {""})
-        asgs = {a: f"{base}/applicationSecurityGroups/asg-{a}" for a in apps}
+        asgs = {a: f"{base}/applicationSecurityGroups/asg-{a}-{local}" for a in apps}
+        tem_banco = any("/flexibleservers/" in r["id"] for r in itens)
+        consumidores_do_banco = (
+            ([a for a in ("checkout", "pagamentos") if a in asgs] or apps[:2]) if tem_banco else []
+        )
         linha(
             vnet,
             "microsoft.network/virtualnetworks",
@@ -1188,6 +1197,7 @@ def gerar_inventario_azure(  # noqa: PLR0912, PLR0915 - uma seção por tipo
                     },
                 ],
             },
+            location=local,
         )
         regras_app = []
         prioridade = 100
@@ -1233,6 +1243,7 @@ def gerar_inventario_azure(  # noqa: PLR0912, PLR0915 - uma seção por tipo
                 "subnets": [{"id": sub_app}],
                 "defaultSecurityRules": [{"name": "AllowVnetInBound"}, {"name": "DenyAllInBound"}],
             },
+            location=local,
         )
         regras_dados = [
             {
@@ -1247,15 +1258,16 @@ def gerar_inventario_azure(  # noqa: PLR0912, PLR0915 - uma seção por tipo
                     "destinationPortRange": "5432",
                 },
             }
-            for i, a in enumerate(a for a in ("checkout", "pagamentos") if a in asgs)
+            for i, a in enumerate(consumidores_do_banco)
         ]
         linha(
             nsg_dados,
             "microsoft.network/networksecuritygroups",
             {"securityRules": regras_dados, "subnets": [{"id": sub_dados}]},
+            location=local,
         )
         for ident in sorted(asgs.values()):
-            linha(ident, "microsoft.network/applicationsecuritygroups", {})
+            linha(ident, "microsoft.network/applicationsecuritygroups", {}, location=local)
 
         vms = [r for r in itens if "/virtualmachines/" in r["id"]]
         discos = [r for r in itens if "/disks/" in r["id"]]
@@ -1293,6 +1305,7 @@ def gerar_inventario_azure(  # noqa: PLR0912, PLR0915 - uma seção por tipo
                     "virtualMachine": {"id": ident},
                 },
                 tags=vm["tags"],
+                location=local,
             )
             linha(
                 ident,
