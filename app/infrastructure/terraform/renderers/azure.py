@@ -19,7 +19,17 @@ from app.infrastructure.terraform.hcl import (
     comentario,
     referencia,
 )
-from app.infrastructure.terraform.renderers.base import nome_cloud
+from app.infrastructure.terraform.renderers.base import (
+    com_indice,
+    instancias_banco,
+    nome_banco,
+    nome_cloud,
+    quantidade_volumes,
+    texto_banco,
+    texto_tamanho_disco,
+    texto_volume_bucket,
+    var_versao,
+)
 from app.schemas.terraform import (
     RecursoTerraform,
     TerraformBlueprint,
@@ -188,11 +198,12 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
     tipo = "Premium_LRS" if str(cfg.get("disk_type", "")).endswith("ssd") else "Standard_LRS"
-    return comentario(
-        "TAMANHO ESTIMADO a partir do custo mensal — veja a premissa no README.\n"
-        "Confira contra o uso real antes de aplicar."
-    ) + "\n" + bloco("resource", ["azurerm_managed_disk", r.logical_name], [
-        atributo("name", nome_cloud(bp.project_name, r.logical_name)),
+    n = quantidade_volumes(cfg)
+    nome = nome_cloud(bp.project_name, r.logical_name)
+    return comentario(texto_tamanho_disco(cfg)) + "\n" + bloco(
+        "resource", ["azurerm_managed_disk", r.logical_name],
+        ([atributo("count", n)] if n > 1 else []) + [
+        atributo("name", referencia(f'"{nome}-${{count.index}}"') if n > 1 else nome),
         *_grupo(),
         atributo("storage_account_type", tipo),
         atributo("create_option", "Empty"),
@@ -207,7 +218,7 @@ def _storage(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     # regra de nome mais restritiva das quatro nuvens.
     nome = nome_cloud(bp.project_name, r.logical_name, maximo=_MAX_STORAGE, separador="")
     return comentario(
-        f"Volume estimado: ~{cfg.get('estimated_gb')} GB (derivado do custo).\n"
+        texto_volume_bucket(cfg) +
         "Nome sem hífen e com 24 caracteres no máximo — exigência da Azure."
     ) + "\n" + bloco("resource", ["azurerm_storage_account", r.logical_name], [
         atributo("name", nome),
@@ -231,15 +242,15 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     ha = bool(cfg.get("high_availability"))
     sku = _sku_azure(vcpus)
     return comentario(
-        f"vCPU ESTIMADO ({vcpus}) a partir do custo mensal — veja o README.\n"
+        texto_banco(cfg, vcpus) + "\n"
         f"Traduzido para o SKU {sku}, o mais próximo acima.\n"
-        "Motor e versão NÃO foram deduzidos: o billing não os informa.\n"
         "`database_version` aqui é a versão do PostgreSQL (ex.: 15)."
     ) + "\n" + bloco(
         "resource", ["azurerm_postgresql_flexible_server", r.logical_name], [
-            atributo("name", nome_cloud(bp.project_name, "db")),
+            *([atributo("count", n)] if (n := instancias_banco(cfg)) > 1 else []),
+            atributo("name", com_indice(nome_banco(bp, r), n)),
             *_grupo(),
-            atributo("version", referencia("var.database_version")),
+            atributo("version", var_versao(cfg)),
             atributo("sku_name", sku),
             atributo("storage_mb", 131072),
             atributo("administrator_login", referencia("var.admin_username")),

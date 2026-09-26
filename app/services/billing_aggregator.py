@@ -465,7 +465,9 @@ def _medir_auxiliar(
     """Tamanho medido de armazenamento e inventário de bancos."""
     atributos = item.attributes or {}
     if component_type in _ARMAZENAMENTO and (item.usage_unit or "") == _GIB_MES:
-        destino = armazenamento[component_type]
+        # Snapshot medido à parte: somado ao disco, viraria volume no Terraform.
+        chave = "snapshots" if atributos.get("storage_kind") == "snapshot" else component_type
+        destino = armazenamento[chave]
         destino["gb"] += item.usage_amount or _ZERO
         if item.resource_id:
             destino["recursos"].add(item.resource_id)

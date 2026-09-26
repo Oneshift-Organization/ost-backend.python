@@ -574,6 +574,10 @@ class AWSParser(BaseParser):
             atributos["project_id"] = conta
         if _POR_INSTANCIA.search(usage_type or "") and "ExtendedSupport" not in (usage_type or ""):
             atributos["capacity_unit"] = "instance"
+        # Snapshot é backup, não disco: medido à parte para não virar volume no
+        # Terraform (o custo continua no balde de armazenamento).
+        if "SnapshotUsage" in (usage_type or ""):
+            atributos["storage_kind"] = "snapshot"
         return atributos
 
     def _tags(self, bruto: str, achatadas: dict[str, list[str]], i: int) -> dict[str, str]:

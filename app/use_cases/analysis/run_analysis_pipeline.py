@@ -118,6 +118,7 @@ _NOMES_ARMAZENAMENTO = {
     "storage_ssd": "armazenamento_ssd",
     "storage_hdd": "armazenamento_hdd",
     "object_storage": "armazenamento_objetos",
+    "snapshots": "snapshots",
 }
 
 

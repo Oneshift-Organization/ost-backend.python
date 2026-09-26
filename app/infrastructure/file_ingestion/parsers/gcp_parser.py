@@ -268,6 +268,9 @@ class GCPParser(BaseParser):
         capacidade = _capacidade(sku)
         if capacidade:
             atributos["capacity_unit"] = capacidade
+        # Snapshot e machine image são backup, não disco (ver parser da AWS).
+        if "Snapshot" in sku or "Machine Image" in sku:
+            atributos["storage_kind"] = "snapshot"
 
         tags = _pares(raw.get("labels"))
         for chave, valor in _pares(raw.get("tags")).items():

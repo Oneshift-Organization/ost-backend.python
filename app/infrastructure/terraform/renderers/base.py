@@ -333,3 +333,76 @@ def nome_cloud(*partes: object, maximo: int = 63, separador: str = "-") -> str:
     if separador:
         limpo = limpo.rstrip(separador)
     return limpo or "oneshift"
+
+
+# ── Texto que acompanha número derivado ─────────────────────────────────────
+# O comentário no `.tf` diz de onde veio o número. Com export detalhado ele é
+# MEDIDO; sem, é ESTIMADO pelo custo. Dizer "estimado" de um número medido
+# subestima a análise; dizer "medido" de um estimado é pior.
+
+
+def quantidade_volumes(cfg: dict[str, Any]) -> int:
+    """Volumes medidos na origem viram `count`; sem medição, um só."""
+    return max(1, int(cfg.get("volumes") or 1))
+
+
+def texto_tamanho_disco(cfg: dict[str, Any]) -> str:
+    if cfg.get("size_source") == "medido":
+        n = quantidade_volumes(cfg)
+        return (
+            f"TAMANHO MEDIDO no billing da origem: {n} volume(s) de ~{cfg.get('size_gb')} GB\n"
+            "(soma de GB-mês; num mês inteiro, o tamanho médio provisionado)."
+        )
+    return (
+        "TAMANHO ESTIMADO a partir do custo mensal — veja a premissa no README.\n"
+        "Confira contra o uso real antes de aplicar."
+    )
+
+
+def texto_volume_bucket(cfg: dict[str, Any]) -> str:
+    if cfg.get("size_source") == "medido":
+        return f"Volume medido: ~{cfg.get('estimated_gb')} GB (soma de GB-mês no billing).\n"
+    return f"Volume estimado: ~{cfg.get('estimated_gb')} GB (derivado do custo).\n"
+
+
+def texto_banco(cfg: dict[str, Any], vcpus: int) -> str:
+    """vCPU e motor do banco, com a fonte de cada um."""
+    if cfg.get("vcpu_source") == "medido":
+        linhas = [
+            f"vCPU ({vcpus}) da classe medida na origem: {cfg.get('source_class')} "
+            f"({cfg.get('instances_measured', 1)} instância(s)).",
+        ]
+    else:
+        linhas = [f"vCPU ESTIMADO ({vcpus}) a partir do custo mensal — veja o README."]
+    motor = cfg.get("engine_measured")
+    if motor:
+        linhas.append(f"Motor medido na origem: {motor}. A versão não aparece no billing:")
+        linhas.append("preencha `database_version` antes de aplicar.")
+    else:
+        linhas.append("Motor e versão NÃO foram deduzidos: o billing não os informa.")
+        linhas.append("Preencha `database_version` antes de aplicar.")
+    return "\n".join(linhas)
+
+
+# ── Banco: grupo medido com `count` ─────────────────────────────────────────
+
+
+def instancias_banco(cfg: dict[str, Any]) -> int:
+    return max(1, int(cfg.get("instances") or 1))
+
+
+def nome_banco(bp: TerraformBlueprint, r: RecursoTerraform, *extra: object) -> str:
+    """Banco medido usa o nome lógico (há um por grupo); o do caminho agregado
+    mantém `<projeto>-db`, o nome que os pacotes já gerados têm."""
+    if r.configuration.get("source_class"):
+        return nome_cloud(bp.project_name, r.logical_name, *extra)
+    return nome_cloud(bp.project_name, "db", *extra)
+
+
+def com_indice(nome: str, quantidade: int) -> str:
+    """Nome literal, ou interpolado com `count.index` quando há várias instâncias."""
+    return referencia(f'"{nome}-${{count.index}}"') if quantidade > 1 else nome
+
+
+def var_versao(cfg: dict[str, Any]) -> str:
+    return referencia(f"var.{cfg.get('version_var') or 'database_version'}")
