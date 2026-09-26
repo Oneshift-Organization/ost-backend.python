@@ -24,9 +24,12 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from http import HTTPStatus
 from pathlib import Path
 
 FIXTURES = Path(__file__).resolve().parent.parent / "app/tests/integration/fixtures"
+
+_AGENTE = "oneshift-demo/1.0"
 
 BILLINGS = {
     "aws": ("aws_cost_explorer_full.csv", "sa-east-1", "gcp", "southamerica-east1"),
@@ -47,7 +50,10 @@ def _chamar(
     corpo: dict | None = None,
     arquivo: tuple[str, bytes] | None = None,
 ) -> tuple[int, dict]:
-    cabecalhos = {"Accept": "application/json"}
+    # O User-Agent não é cosmético: o Cloudflare na frente da API responde
+    # **403 (erro 1010)** ao `Python-urllib/3.x` default, e o script morre antes
+    # de chegar na aplicação. Mesma armadilha do cliente de câmbio.
+    cabecalhos = {"Accept": "application/json", "User-Agent": _AGENTE}
     if token:
         cabecalhos["Authorization"] = f"Bearer {token}"
 
@@ -66,8 +72,11 @@ def _chamar(
     else:
         dados = None
 
-    req = urllib.request.Request(url, data=dados, headers=cabecalhos, method=metodo)
+    req = urllib.request.Request(  # noqa: S310 - esquema validado em main()
+        url, data=dados, headers=cabecalhos, method=metodo
+    )
     try:
+        # Esquema validado em main(): só http(s) chega aqui.
         with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
             return resp.status, json.loads(resp.read() or b"{}")
     except urllib.error.HTTPError as e:
@@ -86,8 +95,9 @@ def _esperar(
     ultimo = ""
     while time.time() - inicio < limite_s:
         st, corpo = _chamar("GET", url, token)
-        if st != 200:
-            raise SystemExit(f"  ✗ {rotulo}: HTTP {st} — {json.dumps(corpo, ensure_ascii=False)[:200]}")
+        if st != HTTPStatus.OK:
+            detalhe = json.dumps(corpo, ensure_ascii=False)[:200]
+            raise SystemExit(f"  ✗ {rotulo}: HTTP {st} — {detalhe}")
         estado = str(corpo.get("status", ""))
         if estado != ultimo:
             print(f"  … {rotulo}: {estado}")
@@ -106,6 +116,10 @@ def main() -> None:
     p.add_argument("--timeout-analise", type=int, default=600)
     args = p.parse_args()
 
+    # A URL vem da linha de comando e vai direto para `urlopen`, que aceitaria
+    # `file://` e leria arquivo local. Só HTTP(S) faz sentido aqui.
+    if not args.url.startswith(("http://", "https://")):
+        raise SystemExit(f"✗ --url precisa ser http(s): {args.url!r}")
     base = args.url.rstrip("/") + "/v1"
     arquivo, _, destino_sugerido, regiao_sugerida = BILLINGS[args.billing]
     conteudo = (FIXTURES / arquivo).read_bytes()
@@ -114,12 +128,12 @@ def main() -> None:
     print(f"Billing: {arquivo} ({len(conteudo):,} bytes, origem {args.billing.upper()})\n")
 
     st, saude = _chamar("GET", f"{base}/health", args.token)
-    if st != 200:
+    if st != HTTPStatus.OK:
         raise SystemExit(f"✗ API não respondeu: HTTP {st}")
     print(f"1. health            {saude}")
 
     st, up = _chamar("POST", f"{base}/billing-files", args.token, arquivo=(arquivo, conteudo))
-    if st != 202:
+    if st != HTTPStatus.ACCEPTED:
         raise SystemExit(f"✗ upload: HTTP {st} — {json.dumps(up, ensure_ascii=False)[:300]}")
     report_id = up["job_id"]
     print(f"2. upload            202  report_id={report_id}")
@@ -130,7 +144,7 @@ def main() -> None:
     print(f"3. ingestão          done  {ing.get('row_count')} linhas")
 
     st, an = _chamar("POST", f"{base}/analyses/start/{report_id}", args.token)
-    if st != 202:
+    if st != HTTPStatus.ACCEPTED:
         raise SystemExit(f"✗ análise: HTTP {st} — {json.dumps(an, ensure_ascii=False)[:300]}")
     analysis_job_id = an["job_id"]
     print(f"4. análise           202  analysis_job_id={analysis_job_id}")
@@ -168,10 +182,10 @@ def main() -> None:
     print(json.dumps(corpo_tf, indent=2, ensure_ascii=False))
     print("═" * 72)
     print("\nDepois:")
-    print(f"  GET  /v1/terraform-generations/{{generation_id}}           → espere COMPLETED")
-    print(f"  GET  /v1/terraform-generations/{{generation_id}}/download  → baixa o ZIP")
-    print(f"\nTrocar a nuvem de destino: `target_provider` aceita gcp, aws, azure, oci.")
-    print(f"Ao trocar, ajuste `region` para uma região daquela nuvem.\n")
+    print("  GET  /v1/terraform-generations/{generation_id}           → espere COMPLETED")
+    print("  GET  /v1/terraform-generations/{generation_id}/download  → baixa o ZIP")
+    print("\nTrocar a nuvem de destino: `target_provider` aceita gcp, aws, azure, oci.")
+    print("Ao trocar, ajuste `region` para uma região daquela nuvem.\n")
 
 
 if __name__ == "__main__":

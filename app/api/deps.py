@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -49,12 +50,33 @@ _DEV_USER = UserClaims(
 )
 
 
-def get_current_user(request: Request) -> UserClaims:
+# Declara o esquema para o OpenAPI — é o que faz o botão **Authorize** aparecer
+# no Swagger. Sem isto, `get_current_user` lia o header direto de `Request` e o
+# FastAPI não tinha como documentar nada: a tela não oferecia onde colar o token
+# e toda chamada voltava 401, sem indicação do que fazer.
+#
+# `auto_error=False` de propósito: quem decide o que é 401 continua sendo a
+# função abaixo, que também trata o bypass de dev. Com `True`, o HTTPBearer
+# levantaria antes e o bypass pararia de funcionar.
+_bearer = HTTPBearer(
+    auto_error=False,
+    description="JWT do Supabase. Cole apenas o token, sem o prefixo 'Bearer '.",
+)
+
+
+def get_current_user(
+    request: Request,
+    _credencial: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
+) -> UserClaims:
     """Reads `Authorization: Bearer <jwt>` and verifies via Supabase JWKS.
 
     Dev bypass: when `settings.auth_enabled` is False (only allowed outside
     production), returns a fixed `_DEV_USER` regardless of the Authorization
     header. Logged on every request so the bypass is never silent.
+
+    O header continua sendo lido de `request` e não de `_credencial`: o parsing
+    já existia, está coberto por teste, e trocá-lo agora mudaria o contrato de
+    erro por causa de uma melhoria de documentação.
     """
     settings = get_settings()
     if not settings.auth_enabled:
