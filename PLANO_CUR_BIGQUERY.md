@@ -16,8 +16,8 @@ continuam produzindo exatamente o mesmo payload; o teste de caracterização
 > | etapa | estado |
 > |---|---|
 > | E0 — versão preservada (`baseline/pre-cur-inventario`) | ✅ |
-> | E1 — contrato canônico ampliado | ⬜ |
-> | E2 — mocks + invariantes | ⬜ |
+> | E1 — contrato canônico ampliado | ✅ |
+> | E2 — mocks + invariantes | ✅ |
 > | E3 — parser CUR 2.0 | ⬜ |
 > | E4 — parser BigQuery | ⬜ |
 > | E5 — enriquecimento | ⬜ |
