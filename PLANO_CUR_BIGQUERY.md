@@ -22,7 +22,7 @@ continuam produzindo exatamente o mesmo payload; o teste de caracterização
 > | E4 — parser BigQuery | ✅ |
 > | E5 — enriquecimento | ✅ |
 > | E6 — agregador + fatos medidos | ✅ |
-> | E7 — payload e premissas | ⬜ |
+> | E7 — payload e premissas | ✅ |
 > | E8 — Terraform usando fatos medidos | ⬜ |
 > | E9 — Azure e OCI | ⬜ |
 > | E10 — E2E + auditoria de coerência | ⬜ |
@@ -526,6 +526,7 @@ corrigidos lá (os gates de integração seguem verdes).
 | 22 | SKU "E2 Instance Core running free tier discount" (horas positivas, custo negativo) | pool fantasma de custo NEGATIVO, marcado "coberto por compromisso" (inclusive no legado) | free tier sai da base (RN1/RN3 ajustadas): não migra, e o destino é cotado sem ele |
 | 23 | Linha de uso detalhada sem capacidade (CPU credit) caía no balde de compromisso | custo real de uso rotulado como compromisso | vai para órfão; no legado continua compromisso (único caso que o bill agregado produz) |
 | 24 | Ordenação de `billing_items` não era total | paginação por offset repetiria e pularia linhas | `id` como desempate |
+| 25 | Parser da fatura AWS legada dava unidade `hours` só a `BoxUsage` sem prefixo | Spot, Dedicated e `SAE1-BoxUsage` sem capacidade: no bill REAL, ~150 vCPU a menos (C7G −18%, M7G −15%) e US$ 1,7 mil de Spot contados como compromisso | padrão de instância-hora com prefixo; achado comparando CUR × legado — os dois parsers agora dão a mesma capacidade para o C7G |
 
 **Reanálise depois das mudanças de regra:** RN1 (free tier fora dos créditos
 estruturais) e RN3 (free tier fora da base) mudaram. Revisei quem consome

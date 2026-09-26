@@ -50,6 +50,11 @@ from app.domain.services.migration_expectation import (
     learn_class_defaults,
 )
 from app.domain.services.pool_aggregation import aggregate_by_family
+from app.domain.services.premissas_detalhadas import (
+    base_de_custo,
+    desconto_origem_sobre_lista,
+    fracao,
+)
 from app.domain.services.provider_consolidation import (
     ProviderTally,
     consolidate,
@@ -433,6 +438,7 @@ class BuildMigrationContextUseCase:
         auxiliary: AuxiliaryCosts | None = None
         mapping_confidence: dict[str, Decimal] = {}
         estimated_capacity_cost = Decimal("0")
+        agg_result = None
         if self._aggregator is not None:
             agg_result = await self._aggregator.aggregate(items, source_provider)
             pools = agg_result.pools
@@ -732,6 +738,21 @@ class BuildMigrationContextUseCase:
         )
         premissas["tipo_servico_inferido"] = fracao_inferida
 
+        # ── 10c. Export detalhado: o que foi medido e em que base ─────
+        # Só existe com export detalhado; o bill agregado não ganha as chaves.
+        if agg_result is not None and agg_result.inventario is not None:
+            base = base_de_custo(agg_result.custo_por_base)
+            if base:
+                premissas["base_de_custo"] = base
+            desconto = desconto_origem_sobre_lista(
+                agg_result.custo_sob_demanda, agg_result.custo_efetivo_referenciado
+            )
+            if desconto:
+                premissas["desconto_origem_sobre_lista"] = desconto
+            premissas["dimensionamento_medido"] = fracao(
+                agg_result.measured_capacity_cost, total_spend
+            )
+
         premissas["reconciliacao"] = reconcile(
             total_spend=total_spend,
             family_pools=family_pools,
@@ -769,6 +790,7 @@ class BuildMigrationContextUseCase:
             analysis_currency=ANALYSIS_CURRENCY,
             premissas=premissas,
             resumo_executivo=resumo_executivo,
+            inventario=agg_result.inventario if agg_result is not None else None,
         )
 
     async def _resolve_fx(self, source_currency: str) -> FxRate:

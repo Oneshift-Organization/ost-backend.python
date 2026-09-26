@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from app.domain.entities.analysis_job import AnalysisJob
@@ -103,9 +104,73 @@ def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
         # conclui que migrar o pool ADICIONA o custo inteiro.
         if fp.capacity.vcpus > 0 and fp.monthly_cost <= 0:
             entry["custo_coberto_por_compromisso"] = True
+        entry.update(_inventario_do_pool(fp, ctx))
         out.append(entry)
 
     return out, missing
+
+
+# Tipos de origem por pool no payload: o topo basta para narrar e cabe no
+# orçamento de tokens; a contagem total vai em `instancias_medidas`.
+_MAX_TIPOS = 5
+_MAX_GRUPOS_BANCO = 15
+_NOMES_ARMAZENAMENTO = {
+    "storage_ssd": "armazenamento_ssd",
+    "storage_hdd": "armazenamento_hdd",
+    "object_storage": "armazenamento_objetos",
+}
+
+
+def _inventario_do_pool(fp, ctx) -> dict[str, object]:
+    """Fatos medidos do pool (export detalhado). Vazio no caminho agregado."""
+    inv = getattr(fp, "inventario", None)
+    if inv is None:
+        return {}
+    saida: dict[str, object] = {}
+    if inv.instancias:
+        saida["instancias_medidas"] = inv.instancias
+        saida["tipos_origem"] = dict(list(inv.tipos().items())[:_MAX_TIPOS])
+    inventario = getattr(ctx, "inventario", None)
+    horas = inventario.horas_periodo if inventario is not None else Decimal("730")
+    ativo = inv.fracao_tempo_ativo(horas)
+    if ativo is not None:
+        # Tempo LIGADA, não utilização de CPU: billing não mede carga.
+        saida["fracao_tempo_ativo"] = round(float(ativo), 2)
+    fonte = inv.fonte_capacidade()
+    if fonte:
+        saida["fonte_capacidade"] = fonte
+    return saida
+
+
+def _serialize_inventario(inv, fx: FxRate) -> dict[str, object]:
+    """Armazenamento e bancos medidos (export detalhado)."""
+    saida: dict[str, object] = {"horas_periodo": float(inv.horas_periodo)}
+    armazenamento = {
+        _NOMES_ARMAZENAMENTO.get(categoria, categoria): {
+            "gb": round(float(medido.gb)),
+            "recursos": medido.quantidade,
+        }
+        for categoria, medido in sorted(inv.armazenamento.items())
+    }
+    if armazenamento:
+        saida["armazenamento"] = armazenamento
+    if inv.bancos:
+        grupos: dict[tuple, dict[str, Any]] = {}
+        for b in inv.bancos:
+            chave = (b.classe, b.motor, b.multi_az, b.regiao)
+            g = grupos.setdefault(
+                chave,
+                {"classe": b.classe, "motor": b.motor, "multi_az": b.multi_az,
+                 "regiao": b.regiao, "quantidade": 0, "custo": Decimal("0")},
+            )
+            g["quantidade"] += 1
+            g["custo"] += b.custo
+        ordenados = sorted(grupos.values(), key=lambda g: (-g["custo"], str(g["classe"])))
+        saida["bancos"] = [
+            {**g, "custo": _money(g["custo"], fx)} for g in ordenados[:_MAX_GRUPOS_BANCO]
+        ]
+        saida["total_bancos"] = len(inv.bancos)
+    return saida
 
 
 def _serialize_services(ctx, fx: FxRate) -> list[dict]:
@@ -355,6 +420,10 @@ def build_pipeline_llm_input_payload(
     resumo = getattr(ctx, "resumo_executivo", {}) or {}
     if resumo:
         context_payload["resumo_executivo"] = resumo
+    # Fatos medidos de export detalhado. O bill agregado não ganha a chave.
+    inventario = getattr(ctx, "inventario", None)
+    if inventario is not None:
+        context_payload["inventario_medido"] = _serialize_inventario(inventario, fx)
     context_payload["decision_workloads"] = _decision_workloads(ctx, fx)
     if decision_context:
         context_payload["decision_context"] = decision_context

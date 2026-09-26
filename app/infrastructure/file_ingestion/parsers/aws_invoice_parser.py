@@ -17,6 +17,7 @@ Signature: header contains both "ProductCode" AND "CostBeforeTax".
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,13 @@ from app.infrastructure.file_ingestion.base_parser import BaseParser
 from app.infrastructure.file_ingestion.loaders import read_tabular
 
 _SIGNATURE_COLS = ("ProductCode", "CostBeforeTax")
+
+# Instância-hora de EC2, com ou sem prefixo de região. `startswith("BoxUsage")`
+# deixava sem unidade o Spot (`SpotUsage:c7g.2xlarge`), o Dedicated e o
+# `SAE1-BoxUsage:…` de São Paulo: sem unidade o agregador não soma capacidade e
+# joga o custo em "compromisso" — no bill real, ~150 vCPU sumiam dos pools e
+# US$ 1,7 mil de Spot viravam compromisso.
+_HORA_DE_INSTANCIA = re.compile(r"(?:^|-)(?:BoxUsage|SpotUsage|DedicatedUsage|HostUsage):")
 
 
 def _clean(value: object) -> str:
@@ -94,7 +102,9 @@ class AwsDetailedBillingParser(BaseParser):
                 "cost_discounted": cost,
                 "currency": _clean(row.get("CurrencyCode", "USD")) or "USD",
                 "usage_amount": self._cost_to_decimal(_clean(row.get("UsageQuantity", "0"))),
-                "usage_unit": "hours" if usage_type and usage_type.startswith("BoxUsage") else None,
+                "usage_unit": (
+                    "hours" if usage_type and _HORA_DE_INSTANCIA.search(usage_type) else None
+                ),
                 "tags": {},
                 "is_correction": False,
                 "is_estimate": False,

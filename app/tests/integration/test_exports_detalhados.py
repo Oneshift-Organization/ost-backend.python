@@ -17,6 +17,7 @@ from app.infrastructure.repositories.pg_billing_enriched_repo import (
     PgBillingEnrichedRepository,
 )
 from app.use_cases.analysis.leitura_completa import listar_todos
+from app.use_cases.analysis.run_analysis_pipeline import build_pipeline_llm_input_payload
 
 from .conftest import TEST_USER, _cleanup, _context, _ingest
 
@@ -204,3 +205,49 @@ async def test_cur_regioes_reais(ctx_cur) -> None:
     regioes = {fp.pool_key.region for fp in ctx_cur.family_pools}
     assert "sa-east-1" in regioes
     assert "global" not in regioes
+
+
+# ── E7: payload ─────────────────────────────────────────────────────────────
+
+
+def _payload(ctx) -> dict:
+    payload, _ = build_pipeline_llm_input_payload(ctx)
+    return payload
+
+
+async def test_payload_cur_traz_fatos_medidos(ctx_cur) -> None:
+    payload = _payload(ctx_cur)
+    premissas = payload["premissas"]
+    assert premissas["base_de_custo"]["base"] == "amortizado"
+    assert 0 < premissas["desconto_origem_sobre_lista"]["fracao"] < 1
+    assert premissas["dimensionamento_medido"] > 0
+    c7g = next(p for p in payload["pools_computacao"] if p["familia"] == "C7G")
+    assert c7g["instancias_medidas"] == 79
+    assert c7g["fonte_capacidade"] == "medida"
+    assert 0 < c7g["fracao_tempo_ativo"] <= 1
+    inventario = payload["inventario_medido"]
+    assert inventario["armazenamento"]["armazenamento_ssd"]["gb"] == 48626
+    assert inventario["total_bancos"] > 0
+    assert sum(b["quantidade"] for b in inventario["bancos"]) <= inventario["total_bancos"]
+
+
+async def test_payload_legado_nao_ganha_chave_nova(aws_context, gcp_context) -> None:
+    """RN9: sem export detalhado, nenhuma chave nova no payload do legado."""
+    for ctx in (aws_context, gcp_context):
+        payload = _payload(ctx)
+        assert "inventario_medido" not in payload
+        for chave in ("base_de_custo", "desconto_origem_sobre_lista", "dimensionamento_medido"):
+            assert chave not in payload["premissas"]
+        for pool in payload["pools_computacao"]:
+            assert not {"instancias_medidas", "tipos_origem", "fonte_capacidade"} & set(pool)
+
+
+async def test_cur_e_legado_concordam_na_capacidade(ctx_cur, aws_context) -> None:
+    """Dois parsers independentes sobre o mesmo dinheiro: a capacidade do C7G
+    tem de bater (o legado só estima o shape pelo nome; o C7G não tem tamanho
+    que a estimativa erre)."""
+    cur = _pool(ctx_cur, "C7G/us-east-1").capacity.vcpus
+    legado = next(
+        fp for fp in aws_context.family_pools if fp.pool_key.machine_family == "C7G"
+    ).capacity.vcpus
+    assert abs(cur - legado) < Decimal("0.5")
