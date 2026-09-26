@@ -965,3 +965,30 @@ vem depois.
   então não há como uma divergir da outra na direção.
 - **Impacto:** nenhum no código existente (módulos novos). A I4 depende destas
   assinaturas; a I2 depende do modelo.
+
+### I2 — normalizadores
+
+- **Entregue:** `infrastructure/inventory_ingestion/` com leitura segura
+  (gzip e zip pelo conteúdo, orçamento de bytes compartilhado, NDJSON em
+  streaming, limite de documento único), construtor comum (dedup pela captura,
+  referência resolvida no fim, par de tipos validado pela RI3) e os quatro
+  normalizadores. 106 testes; cobertura do pacote entre 91% e 98% por módulo.
+- **Achados ao testar contra a documentação oficial:**
+  - O exemplo oficial do Config escreve o tipo da relação como
+    `AWS::EC2::SUBNET`. O mapa de tipos é consultado sem diferenciar caixa, e
+    a relação vem primeiro do campo `subnetId`, que é estruturado. Os dois
+    caminhos estão testados.
+  - O mesmo exemplo tem um ARN de volume malformado
+    (`arn:aws:us-west-2b:...`). Ele vira a chave como veio; a correlação com
+    o billing usa os apelidos (o `vol-…` está entre eles), então não depende
+    do ARN estar certo.
+  - `ipRanges` (lista de texto, formato antigo) e `ipv4Ranges` repetem a mesma
+    faixa no mesmo item: deduplicado por regra.
+  - Um grupo citado de outra conta (`userId` diferente) vira
+    `grupo_externo:<id>` e é contado. Sem isso a regra apontaria para um grupo
+    que não existe no inventário.
+- **Impacto para trás:** nenhum. Pacote novo, fora de `detector.PARSERS` do
+  billing.
+- **Impacto para frente:** a I5 precisa persistir as regras separadas dos
+  atributos (no modelo são `Inventario.regras`, não atributo do grupo); a I3
+  precisa gerar os quatro formatos exatamente como estes testes os descrevem.
