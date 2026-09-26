@@ -69,6 +69,7 @@ class _Grupo:
     estimativa: bool = False
     correcao: bool = False
     tags: dict[str, str] = field(default_factory=dict)
+    somas: dict[str, Decimal] = field(default_factory=dict)
 
 
 class Consolidador:
@@ -85,7 +86,10 @@ class Consolidador:
       (vcpus, instance_type…) — vale o da primeira linha do grupo;
     - ``identity``: identidade da linha para deduplicar (``None`` = sem);
     - ``raw``: dict pequeno para rastrear a origem;
-    - ``line_type``: tipo de linha original do provedor, para auditoria.
+    - ``line_type``: tipo de linha original do provedor, para auditoria;
+    - ``somas``: dict de ``Decimal`` que o provedor quer somado no grupo e
+      exposto em ``attributes`` (crédito de CUD, custo antes dos créditos…).
+      Genérico de propósito: o consolidador não sabe o que cada soma significa.
     """
 
     def __init__(self, provider: str) -> None:
@@ -116,6 +120,9 @@ class Consolidador:
         grupo.cost_discounted += linha.get("cost_discounted", linha["cost"])
         grupo.usage_amount = _somar(grupo.usage_amount, linha.get("usage_amount"))
         grupo.on_demand = _somar(grupo.on_demand, linha.get("on_demand"))
+        for nome, valor in (linha.get("somas") or {}).items():
+            if valor is not None:
+                grupo.somas[nome] = grupo.somas.get(nome, _ZERO) + valor
         grupo.linhas += 1
         if linha.get("line_type"):
             grupo.tipos.add(linha["line_type"])
@@ -177,6 +184,7 @@ class Consolidador:
                 **({"first_usage": g.inicio.isoformat()} if g.inicio else {}),
                 **({"last_usage": g.fim.isoformat()} if g.fim else {}),
                 **({"on_demand_cost": str(g.on_demand)} if g.on_demand is not None else {}),
+                **{nome: str(valor) for nome, valor in g.somas.items()},
             }
         )
         if chave_dict["cost_basis"]:

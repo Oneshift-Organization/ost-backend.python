@@ -84,3 +84,8 @@ SKU ID
 
 # ── Knowledge graph local (graphify) ─────────────────────────────────────
 graphify-out/
+
+# ── Mocks de billing gerados (scripts/gerar_mocks_billing.py) ─────────────
+# Determinísticos e maiores que o limite de 500 KB do pre-commit: gerados na
+# sessão de testes ou sob demanda, nunca versionados.
+app/tests/integration/fixtures/mocks/

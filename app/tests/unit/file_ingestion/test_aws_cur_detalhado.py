@@ -11,6 +11,7 @@ import gzip
 import json
 from decimal import Decimal
 from pathlib import Path
+from uuid import UUID
 
 import pandas as pd
 import pyarrow as pa
@@ -20,10 +21,6 @@ import pytest
 from app.infrastructure.file_ingestion.detector import detect_parser
 from app.infrastructure.file_ingestion.loaders import iter_tabular, read_tabular
 from app.infrastructure.file_ingestion.parsers import AWSParser
-
-_MOCK = (
-    Path(__file__).resolve().parents[2] / "integration/fixtures/mocks/mock_aws_cur2_2026-03.csv.gz"
-)
 
 _BASE = {
     "identity_line_item_id": "",
@@ -83,7 +80,9 @@ def _soma(serie) -> Decimal:
 
 def _exemplo_sp() -> list[dict]:
     comum = {
-        "savings_plan_savings_plan_a_r_n": "arn:aws:savingsplans::5555555555555:savingsplan/bc1d08fd"
+        "savings_plan_savings_plan_a_r_n": (
+            "arn:aws:savingsplans::5555555555555:savingsplan/bc1d08fd"
+        )
     }
     return [
         {
@@ -410,14 +409,12 @@ def test_parquet_da_o_mesmo_que_csv(tmp_path, user_id, job_id) -> None:
 
 
 @pytest.fixture(scope="module")
-def mock_parseado():
-    from uuid import UUID
-
+def mock_parseado(mocks_billing):
     parser = AWSParser(
         user_id=UUID("11111111-1111-1111-1111-111111111111"),
         job_id=UUID("22222222-2222-2222-2222-222222222222"),
     )
-    return parser.parse(_MOCK)
+    return parser.parse(mocks_billing.cur)
 
 
 def test_mock_total_amortizado_bate_com_o_bill_real(mock_parseado) -> None:
@@ -429,8 +426,8 @@ def test_mock_total_amortizado_bate_com_o_bill_real(mock_parseado) -> None:
     assert _soma(mock_parseado["cost_billed"]) == total
 
 
-def test_mock_consolidado_e_rastreavel(mock_parseado) -> None:
-    with gzip.open(_MOCK, "rt") as fh:
+def test_mock_consolidado_e_rastreavel(mock_parseado, mocks_billing) -> None:
+    with gzip.open(mocks_billing.cur, "rt") as fh:
         origem = sum(1 for _ in fh) - 1
     assert len(mock_parseado) < origem  # consolidou
     assert sum(r["linhas_origem"] for r in mock_parseado["raw_payload"]) == origem

@@ -78,7 +78,11 @@ class GcpCostTableParser(BaseParser):
             billing_period = usage_start.strftime("%Y-%m") if usage_start else "0000-00"
 
             service = _clean_gcp(row.get("Service description", "")) or "unknown"
-            raw_payload = {k: _clean_gcp(v) for k, v in row.items() if _clean_gcp(v)}
+            raw_payload = {
+                k: _clean_gcp(v)
+                for k, v in row.items()
+                if _clean_gcp(v)
+            }
 
             record = {
                 "user_id": str(self.user_id),
@@ -102,7 +106,8 @@ class GcpCostTableParser(BaseParser):
                 "usage_unit": _clean_gcp(row.get("Usage unit", "")) or None,
                 "tags": {},
                 "is_correction": (
-                    _clean_gcp(row.get("Cost type", "")).lower() in ("adjustment", "rounding_error")
+                    _clean_gcp(row.get("Cost type", "")).lower()
+                    in ("adjustment", "rounding_error")
                     or cost < 0
                 ),
                 "is_estimate": False,

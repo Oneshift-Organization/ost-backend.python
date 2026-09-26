@@ -11,22 +11,16 @@ from __future__ import annotations
 import csv
 import gzip
 import hashlib
-import importlib.util
 import json
-import sys
 from collections import defaultdict
 from decimal import Decimal
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
-_RAIZ = Path(__file__).resolve().parents[4]
-_FIXTURES = _RAIZ / "app/tests/integration/fixtures"
-_MOCKS = _FIXTURES / "mocks"
-_CUR = _MOCKS / "mock_aws_cur2_2026-03.csv.gz"
-_BQ = _MOCKS / "mock_gcp_bigquery_2025-12.json.gz"
-_BQ_CSV = _MOCKS / "mock_gcp_bigquery_achatado_2025-12.csv"
+from app.tests.conftest import FIXTURES_INTEGRACAO, gerar_mocks
+
+_FIXTURES = FIXTURES_INTEGRACAO
 _TOL = Decimal("0.000001")
 
 
@@ -38,8 +32,8 @@ def _d(valor: str) -> Decimal:
 
 
 @pytest.fixture(scope="module")
-def cur() -> pd.DataFrame:
-    df = pd.read_csv(_CUR, dtype=str, keep_default_na=False)
+def cur(mocks_billing) -> pd.DataFrame:
+    df = pd.read_csv(mocks_billing.cur, dtype=str, keep_default_na=False)
     df["unb"] = df["line_item_unblended_cost"].map(_d)
     df["amort"] = [_amortizado(linha) for linha in df.to_dict(orient="records")]
     return df
@@ -190,8 +184,8 @@ def test_mapas_sao_json_e_instancia_traz_shape_medido(cur) -> None:
 
 
 @pytest.fixture(scope="module")
-def bq() -> list[dict]:
-    with gzip.open(_BQ, "rt", encoding="utf-8") as fh:
+def bq(mocks_billing) -> list[dict]:
+    with gzip.open(mocks_billing.bigquery, "rt", encoding="utf-8") as fh:
         return [json.loads(linha) for linha in fh]
 
 
@@ -251,8 +245,8 @@ def test_bigquery_traz_imposto_e_credito(bq) -> None:
     assert {"DISCOUNT", "SUSTAINED_USAGE_DISCOUNT"} <= tipos
 
 
-def test_csv_achatado_espelha_o_ndjson(bq) -> None:
-    with _BQ_CSV.open(encoding="utf-8") as fh:
+def test_csv_achatado_espelha_o_ndjson(bq, mocks_billing) -> None:
+    with mocks_billing.bigquery_csv.open(encoding="utf-8") as fh:
         linhas = list(csv.DictReader(fh))
     assert "service.description" in linhas[0]
     for plano, aninhado in zip(linhas, bq, strict=False):
@@ -263,26 +257,13 @@ def test_csv_achatado_espelha_o_ndjson(bq) -> None:
 # ── reprodutibilidade ───────────────────────────────────────────────────────
 
 
-def test_gerador_reproduz_os_arquivos_versionados(tmp_path) -> None:
-    """Mudou o gerador sem regenerar os mocks? Este teste acusa."""
-    spec = importlib.util.spec_from_file_location(
-        "gerar_mocks_billing", _RAIZ / "scripts/gerar_mocks_billing.py"
-    )
-    assert spec is not None and spec.loader is not None
-    modulo = importlib.util.module_from_spec(spec)
-    # `@dataclass` procura o módulo em sys.modules durante a execução.
-    sys.modules[spec.name] = modulo
-    spec.loader.exec_module(modulo)
-    modulo.gerar_cur_aws(_FIXTURES / "aws_cost_explorer_full.csv", tmp_path / "cur.csv.gz")
-    modulo.gerar_bigquery_gcp(
-        _FIXTURES / "gcp_cost_table_full.csv", tmp_path / "bq.json.gz", tmp_path / "bq.csv"
-    )
-    for gerado, versionado in (
-        (tmp_path / "cur.csv.gz", _CUR),
-        (tmp_path / "bq.json.gz", _BQ),
-        (tmp_path / "bq.csv", _BQ_CSV),
+def test_gerador_e_deterministico(tmp_path, mocks_billing) -> None:
+    """Os mocks não são versionados; o que garante reprodutibilidade é gerar
+    duas vezes e obter os mesmos bytes."""
+    de_novo = gerar_mocks(tmp_path)
+    for a, b in (
+        (mocks_billing.cur, de_novo.cur),
+        (mocks_billing.bigquery, de_novo.bigquery),
+        (mocks_billing.bigquery_csv, de_novo.bigquery_csv),
     ):
-        assert (
-            hashlib.sha256(gerado.read_bytes()).hexdigest()
-            == hashlib.sha256(versionado.read_bytes()).hexdigest()
-        ), f"{versionado.name} desatualizado: rode scripts/gerar_mocks_billing.py"
+        assert hashlib.sha256(a.read_bytes()).digest() == hashlib.sha256(b.read_bytes()).digest()

@@ -19,7 +19,7 @@ continuam produzindo exatamente o mesmo payload; o teste de caracterização
 > | E1 — contrato canônico ampliado | ✅ |
 > | E2 — mocks + invariantes | ✅ |
 > | E3 — parser CUR 2.0 | ✅ |
-> | E4 — parser BigQuery | ⬜ |
+> | E4 — parser BigQuery | ✅ |
 > | E5 — enriquecimento | ⬜ |
 > | E6 — agregador + fatos medidos | ⬜ |
 > | E7 — payload e premissas | ⬜ |
