@@ -25,7 +25,7 @@ continuam produzindo exatamente o mesmo payload; o teste de caracterização
 > | E7 — payload e premissas | ✅ |
 > | E8 — Terraform usando fatos medidos | ✅ |
 > | E9 — Azure e OCI | ✅ |
-> | E10 — E2E + auditoria de coerência | ⬜ |
+> | E10 — E2E + auditoria de coerência | ✅ ([relatório](docs/auditoria-e2e-2026-09-26-exports-detalhados.md)) |
 
 > **Antes de ligar em dev/produção:** `alembic upgrade head` (colunas novas),
 > re-seed de `sku_classification_rules` (regras novas e `*rds:*` com prefixo de

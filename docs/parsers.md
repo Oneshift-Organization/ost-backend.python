@@ -23,11 +23,11 @@ Hoje há **7 parsers**, todos em
 
 | Parser | Formato | `schema_version` emitido | Status |
 |---|---|---|---|---|
-| `AWSParser` | AWS CUR 2.0 + Legacy CUR (.csv/.csv.gz/.csv.zip/.xlsx) | `AWS_CUR2.0` ou `AWS_CUR_LEGACY` | ✅ |
+| `AWSParser` | AWS CUR 2.0 + Legacy CUR (.csv/.csv.gz/.csv.zip/.parquet/.xlsx) | `AWS_CUR2.0` ou `AWS_CUR_LEGACY` | ✅ |
 | `AWSCostExplorerParser` | AWS Cost Explorer "Daily by service" (TSV/CSV pivotado, BOM, locale) | `AWS_CE_DAILY_BY_SERVICE` | ✅ |
 | `AwsDetailedBillingParser` | AWS Invoice / Detailed Billing Report | `AWS_DETAILED_BILLING` | ✅ |
-| `AzureParser` | Azure Cost Management Export (PAYG / EA) | `AZURE_PAYG` ou `AZURE_EA` | ✅ |
-| `GCPParser` | GCP Cloud Billing Export (NDJSON / JSON / CSV / XLSX) | `GCP_BILLING_STD` | ✅ |
+| `AzureParser` | Azure Cost Management cost details (PAYG / EA / MCA) | `AZURE_PAYG`, `AZURE_EA` ou `AZURE_MCA` | ✅ |
+| `GCPParser` | GCP Cloud Billing Export (NDJSON / JSON / CSV / XLSX / Parquet) | `GCP_BILLING_STD` ou `GCP_BILLING_DETAILED` (com recurso) | ✅ |
 | `GcpCostTableParser` | GCP Cost Table (Console BR, semicolon, BRL) | `GCP_COST_TABLE` | ✅ |
 | `OCIParser` | OCI Cost Report (.csv.gz proprietário) | `OCI_COST_REPORT` | ✅ |
 
@@ -66,51 +66,83 @@ antes de virar `BillingItem` persistido.
 
 ---
 
+## Exports detalhados: o que é comum (CUR, BigQuery, Azure, OCI)
+
+Os quatro parsers de export detalhado seguem o mesmo desenho, e as regras de
+negócio estão em [`PLANO_CUR_BIGQUERY.md`](../PLANO_CUR_BIGQUERY.md):
+
+- **Natureza da linha** (`charge_kind`): `usage | commitment | tax | credit |
+  refund | adjustment | other`
+  ([`charge_kind.py`](../app/domain/value_objects/charge_kind.py)). O
+  enriquecimento decide por ela: imposto, crédito, reembolso e ajuste ficam
+  fora da base; compromisso nunca vira capacidade.
+- **Custo amortizado** (`cost`): compromisso (Savings Plan, RI, CUD, reserva)
+  distribuído sobre o uso que cobriu, desconto negociado aplicado. O valor da
+  fatura fica em `cost_billed`. Crédito promocional e free tier não reduzem a
+  base: acabam ou não migram.
+- **Consolidação** ([`consolidacao.py`](../app/infrastructure/file_ingestion/consolidacao.py)):
+  uma linha por (período, conta, região, recurso, tipo de uso, operação, tipo
+  de recurso, natureza, unidade, base de custo), com deduplicação pela
+  identidade da linha. O `raw_payload` guarda a chave e a contagem, não a linha
+  original.
+- **Unidade canônica** ([`unidades.py`](../app/infrastructure/file_ingestion/unidades.py)):
+  `hours`, `gibibyte hour`, `gibibyte month`. O multiplicador embutido
+  (`10 Hours`) vai para a quantidade.
+- **Fatos medidos** (`attributes`): `instance_type`, `vcpus`, `memory_gib`,
+  `project_id`, `capacity_unit` (`instance` | `vcpu` | `gib`),
+  `instance_family`, `storage_kind`. Só entra fato informado pelo provedor,
+  nunca estimativa.
+- **Leitura em blocos** e só das colunas usadas (`loaders.iter_tabular`);
+  Parquet aceito.
+- **Mocks** derivados dos bills reais (CUR, BigQuery) e sintéticos (Azure,
+  OCI): `scripts/gerar_mocks_billing.py`, determinístico, com invariantes em
+  `test_mocks_invariantes.py`. E2E pela API: `scripts/e2e_exports_detalhados.py`.
+
+---
+
 ## AWS CUR (Cost and Usage Report)
 
 Arquivo: [`aws_parser.py`](../app/infrastructure/file_ingestion/parsers/aws_parser.py)
 
 ### Formato
 
-CUR é o export "oficial" da AWS, entregue em S3. Suporta:
-
-- **CUR 2.0** — colunas em `snake_case` (`line_item_unblended_cost`).
-- **Legacy CUR** — colunas com `/` (`lineItem/UnblendedCost`).
-- Extensões: `.csv`, `.csv.gz`, `.csv.zip`, `.xlsx`, `.xlsm`.
+- **CUR 2.0**: colunas `snake_case`; mapas (`product`, `resource_tags`) como
+  JSON no CSV ou `map` no Parquet.
+- **CUR legado**: colunas com `/` (`lineItem/UnblendedCost`), tags em colunas
+  `resourceTags/user:X`.
+- Extensões: `.csv`, `.csv.gz`, `.csv.zip`, `.parquet`, `.xlsx`.
+- Recomendação ao cliente: granularidade **diária** com `INCLUDE_RESOURCES`.
 
 ### Assinatura para detecção
 
-Presença de `line_item_unblended_cost` **OU** `lineItem/UnblendedCost` no
-sample de 8 KB inicial.
+`line_item_unblended_cost` **ou** `lineItem/UnblendedCost`.
 
-### Colunas críticas
+### Colunas críticas (CUR 2.0)
 
-| Schema canônico | CUR 2.0 | Legacy CUR |
-|---|---|---|
-| `cost` | `line_item_unblended_cost` | `lineItem/UnblendedCost` |
-| `cost_discounted` | `line_item_net_unblended_cost` | `lineItem/NetUnblendedCost` |
-| `usage_start` | `line_item_usage_start_date` | `lineItem/UsageStartDate` |
-| `service` | `line_item_product_code` | `lineItem/ProductCode` |
-| `resource_id` | `line_item_resource_id` | `lineItem/ResourceId` |
-| `account_id` | `bill_payer_account_id` | `bill/PayerAccountId` |
-| `region` | `product_region` | `product/region` |
-| `billing_period` | `bill_billing_period_start_date[:7]` | `bill/BillingPeriodStartDate[:7]` |
-| `currency` | `line_item_currency_code` | `lineItem/CurrencyCode` |
-| `tags` | `resource_tags` (JSON string) | `resourceTags` |
-| `is_estimate` | `not bool(bill_invoice_id)` | `not bool(bill/InvoiceId)` |
+| Canônico | Coluna |
+|---|---|
+| natureza | `line_item_line_item_type` (sem a coluna: `usage` na base faturada) |
+| `cost` | amortizado: `savings_plan_savings_plan_effective_cost` (coberto por SP), `reservation_effective_cost` (RI), parte ociosa do plano/reserva nas taxas; o resto `line_item_net_unblended_cost` ou `line_item_unblended_cost` |
+| `cost_billed` | `line_item_unblended_cost` |
+| `usage_type` | `line_item_usage_type` |
+| `account_id` | `line_item_usage_account_id` (quem consumiu); fallback pagador |
+| `region` | `product_region_code`; fallbacks `product_region` e mapa `product` |
+| `resource_id` | `line_item_resource_id` |
+| `resource_type` | `product_instance_type` (ou o sufixo do tipo de uso) |
+| `attributes.vcpus/memory_gib` | mapa `product` (`vcpu`, `memory`) |
+| `tags` | `resource_tags` (`user_env` vira `env`; `aws_x` vira `aws:x`) |
 
 ### Armadilhas
 
-- `cost` chega como **string** no CSV (`dtype=str` no read_csv). Conversão via
-  `_cost_to_decimal` (passa por `str`).
-- `bill_invoice_id` **vazio** = dados não finalizados → `is_estimate=True`.
-- Schema do Legacy CUR pode variar mensalmente; detectar pela presença das
-  colunas snake_case vs slash, não pela extensão do arquivo.
-- Múltiplos arquivos por mês (split por tamanho) — cada upload processa **um**
-  CSV; quem orquestra múltiplos arquivos é o cliente, não o parser.
+- **Savings Plan no faturado soma zero por instância**: `SavingsPlanCoveredUsage`
+  traz o sob demanda, e a `SavingsPlanNegation` anula. Por isso a base é a
+  amortizada.
+- **Sem as colunas de SP/RI** (o CUR 2.0 deixa escolher colunas), a linha fica
+  na base faturada: `attributes.cost_basis = "billed"` e premissa `misto`.
+- `SavingsPlanRecurringFee` é compromisso, não `core`: pela escada, as horas do
+  plano viravam vCPU.
 
 ---
-
 ## AWS Cost Explorer (Daily by service)
 
 Arquivo: [`aws_cost_explorer_parser.py`](../app/infrastructure/file_ingestion/parsers/aws_cost_explorer_parser.py)
@@ -216,145 +248,108 @@ Arquivo: [`azure_parser.py`](../app/infrastructure/file_ingestion/parsers/azure_
 
 ### Formato
 
-Export do Azure Cost Management para Blob Storage. Suporta:
-
-- **PAYG** (Pay-As-You-Go): coluna `Date`, `SubscriptionGuid`.
-- **EA** (Enterprise Agreement): coluna `UsageDateTime`, `SubscriptionId`.
-- **MCA** (Microsoft Customer Agreement): usa FOCUS por default — não coberto
-  ainda; adicionar parser específico ou estender.
-- Extensões: `.csv` (UTF-8 BOM aware), `.csv.gz`, `.xlsx`, `.xlsm`. Parquet
-  via pyarrow está diferido.
+Cost details (EA, MCA, PAYG). Prefira o dataset **amortized**: nele a reserva já
+vem distribuída sobre o uso. No *actual*, o uso coberto sai zero e a compra
+aparece como compromisso (é o que `cobertura_por_compromisso` declara).
 
 ### Assinatura
 
-Presença simultânea de `CostInBillingCurrency` **E** `MeterCategory`.
+`CostInBillingCurrency` **e** `MeterCategory`.
 
 ### Colunas críticas
 
-| Schema canônico | Azure |
+| Canônico | Coluna |
 |---|---|
-| `cost` | `CostInBillingCurrency` |
-| `usage_start` / `usage_end` | `Date` (PAYG) / `UsageDateTime` (EA) — mesmo valor em ambos |
-| `service` | `ServiceName` ou `MeterCategory` (fallback) |
-| `account_id` | `SubscriptionGuid` (PAYG) / `SubscriptionId` (EA) |
-| `account_name` | `SubscriptionName` |
-| `region` | `ResourceLocation` |
-| `resource_id` | `ResourceId` |
-| `resource_type` | `MeterSubCategory` |
-| `currency` | `BillingCurrency` |
-| `tags` | `Tags` (string JSON) |
+| natureza | `ChargeType` + `PricingModel` (compra de reserva/SP e reserva ociosa = compromisso) |
+| `usage_type` | `MeterCategory | MeterSubCategory | MeterName` |
+| `service` | `ServiceName` (só PAYG) ou `MeterCategory` |
+| `region` | `ResourceLocation` normalizada (`East US` vira `eastus`) |
+| `resource_id` | `ResourceId`, em minúsculas (o ARM não diferencia) |
+| `attributes` | `AdditionalInfo`: `ServiceType` (tamanho, família), `VCPUs` |
+| `usage_amount` | `Quantity` x multiplicador de `UnitOfMeasure`; disco por tier (P30) vira GB-mês |
 
 ### Armadilhas
 
-- `SubscriptionGuid` ≠ `SubscriptionId` — mesmo dado, **nomes diferentes** por
-  tipo de contrato. Detectar pela presença das colunas em runtime.
-- `Date` ≠ `UsageDateTime` — idem.
-- Decimais às vezes truncados por ferramentas intermediárias (Excel, BI tools).
-  Ler sempre como string e converter via `_cost_to_decimal`.
-- Export pode vir em múltiplos arquivos (partitioning automático). Cliente
-  precisa orquestrar; o parser processa um arquivo por vez.
+- `Tags` vem **sem as chaves externas** (`"env": "prod","app": "x"`).
+- Sem `ServiceName` (EA/MCA), a versão antiga gravava o serviço literal "None".
+- Disco é cobrado por disco-mês do tier, não por GB: o parser converte pelo
+  tamanho publicado do tier. O preço de lista é por disco-mês, então o sob
+  demanda é calculado antes da conversão.
+- A Azure informa vCPU e não RAM: a RAM sai da estimativa pelo nome e a
+  capacidade conta como estimada.
 
 ---
-
 ## GCP Cloud Billing Export
 
 Arquivo: [`gcp_parser.py`](../app/infrastructure/file_ingestion/parsers/gcp_parser.py)
 
 ### Formato
 
-Dados vivem nativamente no BigQuery; export para JSON/NDJSON/CSV/XLSX.
-
-- **Tabela standard:** `gcp_billing_export_v1_{BILLING_ACCOUNT_ID}`.
-- **Tabela detailed:** `gcp_billing_export_resource_v1_{BILLING_ACCOUNT_ID}`.
+Export do BigQuery (padrão e detalhado): NDJSON (inclusive `.json.gz` do
+`bq extract`), array JSON, CSV achatado (`service.description` ou
+`service_description`, repetidos como JSON), XLSX, Parquet. NDJSON lido em
+fluxo, com `parse_float=Decimal`.
 
 ### Assinatura
 
-Presença de `billing_account_id` **E** `usage_start_time`.
+`billing_account_id` **e** `usage_start_time`.
 
 ### Colunas críticas
 
-| Schema canônico | GCP |
+| Canônico | Coluna |
 |---|---|
-| `cost` | `cost` (**FLOAT** no BigQuery — converter via string!) |
-| `cost_discounted` | `cost + sum(credits[*].amount)` (credits são negativos) |
-| `usage_start` / `usage_end` | `usage_start_time` / `usage_end_time` |
-| `service` | `service.description` (fallback `service.id`) |
-| `account_id` | `billing_account_id` |
-| `account_name` | `project.name` |
-| `resource_id` | `resource.name` ou `resource.global_name` |
-| `resource_type` | `sku.description` |
-| `region` | `location.region` |
-| `usage_amount` | `usage.amount` |
-| `usage_unit` | `usage.unit` |
-| `tags` | `labels[]` ({key, value}) |
-| `is_correction` | `cost_type in {"adjustment", "rounding_error"}` |
-| `billing_period` | `invoice.month` (YYYYMM → YYYY-MM) ou fallback de `usage_start` |
+| `usage_amount` / `usage_unit` | `usage.amount_in_pricing_units` / `usage.pricing_unit` (fallback converte segundos e byte-segundos) |
+| `cost` | `cost` + créditos estruturais (CUD, SUD, `DISCOUNT`…) + parcela rateada da taxa de CUD |
+| `cost_billed` | `cost` + todos os créditos |
+| natureza | `cost_type` (`tax`, `rounding error`, `adjustment` por `adjustment_info.type`); SKU `Commitment…` = compromisso; SKU de free tier = crédito |
+| `usage_type` | `sku.description` |
+| `resource_id` | `resource.global_name` ou `resource.name` |
+| `attributes` | `system_labels` (`machine_spec`, `cores`, `memory`); `capacity_unit` vcpu/gib; `project_id` |
 
 ### Armadilhas críticas
 
-- **`cost` é FLOAT** no BigQuery — **NUNCA somar diretamente**. Caminho seguro:
-  ler como string, `Decimal(str(value))`. O parser faz isso via `_cost_to_decimal`.
-- **`credits`** é array de `{name, amount, type}` — somar em `cost_discounted`.
-  Não somar em `cost`.
-- **`labels`** é array de `{key, value}` (≠ Azure que é JSON string). Achatar
-  via `_labels_to_dict`.
-- Schema pode mudar sem aviso — preferir BigQuery **views** para proteger
-  queries downstream.
-- Sem backfill se export não estava habilitado — dados históricos podem ser
-  incompletos. Não inferir nada do silêncio.
+- **`usage.amount` está na unidade BASE** (segundos). Sem a unidade de preço, a
+  capacidade saía zero e o custo ia para compromisso.
+- **Taxa de CUD** rateada pelo crédito de CUD de cada linha. A ociosidade não
+  aparece no export, então o rateio é integral e declarado como estimativa.
+- **SKU "…free tier discount"**: horas positivas e custo negativo. Pela escada
+  virava `core` e um pool fantasma de custo negativo; é crédito.
 
 ---
-
 ## OCI Cost Report
 
 Arquivo: [`oci_parser.py`](../app/infrastructure/file_ingestion/parsers/oci_parser.py)
 
 ### Formato
 
-Cost Report proprietário da Oracle, entregue em Object Storage.
-
-- **Formato nativo:** `.csv.gz`. Múltiplos arquivos por dia (gerado a cada
-  6h).
-- **Também aceita:** `.xlsx` / `.xlsm` (exports manuais de FinOps).
-- **FOCUS:** disponível em `FOCUS/{yyyy}/{mm}/{dd}/` — não coberto ainda;
-  adicionar parser específico se necessário.
+Cost Report proprietário (`.csv.gz` a cada 6h). Nomes lidos sem diferenciar
+maiúsculas.
 
 ### Assinatura
 
-Presença simultânea de `cost/myCost` **E** `lineItem/intervalUsageStart`.
+`cost/myCost` **e** `lineItem/intervalUsageStart`.
 
 ### Colunas críticas
 
-| Schema canônico | OCI |
+| Canônico | Coluna |
 |---|---|
-| `cost` | `cost/myCost` |
-| `usage_start` / `usage_end` | `lineItem/intervalUsageStart` / `lineItem/intervalUsageEnd` |
-| `service` | `product/service` |
-| `account_id` | `tenantId` |
-| `account_name` | `compartmentName` |
-| `resource_id` | `product/resourceId` |
-| `resource_type` | `product/resource` |
-| `region` | `product/region` |
-| `usage_amount` | `usage/billedQuantity` |
-| `usage_unit` | `usage/billedUnit` |
-| `tags` | colunas `tags/*` (dinâmicas — cada tag vira coluna) |
-| `is_correction` | `lineItem/isCorrection == "true"` |
-| `currency` | `cost/currencyCode` |
+| `account_id` | `lineItem/tenantId` |
+| `account_name` | `product/compartmentName` |
+| `attributes.project_id` | `product/compartmentId` |
+| `usage_type` | `product/description` |
+| `usage_unit` | `cost/billingUnitReadable` (`OCPU Hours`, `GB Hours`, `GB Month`) |
+| `attributes.vcpus_per_unit` | 2 por OCPU em x86; 1 no Ampere A1 |
+| `is_correction` | `lineItem/isCorrection`; substitui `lineItem/backReferenceNo` |
 
 ### Armadilhas
 
-- **Correções substituem, não somam.** Linhas com `lineItem/isCorrection=true`
-  apontam para `lineItem/backReference`; a linha referenciada deve ser
-  **dropada** do DataFrame antes de processar, e a correção mantida. O parser
-  faz isso em `_apply_corrections`.
-- **Tags dinâmicas:** o número e os nomes das colunas `tags/*` variam entre
-  tenancies. Achatar tudo em `tags: dict[str, str]`.
-- **Múltiplos arquivos por dia:** deduplicar por `lineItem/referenceNo` antes
-  de persistir (ou pelo `line_hash` do parser).
-- `.csv.gz` precisa descompactar antes — o `loaders.read_tabular` resolve.
+- **Correção substitui, não soma**, e pode vir em bloco posterior ao da linha
+  corrigida: leitura em duas passadas.
+- **OCPU ≠ vCPU**.
+- A versão antiga lia `tenantId`, `compartmentName`, `usage/billedUnit` e
+  `lineItem/backReference`, colunas que o relatório real não tem.
 
 ---
-
 ## Como adicionar um parser novo
 
 Cenário: nova cloud (digamos, **DigitalOcean**) ou novo formato (digamos,
