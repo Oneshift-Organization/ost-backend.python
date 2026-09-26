@@ -46,9 +46,9 @@ _COMPROMISSO = SkuMatch(
     mapping_confidence="high",
 )
 
-# Crédito do Cost Table legado que não é preço: acaba (RN3 do
-# PLANO_CUR_BIGQUERY). Os exports detalhados já tratam isso no parser.
-_CREDITO_TEMPORARIO_LEGADO = frozenset({"PROMOTION"})
+# Crédito do Cost Table legado que não é preço (RN3 do PLANO_CUR_BIGQUERY):
+# promoção acaba; free tier não migra. Os exports detalhados tratam isso no parser.
+_CREDITO_TEMPORARIO_LEGADO = frozenset({"PROMOTION", "FREE_TIER"})
 
 
 @dataclass(frozen=True)
@@ -213,6 +213,10 @@ def _linha_financeira_legado(raw_payload: dict) -> bool:
         or raw_payload.get("ProductCode") == "Tax"
         or cost_type in ("tax", "total", "rounding error")
         or raw_payload.get("Credit type") in _CREDITO_TEMPORARIO_LEGADO
+        # SKU de desconto de free tier (custo negativo, horas positivas): sem
+        # isto, vira pool fantasma de custo negativo marcado como "coberto por
+        # compromisso".
+        or "free tier" in str(raw_payload.get("SKU description", "")).casefold()
     )
 
 

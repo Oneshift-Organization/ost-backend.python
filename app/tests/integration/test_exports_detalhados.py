@@ -23,7 +23,9 @@ from .conftest import TEST_USER, _cleanup, _context, _ingest
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 _CUR_SEM_IMPOSTO = Decimal("92103.4834133795")
-_BQ_TOTAL = Decimal("27825.01")
+# Base do BigQuery: R$ 27.825,01 do Cost Table, sem os R$ 49,12 de desconto de
+# free tier (SKU "…free tier discount") e sem imposto/arredondamento — RN3.
+_BQ_BASE = Decimal("27874.127084")
 
 
 async def _enriquecidas(report_id):
@@ -116,7 +118,9 @@ async def test_cur_cobertura_de_classificacao(cur) -> None:
 async def test_bq_enriquecido_bate_com_o_cost_table(bq) -> None:
     _, linhas = bq
     total = sum((x.cost for x in linhas), Decimal("0"))
-    assert abs(total - _BQ_TOTAL) < Decimal("0.01")
+    assert abs(total - _BQ_BASE) < Decimal("0.01")
+    # Nada de free tier na base: ele virava pool fantasma de custo negativo.
+    assert not any("free tier" in (x.usage_type or "").casefold() for x in linhas)
 
 
 async def test_bq_core_em_horas_e_ram_em_gib_hora(bq) -> None:
@@ -142,3 +146,61 @@ async def test_contexto_roda_com_os_dois_mocks(cur, bq) -> None:
         ctx = await _context(rid)
         assert ctx.total_spend > 0
         assert ctx.premissas["reconciliacao"]["conservacao_custo"]["bate"] is True
+
+
+# ── E6: pools e fatos medidos ───────────────────────────────────────────────
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="session")
+async def ctx_cur(cur):
+    rid, _ = cur
+    return await _context(rid)
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="session")
+async def ctx_bq(bq):
+    rid, _ = bq
+    return await _context(rid)
+
+
+def _pool(ctx, chave: str):
+    return next(fp for fp in ctx.family_pools if fp.pool_key.as_str() == chave)
+
+
+async def test_cur_nenhum_pool_com_capacidade_e_custo_zero(ctx_cur) -> None:
+    """O defeito que motivou o plano: no faturado, instância coberta por SP
+    soma zero; no amortizado, todo pool com capacidade tem custo."""
+    assert not [
+        fp.pool_key.as_str()
+        for fp in ctx_cur.family_pools
+        if fp.capacity.vcpus > 0 and fp.monthly_cost <= 0
+    ]
+    assert "cobertura_por_compromisso" not in ctx_cur.premissas
+
+
+async def test_cur_capacidade_toda_medida(ctx_cur) -> None:
+    # O mapa `product` traz vCPU e memória: nada estimado pelo nome.
+    assert ctx_cur.premissas["dimensionamento_estimado"] == 0.0
+    assert all(
+        fp.inventario is not None and fp.inventario.fonte_capacidade() == "medida"
+        for fp in ctx_cur.family_pools
+    )
+
+
+async def test_cur_inventario_do_pool_c7g(ctx_cur) -> None:
+    c7g = _pool(ctx_cur, "C7G/us-east-1")
+    assert c7g.inventario.instancias == 79
+    assert c7g.inventario.tipos()["c7g.2xlarge"] == 69
+
+
+async def test_cur_horario_comercial_aparece_no_tempo_ativo(ctx_cur) -> None:
+    # O mock liga os burstable 12h/dia; o billing mostra isso.
+    t3a = _pool(ctx_cur, "T3A/us-east-1")
+    ativo = t3a.inventario.fracao_tempo_ativo(Decimal("744"))
+    assert Decimal("0.4") < ativo < Decimal("0.6")
+
+
+async def test_cur_regioes_reais(ctx_cur) -> None:
+    regioes = {fp.pool_key.region for fp in ctx_cur.family_pools}
+    assert "sa-east-1" in regioes
+    assert "global" not in regioes

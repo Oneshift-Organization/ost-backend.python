@@ -21,7 +21,7 @@ continuam produzindo exatamente o mesmo payload; o teste de caracterização
 > | E3 — parser CUR 2.0 | ✅ |
 > | E4 — parser BigQuery | ✅ |
 > | E5 — enriquecimento | ✅ |
-> | E6 — agregador + fatos medidos | ⬜ |
+> | E6 — agregador + fatos medidos | ✅ |
 > | E7 — payload e premissas | ⬜ |
 > | E8 — Terraform usando fatos medidos | ⬜ |
 > | E9 — Azure e OCI | ⬜ |
@@ -196,8 +196,11 @@ por Savings Plan custa zero e o plano custa tudo.
   `line_item_line_item_type` (export mínimo ou antigo), toda linha é `usage` na
   base faturada. É o comportamento de hoje, só que declarado.
 - *GCP*: `cost + créditos estruturais + parcela do compromisso`. Créditos
-  estruturais: CUD, SUD, `DISCOUNT`, `SUBSCRIPTION_BENEFIT`, `RESELLER_MARGIN`,
-  `FREE_TIER`. `PROMOTION` fica fora (RN3). A taxa de compromisso (SKU
+  estruturais: CUD, SUD, `DISCOUNT`, `SUBSCRIPTION_BENEFIT`, `RESELLER_MARGIN`.
+  `PROMOTION` e `FREE_TIER` ficam fora (RN3). *Ajuste de 26/09:* o free tier
+  estava na lista de estruturais; saiu porque não migra, a cotação do destino
+  não o tem, e o SKU "…free tier discount" (horas positivas, custo negativo)
+  criava um pool fantasma. A taxa de compromisso (SKU
   `Commitment…`) é rateada entre as linhas com crédito de CUD, na proporção do
   crédito. A ociosidade de CUD não aparece no export, então o rateio é integral
   e sai como **ESTIMATIVA** declarada.
@@ -507,3 +510,26 @@ texto acima; aqui fica o que estava errado e por quê.
 
 Nenhuma falha aberta depois da rodada 3. Revisão de novo a cada mudança de
 regra de negócio durante a execução (regra do projeto).
+
+### Rodada 4: achados passando os mocks pelo pipeline real (E4–E6)
+
+Nenhum destes aparecia lendo código: surgiram ao rodar os mocks de ponta a
+ponta e olhar os números. Vários afetam também o caminho legado, e foram
+corrigidos lá (os gates de integração seguem verdes).
+
+| # | achado | efeito | correção |
+|---|---|---|---|
+| 18 | Regras sem `*` na frente (`rds:*`, `ebs:*`, `aurora:*`, `elasticache:*`) | tipo de uso com prefixo de região escapava: storage do RDS em São Paulo virava disco | padrões com `*` na frente |
+| 19 | `EBS:SnapshotUsage` casava `ebs:*` (SSD) antes de `*snapshotusage*` (HDD) | o mesmo snapshot virava SSD ou HDD conforme a região | snapshot com prioridade 2 |
+| 20 | Faltavam regras para Aurora I/O-Optimized, suporte estendido, Performance Insights, VPN, VPC Endpoint, IPv4 público, DNS | US$ 4 mil do mock (e US$ 1,7 mil do bill real) sem classificação | regras novas; órfão do mock 10,2% → 5,8% |
+| 21 | `extract_family` lia o prefixo de região da AWS (`USE1-`) como família | monitoramento por vCPU-hora virava `core` da família "USE1": capacidade fantasma | prefixo de região ignorado no início do descritor |
+| 22 | SKU "E2 Instance Core running free tier discount" (horas positivas, custo negativo) | pool fantasma de custo NEGATIVO, marcado "coberto por compromisso" (inclusive no legado) | free tier sai da base (RN1/RN3 ajustadas): não migra, e o destino é cotado sem ele |
+| 23 | Linha de uso detalhada sem capacidade (CPU credit) caía no balde de compromisso | custo real de uso rotulado como compromisso | vai para órfão; no legado continua compromisso (único caso que o bill agregado produz) |
+| 24 | Ordenação de `billing_items` não era total | paginação por offset repetiria e pularia linhas | `id` como desempate |
+
+**Reanálise depois das mudanças de regra:** RN1 (free tier fora dos créditos
+estruturais) e RN3 (free tier fora da base) mudaram. Revisei quem consome
+`cost`: dashboard (lê `billing_items`, inclui a linha de crédito, que lá é
+informação de fatura), enriquecimento (exclui), agregador e reconciliação
+(recebem só o enriquecido). A conservação da reconciliação continua fechando
+nos dois mocks e nos dois bills reais.

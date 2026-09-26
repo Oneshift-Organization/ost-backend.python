@@ -49,7 +49,10 @@ from app.infrastructure.file_ingestion.unidades import normalizar_unidade
 _ZERO = Decimal("0")
 _INVOICE_MONTH_LEN = 6  # "YYYYMM"
 
-_CREDITO_PROMOCIONAL = frozenset({"PROMOTION"})
+# Fora da base (RN3): promoção acaba, e free tier é benefício do provedor de
+# ORIGEM — não migra, e a cotação do destino também não o tem. Comparar origem
+# com free tier contra destino sem ele não é comparar igual com igual.
+_CREDITO_PROMOCIONAL = frozenset({"PROMOTION", "FREE_TIER"})
 _CREDITO_CUD = frozenset({"COMMITTED_USAGE_DISCOUNT", "COMMITTED_USAGE_DISCOUNT_DOLLAR_BASE"})
 # Ajuste que CORRIGE custo recorrente fica na base; o resto é crédito.
 _AJUSTE_DE_USO = frozenset({"USAGE_CORRECTION", "PRICE_CORRECTION", "METADATA_CORRECTION"})
@@ -147,7 +150,7 @@ def _creditos(lista: object) -> list[tuple[str, Decimal]]:
     return saida
 
 
-def _natureza(raw: dict, sku: str) -> ChargeKind:
+def _natureza(raw: dict, sku: str) -> ChargeKind:  # noqa: PLR0911 - cascata por cost_type
     tipo = str(raw.get("cost_type") or "regular").casefold().replace("_", " ")
     if tipo == "tax":
         return ChargeKind.TAX
@@ -160,6 +163,12 @@ def _natureza(raw: dict, sku: str) -> ChargeKind:
         return ChargeKind.CREDIT if ajuste else ChargeKind.ADJUSTMENT
     if sku.startswith("Commitment"):
         return ChargeKind.COMMITMENT
+    # "E2 Instance Core running free tier discount": o free tier também vem como
+    # SKU próprio, com custo negativo e HORAS positivas. Pela escada ele era
+    # `core` e somava capacidade às horas já contadas no uso — um pool fantasma
+    # de custo negativo. É crédito, e sai da base pelo mesmo motivo acima.
+    if "free tier" in sku.casefold():
+        return ChargeKind.CREDIT
     return ChargeKind.USAGE
 
 

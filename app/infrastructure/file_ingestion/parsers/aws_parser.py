@@ -78,6 +78,14 @@ _PRECISA_RI = frozenset({"DiscountedUsage", "RIFee"})
 
 # `m7g.2xlarge`, `db.r8g.4xlarge`, `cache.t4g.micro` — sufixo do tipo de uso.
 _TIPO_NO_USO = re.compile(r":((?:db\.|cache\.)?[a-z][a-z0-9-]*\.[a-z0-9]+)$")
+# Tipos de uso cobrados por HORA DE INSTÂNCIA: a quantidade é instância-hora,
+# e a capacidade sai de quantidade vezes shape. Explícito aqui para o agregador não
+# adivinhar pelo texto (EBSOptimized e CPUCredits também têm o tipo no nome e
+# não são capacidade).
+_POR_INSTANCIA = re.compile(
+    r"(?:^|[-:])(BoxUsage|SpotUsage|DedicatedUsage|HostUsage|InstanceUsage"
+    r"|InstanceUsageIOOptimized|Multi-AZUsage|Multi-AZClusterUsage|NodeUsage):"
+)
 _MEMORIA = re.compile(r"^\s*([\d.,]+)\s*(GiB|GB)\s*$", re.IGNORECASE)
 
 
@@ -564,6 +572,8 @@ class AWSParser(BaseParser):
                 atributos[chave] = produto[chave]
         if conta:
             atributos["project_id"] = conta
+        if _POR_INSTANCIA.search(usage_type or "") and "ExtendedSupport" not in (usage_type or ""):
+            atributos["capacity_unit"] = "instance"
         return atributos
 
     def _tags(self, bruto: str, achatadas: dict[str, list[str]], i: int) -> dict[str, str]:

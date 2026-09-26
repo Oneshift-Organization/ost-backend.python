@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from app.domain.entities.inventario_medido import InventarioDoPool
+
 
 @dataclass(frozen=True, slots=True)
 class PoolKey:
@@ -31,6 +33,8 @@ class WorkloadPool:
     hours_window: Decimal
     os_license_type: str | None = None
     gke_control_plane_cost: Decimal | None = None
+    # Só com export detalhado; None no caminho agregado.
+    inventario: InventarioDoPool | None = None
 
     @property
     def monthly_cost(self) -> Decimal:
@@ -63,6 +67,7 @@ class FamilyPool:
     costs: PoolCosts
     hours_window: Decimal
     source_projects: tuple[str, ...] = ()
+    inventario: InventarioDoPool | None = None
 
     @property
     def monthly_cost(self) -> Decimal:

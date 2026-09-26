@@ -137,14 +137,18 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*extendedsupport*", "glob", "database", None, "medium", 29),
     # ── Storage ──
     ("*volumeusage*", "glob", "storage_ssd", None, "high", 30),
-    ("ebs:*", "glob", "storage_ssd", None, "high", 31),
+    # `*` na frente pelo mesmo motivo do RDS: prefixo de região.
+    ("*ebs:*", "glob", "storage_ssd", None, "high", 31),
     # `TimedStorage-ByteHrs` é a linha de armazenamento do S3 — objeto, não
     # bloco. Ia para `storage_hdd` e era comparada com disco no destino.
     ("*timedstorage*", "glob", "object_storage", None, "high", 32),
     ("*-bytehrs", "glob", "object_storage", None, "medium", 33),
     ("s3:*", "glob", "object_storage", None, "high", 35),
     ("*glacier*", "glob", "object_storage", None, "high", 36),
-    ("*snapshotusage*", "glob", "storage_hdd", None, "medium", 34),
+    # Prioridade 2, antes de `*ebs:*`: `EBS:SnapshotUsage` casava a regra de
+    # volume e virava SSD, enquanto `SAE1-EBS:SnapshotUsage` virava HDD — o mesmo
+    # snapshot classificado de dois jeitos conforme a região.
+    ("*snapshotusage*", "glob", "storage_hdd", None, "medium", 2),
     ("*storage*", "glob", "storage_hdd", None, "low", 39),
     # ── Networking ──
     ("natgateway*", "glob", "network_egress", None, "high", 40),
