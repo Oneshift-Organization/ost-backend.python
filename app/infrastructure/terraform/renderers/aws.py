@@ -29,6 +29,7 @@ from app.infrastructure.terraform.renderers.base import (
     nome_cloud,
     quantidade_volumes,
     texto_banco,
+    texto_espelho,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
@@ -42,6 +43,7 @@ from app.schemas.terraform import (
 
 REDE = "rede_principal"
 SUBNET = "subnet_principal"
+ZONAS = "disponiveis"
 
 # S3: nome final tem 3 a 63 caracteres, mas `bucket_prefix` é limitado a 37 pelo
 # provider — ele reserva o resto para o sufixo aleatório. O hífen que separa
@@ -75,7 +77,15 @@ class AdaptadorAWS:
         ]
 
     def preambulo(self, bp: TerraformBlueprint) -> list[str]:
-        return []
+        if not any(r.configuration.get("mirror_of") for r in bp.resources):
+            return []
+        # A letra da zona muda de região para região (ap-northeast-1 não tem `b`
+        # para contas novas): as subredes espelhadas pegam a zona pela posição.
+        return [
+            comentario("Zonas disponíveis na região, para as subredes espelhadas da origem.")
+            + "\n"
+            + bloco("data", ["aws_availability_zones", ZONAS], [atributo("state", "available")])
+        ]
 
     def outputs(self, bp: TerraformBlueprint) -> list[str]:
         saidas = []
@@ -112,6 +122,18 @@ def _rede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 
 def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    espelho = texto_espelho(r.configuration)
+    if espelho is not None:
+        return comentario(espelho) + "\n" + bloco("resource", ["aws_subnet", r.logical_name], [
+            atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id")),
+            atributo("cidr_block", str(r.configuration.get("cidr"))),
+            atributo("availability_zone", referencia(
+                f"element(data.aws_availability_zones.{ZONAS}.names, "
+                f"{int(r.configuration.get('zone_index') or 0)})"
+            )),
+            atributo("map_public_ip_on_launch", bool(r.configuration.get("public_access"))),
+            atributo("tags", {"Name": nome_cloud(bp.project_name, r.logical_name)}),
+        ])
     return bloco("resource", ["aws_subnet", r.logical_name], [
         atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id")),
         atributo("cidr_block", str(r.configuration.get("cidr") or "10.0.0.0/24")),
@@ -136,7 +158,7 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("count", int(cfg.get("instances") or 1)),
         atributo("ami", referencia("var.ami_id")),
         atributo("instance_type", str(cfg.get("machine_type"))),
-        atributo("subnet_id", referencia(f"aws_subnet.{SUBNET}.id")),
+        atributo("subnet_id", referencia(f"aws_subnet.{cfg.get('subnet') or SUBNET}.id")),
         atributo("tags", referencia(
             f'{{\n    Name = "{nome_cloud(bp.project_name, slug)}-${{count.index}}"\n  }}'
         )),
@@ -230,7 +252,21 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     # RDS cobra por classe de instância, não por vCPU avulso. `m6g` é a linha
     # de propósito geral; o número de vCPU vira o tamanho mais próximo.
     classe = _classe_rds(vcpus)
-    return comentario(
+    subredes = [str(s) for s in cfg.get("db_subnets") or []]
+    grupo = f"{r.logical_name}_subredes"
+    rede = []
+    antes = ""
+    if subredes:
+        antes = comentario(
+            "Subredes espelhadas de onde o banco estava na origem (duas zonas ou mais)."
+        ) + "\n" + bloco("resource", ["aws_db_subnet_group", grupo], [
+            atributo("name", nome_cloud(bp.project_name, r.logical_name, "subredes")),
+            atributo("subnet_ids", referencia(
+                "[" + ", ".join(f"aws_subnet.{s}.id" for s in subredes) + "]"
+            )),
+        ]) + "\n\n"
+        rede = [atributo("db_subnet_group_name", referencia(f"aws_db_subnet_group.{grupo}.name"))]
+    return antes + comentario(
         texto_banco(cfg, vcpus) + "\n"
         f"Traduzido para a classe {classe}, a mais próxima acima.\n"
         "`deletion_protection` fica ligado; desligue conscientemente."
@@ -242,6 +278,7 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("allocated_storage", 100),
         atributo("storage_encrypted", True),
         atributo("multi_az", ha),
+        *rede,
         atributo("publicly_accessible", False),
         atributo("deletion_protection", True),
         atributo("skip_final_snapshot", False),

@@ -508,6 +508,19 @@ def ajustar_tamanho(gb: int, *, minimo: int, maximo: int, tipo: str) -> tuple[in
     )
 
 
+def texto_espelho(cfg: dict[str, Any]) -> str | None:
+    """Comentário da subrede espelhada: de qual subrede de origem ela veio."""
+    origem = cfg.get("mirror_of")
+    if not isinstance(origem, dict):
+        return None
+    nome = texto_seguro(origem.get("nome") or origem.get("chave") or "?", 80)
+    cidr = texto_seguro(origem.get("cidr") or "sem CIDR", 40)
+    return (
+        f"Espelha a subrede de origem {nome} ({cidr}), com endereçamento novo:\n"
+        "reusar o CIDR da origem quebraria a VPN da migração."
+    )
+
+
 def disco_raiz(
     cfg: dict[str, Any], *, minimo: int, maximo: int, tipo: str
 ) -> tuple[int, str] | None:

@@ -18,6 +18,7 @@ from app.infrastructure.terraform.renderers.base import (
     nome_cloud,
     quantidade_volumes,
     texto_banco,
+    texto_espelho,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
@@ -101,14 +102,17 @@ def _rede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 
 def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
-    return bloco("resource", ["google_compute_subnetwork", r.logical_name], [
-        atributo("name", nome_cloud(bp.project_name, "subnet")),
+    espelho = texto_espelho(r.configuration)
+    nome = nome_cloud(bp.project_name, r.logical_name if espelho else "subnet")
+    bloco_hcl = bloco("resource", ["google_compute_subnetwork", r.logical_name], [
+        atributo("name", nome),
         atributo("ip_cidr_range", str(r.configuration.get("cidr") or "10.0.0.0/24")),
         atributo("region", bp.region),
         atributo("network", referencia(f"google_compute_network.{REDE}.id")),
         # Sem isto, tráfego para APIs do Google sairia pela internet pública.
         atributo("private_ip_google_access", True),
     ])
+    return comentario(espelho) + "\n" + bloco_hcl if espelho else bloco_hcl
 
 
 def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -137,8 +141,10 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         ], nivel=1),
         bloco_aninhado("network_interface", [
             atributo("subnetwork", referencia(
-                f"google_compute_subnetwork.{SUBNET}.id"
+                f"google_compute_subnetwork.{cfg.get('subnet') or SUBNET}.id"
             ), nivel=2),
+            # IP externo só onde a subrede de destino é pública.
+            *([bloco_aninhado("access_config", [], nivel=2)] if cfg.get("public_ip") else []),
         ], nivel=1),
         atributo("labels", {"environment": bp.environment, "managed_by": "oneshift"}),
     ]

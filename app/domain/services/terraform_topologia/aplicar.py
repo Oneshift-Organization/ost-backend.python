@@ -27,6 +27,7 @@ from app.domain.services.terraform_topologia.bancos import (
     versao_padrao,
 )
 from app.domain.services.terraform_topologia.discos import Avulsos, avulsos, boot_medio
+from app.domain.services.terraform_topologia.espelho import espelhar
 
 # Chave do payload de cada categoria de disco.
 _CHAVES_DE_DISCO = {"storage_ssd": "armazenamento_ssd", "storage_hdd": "armazenamento_hdd"}
@@ -39,6 +40,8 @@ def aplicar_topologia(
     payload: Mapping[str, Any],
     *,
     destino: str,
+    rede: str,
+    acesso_publico: bool,
 ) -> PlanoDerivado:
     topologia = payload.get("topologia") or {}
     detalhe = topologia.get("detalhe") or {}
@@ -49,10 +52,20 @@ def aplicar_topologia(
         avisos=list(plano.avisos),
         variaveis_padrao=dict(plano.variaveis_padrao),
     )
+    # O banco sem classe entra antes do espelho: as subredes dele também contam.
+    _bancos_sem_grupo(novo, detalhe.get("bancos_sem_grupo") or [], destino)
+    fundacao = ((topologia.get("resumo") or {}).get("contagens") or {}).get("fundacao") or {}
+    espelhar(
+        novo,
+        detalhe,
+        destino=destino,
+        rede=rede,
+        acesso_publico=acesso_publico,
+        redes_de_origem=int(fundacao.get("rede") or 0),
+    )
     _disco_raiz(novo, detalhe.get("posicionamento") or [], detalhe.get("discos") or {})
     medido = (payload.get("inventario_medido") or {}).get("armazenamento") or {}
     _discos_avulsos(novo, medido, detalhe.get("discos") or {})
-    _bancos_sem_grupo(novo, detalhe.get("bancos_sem_grupo") or [], destino)
     _versoes(novo, detalhe.get("bancos") or [], destino)
     return novo
 
@@ -63,35 +76,44 @@ def aplicar_topologia(
 def _disco_raiz(
     plano: PlanoDerivado, posicionamento: list[Mapping[str, Any]], discos: Mapping[str, Any]
 ) -> None:
-    """O boot medido vira o disco raiz da VM, com o tamanho médio da origem.
+    """O boot medido vira o disco raiz da VM (RI15.7).
 
-    A classe é a que domina o boot da origem, em GB: HDD só quando o boot era
-    majoritariamente magnético.
+    Tamanho: o boot médio da subrede de origem da VM; sem ele, o do pool. Classe:
+    a que domina o boot da origem, em GB (HDD só quando o boot era
+    majoritariamente magnético).
     """
     boot = discos.get("boot") or {}
     hdd = (boot.get("armazenamento_hdd") or {}).get("gb") or 0
     ssd = (boot.get("armazenamento_ssd") or {}).get("gb") or 0
     tipo = "pd-standard" if hdd > ssd else "pd-balanced"
     por_pool = {(p.get("familia"), p.get("regiao")): p for p in posicionamento}
+    tamanhos: dict[str, list[tuple[str, int]]] = defaultdict(list)
     for i, r in enumerate(plano.recursos):
         cfg = r.configuration
         if r.resource_type != "compute" or cfg.get("disk_only"):
             continue
         pos = por_pool.get((cfg.get("source_family"), cfg.get("source_region")))
         medio = boot_medio(pos.get("posicionamentos") or []) if pos else None
-        if medio is None:
+        da_fatia = cfg.get("slice_boot_gb")
+        gb = da_fatia if isinstance(da_fatia, int) and da_fatia > 0 else None
+        if gb is None and medio is not None:
+            gb = medio[0]
+        if gb is None:
             continue
-        gb, n = medio
         plano.recursos[i] = replace(r, configuration={**cfg, "root_gb": gb, "root_disk_type": tipo})
+        tamanhos[str(cfg.get("pool") or r.logical_name)].append((r.logical_name, gb))
+    for pool, lista in tamanhos.items():
+        valores = sorted({gb for _, gb in lista})
+        faixa = f"{valores[0]} GB" if len(valores) == 1 else f"{valores[0]} a {valores[-1]} GB"
         plano.premissas.append(
             Premissa(
-                campo=f"{r.logical_name}.root_gb",
+                campo=f"{pool}.root_gb",
                 categoria="derivacao",
-                valor=f"{gb} GB",
+                valor=faixa,
                 base=(
-                    f"Média dos discos de boot de {n} instância(s) do pool no inventário. "
-                    "O boot vira o disco raiz da VM, e não um volume avulso: o billing o "
-                    "cobra como volume comum, e o pacote o criaria duas vezes."
+                    "Boot médio da subrede de origem de cada VM no inventário (sem ele, o do "
+                    "pool). O boot vira o disco raiz, e não um volume avulso: o billing o cobra "
+                    "como volume comum, e o pacote o criaria duas vezes."
                 ),
             )
         )
@@ -215,6 +237,7 @@ def _bancos_sem_grupo(
                     "instances_measured": g.quantidade,
                     "source_inventory": True,
                     "source_versions": {g.versao: g.quantidade} if g.versao else {},
+                    "source_subnets": list(g.subredes),
                 },
                 depends_on=("rede_principal",),
             )

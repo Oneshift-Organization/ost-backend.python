@@ -712,7 +712,10 @@ caracterização dos pacotes atuais, byte a byte).
    posicionamento "sem posicionamento", que vai para a subrede padrão, com
    peso = quantidade × vCPU médio das instâncias posicionadas do pool. Se `M`
    for menor que o número de posicionamentos, os `M` maiores recebem uma VM
-   cada e o aviso lista os que ficaram sem máquina. Custo aprovado intacto.
+   cada e o aviso lista os que ficaram sem máquina. Com `M` maior ou igual,
+   **cada posicionamento recebe ao menos uma VM** (preserva a zona e a rede de
+   origem) e o restante vai pelo maior resto: o maior resto puro podia zerar
+   uma subrede pequena mesmo sobrando máquina. Custo aprovado intacto.
    (Revisado na I7: agrupar também pelo conjunto de grupos partia o pool C7G
    em dezenas de posicionamentos, mais que as máquinas aprovadas.)
 6. **Banco:** a versão maior mais frequente no grupo (empate: a maior) vira o
@@ -723,8 +726,13 @@ caracterização dos pacotes atuais, byte a byte).
    billing cobrou **sem classe** (Azure Flexible Server) passa a ser gerado com
    a classe e o motor do inventário, medidos, em vez da estimativa por razão de
    custo. Na AWS, o banco recebe os grupos de segurança espelhados e um
-   `aws_db_subnet_group` quando tinha subredes espelhadas em 2 zonas ou mais;
-   senão, aviso. Nas outras nuvens o posicionamento de banco fica como hoje,
+   `aws_db_subnet_group` com as subredes espelhadas de onde ele estava. O RDS
+   exige duas zonas: quando as do banco ficam numa só (sempre, com origem
+   regional como GCP, Azure e OCI), o grupo é **completado com subredes
+   espelhadas de outra zona**, com premissa. Sem nenhuma, aviso, e o banco fica
+   sem os grupos espelhados (grupo de outra VPC não aplica). (Revisado na I8c:
+   sem grupo de subredes, o RDS cai na VPC padrão da conta, e os grupos de
+   segurança da VPC nova não se aplicam a ele.) Nas outras nuvens o posicionamento de banco fica como hoje,
    com aviso (exige endpoint privado, que é decisão de rede do cliente).
 7. **Discos:** disco de boot vira o disco raiz da VM (tamanho médio do boot no
    posicionamento), não volume avulso. Hoje o CUR cobra o volume raiz como EBS
@@ -1281,3 +1289,45 @@ vem depois.
   teste). Suíte inteira: 1.212 testes.
 - **Para frente:** a I8c reparte as VMs por subrede e usa o boot de cada
   posicionamento; a I8b liga os grupos de segurança.
+
+### I8c — subredes espelhadas e posicionamento
+
+- **Entregue:** `rede.py` (alocação determinística em quatro estratégias, em
+  inteiros), `posicionamento.py` (maior resto com piso de uma VM por subrede) e
+  `espelho.py` (subredes de destino, um recurso por pool e subrede, grupo de
+  subredes do RDS). Os renderers espelham a subrede com comentário da origem; na
+  AWS a zona vem de `data.aws_availability_zones` pela posição, porque a letra
+  muda de região para região.
+- **Teste que importa:** propriedades por força bruta (40 sementes): tudo dentro
+  da rede, nada sobre a subrede padrão, nada sobreposto, nenhuma menor que /28,
+  ou espelha todas ou nenhuma, e a mesma entrada embaralhada dá o mesmo
+  resultado. A repartição soma sempre o aprovado, com ao menos uma VM por
+  subrede quando cabe. Nos 12 pares, as VMs por pool são as mesmas com e sem
+  topologia. `terraform validate` real nos 12 pares.
+- **Ajustes de regra feitos aqui (com análise):**
+  - RI15.5: ao menos uma VM por subrede quando `M` cabe. O maior resto puro
+    zerava subrede pequena com máquina sobrando.
+  - RI15.6: o grupo de subredes do RDS é completado com subrede de outra zona.
+    Sem ele o RDS cai na VPC padrão da conta, e os grupos de segurança da VPC
+    nova (I8b) não se aplicariam a ele: o `apply` falharia por VPCs diferentes.
+    Com origem regional (GCP, Azure, OCI) é sempre o caso.
+- **Achados ao ler o pacote gerado:**
+  1. O aviso "ficaram sem máquina" listava `app-us-central1` várias vezes: no
+     GCP cada projeto tem a sua. Agora sai com o CIDR.
+  2. A VM pedia IP público pela subrede de **origem**; com a requisição privada
+     a subrede de destino sai privada, e a OCI recusaria. Agora vale o destino.
+  3. Sem nenhuma subrede a espelhar, a premissa da rede virava "0 subredes
+     espelham…". Agora a premissa original fica.
+  4. "As N redes de origem viram uma" sumia no GCP, onde a VPC não tem CIDR. A
+     contagem agora vem do inventário.
+- **Números nos mocks:** AWS → GCP com 8 subredes /20 (estratégia "prefixo da
+  origem"); o pool C7G reparte 19 VMs em 7 subredes (4+3+3+2+2+2 e 3 na padrão,
+  para as 13 instâncias fora do inventário). GCP → AWS: o E2 tem 4 VMs para 17
+  subredes de origem; as 4 maiores recebem uma. Azure → AWS: o Flexible Server
+  ganha grupo de subredes completado com a subrede `app` de outra zona.
+- **Impacto para trás:** sem topologia, nada muda (caracterização).
+  `aplicar_topologia` passou a exigir a rede e o acesso público da requisição.
+  Suíte inteira: 1.315 testes.
+- **Para frente:** a I8b usa `placement_groups` de cada fatia, as subredes
+  criadas (NSG por subrede na Azure) e `db_subnets` (só banco na VPC nova
+  recebe grupo espelhado).

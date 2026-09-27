@@ -8,6 +8,7 @@ nada muda — é o teste de caracterização.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
@@ -24,6 +25,7 @@ from app.tests.unit.infrastructure.terraform_fixtures import (
     entrada,
     pacote,
 )
+from app.use_cases.terraform.build_blueprint import montar_blueprint
 from app.use_cases.terraform.generate_terraform import gerar_pacote
 
 PROVEDORES = ("aws", "gcp", "azure", "oci")
@@ -31,8 +33,17 @@ PARES = [(o, d) for o in PROVEDORES for d in PROVEDORES if o != d]
 
 
 def _bloco(main: str, tipo: str, nome: str) -> str:
-    inicio = main.index(f'resource "{tipo}" "{nome}" {{')
+    """O bloco do recurso; ``nome`` terminado em `_` pega a primeira fatia do pool."""
+    alvo = f'resource "{tipo}" "{nome}' + ("" if nome.endswith("_") else '" {')
+    inicio = main.index(alvo)
     return main[inicio : main.index("\n}\n", inicio)]
+
+
+def _blocos(main: str, tipo: str) -> dict[str, str]:
+    return {
+        m.group(1): main[m.start() : main.index("\n}\n", m.start())]
+        for m in re.finditer(rf'resource "{tipo}" "([^"]+)" {{', main)
+    }
 
 
 # ── README e manifesto ──────────────────────────────────────────────────
@@ -91,22 +102,21 @@ def test_nome_do_inventario_nao_vira_codigo() -> None:
 def test_boot_da_aws_vira_disco_raiz_em_cada_destino() -> None:
     payload = com_topologia("aws")
     gcp = pacote(payload, "gcp")["main.tf"]
-    assert re.search(
-        r'type\s*=\s*"pd-balanced"', _bloco(gcp, "google_compute_instance", "vm_c7g_us_east_1")
-    )
-    assert re.search(r"size\s*=\s*\d+", _bloco(gcp, "google_compute_instance", "vm_c7g_us_east_1"))
+    vm = _bloco(gcp, "google_compute_instance", "vm_c7g_us_east_1_")
+    assert re.search(r'type\s*=\s*"pd-balanced"', vm)
+    assert re.search(r"size\s*=\s*\d+", vm)
     azure = pacote(payload, "azure")["main.tf"]
     assert re.search(
         r"disk_size_gb\s*=\s*\d+",
-        _bloco(azure, "azurerm_linux_virtual_machine", "vm_c7g_us_east_1"),
+        _bloco(azure, "azurerm_linux_virtual_machine", "vm_c7g_us_east_1_"),
     )
     oci = pacote(payload, "oci")["main.tf"]
-    assert "boot_volume_size_in_gbs" in _bloco(oci, "oci_core_instance", "vm_c7g_us_east_1")
+    assert "boot_volume_size_in_gbs" in _bloco(oci, "oci_core_instance", "vm_c7g_us_east_1_")
 
 
 def test_boot_do_gcp_vira_raiz_gp3_na_aws() -> None:
     main = pacote(com_topologia("gcp"), "aws")["main.tf"]
-    vm = _bloco(main, "aws_instance", "vm_e2_us_central1")
+    vm = _bloco(main, "aws_instance", "vm_e2_us_central1_")
     assert "root_block_device {" in vm
     assert re.search(r'volume_type\s*=\s*"gp3"', vm)
 
@@ -148,6 +158,105 @@ def test_com_versao_medida_nada_manda_preencher_a_versao() -> None:
     assert "Versão medida no inventário" in arquivos["main.tf"]
     sem = pacote(carregar("payload_aws"), "gcp")
     assert "A versão não aparece no billing" in sem["main.tf"]
+
+
+# ── subredes espelhadas e posicionamento (I8c) ──────────────────────────
+
+
+def test_subredes_espelhadas_com_enderecamento_novo() -> None:
+    """As 8 subredes /20 da AWS com VM posicionada viram 8 /20 dentro da faixa
+    pedida, fora da subrede padrão e sem sobrepor."""
+    main = pacote(com_topologia("aws"), "gcp")["main.tf"]
+    espelhadas = {
+        n: b
+        for n, b in _blocos(main, "google_compute_subnetwork").items()
+        if n != "subnet_principal"
+    }
+    assert len(espelhadas) == 8
+    faixas = []
+    for b in espelhadas.values():
+        achado = re.search(r'ip_cidr_range\s*=\s*"([^"]+)"', b)
+        assert achado
+        faixas.append(ipaddress.ip_network(achado.group(1)))
+    rede, padrao = ipaddress.ip_network("10.50.0.0/16"), ipaddress.ip_network("10.50.0.0/24")
+    assert all(f.subnet_of(rede) and not f.overlaps(padrao) and f.prefixlen == 20 for f in faixas)
+    assert len({str(f) for f in faixas}) == 8
+    assert main.count("# Espelha a subrede de origem") == 8
+
+
+def test_aws_pega_a_zona_pela_posicao() -> None:
+    main = pacote(com_topologia("gcp"), "aws")["main.tf"]
+    assert 'data "aws_availability_zones" "disponiveis"' in main
+    subredes = _blocos(main, "aws_subnet")
+    assert re.search(r'availability_zone\s*=\s*"sa-east-1a"', subredes["subnet_principal"])
+    espelhadas = [b for n, b in subredes.items() if n != "subnet_principal"]
+    assert espelhadas
+    assert all("element(data.aws_availability_zones.disponiveis.names" in b for b in espelhadas)
+
+
+@pytest.mark.parametrize(("origem", "destino"), PARES)
+def test_vms_do_pool_somam_o_aprovado(origem: str, destino: str) -> None:
+    """O posicionamento muda onde as VMs ficam, nunca quantas (RI15.5)."""
+
+    def por_pool(payload: dict) -> dict[str, int]:
+        soma: dict[str, int] = {}
+        for r in montar_blueprint(payload, entrada(destino)).resources:
+            if r.resource_type.value == "compute" and not r.configuration.get("disk_only"):
+                pool = str(r.configuration.get("pool") or r.logical_name)
+                soma[pool] = soma.get(pool, 0) + int(r.configuration["instances"])
+        return soma
+
+    assert por_pool(com_topologia(origem)) == por_pool(carregar(f"payload_{origem}"))
+
+
+def test_banco_na_aws_ganha_grupo_de_subredes_completado() -> None:
+    """O Flexible Server estava numa subrede só (regional): o grupo de subredes do
+    RDS é completado com uma de outra zona, e a premissa diz isso."""
+    arquivos = pacote(com_topologia("azure"), "aws")
+    grupo = _bloco(arquivos["main.tf"], "aws_db_subnet_group", "banco_postgresql_standard_d4ds_v5_")
+    assert "aws_subnet.subnet_dados.id" in grupo
+    assert grupo.count("aws_subnet.") == 2
+    banco = _bloco(arquivos["main.tf"], "aws_db_instance", "banco_postgresql_standard_d4ds_v5")
+    assert "db_subnet_group_name" in banco
+    assert "o grupo foi completado com" in arquivos["README.md"]
+
+
+def test_redes_de_origem_contadas_pelo_inventario() -> None:
+    """No GCP a VPC não tem CIDR: a contagem vem do inventário, não dos CIDRs."""
+    payload = com_topologia("gcp")
+    redes = payload["topologia"]["resumo"]["contagens"]["fundacao"]["rede"]
+    assert redes > 1
+    readme = pacote(payload, "aws")["README.md"]
+    assert f"As {redes} redes de origem viram uma" in readme
+
+
+def test_aviso_de_subrede_sem_maquina_diz_o_cidr() -> None:
+    readme = pacote(com_topologia("gcp"), "aws")["README.md"]
+    assert "Ficaram sem máquina: app-us-central1 10.2" in readme
+
+
+def test_ip_publico_so_onde_o_destino_e_publico() -> None:
+    payload = com_topologia("aws")
+    publicas = [s for s in payload["topologia"]["detalhe"]["rede"]["subredes"] if s["publica"]]
+    assert publicas, "o mock da AWS tem subrede pública com recurso posicionado"
+    com = pacote(payload, "oci", network={"cidr": "10.50.0.0/16", "public_access": True})
+    sem = pacote(payload, "oci", network={"cidr": "10.50.0.0/16", "public_access": False})
+    assert re.search(r"assign_public_ip\s*=\s*true", com["main.tf"])
+    assert not re.search(r"assign_public_ip\s*=\s*true", sem["main.tf"])
+    assert "eram públicas na origem" in sem["README.md"]
+
+
+def test_faixa_que_sobrepoe_a_origem_e_avisada() -> None:
+    readme = pacote(com_topologia("aws"), "gcp", network={"cidr": "10.10.0.0/16"})["README.md"]
+    assert "sobrepõe a origem" in readme
+
+
+def test_rede_pequena_divide_e_rede_minima_avisa() -> None:
+    pequena = pacote(com_topologia("aws"), "gcp", network={"cidr": "10.50.0.0/22"})
+    assert "estratégia: todas /26" in pequena["README.md"]
+    minima = pacote(com_topologia("aws"), "gcp", network={"cidr": "10.50.0.0/24"})
+    assert "tudo foi para a subrede padrão" in minima["README.md"]
+    assert "Espelha a subrede de origem" not in minima["main.tf"]
 
 
 # ── `terraform validate` nos 12 pares ───────────────────────────────────

@@ -29,6 +29,7 @@ from app.infrastructure.terraform.renderers.base import (
     nome_cloud,
     quantidade_volumes,
     texto_banco,
+    texto_espelho,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
@@ -132,8 +133,9 @@ def _rede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 
 def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
-    return bloco("resource", ["azurerm_subnet", r.logical_name], [
-        atributo("name", nome_cloud(bp.project_name, "subnet")),
+    espelho = texto_espelho(r.configuration)
+    bloco_hcl = bloco("resource", ["azurerm_subnet", r.logical_name], [
+        atributo("name", nome_cloud(bp.project_name, r.logical_name if espelho else "subnet")),
         atributo("resource_group_name", referencia(
             f"azurerm_resource_group.{GRUPO}.name"
         )),
@@ -144,6 +146,7 @@ def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             str(r.configuration.get("cidr") or "10.0.0.0/24")
         ]),
     ])
+    return comentario(espelho) + "\n" + bloco_hcl if espelho else bloco_hcl
 
 
 def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -179,7 +182,9 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         *_grupo(),
         bloco_aninhado("ip_configuration", [
             atributo("name", "interna", nivel=2),
-            atributo("subnet_id", referencia(f"azurerm_subnet.{SUBNET}.id"), nivel=2),
+            atributo(
+                "subnet_id", referencia(f"azurerm_subnet.{cfg.get('subnet') or SUBNET}.id"), nivel=2
+            ),
             atributo("private_ip_address_allocation", "Dynamic", nivel=2),
         ], nivel=1),
     ])

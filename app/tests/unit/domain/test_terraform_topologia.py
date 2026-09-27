@@ -170,15 +170,21 @@ def _payload() -> dict:
 
 def _aplicar(payload: dict, destino: str = "gcp"):
     plano = derivar_plano(payload, provedor_destino=destino, regiao="us-central1")
-    return plano, aplicar_topologia(plano, payload, destino=destino)
+    return plano, aplicar_topologia(
+        plano, payload, destino=destino, rede="10.50.0.0/16", acesso_publico=False
+    )
 
 
 def test_boot_vira_disco_raiz_e_o_plano_de_entrada_fica_intacto() -> None:
+    """Sem subrede de origem no detalhe, as fatias caem todas na padrão e viram uma VM
+    só; o raiz é a média ponderada do boot das duas subredes: (3x100 + 1x20) / 4."""
     antes, depois = _aplicar(_payload())
     [vm] = [r for r in depois.recursos if r.logical_name.startswith("vm_")]
+    assert vm.logical_name == "vm_c7g_us_east_1_padrao"
+    assert vm.configuration["instances"] == 4
     assert vm.configuration["root_gb"] == 80
     assert vm.configuration["root_disk_type"] == "pd-balanced"
-    assert any(p.campo == f"{vm.logical_name}.root_gb" for p in depois.premissas)
+    assert any(p.campo == "vm_c7g_us_east_1.root_gb" for p in depois.premissas)
     [vm_antes] = [r for r in antes.recursos if r.logical_name.startswith("vm_")]
     assert "root_gb" not in vm_antes.configuration
 

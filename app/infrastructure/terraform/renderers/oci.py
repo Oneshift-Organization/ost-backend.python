@@ -31,6 +31,7 @@ from app.infrastructure.terraform.renderers.base import (
     nome_cloud,
     quantidade_volumes,
     texto_banco,
+    texto_espelho,
     texto_tamanho_disco,
     texto_volume_bucket,
 )
@@ -151,11 +152,14 @@ def _rede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 
 def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
-    return bloco("resource", ["oci_core_subnet", r.logical_name], [
+    espelho = texto_espelho(r.configuration)
+    bloco_hcl = bloco("resource", ["oci_core_subnet", r.logical_name], [
         _compartimento(),
         atributo("vcn_id", referencia(f"oci_core_vcn.{REDE}.id")),
         atributo("cidr_block", str(r.configuration.get("cidr") or "10.0.0.0/24")),
-        atributo("display_name", nome_cloud(bp.project_name, "subnet")),
+        atributo(
+            "display_name", nome_cloud(bp.project_name, r.logical_name if espelho else "subnet")
+        ),
         # `true` aqui deixaria toda instância sem IP público mesmo quando o
         # usuário pediu acesso público — a lógica é invertida no nome.
         atributo(
@@ -163,6 +167,7 @@ def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             not bool(r.configuration.get("public_access")),
         ),
     ])
+    return comentario(espelho) + "\n" + bloco_hcl if espelho else bloco_hcl
 
 
 def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -205,8 +210,12 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             atributo("memory_in_gbs", ram_instancia, nivel=2),
         ], nivel=1),
         bloco_aninhado("create_vnic_details", [
-            atributo("subnet_id", referencia(f"oci_core_subnet.{SUBNET}.id"), nivel=2),
-            atributo("assign_public_ip", False, nivel=2),
+            atributo(
+                "subnet_id",
+                referencia(f"oci_core_subnet.{cfg.get('subnet') or SUBNET}.id"),
+                nivel=2,
+            ),
+            atributo("assign_public_ip", bool(cfg.get("public_ip")), nivel=2),
         ], nivel=1),
         bloco_aninhado("source_details", origem, nivel=1),
     ])

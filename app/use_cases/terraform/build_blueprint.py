@@ -47,7 +47,13 @@ def montar_blueprint(
         alta_disponibilidade=entrada.availability.high_availability,
     )
     if tem_topologia(payload_analise):
-        plano = aplicar_topologia(plano, payload_analise, destino=entrada.target_provider.value)
+        plano = aplicar_topologia(
+            plano,
+            payload_analise,
+            destino=entrada.target_provider.value,
+            rede=entrada.network.cidr,
+            acesso_publico=entrada.network.public_access,
+        )
 
     recursos = [*_rede(entrada), *_recursos_derivados(plano)]
 
