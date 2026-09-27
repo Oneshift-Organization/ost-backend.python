@@ -106,6 +106,12 @@ PYTHONPATH=. python scripts/sync_prices.py --providers categories
 > grosseiro e o DE-PARA por serviço perde precisão. Isso foi descoberto pelos
 > gates de integração, não em revisão de código.
 
+> ⚠️ **Regra ou taxa mudou? Rode de novo e re-enriqueça.** A classificação é
+> gravada em `billing_enriched` na ingestão: re-seedar muda só os reports novos.
+> Para os existentes, `python scripts/re_enrich_report.py <report_id>`. Foi o
+> caso da correção do Balanced PD do GCP (SSD, não HDD) e da taxa de SSD do GCP
+> (pd-balanced, não pd-ssd).
+
 ## 4.2 Preços oficiais (opcional, precisa de rede)
 
 ```bash

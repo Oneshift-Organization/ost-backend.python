@@ -20,7 +20,9 @@ from app.infrastructure.terraform.hcl import (
     referencia,
 )
 from app.infrastructure.terraform.renderers.base import (
+    ajustar_tamanho,
     com_indice,
+    disco_ssd,
     instancias_banco,
     nome_banco,
     nome_cloud,
@@ -143,14 +145,20 @@ def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
     # gp3 e st1 são os equivalentes diretos do que o pool classificou como
     # SSD e HDD na origem.
-    tipo = "gp3" if str(cfg.get("disk_type", "")).endswith("ssd") else "st1"
+    tipo = "gp3" if disco_ssd(cfg) else "st1"
+    tamanho, nota = ajustar_tamanho(
+        int(cfg.get("size_gb") or 10),
+        minimo=125 if tipo == "st1" else 1,
+        maximo=16_384,
+        tipo=tipo,
+    )
     n = quantidade_volumes(cfg)
     nome = nome_cloud(bp.project_name, r.logical_name)
-    return comentario(texto_tamanho_disco(cfg)) + "\n" + bloco(
+    return comentario(texto_tamanho_disco(cfg) + nota) + "\n" + bloco(
         "resource", ["aws_ebs_volume", r.logical_name],
         ([atributo("count", n)] if n > 1 else []) + [
         atributo("availability_zone", f"{bp.region}a"),
-        atributo("size", int(cfg.get("size_gb") or 10)),
+        atributo("size", tamanho),
         atributo("type", tipo),
         atributo("encrypted", True),
         atributo("tags", referencia(f'{{\n    Name = "{nome}-${{count.index}}"\n  }}')

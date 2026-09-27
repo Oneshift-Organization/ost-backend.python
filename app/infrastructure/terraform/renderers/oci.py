@@ -23,6 +23,7 @@ from app.infrastructure.terraform.hcl import (
     referencia,
 )
 from app.infrastructure.terraform.renderers.base import (
+    ajustar_tamanho,
     com_indice,
     instancias_banco,
     nome_banco,
@@ -206,15 +207,18 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
+    tamanho, nota = ajustar_tamanho(
+        int(cfg.get("size_gb") or 50), minimo=50, maximo=32_768, tipo="Block Volume"
+    )
     n = quantidade_volumes(cfg)
     nome = nome_cloud(bp.project_name, r.logical_name)
-    return comentario(texto_tamanho_disco(cfg)) + "\n" + bloco(
+    return comentario(texto_tamanho_disco(cfg) + nota) + "\n" + bloco(
         "resource", ["oci_core_volume", r.logical_name],
         ([atributo("count", n)] if n > 1 else []) + [
         _compartimento(),
         atributo("availability_domain", referencia("var.availability_domain")),
         atributo("display_name", referencia(f'"{nome}-${{count.index}}"') if n > 1 else nome),
-        atributo("size_in_gbs", int(cfg.get("size_gb") or 50)),
+        atributo("size_in_gbs", tamanho),
     ])
 
 

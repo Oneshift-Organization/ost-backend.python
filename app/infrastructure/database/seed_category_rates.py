@@ -19,9 +19,12 @@ _SOURCE = "published_reference_2026"
 
 # (provider, category, unit, rate USD)
 _RATES: tuple[tuple[str, str, str, str], ...] = (
-    # Block SSD de propósito geral ($/GB-mês)
+    # Block SSD de propósito geral ($/GB-mês). No GCP é o pd-balanced, o disco
+    # padrão das VMs e o par do gp3; o pd-ssd (US$ 0,170) é o tier de desempenho.
+    # Cotar pela taxa dele tratava todo SSD como o mais caro: o GB saía ~40% menor
+    # na origem e o GCP, ~2x mais caro como destino.
     ("aws", "storage_ssd", "gb_month", "0.080"),     # gp3
-    ("gcp", "storage_ssd", "gb_month", "0.170"),     # pd-ssd
+    ("gcp", "storage_ssd", "gb_month", "0.100"),     # pd-balanced
     ("azure", "storage_ssd", "gb_month", "0.088"),   # premium ssd
     ("oci", "storage_ssd", "gb_month", "0.0255"),    # block balanced
     # Armazenamento de objetos, tier padrão ($/GB-mês). Cerca de metade da taxa
