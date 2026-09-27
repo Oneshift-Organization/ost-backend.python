@@ -1331,3 +1331,41 @@ vem depois.
 - **Para frente:** a I8b usa `placement_groups` de cada fatia, as subredes
   criadas (NSG por subrede na Azure) e `db_subnets` (só banco na VPC nova
   recebe grupo espelhado).
+
+### I8b — grupos de segurança nas quatro nuvens
+
+- **Entregue:** `grupos.py` (grupo por grupo de origem com recurso gerado,
+  tradução de cada regra de entrada, limite por interface com grupo combinado,
+  avisos de limite de regras) e a predicate única `regra_de_risco_alto` em
+  `topologia/riscos.py`, que a análise e o Terraform usam. Renderers: AWS
+  `aws_security_group` com uma regra de entrada por origem (recurso separado,
+  para dois grupos que se referenciam não formarem ciclo) e saída liberada; GCP
+  tag de rede por grupo e um firewall por regra; Azure ASG por grupo, NIC
+  associada ao ASG e NSG por subrede com o ASG como destino; OCI NSG com regras e
+  `nsg_ids` na VNIC. O tipo `security_group` entrou na allowlist.
+- **Teste que importa:** nenhum dos 12 pares libera administração ou banco para
+  a internet; `terraform validate` real nos 12 pares; os casos de tradução um a
+  um (subrede, pedaço, rede inteira, externa, grupo espelhado, grupo que ficou,
+  grupo sem membro, negar, protocolo, serviço, IAP do Google, `VirtualNetwork`,
+  ASG que estreita o alvo) e o combinado com as origens ampliadas.
+- **Decisões tomadas na implementação:**
+  - A regra da Azure com ASG de destino vai para o grupo do ASG, não para o do
+    NSG: aplicar ao NSG inteiro liberaria mais do que a origem liberava.
+  - Faixas de serviço do GCP (IAP, health check dos balanceadores) não são
+    traduzidas: são a infraestrutura do Google falando com a VM, e em outra nuvem
+    não significam nada.
+  - Na Azure a regra padrão `AllowVnetInBound` libera o tráfego entre subredes da
+    mesma VNet: há aviso de que o isolamento entre as redes de origem precisa de
+    uma regra de negar, que o pacote não cria.
+- **Números nos mocks:** AWS → GCP: 20 grupos, 39 regras, 3 de risco alto e 1 de
+  grupo sem membro fora; o SSH do bastion vira a faixa dele na origem
+  (`10.10.0.0/20`), que continua lá e passa pela VPN. AWS → OCI: 11 VMs herdam
+  mais de 5 grupos e recebem o combinado. GCP → AWS: 8 regras de SSH pelo IAP
+  do Google fora. Azure → AWS: o banco na VPC nova recebe o grupo espelhado.
+- **Achado ao ler o pacote:** o aviso das regras descartadas repetia o mesmo
+  exemplo várias vezes. Agora cada exemplo aparece uma vez.
+- **Impacto para trás:** `riscos_de_exposicao` usa a predicate nova, com o mesmo
+  resultado (os 135 testes de topologia passam). Sem topologia, nada muda.
+  Suíte inteira: 1.340 testes.
+- **Para frente:** a I9 roda o fluxo inteiro pela API (billing, inventário,
+  análise e Terraform) e registra a coerência entre os três.

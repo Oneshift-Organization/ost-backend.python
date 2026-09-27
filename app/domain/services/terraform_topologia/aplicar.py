@@ -28,6 +28,7 @@ from app.domain.services.terraform_topologia.bancos import (
 )
 from app.domain.services.terraform_topologia.discos import Avulsos, avulsos, boot_medio
 from app.domain.services.terraform_topologia.espelho import espelhar
+from app.domain.services.terraform_topologia.grupos import espelhar_grupos
 
 # Chave do payload de cada categoria de disco.
 _CHAVES_DE_DISCO = {"storage_ssd": "armazenamento_ssd", "storage_hdd": "armazenamento_hdd"}
@@ -62,6 +63,13 @@ def aplicar_topologia(
         rede=rede,
         acesso_publico=acesso_publico,
         redes_de_origem=int(fundacao.get("rede") or 0),
+    )
+    espelhar_grupos(
+        novo,
+        detalhe,
+        destino=destino,
+        rede=rede,
+        provedor_origem=str(payload.get("provedor_origem") or "").lower(),
     )
     _disco_raiz(novo, detalhe.get("posicionamento") or [], detalhe.get("discos") or {})
     medido = (payload.get("inventario_medido") or {}).get("armazenamento") or {}
@@ -238,6 +246,7 @@ def _bancos_sem_grupo(
                     "source_inventory": True,
                     "source_versions": {g.versao: g.quantidade} if g.versao else {},
                     "source_subnets": list(g.subredes),
+                    "source_groups": list(g.grupos),
                 },
                 depends_on=("rede_principal",),
             )

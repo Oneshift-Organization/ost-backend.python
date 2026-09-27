@@ -521,6 +521,38 @@ def texto_espelho(cfg: dict[str, Any]) -> str | None:
     )
 
 
+def texto_grupo(cfg: dict[str, Any]) -> str:
+    """Comentário do grupo espelhado: de onde veio e o que foi deixado de fora."""
+    origem = cfg.get("mirror_of") or {}
+    nome = texto_seguro(origem.get("nome") or "?", 120)
+    if cfg.get("combined"):
+        return (
+            f"Grupo combinado ({nome}): o recurso herda mais grupos do que o destino aceita\n"
+            "por interface, então recebe as regras da união num grupo só."
+        )
+    return (
+        f"Espelha o grupo de segurança de origem {nome}. Regras de entrada traduzidas;\n"
+        "as de risco alto não foram replicadas (veja os avisos no README)."
+    )
+
+
+def fontes(regra: dict[str, Any]) -> list[tuple[str, str]]:
+    """Cada origem de uma regra traduzida: ("cidr", faixa) ou ("grupo", nome lógico)."""
+    return [("cidr", str(c)) for c in regra.get("source_cidrs") or []] + [
+        ("grupo", str(g)) for g in regra.get("source_groups") or []
+    ]
+
+
+def faixa_de_portas(regra: dict[str, Any]) -> tuple[int, int] | None:
+    """(início, fim) das portas TCP/UDP; ``None`` quando são todas."""
+    inicio, fim = regra.get("from_port"), regra.get("to_port")
+    if inicio is None and fim is None:
+        return None
+    inicio = 0 if inicio is None else int(inicio)
+    fim = 65535 if fim is None else int(fim)
+    return None if (inicio, fim) == (0, 65535) else (inicio, fim)
+
+
 def disco_raiz(
     cfg: dict[str, Any], *, minimo: int, maximo: int, tipo: str
 ) -> tuple[int, str] | None:

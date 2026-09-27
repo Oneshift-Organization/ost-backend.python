@@ -109,6 +109,7 @@ class BancoSemGrupo:
     quantidade: int
     vcpus: int
     subredes: tuple[str, ...] = ()
+    grupos: tuple[str, ...] = ()
 
 
 def agrupar_sem_grupo(bancos: Iterable[Mapping[str, object]]) -> tuple[list[BancoSemGrupo], int]:
@@ -116,6 +117,7 @@ def agrupar_sem_grupo(bancos: Iterable[Mapping[str, object]]) -> tuple[list[Banc
     de fora porque a classe não diz o vCPU (Autonomous Database da OCI)."""
     grupos: Counter[tuple[str, str | None, str | None, bool]] = Counter()
     subredes: dict[tuple[str, str | None, str | None, bool], set[str]] = {}
+    seguranca: dict[tuple[str, str | None, str | None, bool], set[str]] = {}
     vcpus: dict[str, int] = {}
     sem_vcpu = 0
     for b in bancos:
@@ -129,14 +131,22 @@ def agrupar_sem_grupo(bancos: Iterable[Mapping[str, object]]) -> tuple[list[Banc
         versao = str(b["versao"]) if b.get("versao") else None
         chave = (classe, motor, versao, bool(b.get("alta_disponibilidade")))
         grupos[chave] += 1
-        lista = b.get("subredes")
-        subredes.setdefault(chave, set()).update(
-            str(x) for x in (lista if isinstance(lista, list | tuple) else [])
-        )
+        subredes.setdefault(chave, set()).update(_textos(b.get("subredes")))
+        seguranca.setdefault(chave, set()).update(_textos(b.get("grupos")))
     saida = [
-        BancoSemGrupo(*chave, n, vcpus[chave[0]], tuple(sorted(subredes[chave])))
+        BancoSemGrupo(
+            *chave,
+            n,
+            vcpus[chave[0]],
+            tuple(sorted(subredes[chave])),
+            tuple(sorted(seguranca[chave])),
+        )
         for chave, n in sorted(
             grupos.items(), key=lambda kv: (kv[0][0], str(kv[0][1]), str(kv[0][2]), kv[0][3])
         )
     ]
     return saida, sem_vcpu
+
+
+def _textos(valor: object) -> list[str]:
+    return [str(x) for x in valor] if isinstance(valor, list | tuple) else []

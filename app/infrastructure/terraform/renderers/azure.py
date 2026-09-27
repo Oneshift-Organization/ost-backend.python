@@ -24,12 +24,14 @@ from app.infrastructure.terraform.renderers.base import (
     com_indice,
     disco_raiz,
     disco_ssd,
+    faixa_de_portas,
     instancias_banco,
     nome_banco,
     nome_cloud,
     quantidade_volumes,
     texto_banco,
     texto_espelho,
+    texto_grupo,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
@@ -112,6 +114,7 @@ class AdaptadorAzure:
             TipoRecurso.COMPUTE: _compute,
             TipoRecurso.OBJECT_STORAGE: _storage,
             TipoRecurso.MANAGED_DATABASE: _banco,
+            TipoRecurso.SECURITY_GROUP: _asg,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -146,7 +149,10 @@ def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             str(r.configuration.get("cidr") or "10.0.0.0/24")
         ]),
     ])
-    return comentario(espelho) + "\n" + bloco_hcl if espelho else bloco_hcl
+    nsg = _nsg_da_subrede(r, bp)
+    if espelho:
+        bloco_hcl = comentario(espelho) + "\n" + bloco_hcl
+    return bloco_hcl + ("\n\n" + nsg if nsg else "")
 
 
 def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -218,7 +224,115 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     )
     if raiz is not None:
         texto += "\n" + raiz[1]
-    return comentario(texto) + "\n" + interface + "\n\n" + vm
+    associacoes = [
+        bloco("resource", [
+            "azurerm_network_interface_application_security_group_association",
+            f"{r.logical_name}_{g}",
+        ], [
+            atributo("count", int(cfg.get("instances") or 1)),
+            atributo("network_interface_id", referencia(
+                f"azurerm_network_interface.{nic}[count.index].id"
+            )),
+            atributo("application_security_group_id", referencia(
+                f"azurerm_application_security_group.{g}.id"
+            )),
+        ])
+        for g in cfg.get("security_groups") or []
+    ]
+    return "\n\n".join([comentario(texto) + "\n" + interface, vm, *associacoes])
+
+
+_PROTOCOLO_AZURE = {"tcp": "Tcp", "udp": "Udp", "icmp": "Icmp", "todos": "*"}
+# Faixa de prioridade das regras de usuário num NSG.
+_PRIORIDADE_INICIAL = 100
+_PRIORIDADE_MAXIMA = 4096
+_PASSO = 10
+
+
+def _asg(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    return comentario(
+        texto_grupo(r.configuration)
+        + "\nNa Azure o grupo é um ASG: a VM entra pela NIC, e as regras ficam no NSG\n"
+        "da subrede de cada membro, com o ASG como destino."
+    ) + "\n" + bloco("resource", ["azurerm_application_security_group", r.logical_name], [
+        atributo("name", nome_cloud(bp.project_name, r.logical_name)),
+        *_grupo(),
+    ])
+
+
+def _nsg_da_subrede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """Um NSG por subrede de destino, com as regras dos grupos que têm membro nela.
+
+    A NIC aceita um NSG só, e a VM de origem podia ter vários grupos: por isso o
+    grupo vira ASG e a regra fica no NSG da subrede, com o ASG como destino.
+    Prioridade 100 + 10 por regra, em ordem determinística (RI15.4).
+    """
+    alvos = sorted(
+        (
+            g for g in bp.resources
+            if g.resource_type is TipoRecurso.SECURITY_GROUP
+            and r.logical_name in (g.configuration.get("subnets") or [])
+        ),
+        key=lambda g: g.logical_name,
+    )
+    regras = []
+    for g in alvos:
+        for regra in g.configuration.get("rules") or []:
+            protocolo = _PROTOCOLO_AZURE.get(str(regra.get("protocol")), "*")
+            faixa = faixa_de_portas(regra) if protocolo in ("Tcp", "Udp") else None
+            porta = "*" if faixa is None else (
+                str(faixa[0]) if faixa[0] == faixa[1] else f"{faixa[0]}-{faixa[1]}"
+            )
+            comum = [
+                atributo("direction", "Inbound", nivel=2),
+                atributo("access", "Allow", nivel=2),
+                atributo("protocol", protocolo, nivel=2),
+                atributo("source_port_range", "*", nivel=2),
+                atributo("destination_port_range", porta, nivel=2),
+                atributo("destination_application_security_group_ids", referencia(
+                    f"[azurerm_application_security_group.{g.logical_name}.id]"
+                ), nivel=2),
+            ]
+            # Uma regra da Azure não mistura faixa e ASG na origem: vira duas.
+            if regra.get("source_cidrs"):
+                regras.append([*comum, atributo(
+                    "source_address_prefixes", [str(c) for c in regra["source_cidrs"]], nivel=2
+                )])
+            if regra.get("source_groups"):
+                regras.append([*comum, atributo(
+                    "source_application_security_group_ids", referencia(
+                        "[" + ", ".join(
+                            f"azurerm_application_security_group.{x}.id"
+                            for x in regra["source_groups"]
+                        ) + "]"
+                    ), nivel=2,
+                )])
+    blocos = []
+    for i, corpo in enumerate(regras):
+        prioridade = _PRIORIDADE_INICIAL + _PASSO * i
+        if prioridade > _PRIORIDADE_MAXIMA:
+            break
+        blocos.append(bloco_aninhado("security_rule", [
+            atributo("name", f"regra-{i + 1}", nivel=2),
+            atributo("priority", prioridade, nivel=2),
+            *corpo,
+        ], nivel=1))
+    if not blocos:
+        return ""
+    nsg = f"nsg_{r.logical_name}"
+    return bloco("resource", ["azurerm_network_security_group", nsg], [
+        atributo("name", nome_cloud(bp.project_name, nsg)),
+        *_grupo(),
+        *blocos,
+    ]) + "\n\n" + bloco(
+        "resource",
+        ["azurerm_subnet_network_security_group_association", f"{r.logical_name}_nsg"],
+        [
+            atributo("subnet_id", referencia(f"azurerm_subnet.{r.logical_name}.id")),
+            atributo("network_security_group_id", referencia(
+                f"azurerm_network_security_group.{nsg}.id"
+            )),
+        ])
 
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:

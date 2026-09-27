@@ -16,6 +16,7 @@ from app.domain.entities.topologia import (
     Acao,
     Direcao,
     EstadoDoRecurso,
+    RegraDeRede,
     TipoDeRecurso,
     TipoDeRelacao,
     TipoDeSeletor,
@@ -74,15 +75,28 @@ def _risco(
     return Risco(regra, severidade, titulo, detalhe, tuple(lista[:MAX_EXEMPLOS]), len(lista))
 
 
+def regra_de_risco_alto(regra: RegraDeRede) -> bool:
+    """Entrada liberada da internet para todas as portas, administração ou banco.
+
+    É a definição única de "risco alto de exposição" (RI11): a análise a reporta,
+    e o Terraform não a replica (RI15.4).
+    """
+    if (
+        regra.direcao is not Direcao.ENTRADA
+        or regra.acao is not Acao.PERMITIR
+        or regra.origem.tipo is not TipoDeSeletor.QUALQUER
+    ):
+        return False
+    return regra.todas_as_portas or any(
+        regra.cobre_porta(p) for p in PORTAS_ADMINISTRATIVAS | PORTAS_DE_BANCO
+    )
+
+
 def riscos_de_exposicao(indice: Indice) -> list[Risco]:
     """Entrada liberada para a internet: administração, banco, tudo aberto."""
     portas: dict[tuple[str, str], set[str]] = defaultdict(set)
     for regra in indice.inventario.regras:
-        if (
-            regra.direcao is not Direcao.ENTRADA
-            or regra.acao is not Acao.PERMITIR
-            or regra.origem.tipo is not TipoDeSeletor.QUALQUER
-        ):
+        if not regra_de_risco_alto(regra):
             continue
         if regra.todas_as_portas:
             portas[("porta_ampla_aberta", regra.grupo)].add("todas")

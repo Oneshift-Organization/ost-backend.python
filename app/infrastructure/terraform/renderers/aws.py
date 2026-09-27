@@ -12,6 +12,8 @@ Duas diferenças que importam em relação ao GCP:
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.infrastructure.terraform.hcl import (
     atributo,
     bloco,
@@ -24,12 +26,15 @@ from app.infrastructure.terraform.renderers.base import (
     com_indice,
     disco_raiz,
     disco_ssd,
+    faixa_de_portas,
+    fontes,
     instancias_banco,
     nome_banco,
     nome_cloud,
     quantidade_volumes,
     texto_banco,
     texto_espelho,
+    texto_grupo,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
@@ -109,6 +114,7 @@ class AdaptadorAWS:
             TipoRecurso.COMPUTE: _compute,
             TipoRecurso.OBJECT_STORAGE: _bucket,
             TipoRecurso.MANAGED_DATABASE: _banco,
+            TipoRecurso.SECURITY_GROUP: _grupo,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -159,6 +165,7 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("ami", referencia("var.ami_id")),
         atributo("instance_type", str(cfg.get("machine_type"))),
         atributo("subnet_id", referencia(f"aws_subnet.{cfg.get('subnet') or SUBNET}.id")),
+        *_grupos_da_instancia(cfg),
         atributo("tags", referencia(
             f'{{\n    Name = "{nome_cloud(bp.project_name, slug)}-${{count.index}}"\n  }}'
         )),
@@ -175,6 +182,66 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             atributo("encrypted", True, nivel=2),
         ], nivel=1))
     return comentario(texto) + "\n" + bloco("resource", ["aws_instance", r.logical_name], corpo)
+
+
+_PROTOCOLO_AWS = {"tcp": "tcp", "udp": "udp", "icmp": "icmp", "todos": "-1"}
+
+
+def _grupos_da_instancia(cfg: dict[str, Any]) -> list[str]:
+    grupos = cfg.get("security_groups") or []
+    if not grupos:
+        return []
+    return [atributo("vpc_security_group_ids", referencia(
+        "[" + ", ".join(f"aws_security_group.{g}.id" for g in grupos) + "]"
+    ))]
+
+
+def _grupo(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """Grupo espelhado, uma regra de entrada por origem, saída liberada.
+
+    Regra como recurso separado (`aws_vpc_security_group_ingress_rule`), e não
+    bloco `ingress`: dois grupos que se referenciam formariam um ciclo.
+    """
+    cfg = r.configuration
+    nome = nome_cloud(bp.project_name, r.logical_name)
+    grupo = f"aws_security_group.{r.logical_name}.id"
+    partes = [comentario(texto_grupo(cfg)) + "\n" + bloco(
+        "resource", ["aws_security_group", r.logical_name], [
+            atributo("name", nome),
+            atributo("description", "Espelhado da origem pela OneShift"),
+            atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id")),
+            atributo("tags", {"Name": nome}),
+        ])]
+    n = 0
+    for regra in cfg.get("rules") or []:
+        protocolo = _PROTOCOLO_AWS.get(str(regra.get("protocol")), "-1")
+        portas: list[str] = []
+        if protocolo == "icmp":
+            portas = [atributo("from_port", -1), atributo("to_port", -1)]
+        elif protocolo != "-1":
+            faixa = faixa_de_portas(regra) or (0, 65535)
+            portas = [atributo("from_port", faixa[0]), atributo("to_port", faixa[1])]
+        for tipo, valor in fontes(regra):
+            n += 1
+            origem = (
+                atributo("cidr_ipv4", valor)
+                if tipo == "cidr"
+                else atributo(
+                    "referenced_security_group_id", referencia(f"aws_security_group.{valor}.id")
+                )
+            )
+            partes.append(bloco(
+                "resource", ["aws_vpc_security_group_ingress_rule", f"{r.logical_name}_{n}"],
+                [atributo("security_group_id", referencia(grupo)),
+                 atributo("ip_protocol", protocolo), *portas, origem],
+            ))
+    partes.append(bloco(
+        "resource", ["aws_vpc_security_group_egress_rule", f"{r.logical_name}_saida"], [
+            atributo("security_group_id", referencia(grupo)),
+            atributo("ip_protocol", "-1"),
+            atributo("cidr_ipv4", "0.0.0.0/0"),
+        ]))
+    return "\n\n".join(partes)
 
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -279,6 +346,7 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("storage_encrypted", True),
         atributo("multi_az", ha),
         *rede,
+        *_grupos_da_instancia(cfg),
         atributo("publicly_accessible", False),
         atributo("deletion_protection", True),
         atributo("skip_final_snapshot", False),

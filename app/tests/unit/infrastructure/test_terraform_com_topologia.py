@@ -259,6 +259,83 @@ def test_rede_pequena_divide_e_rede_minima_avisa() -> None:
     assert "Espelha a subrede de origem" not in minima["main.tf"]
 
 
+# ── grupos de segurança (I8b) ───────────────────────────────────────────
+
+
+def test_aws_grupo_regras_e_anexos() -> None:
+    main = pacote(com_topologia("azure"), "aws")["main.tf"]
+    grupos = _blocos(main, "aws_security_group")
+    assert grupos
+    entradas = _blocos(main, "aws_vpc_security_group_ingress_rule")
+    saidas = _blocos(main, "aws_vpc_security_group_egress_rule")
+    assert entradas
+    assert len(saidas) == len(grupos)  # saída liberada em todo grupo
+    vm = _bloco(main, "aws_instance", "vm_esv5_eastus_")
+    assert "vpc_security_group_ids = [aws_security_group." in vm
+    banco = _bloco(main, "aws_db_instance", "banco_postgresql_standard_d4ds_v5")
+    assert "vpc_security_group_ids" in banco  # banco na VPC nova recebe o grupo
+
+
+def test_gcp_tag_e_firewall() -> None:
+    main = pacote(com_topologia("aws"), "gcp")["main.tf"]
+    firewalls = _blocos(main, "google_compute_firewall")
+    assert firewalls
+    assert all(
+        "target_tags" in b and re.search(r'direction\s*=\s*"INGRESS"', b)
+        for b in firewalls.values()
+    )
+    nomes = [re.search(r'name\s*=\s*"([^"]+)"', b).group(1) for b in firewalls.values()]
+    assert len(nomes) == len(set(nomes))
+    assert all(len(n) <= 63 for n in nomes)
+    vm = _bloco(main, "google_compute_instance", "vm_c7g_us_east_1_")
+    assert re.search(r'tags\s*=\s*\["sg-', vm)
+
+
+def test_azure_asg_na_nic_e_nsg_por_subrede() -> None:
+    main = pacote(com_topologia("oci"), "azure")["main.tf"]
+    assert _blocos(main, "azurerm_application_security_group")
+    assert _blocos(main, "azurerm_network_interface_application_security_group_association")
+    nsgs = _blocos(main, "azurerm_network_security_group")
+    assert nsgs
+    for nsg in nsgs.values():
+        prioridades = [int(x) for x in re.findall(r"priority\s*=\s*(\d+)", nsg)]
+        assert prioridades == list(range(100, 100 + 10 * len(prioridades), 10))
+        assert "destination_application_security_group_ids" in nsg
+    assert len(_blocos(main, "azurerm_subnet_network_security_group_association")) == len(nsgs)
+
+
+def test_oci_nsg_e_combinado() -> None:
+    arquivos = pacote(com_topologia("aws"), "oci")
+    main = arquivos["main.tf"]
+    assert _blocos(main, "oci_core_network_security_group")
+    regras = _blocos(main, "oci_core_network_security_group_security_rule")
+    assert any(re.search(r'direction\s*=\s*"EGRESS"', b) for b in regras.values())
+    vm = _bloco(main, "oci_core_instance", "vm_c7g_us_east_1_")
+    ids = re.search(r"nsg_ids\s*=\s*\[([^\]]*)\]", vm)
+    assert ids and 1 <= ids.group(1).count(".id") <= 5  # a OCI aceita 5 por VNIC
+    assert "grupo combinado" in arquivos["README.md"]
+
+
+@pytest.mark.parametrize(("origem", "destino"), PARES)
+def test_regra_de_risco_alto_nao_vai_para_o_destino(origem: str, destino: str) -> None:
+    """Administração ou banco aberto para a internet não é replicado (RI15.4)."""
+    main = pacote(com_topologia(origem), destino)["main.tf"]
+    abertos = []
+    for tipo, internet in (
+        ("aws_vpc_security_group_ingress_rule", r'cidr_ipv4\s*=\s*"0\.0\.0\.0/0"'),
+        ("google_compute_firewall", r'source_ranges\s*=\s*\["0\.0\.0\.0/0"'),
+        ("oci_core_network_security_group_security_rule", r'source\s*=\s*"0\.0\.0\.0/0"'),
+    ):
+        for nome, bloco in _blocos(main, tipo).items():
+            if re.search(internet, bloco) and re.search(r"\b(22|3389|5432|3306|1433)\b", bloco):
+                abertos.append(nome)
+    for nsg in _blocos(main, "azurerm_network_security_group").values():
+        for regra in nsg.split("security_rule {")[1:]:
+            if '"0.0.0.0/0"' in regra and re.search(r'"(22|3389|5432|3306|1433)"', regra):
+                abertos.append("nsg")
+    assert abertos == []
+
+
 # ── `terraform validate` nos 12 pares ───────────────────────────────────
 
 _precisa_binario = pytest.mark.skipif(
