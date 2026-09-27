@@ -341,6 +341,30 @@ def nome_cloud(*partes: object, maximo: int = 63, separador: str = "-") -> str:
 # subestima a análise; dizer "medido" de um estimado é pior.
 
 
+# O plano nomeia o disco com os tipos do GCP (ver `terraform_plan._TIPO_DE_DISCO`).
+# A classe é o que os outros renderers traduzem; decidir pelo sufixo `ssd`
+# levava o pd-balanced, que é SSD, para st1 e Standard_LRS.
+_TIPOS_DE_DISCO_SSD = frozenset({"pd-balanced", "pd-ssd", "pd-extreme"})
+
+
+def disco_ssd(cfg: dict[str, Any]) -> bool:
+    return str(cfg.get("disk_type") or "") in _TIPOS_DE_DISCO_SSD
+
+
+def ajustar_tamanho(gb: int, *, minimo: int, maximo: int, tipo: str) -> tuple[int, str]:
+    """Tamanho dentro da faixa que o tipo de disco aceita, e a nota quando mudou.
+
+    A faixa é regra da API do provedor: `terraform validate` não a confere, e um
+    volume fora dela só falharia no `apply` (um st1 de 110 GB, por exemplo)."""
+    ajustado = min(max(gb, minimo), maximo)
+    if ajustado == gb:
+        return gb, ""
+    return ajustado, (
+        f"\n{tipo} aceita de {minimo:,} a {maximo:,} GB: o volume de ~{gb:,} GB "
+        f"saiu com {ajustado:,}."
+    )
+
+
 def quantidade_volumes(cfg: dict[str, Any]) -> int:
     """Volumes medidos na origem viram `count`; sem medição, um só."""
     return max(1, int(cfg.get("volumes") or 1))

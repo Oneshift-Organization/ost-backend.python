@@ -141,6 +141,17 @@ async def test_bq_cobertura_e_projeto(bq) -> None:
     assert projetos and all(p.startswith("proj-id-") for p in projetos)
 
 
+async def test_bq_balanced_pd_e_ssd_medido(bq, ctx_bq) -> None:
+    """O SSD medido é o pd-balanced mais o pd-ssd (6.589 GiB-mês no mock); o HDD
+    fica com o pd-standard e o Filestore. Com a regra antiga era o contrário."""
+    _, linhas = bq
+    balanced = [x for x in linhas if "balanced pd capacity" in (x.usage_type or "").casefold()]
+    assert balanced
+    assert {x.component_type for x in balanced} == {"storage_ssd"}
+    medido = ctx_bq.inventario.armazenamento
+    assert medido["storage_ssd"].gb > 5 * medido["storage_hdd"].gb
+
+
 async def test_contexto_roda_com_os_dois_mocks(cur, bq) -> None:
     """O contexto de migração inteiro aceita os exports detalhados."""
     for rid, _ in (cur, bq):

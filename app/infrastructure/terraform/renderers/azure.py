@@ -20,7 +20,9 @@ from app.infrastructure.terraform.hcl import (
     referencia,
 )
 from app.infrastructure.terraform.renderers.base import (
+    ajustar_tamanho,
     com_indice,
+    disco_ssd,
     instancias_banco,
     nome_banco,
     nome_cloud,
@@ -197,17 +199,20 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
-    tipo = "Premium_LRS" if str(cfg.get("disk_type", "")).endswith("ssd") else "Standard_LRS"
+    tipo = "Premium_LRS" if disco_ssd(cfg) else "Standard_LRS"
+    tamanho, nota = ajustar_tamanho(
+        int(cfg.get("size_gb") or 10), minimo=1, maximo=32_767, tipo=tipo
+    )
     n = quantidade_volumes(cfg)
     nome = nome_cloud(bp.project_name, r.logical_name)
-    return comentario(texto_tamanho_disco(cfg)) + "\n" + bloco(
+    return comentario(texto_tamanho_disco(cfg) + nota) + "\n" + bloco(
         "resource", ["azurerm_managed_disk", r.logical_name],
         ([atributo("count", n)] if n > 1 else []) + [
         atributo("name", referencia(f'"{nome}-${{count.index}}"') if n > 1 else nome),
         *_grupo(),
         atributo("storage_account_type", tipo),
         atributo("create_option", "Empty"),
-        atributo("disk_size_gb", int(cfg.get("size_gb") or 10)),
+        atributo("disk_size_gb", tamanho),
     ])
 
 

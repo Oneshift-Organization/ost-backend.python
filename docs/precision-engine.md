@@ -150,6 +150,13 @@ unidade fino (IOPS, engine, requests, tiers de egress).
 
 Confiança do resultado = **elo mais fraco** entre a taxa de origem e a de destino.
 
+A taxa de `storage_ssd` é a do SSD **de propósito geral** de cada provedor: gp3,
+Premium SSD, **pd-balanced** e Block Volume balanceado. No GCP era a do pd-ssd
+(US$ 0,170, o tier de desempenho). Somado à regra que levava o Balanced PD para
+HDD, isso tratava o disco padrão do GCP como magnético na origem e como o SSD
+mais caro no destino. `terraform_plan._TAXA_GB_MES` é uma cópia pura destas
+taxas; um teste trava as duas juntas.
+
 ### 3.6 Shape de instância — não estava no plano
 `domain/services/instance_shape.py` e `azure_shape.py` derivam (vCPU, RAM) do
 **esquema de nomenclatura**, não de tabela por instância:
@@ -251,6 +258,8 @@ DE-PARA e `migracao`), `premissas`, `resumo_executivo`, `confianca_classificacao
 | `ICategoryCalculator` pleno | falta modelo de unidade fino por categoria |
 | **Validade externa das taxas** | 61% do custo AWS é reprecificado por taxa `reference` digitada; a reconciliação não pega viés (ex.: um provedor mais barato em *todas* as categorias) |
 | `fator_utilizacao` por telemetria | knob existe fixo em 1.0 |
+| Filestore como `storage_hdd` | é arquivo (NFS), não bloco; não há categoria `file_storage`. No mock BigQuery são 234 GiB e US$ 358/mês que viram volume HDD no Terraform |
+| SKU `Storage` do Source Repositories | cai no catch-all `*storage*` → `storage_hdd` (custo zero, mas 185 GiB medidos viram volume). A regra L2 só vê a descrição do SKU, que não diz o serviço |
 
 ## 8. Verificação contínua
 
