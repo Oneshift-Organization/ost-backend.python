@@ -25,6 +25,7 @@ from app.infrastructure.terraform.hcl import (
 from app.infrastructure.terraform.renderers.base import (
     ajustar_tamanho,
     com_indice,
+    disco_raiz,
     instancias_banco,
     nome_banco,
     nome_cloud,
@@ -176,13 +177,22 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     por_instancia = max(1, vcpus // max(1, instancias))
     ram_instancia = max(1.0, round(ram / max(1, instancias), 1))
     slug = r.logical_name.replace("_", "-")
-
-    return comentario(
+    texto = (
         f"Derivado do pool de família '{cfg.get('source_family')}' "
         f"({cfg.get('vcpus')} vCPU, {cfg.get('ram_gb')} GB no total).\n"
         "Shape flexível: a OCI cobra OCPU e memória separadamente, então o\n"
         "dimensionamento vai em `shape_config` em vez de um nome fechado."
-    ) + "\n" + bloco("resource", ["oci_core_instance", r.logical_name], [
+    )
+    origem = [
+        atributo("source_type", "image", nivel=2),
+        atributo("source_id", referencia("var.image_ocid"), nivel=2),
+    ]
+    raiz = disco_raiz(cfg, minimo=50, maximo=32_768, tipo="boot volume")
+    if raiz is not None:
+        texto += "\n" + raiz[1]
+        origem.append(atributo("boot_volume_size_in_gbs", raiz[0], nivel=2))
+
+    return comentario(texto) + "\n" + bloco("resource", ["oci_core_instance", r.logical_name], [
         atributo("count", instancias),
         _compartimento(),
         atributo("availability_domain", referencia("var.availability_domain")),
@@ -198,10 +208,7 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             atributo("subnet_id", referencia(f"oci_core_subnet.{SUBNET}.id"), nivel=2),
             atributo("assign_public_ip", False, nivel=2),
         ], nivel=1),
-        bloco_aninhado("source_details", [
-            atributo("source_type", "image", nivel=2),
-            atributo("source_id", referencia("var.image_ocid"), nivel=2),
-        ], nivel=1),
+        bloco_aninhado("source_details", origem, nivel=1),
     ])
 
 

@@ -658,7 +658,12 @@ caracterização dos pacotes atuais, byte a byte).
    origem gera aviso. Várias redes de origem viram **uma** rede de destino, e a
    premissa diz que o isolamento entre elas passa a ser dos grupos de
    segurança. Na AWS, a zona da subrede de destino herda a letra da zona de
-   origem (`a`, `b`, `c`; outra letra vira `a`).
+   origem (`a`, `b`, `c`; outra letra vira `a`). Subrede regional na origem
+   (GCP, Azure, OCI) não tem letra: recebe `a`, `b`, `c` em rodízio, na ordem
+   de alocação, com premissa (é escolha do pacote, não fato medido).
+   **A subrede padrão continua:** é a primeira `/24` da requisição, como hoje,
+   e recebe o que não tem posicionamento. As espelhadas são alocadas depois
+   dela, sem sobrepor.
 3. **Pública ou privada:** espelha a origem (`mapPublicIpOnLaunch` ou recurso
    com IP público), **mas só se a requisição pedir `public_access`**. Sem isso,
    tudo sai privado, e o aviso lista o que era público.
@@ -689,14 +694,27 @@ caracterização dos pacotes atuais, byte a byte).
      porque a NIC aceita um NSG só e a VM de origem pode ter vários grupos.
      Prioridade da Azure: 100 + 10 por regra, em ordem determinística; passou
      de 4096, as restantes saem com aviso.
+   - **Limite de grupos por interface** (AWS 5, OCI 5, Azure 20 ASGs, GCP 64
+     tags): quando a união de um posicionamento (RI15.5) passa do limite do
+     destino, a VM dele recebe um **grupo combinado** com as regras de todos os
+     grupos da união, e toda regra que tinha como origem um grupo da união
+     passa a aceitar também o combinado. A intenção de cada regra é preservada
+     sem depender de a VM ser membro do grupo original. Aviso com a lista.
+     `terraform validate` não confere esse limite; o `apply` falharia.
 5. **Posicionamento das VMs.** O pool continua com o shape e a quantidade `M`
    que a análise aprovou. O que muda é onde ficam: `M` é repartido entre os
-   posicionamentos de origem (subrede + conjunto de grupos) proporcionalmente
-   ao vCPU de origem, pelo **maior resto**. As VMs do pool que não estão no
-   inventário formam o posicionamento "sem posicionamento", que vai para a
-   subrede padrão. Se `M` for menor que o número de posicionamentos, os `M`
-   maiores recebem uma VM cada e o aviso lista os que ficaram sem máquina.
-   Custo aprovado intacto.
+   posicionamentos de origem, **um por subrede**, proporcionalmente ao vCPU de
+   origem, pelo **maior resto**. A VM de uma subrede recebe a **união** dos
+   grupos das instâncias de origem dela: o empacotamento consolida, e a
+   máquina consolidada precisa aceitar o que qualquer uma aceitava. Quando a
+   subrede juntava conjuntos de grupos diferentes (`conjuntos_de_grupos` > 1),
+   há aviso. As VMs do pool que não estão no inventário formam o
+   posicionamento "sem posicionamento", que vai para a subrede padrão, com
+   peso = quantidade × vCPU médio das instâncias posicionadas do pool. Se `M`
+   for menor que o número de posicionamentos, os `M` maiores recebem uma VM
+   cada e o aviso lista os que ficaram sem máquina. Custo aprovado intacto.
+   (Revisado na I7: agrupar também pelo conjunto de grupos partia o pool C7G
+   em dezenas de posicionamentos, mais que as máquinas aprovadas.)
 6. **Banco:** a versão maior mais frequente no grupo (empate: a maior) vira o
    `default` da variável de versão, no formato do destino (`POSTGRES_15` no
    GCP, `15` na Azure e na AWS, `8.0` para MySQL na AWS), só quando está na
@@ -835,7 +853,7 @@ análise de impacto nas etapas anteriores e seguintes.
 | **I5** | migração (3 tabelas), models, repositório, casos de uso, rotas, flag | unitários de rota com fakes; integração no Postgres (ida e volta, isolamento, `DELETE` em cascata) |
 | **I6** | correlação: agregação de custo por recurso + serviço de domínio + rota | mocks: cobertura nas contas incluídas, lacuna na conta excluída, ID numérico do GCP |
 | **I7** | análise: `inventory_id`, payload `topologia`, compactação, imposição da sequência | neutralidade; payload congelado; LLM e agente sem rede e sem posicionamento |
-| **I8** | Terraform: (a) caracterização + versão, discos, README; (b) grupos de segurança nas 4 nuvens; (c) subredes espelhadas e posicionamento | caracterização sem topologia; `terraform validate` nos 12 pares; regra de risco não replicada |
+| **I8** | Terraform: (a) caracterização + versão, discos, README; (c) subredes espelhadas e posicionamento; (b) grupos de segurança nas 4 nuvens. A ordem c → b é de propósito: o NSG por subrede da Azure e o `db_subnet_group` da AWS precisam das subredes finais | caracterização sem topologia; `terraform validate` nos 12 pares; regra de risco não replicada |
 | **I9** | E2E pela API com billing + inventário, relatório de coerência, `docs/` | payload, resposta e pacote coerentes entre si |
 | **I10** | coleta ativa pela plataforma | bloqueada por D1 |
 
@@ -1221,3 +1239,45 @@ vem depois.
 - **Para frente:** a I8 lê `detalhe` (subredes, grupos com regras, posicionamento
   por subrede, versão e rede dos bancos, discos de boot e soltos) do payload
   persistido, nunca do compacto.
+
+### I8a — caracterização, versão, discos e README
+
+- **Entregue:** teste de caracterização (5 payloads reais congelados em
+  `fixtures_terraform/` × destinos = 15 pares, 105 arquivos com hash), pacote de
+  domínio `domain/services/terraform_topologia/` (versão do banco, discos, banco
+  sem classe no billing), chamado pelo `montar_blueprint` só quando o payload
+  tem `topologia` na versão conhecida. Os renderers ganham disco raiz medido; o
+  README, a seção "Topologia de origem"; o `manifest.json`, o inventário de onde
+  saiu o pacote (id e fingerprint).
+- **Teste que importa:** a caracterização (sem topologia, nada muda, byte a
+  byte), o `terraform validate` real nos 12 pares com topologia e os números do
+  mock da AWS: 48.626 GB medidos em 99 volumes, menos 74 de boot e 7 sem anexo,
+  dão 18 volumes de 490 GB.
+- **Decisões tomadas na implementação:**
+  - A versão padrão é **por motor**, não por grupo: a variável de versão já era
+    uma por motor. Quando os grupos têm versões diferentes, há aviso, e a
+    premissa lista as versões medidas.
+  - A classe do disco raiz é a que domina o boot da origem, em GB. Na AWS o raiz
+    é sempre gp3 (st1 não pode ser boot). Faixas do disco raiz: AWS ≥ 8 GB,
+    GCP ≥ 10, Azure ≥ 30 (imagem do marketplace), OCI ≥ 50.
+  - Banco que o billing cobrou sem classe (Flexible Server) substitui o banco
+    estimado por custo; motor que o destino não gera vai para "o que ficou de
+    fora".
+- **Achados ao ler o pacote gerado:**
+  1. A premissa do motor e o comentário do banco no `.tf` continuavam dizendo "a
+     versão não aparece no billing: preencha", com a variável já trazendo o
+     default do inventário. Agora dizem de onde veio a versão.
+  2. A contagem de achados informativos do README vinha da lista resumida (7);
+     a análise tem 8. As contagens agora vêm do resumo inteiro, e o README diz
+     quando há risco alto ou médio fora da lista.
+  3. O aviso de disco escrevia "0 GB de boot (0 volumes) viraram disco raiz"
+     (Azure, onde o mock não tem boot com custo). Agora só fala do que saiu.
+- **Visto e não é desta etapa:** o empacotador **expande** pools pequenos (no
+  mock da Azure, 2 instâncias FSV2 viram 9 `c6g.xlarge`). O pacote avisa de
+  consolidação, não de expansão. É do motor de análise; fica para o relatório.
+- **Impacto para trás:** `_Nomeador` virou `Nomeador` (aceita nomes já usados);
+  `familia_do_motor` e `motor_aceito` ficaram públicos; `renderizar` ganhou
+  `topologia` e `moeda` opcionais. Sem topologia, os pacotes não mudam (é o
+  teste). Suíte inteira: 1.212 testes.
+- **Para frente:** a I8c reparte as VMs por subrede e usa o boot de cada
+  posicionamento; a I8b liga os grupos de segurança.

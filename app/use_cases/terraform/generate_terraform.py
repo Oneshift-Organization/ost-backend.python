@@ -23,7 +23,7 @@ from app.schemas.terraform import (
     TerraformBlueprint,
     TerraformGenerationIn,
 )
-from app.use_cases.terraform.build_blueprint import montar_blueprint
+from app.use_cases.terraform.build_blueprint import montar_blueprint, tem_topologia
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,13 @@ def gerar_pacote(
     """
     blueprint = montar_blueprint(payload_analise, entrada)
     premissas = payload_analise.get("premissas") or {}
-    arquivos = renderizar(blueprint, procedencia=premissas)
+    topologia = payload_analise["topologia"] if tem_topologia(payload_analise) else None
+    arquivos = renderizar(
+        blueprint,
+        procedencia=premissas,
+        topologia=topologia,
+        moeda=payload_analise.get("moeda"),
+    )
 
     arquivos, validacao = formatar(arquivos)
     # `validate` vê o que o `fmt` não vê: schema do provider, atributo que não
@@ -56,7 +62,7 @@ def gerar_pacote(
 
     # Manifesto e validação entram DEPOIS do fmt: são JSON, não HCL, e passá-los
     # pelo formatador do Terraform não faz sentido.
-    arquivos["manifest.json"] = _manifesto(blueprint, entrada, premissas)
+    arquivos["manifest.json"] = _manifesto(blueprint, entrada, premissas, topologia)
     arquivos["validation.json"] = json.dumps(
         validacao.model_dump(), ensure_ascii=False, indent=2
     )
@@ -74,6 +80,7 @@ def _manifesto(
     blueprint: TerraformBlueprint,
     entrada: TerraformGenerationIn,
     premissas: dict[str, Any],
+    topologia: dict[str, Any] | None = None,
 ) -> str:
     """O que sustenta o pacote, legível por máquina.
 
@@ -81,8 +88,7 @@ def _manifesto(
     auditar depois: de qual análise saiu, com que preços, com que câmbio, e o
     que foi estimado em vez de calculado.
     """
-    return json.dumps(
-        {
+    manifesto: dict[str, Any] = {
             "contract_version": blueprint.contract_version,
             "gerado_por": "oneshift-backend",
             "analysis_job_id": str(entrada.analysis_job_id),
@@ -115,7 +121,11 @@ def _manifesto(
             # Dito explicitamente: o pacote não declara economia porque a
             # cotação usa região de referência, que pode não ser a escolhida.
             "custo_declarado": None,
-        },
-        ensure_ascii=False,
-        indent=2,
-    )
+    }
+    if topologia is not None:
+        # De qual inventário saiu o posicionamento: o fingerprint diz se é o
+        # mesmo que a análise usou (RI16).
+        manifesto["topologia"] = {
+            k: topologia.get(k) for k in ("versao", "inventario_id", "fingerprint", "capturado_em")
+        }
+    return json.dumps(manifesto, ensure_ascii=False, indent=2)

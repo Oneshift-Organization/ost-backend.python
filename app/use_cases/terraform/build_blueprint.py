@@ -14,6 +14,7 @@ import ipaddress
 from typing import Any
 
 from app.domain.services.terraform_plan import PlanoDerivado, derivar_plano
+from app.domain.services.terraform_topologia import aplicar_topologia
 from app.schemas.terraform import (
     _BASE_MAXIMA,
     Categoria,
@@ -25,6 +26,7 @@ from app.schemas.terraform import (
     TipoRecurso,
     VariavelTerraform,
 )
+from app.use_cases.analysis.topologia_no_payload import VERSAO as VERSAO_TOPOLOGIA
 
 # Nomes fixos: o renderer referencia `google_compute_network.rede_principal.id`
 # ao ligar subnet e banco. Se virarem configuráveis, as referências quebram.
@@ -44,6 +46,8 @@ def montar_blueprint(
         regiao=entrada.region,
         alta_disponibilidade=entrada.availability.high_availability,
     )
+    if tem_topologia(payload_analise):
+        plano = aplicar_topologia(plano, payload_analise, destino=entrada.target_provider.value)
 
     recursos = [*_rede(entrada), *_recursos_derivados(plano)]
 
@@ -59,6 +63,12 @@ def montar_blueprint(
         unsupported_items=plano.nao_suportado,
         warnings=plano.avisos,
     )
+
+
+def tem_topologia(payload: dict[str, Any]) -> bool:
+    """A análise congelou uma topologia que este gerador sabe ler (RI14)."""
+    topologia = payload.get("topologia")
+    return isinstance(topologia, dict) and topologia.get("versao") == VERSAO_TOPOLOGIA
 
 
 def validate_migration_strategy(payload: dict[str, Any], provider: str) -> None:
@@ -141,18 +151,24 @@ def _variaveis(plano: PlanoDerivado) -> list[VariavelTerraform]:
             nome = str(r.configuration.get("version_var") or "database_version")
             versoes.setdefault(nome, r.configuration.get("engine_measured"))
     for nome, motor in versoes.items():
-        variaveis.append(
-            VariavelTerraform(
-                name=nome,
-                type="string",
-                description=(
-                    f"Versão do {motor} (motor medido na origem). O billing informa o "
-                    "motor, não a versão."
-                    if motor
-                    else "Motor e versão do banco (ex.: POSTGRES_15, MYSQL_8_0). "
-                    "O billing informa o custo, não o motor."
-                ),
+        padrao = plano.variaveis_padrao.get(nome)
+        if padrao is not None:
+            descricao = (
+                f"Versão do {motor}. O default é a versão medida no inventário da origem "
+                "(a mais frequente); confira antes de aplicar."
             )
+        elif motor:
+            descricao = (
+                f"Versão do {motor} (motor medido na origem). O billing informa o "
+                "motor, não a versão."
+            )
+        else:
+            descricao = (
+                "Motor e versão do banco (ex.: POSTGRES_15, MYSQL_8_0). "
+                "O billing informa o custo, não o motor."
+            )
+        variaveis.append(
+            VariavelTerraform(name=nome, type="string", description=descricao, default=padrao)
         )
     usados = {v.name for v in variaveis}
     for premissa in plano.premissas:

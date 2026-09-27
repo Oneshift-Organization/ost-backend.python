@@ -12,6 +12,7 @@ from app.infrastructure.terraform.hcl import (
 from app.infrastructure.terraform.renderers.base import (
     ajustar_tamanho,
     com_indice,
+    disco_raiz,
     instancias_banco,
     nome_banco,
     nome_cloud,
@@ -116,6 +117,14 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         return _disco(r, bp)
 
     slug = r.logical_name.replace("_", "-")
+    inicializacao = [atributo("image", referencia("var.boot_image"), nivel=3)]
+    raiz = disco_raiz(cfg, minimo=10, maximo=65_536, tipo="boot disk")
+    if raiz is not None:
+        inicializacao += [
+            atributo("size", raiz[0], nivel=3),
+            # Sem `type`, o provider cria o boot em pd-standard (HDD).
+            atributo("type", str(cfg.get("root_disk_type") or "pd-balanced"), nivel=3),
+        ]
     corpo = [
         atributo("count", int(cfg.get("instances") or 1)),
         atributo("name", referencia(
@@ -124,9 +133,7 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("machine_type", str(cfg.get("machine_type"))),
         atributo("zone", f"{bp.region}-a"),
         bloco_aninhado("boot_disk", [
-            bloco_aninhado("initialize_params", [
-                atributo("image", referencia("var.boot_image"), nivel=3),
-            ], nivel=2),
+            bloco_aninhado("initialize_params", inicializacao, nivel=2),
         ], nivel=1),
         bloco_aninhado("network_interface", [
             atributo("subnetwork", referencia(
@@ -135,10 +142,15 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         ], nivel=1),
         atributo("labels", {"environment": bp.environment, "managed_by": "oneshift"}),
     ]
-    return comentario(
+    texto = (
         f"Derivado do pool de família '{cfg.get('source_family')}' "
         f"({cfg.get('vcpus')} vCPU, {cfg.get('ram_gb')} GB no total)."
-    ) + "\n" + bloco("resource", ["google_compute_instance", r.logical_name], corpo)
+    )
+    if raiz is not None:
+        texto += "\n" + raiz[1]
+    return comentario(texto) + "\n" + bloco(
+        "resource", ["google_compute_instance", r.logical_name], corpo
+    )
 
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:

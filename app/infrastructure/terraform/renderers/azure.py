@@ -22,6 +22,7 @@ from app.infrastructure.terraform.hcl import (
 from app.infrastructure.terraform.renderers.base import (
     ajustar_tamanho,
     com_indice,
+    disco_raiz,
     disco_ssd,
     instancias_banco,
     nome_banco,
@@ -154,6 +155,24 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     base = nome_cloud(bp.project_name, slug)
     nic = f"{r.logical_name}_nic"
 
+    disco_so = [
+        atributo("caching", "ReadWrite", nivel=2),
+        atributo("storage_account_type", "Premium_LRS", nivel=2),
+    ]
+    # 30 GB é o tamanho da imagem Ubuntu do marketplace: menor que isso, a VM
+    # não sobe. 4.095 GB é o teto de disco de SO.
+    raiz = disco_raiz(cfg, minimo=30, maximo=4_095, tipo="disco de SO")
+    if raiz is not None:
+        disco_so = [
+            atributo("caching", "ReadWrite", nivel=2),
+            atributo(
+                "storage_account_type",
+                "Standard_LRS" if cfg.get("root_disk_type") == "pd-standard" else "Premium_LRS",
+                nivel=2,
+            ),
+            atributo("disk_size_gb", raiz[0], nivel=2),
+        ]
+
     interface = bloco("resource", ["azurerm_network_interface", nic], [
         atributo("count", int(cfg.get("instances") or 1)),
         atributo("name", referencia(f'"{base}-nic-${{count.index}}"')),
@@ -178,10 +197,7 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             atributo("username", referencia("var.admin_username"), nivel=2),
             atributo("public_key", referencia("var.ssh_public_key"), nivel=2),
         ], nivel=1),
-        bloco_aninhado("os_disk", [
-            atributo("caching", "ReadWrite", nivel=2),
-            atributo("storage_account_type", "Premium_LRS", nivel=2),
-        ], nivel=1),
+        bloco_aninhado("os_disk", disco_so, nivel=1),
         bloco_aninhado("source_image_reference", [
             atributo("publisher", "Canonical", nivel=2),
             atributo("offer", "0001-com-ubuntu-server-jammy", nivel=2),
@@ -190,11 +206,14 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         ], nivel=1),
     ])
 
-    return comentario(
+    texto = (
         f"Derivado do pool de família '{cfg.get('source_family')}' "
         f"({cfg.get('vcpus')} vCPU, {cfg.get('ram_gb')} GB no total).\n"
         "A NIC é recurso separado: a Azure exige uma por VM, ao contrário do GCP."
-    ) + "\n" + interface + "\n\n" + vm
+    )
+    if raiz is not None:
+        texto += "\n" + raiz[1]
+    return comentario(texto) + "\n" + interface + "\n\n" + vm
 
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:

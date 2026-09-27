@@ -31,6 +31,7 @@ Módulo puro: entra dict, sai dataclass. Sem I/O, sem framework.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -97,6 +98,11 @@ _MOTORES_POR_DESTINO: dict[str, frozenset[str]] = {
     "aws": frozenset({"postgresql", "mysql", "sqlserver", "oracle"}),
 }
 
+
+def motor_aceito(destino: str, familia: str | None) -> bool:
+    aceitos = _MOTORES_POR_DESTINO.get(destino)
+    return aceitos is None or familia in aceitos
+
 # Tempo ligada abaixo disto sugere agendamento (dev, horário comercial).
 _TEMPO_ATIVO_BAIXO = 0.6
 
@@ -162,6 +168,8 @@ class PlanoDerivado:
     premissas: list[Premissa] = field(default_factory=list)
     nao_suportado: list[str] = field(default_factory=list)
     avisos: list[str] = field(default_factory=list)
+    # Default de variável que a topologia do inventário sabe (versão do banco).
+    variaveis_padrao: dict[str, str] = field(default_factory=dict)
 
 
 def derivar_plano(
@@ -179,7 +187,7 @@ def derivar_plano(
     """
     plano = PlanoDerivado()
     destino = provedor_destino.lower()
-    nomeador = _Nomeador()
+    nomeador = Nomeador()
 
     _derivar_compute(payload, destino, plano, nomeador)
     _derivar_armazenamento(payload, destino, regiao, plano, nomeador)
@@ -201,7 +209,7 @@ def _derivar_compute(
     payload: dict[str, Any],
     destino: str,
     plano: PlanoDerivado,
-    nomeador: _Nomeador,
+    nomeador: Nomeador,
 ) -> None:
     """Um recurso por pool de família, com o shape que o packer escolheu.
 
@@ -256,6 +264,9 @@ def _derivar_compute(
                     "vcpus": tecnica.get("vcpus"),
                     "ram_gb": tecnica.get("ram_gb"),
                     "source_family": familia,
+                    # Chave do pool (família, região): é por ela que a topologia
+                    # acha o posicionamento. Não é renderizada.
+                    "source_region": pool.get("regiao"),
                 },
                 depends_on=("subnet_principal",),
             )
@@ -354,7 +365,7 @@ def _derivar_armazenamento(
     destino: str,
     regiao: str,
     plano: PlanoDerivado,
-    nomeador: _Nomeador,
+    nomeador: Nomeador,
 ) -> None:
     """Volta de dinheiro para tamanho: ``GB = custo ÷ taxa``.
 
@@ -424,6 +435,7 @@ def _derivar_armazenamento(
                         "volumes": volumes,
                         "size_source": "medido",
                         "disk_type": _TIPO_DE_DISCO[categoria],
+                        "source_category": categoria,
                     },
                 )
             )
@@ -446,6 +458,7 @@ def _derivar_armazenamento(
                         "size_gb": int(gb),
                         "size_source": "medido" if gb_medido is not None else "estimado",
                         "disk_type": _TIPO_DE_DISCO[categoria],
+                        "source_category": categoria,
                     },
                 )
             )
@@ -541,7 +554,7 @@ def _derivar_banco(
     destino: str,
     plano: PlanoDerivado,
     alta_disponibilidade: bool,
-    nomeador: _Nomeador,
+    nomeador: Nomeador,
 ) -> None:
     """vCPU de banco por razão de taxa. Engine e versão ninguém sabe.
 
@@ -605,7 +618,7 @@ def _derivar_banco(
     )
 
 
-def _familia_motor(motor: object) -> str | None:
+def familia_do_motor(motor: object) -> str | None:
     """`Aurora PostgreSQL` → `postgresql`: a família decide compatibilidade e a
     variável de versão. Aurora vira o motor base — o destino não tem Aurora."""
     texto = str(motor or "").casefold()
@@ -620,7 +633,7 @@ def _banco_medido(
     destino: str,
     plano: PlanoDerivado,
     alta_disponibilidade: bool,
-    nomeador: _Nomeador,
+    nomeador: Nomeador,
 ) -> bool:
     """Um recurso por grupo medido (classe, motor, multi-AZ), com a contagem.
 
@@ -649,7 +662,7 @@ def _banco_medido(
     for g in relacionais:
         classe = str(g.get("classe") or "")
         forma = parse_instance_shape(classe)
-        familia = _familia_motor(g.get("motor"))
+        familia = familia_do_motor(g.get("motor"))
         if forma is None:
             restantes.append(g)
             continue
@@ -726,7 +739,7 @@ def _banco_do_grupo(
     familia: str | None,
     plano: PlanoDerivado,
     alta_disponibilidade: bool,
-    nomeador: _Nomeador,
+    nomeador: Nomeador,
 ) -> None:
     quantidade = int(g.get("quantidade") or 1)
     motor = g.get("motor")
@@ -746,6 +759,10 @@ def _banco_do_grupo(
                 "engine_measured": motor,
                 "engine_family": familia,
                 "instances_measured": quantidade,
+                # Chave do grupo medido: é por ela que a topologia acha a versão
+                # e a rede. Não é renderizada.
+                "source_multi_az": bool(g.get("multi_az")),
+                "source_region": g.get("regiao"),
             },
             depends_on=("rede_principal",),
         )
@@ -828,7 +845,7 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
 # ── utilidades ──────────────────────────────────────────────────────────
 
 
-class _Nomeador:
+class Nomeador:
     """Gera nomes de recurso válidos e **únicos**.
 
     A unicidade não é detalhe: dois blocos com o mesmo nome fazem o Terraform
@@ -841,8 +858,10 @@ class _Nomeador:
     saneamento para minúsculas.
     """
 
-    def __init__(self) -> None:
-        self._usados: set[str] = set()
+    def __init__(self, usados: Iterable[str] = ()) -> None:
+        # Semeado com os nomes que já existem quando a topologia acrescenta
+        # recursos a um plano pronto.
+        self._usados: set[str] = set(usados)
 
     def gerar(self, prefixo: str, *partes: object) -> str:
         base = "_".join(

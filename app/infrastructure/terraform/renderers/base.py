@@ -12,6 +12,8 @@ de GCP encontra as mesmas coisas nos mesmos lugares num de AWS.
 
 from __future__ import annotations
 
+import re
+from collections import Counter
 from typing import Any, Protocol
 
 from app.infrastructure.terraform.hcl import (
@@ -27,6 +29,7 @@ from app.schemas.terraform import (
     TerraformBlueprint,
     VariavelTerraform,
 )
+from app.use_cases.analysis.topologia_no_payload import sequencia_de_migracao
 
 # Versão mínima do CLI. Fixa por provedor seria pior: o pacote é um só.
 VERSAO_TERRAFORM = ">= 1.5.0"
@@ -83,6 +86,8 @@ def montar(
     adaptador: AdaptadorNuvem,
     bp: TerraformBlueprint,
     procedencia: dict[str, Any] | None = None,
+    topologia: dict[str, Any] | None = None,
+    moeda: str | None = None,
 ) -> dict[str, str]:
     """Blueprint + adaptador → `{nome do arquivo: conteúdo}`."""
     return {
@@ -92,7 +97,7 @@ def montar(
         "main.tf": _main(adaptador, bp),
         "outputs.tf": _outputs(adaptador, bp),
         "terraform.tfvars.example": _tfvars(adaptador, bp),
-        "README.md": readme(bp, procedencia or {}),
+        "README.md": readme(bp, procedencia or {}, topologia, moeda),
     }
 
 
@@ -200,7 +205,12 @@ _ROTULO_CATEGORIA = {
 }
 
 
-def readme(bp: TerraformBlueprint, procedencia: dict[str, Any]) -> str:
+def readme(
+    bp: TerraformBlueprint,
+    procedencia: dict[str, Any],
+    topologia: dict[str, Any] | None = None,
+    moeda: str | None = None,
+) -> str:
     partes = [
         f"# Terraform — {bp.project_name}",
         "",
@@ -233,6 +243,8 @@ def readme(bp: TerraformBlueprint, procedencia: dict[str, Any]) -> str:
     if bp.warnings:
         partes += ["## Avisos", "", *[f"- {a}" for a in bp.warnings], ""]
 
+    if topologia:
+        partes += [_secao_topologia(topologia, moeda)]
     partes += [_secao_procedencia(procedencia)]
     partes += [
         "## Sobre custo",
@@ -308,6 +320,137 @@ def _secao_procedencia(premissas: dict[str, Any]) -> str:
     return "\n".join(linhas) if len(linhas) > _SO_CABECALHO else ""
 
 
+# ── Topologia de origem (RI15.8 e RI15.9) ───────────────────────────────
+
+_CONTROLE = re.compile(r"[\x00-\x1f\x7f]+")
+_FORA_DO_PACOTE = (
+    ("balanceador", "balanceador(es)"),
+    ("gateway", "gateway(s) (NAT, VPN, internet)"),
+    ("cache", "cache(s)"),
+    ("cluster_kubernetes", "cluster(s) Kubernetes"),
+)
+
+
+def texto_seguro(valor: object, maximo: int = 160) -> str:
+    """Texto vindo do inventário, pronto para comentário do `.tf` ou README (RI17).
+
+    Quebra de linha num comentário do `.tf` vira código HCL na linha seguinte;
+    caractere de controle não tem lugar em nenhum dos dois.
+    """
+    return _CONTROLE.sub(" ", str(valor)).strip()[:maximo]
+
+
+def _celula(valor: object) -> str:
+    return texto_seguro(valor).replace("|", "\\|")
+
+
+def _secao_topologia(topologia: dict[str, Any], moeda: str | None) -> str:
+    """O que o inventário disse da origem: ordem, dependências, riscos, cobertura."""
+    resumo = topologia.get("resumo") or {}
+    linhas = ["## Topologia de origem", ""]
+    linhas += _cobertura(topologia, resumo, moeda)
+    linhas += ["### Ordem de migração", ""]
+    linhas += [
+        f"{i}. {texto_seguro(p, 400)}"
+        for i, p in enumerate(sequencia_de_migracao(topologia).passos, start=1)
+    ]
+    linhas.append("")
+    linhas += _dependencias(resumo.get("dependencias_entre_ondas") or [])
+    linhas += _riscos(resumo.get("riscos") or [], (resumo.get("contagens") or {}).get("riscos"))
+    por_tipo = (resumo.get("contagens") or {}).get("por_tipo") or {}
+    fora = [f"{por_tipo[t]} {rotulo}" for t, rotulo in _FORA_DO_PACOTE if por_tipo.get(t)]
+    if fora:
+        linhas += [
+            "### Fora do pacote",
+            "",
+            "Existem na origem e não viram recurso aqui: " + ", ".join(fora) + ".",
+            "",
+        ]
+    if resumo.get("limitacao"):
+        linhas += [f"_{texto_seguro(resumo['limitacao'], 400)}_", ""]
+    return "\n".join(linhas)
+
+
+def _cobertura(topologia: dict[str, Any], resumo: dict[str, Any], moeda: str | None) -> list[str]:
+    data = str(topologia.get("capturado_em") or "")[:10] or "data desconhecida"
+    estimada = " (data estimada pelo envio)" if topologia.get("capturado_em_estimado") else ""
+    cobertura = resumo.get("cobertura") or {}
+    fracao = cobertura.get("fracao_encontrada")
+    texto = f"Inventário {str(topologia.get('provedor') or '').upper()} de {data}{estimada}."
+    if isinstance(fracao, int | float):
+        texto += f" {fracao:.0%} do custo com recurso foi achado no inventário."
+    linhas = [texto, ""]
+    lacunas = cobertura.get("lacunas") or []
+    if lacunas:
+        linhas += [
+            "Custo sem recurso correspondente no inventário, por conta e região. O que não "
+            "está no inventário não tem posicionamento: vai para a subrede padrão.",
+            "",
+        ]
+        prefixo = f"{moeda} " if moeda else ""
+        linhas += [
+            f"- conta {_celula(x.get('conta'))}, {_celula(x.get('regiao'))}: "
+            f"{prefixo}{x.get('custo', 0):,.2f}/mês"
+            for x in lacunas
+        ]
+        linhas.append("")
+    return linhas
+
+
+def _dependencias(dependencias: list[dict[str, Any]]) -> list[str]:
+    if not dependencias:
+        return []
+    linhas = [
+        "### O que a conectividade híbrida precisa liberar",
+        "",
+        "Durante a migração, uma onda já no destino fala com outra que ainda está na "
+        "origem. Estas portas precisam passar pela VPN:",
+        "",
+        "| De | Para | Portas |",
+        "|---|---|---|",
+    ]
+    for d in dependencias:
+        portas = ", ".join(d.get("portas") or []) or "todas"
+        linhas.append(f"| {_celula(d.get('de'))} | {_celula(d.get('para'))} | {_celula(portas)} |")
+    linhas.append("")
+    return linhas
+
+
+def _riscos(riscos: list[dict[str, Any]], contagem: dict[str, int] | None) -> list[str]:
+    """Riscos altos e médios somados por título. A lista do resumo é cortada;
+    a contagem por severidade é a da análise inteira, e é ela que diz se faltou."""
+    graves: Counter[tuple[str, str]] = Counter()
+    listados = Counter(str(r.get("severidade")) for r in riscos)
+    for r in riscos:
+        if r.get("severidade") in ("alta", "media"):
+            graves[(str(r.get("severidade")), str(r.get("titulo")))] += int(r.get("total") or 0)
+    contagem = contagem or {}
+    linhas: list[str] = []
+    if graves:
+        linhas += ["### Riscos da origem", ""]
+        linhas += ["| Severidade | Risco | Recursos afetados |", "|---|---|---|"]
+        for (severidade, titulo), total in sorted(
+            graves.items(), key=lambda kv: (kv[0][0] != "alta", -kv[1], kv[0][1])
+        ):
+            linhas.append(f"| {severidade} | {_celula(titulo)} | {total} |")
+        linhas.append("")
+        faltam = sum(max(0, int(contagem.get(s) or 0) - listados[s]) for s in ("alta", "media"))
+        if faltam:
+            linhas += [
+                f"A análise tem mais {faltam} risco(s) alto(s) ou médio(s) fora deste resumo.",
+                "",
+            ]
+        linhas += [
+            "Regra de risco alto (administração, banco ou tudo aberto para a internet) "
+            "não é replicada no destino: seria migrar a falha.",
+            "",
+        ]
+    informativos = int(contagem.get("informativa") or listados["informativa"])
+    if informativos:
+        linhas += [f"Mais {informativos} achado(s) informativo(s) na análise.", ""]
+    return linhas
+
+
 def nome_cloud(*partes: object, maximo: int = 63, separador: str = "-") -> str:
     """Nome aceito pelas nuvens: minúsculas, sem acento, começa com letra.
 
@@ -365,6 +508,20 @@ def ajustar_tamanho(gb: int, *, minimo: int, maximo: int, tipo: str) -> tuple[in
     )
 
 
+def disco_raiz(
+    cfg: dict[str, Any], *, minimo: int, maximo: int, tipo: str
+) -> tuple[int, str] | None:
+    """Tamanho do disco raiz medido no inventário (RI15.7) e a linha do comentário.
+
+    ``None`` sem inventário: o disco raiz fica o padrão da imagem, como sempre foi.
+    """
+    gb = cfg.get("root_gb")
+    if not isinstance(gb, int) or gb <= 0:
+        return None
+    tamanho, nota = ajustar_tamanho(gb, minimo=minimo, maximo=maximo, tipo=tipo)
+    return tamanho, f"Disco raiz de {tamanho} GB: média do boot na origem (inventário).{nota}"
+
+
 def quantidade_volumes(cfg: dict[str, Any]) -> int:
     """Volumes medidos na origem viram `count`; sem medição, um só."""
     return max(1, int(cfg.get("volumes") or 1))
@@ -399,7 +556,10 @@ def texto_banco(cfg: dict[str, Any], vcpus: int) -> str:
     else:
         linhas = [f"vCPU ESTIMADO ({vcpus}) a partir do custo mensal — veja o README."]
     motor = cfg.get("engine_measured")
-    if motor:
+    if motor and cfg.get("version_default"):
+        linhas.append(f"Motor medido na origem: {motor}. Versão medida no inventário:")
+        linhas.append(f"default {cfg['version_default']} na variável; confira antes de aplicar.")
+    elif motor:
         linhas.append(f"Motor medido na origem: {motor}. A versão não aparece no billing:")
         linhas.append("preencha `database_version` antes de aplicar.")
     else:

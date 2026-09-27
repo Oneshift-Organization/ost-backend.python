@@ -22,6 +22,7 @@ from app.infrastructure.terraform.hcl import (
 from app.infrastructure.terraform.renderers.base import (
     ajustar_tamanho,
     com_indice,
+    disco_raiz,
     disco_ssd,
     instancias_banco,
     nome_banco,
@@ -127,10 +128,11 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         return _disco(r, bp)
 
     slug = r.logical_name.replace("_", "-")
-    return comentario(
+    texto = (
         f"Derivado do pool de família '{cfg.get('source_family')}' "
         f"({cfg.get('vcpus')} vCPU, {cfg.get('ram_gb')} GB no total)."
-    ) + "\n" + bloco("resource", ["aws_instance", r.logical_name], [
+    )
+    corpo = [
         atributo("count", int(cfg.get("instances") or 1)),
         atributo("ami", referencia("var.ami_id")),
         atributo("instance_type", str(cfg.get("machine_type"))),
@@ -138,7 +140,19 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("tags", referencia(
             f'{{\n    Name = "{nome_cloud(bp.project_name, slug)}-${{count.index}}"\n  }}'
         )),
-    ])
+    ]
+    # st1 e sc1 não podem ser disco de boot: o raiz é gp3, qualquer que seja a
+    # classe na origem. 8 GB é o menor raiz das AMIs Linux comuns.
+    raiz = disco_raiz(cfg, minimo=8, maximo=16_384, tipo="gp3")
+    if raiz is not None:
+        tamanho, linha = raiz
+        texto += "\n" + linha
+        corpo.append(bloco_aninhado("root_block_device", [
+            atributo("volume_size", tamanho, nivel=2),
+            atributo("volume_type", "gp3", nivel=2),
+            atributo("encrypted", True, nivel=2),
+        ], nivel=1))
+    return comentario(texto) + "\n" + bloco("resource", ["aws_instance", r.logical_name], corpo)
 
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
