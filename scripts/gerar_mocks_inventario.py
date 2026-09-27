@@ -921,14 +921,19 @@ def gerar_inventario_gcp(  # noqa: PLR0912, PLR0915 - uma seção por tipo de as
                 "global",
             )
 
+    vms_por_zona: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for vm in sorted(vms.values(), key=lambda v: v["global"]):
-        livres = discos_por_zona[(vm["projeto"], vm["zona"])]
-        # Primeiro disco livre na zona vira o boot; metade dos restantes, dados.
-        if livres:
-            boot = livres.pop(0)
-            anexos_vm[vm["global"]].append({"disco": boot, "boot": True})
-            if livres and _numero("dados", vm["global"], modulo=2) == 0:
-                anexos_vm[vm["global"]].append({"disco": livres.pop(0), "boot": False})
+        vms_por_zona[(vm["projeto"], vm["zona"])].append(vm)
+    for zona_vm, lista in sorted(vms_por_zona.items()):
+        # O menor disco da zona vira o boot de cada VM; o que sobra, dado, em
+        # rodízio. Disco em zona sem VM fica solto: o projeto paga PD sem
+        # pagar compute (VM apagada ou parada o mês inteiro).
+        livres = sorted(discos_por_zona[zona_vm], key=lambda d: (d["gb_mes"], d["global"]))
+        for vm in lista:
+            if livres:
+                anexos_vm[vm["global"]].append({"disco": livres.pop(0), "boot": True})
+        for i, disco in enumerate(livres):
+            anexos_vm[lista[i % len(lista)]["global"]].append({"disco": disco, "boot": False})
 
     ip = defaultdict(lambda: 10)
     for vm in sorted(vms.values(), key=lambda v: v["global"]):
@@ -999,7 +1004,7 @@ def gerar_inventario_gcp(  # noqa: PLR0912, PLR0915 - uma seção por tipo de as
             {
                 "id": d["global"].rsplit("/", 1)[-1],
                 "name": d["nome"],
-                "sizeGb": str(max(10, round(d["gb_mes"] * 10) * 10 // 10)),
+                "sizeGb": str(max(10, round(d["gb_mes"]))),
                 "type": f"{_API}/projects/{d['projeto']}/zones/{d['zona']}/diskTypes/{tipo}",
                 "status": "READY",
                 "users": usuarios.get(d["global"], []),
