@@ -26,15 +26,15 @@ invariantes têm teste.
 > | etapa | estado |
 > |---|---|
 > | I0 — versão preservada (`baseline/pre-inventario-topologia`) + este plano | ✅ |
-> | I1 — domínio da topologia + algoritmos de grafo | ⏳ |
-> | I2 — normalizadores (AWS Config, GCP Asset Inventory, Azure Resource Graph, canônico) | ⏳ |
-> | I3 — mocks de inventário coerentes com os de billing | ⏳ |
-> | I4 — análise de topologia (unidades, dependências, ondas, criticidade, riscos) | ⏳ |
-> | I5 — persistência + API `/v1/inventories` | ⏳ |
-> | I6 — correlação billing × inventário | ⏳ |
-> | I7 — integração com a análise | ⏳ |
-> | I8 — Terraform consumindo a topologia | ⏳ |
-> | I9 — E2E pela API + auditoria de coerência | ⏳ |
+> | I1 — domínio da topologia + algoritmos de grafo | ✅ |
+> | I2 — normalizadores (AWS Config, GCP Asset Inventory, Azure Resource Graph, canônico) | ✅ |
+> | I3 — mocks de inventário coerentes com os de billing | ✅ |
+> | I4 — análise de topologia (unidades, dependências, ondas, criticidade, riscos) | ✅ |
+> | I5 — persistência + API `/v1/inventories` | ✅ |
+> | I6 — correlação billing × inventário | ✅ |
+> | I7 — integração com a análise | ✅ |
+> | I8 — Terraform consumindo a topologia (a, c, b) | ✅ |
+> | I9 — E2E pela API + auditoria de coerência | ✅ |
 > | I10 — coleta ativa pela plataforma (bloqueada pela decisão D1) | ⛔ |
 
 ---
@@ -1369,3 +1369,28 @@ vem depois.
   Suíte inteira: 1.340 testes.
 - **Para frente:** a I9 roda o fluxo inteiro pela API (billing, inventário,
   análise e Terraform) e registra a coerência entre os três.
+
+### I9 — E2E pela API e auditoria
+
+- **Entregue:** `scripts/e2e_inventario.py` (billing, inventário, análise com
+  `inventory_id` e Terraform para os outros três destinos, pela API HTTP, com as
+  checagens de coerência e código de saída), o relatório
+  [`docs/auditoria-e2e-2026-09-27-inventario.md`](docs/auditoria-e2e-2026-09-27-inventario.md),
+  o catálogo [`docs/endpoints/inventories.md`](docs/endpoints/inventories.md)
+  (com os comandos de export de cada nuvem), as tabelas no `data-model.md`, a
+  seção de inventário no `dev-setup.md`, os índices (`docs/README.md`,
+  `CLAUDE.md`) e a flag no `.env.example`, que não estava lá.
+- **Resultado:** 12 pares, todos `COMPLETED` e validados pela própria API. O
+  fingerprint é o mesmo no inventário, na análise e no pacote; a sequência de
+  migração vem das ondas; as VMs do `.tf` somam as aprovadas em todos os pares;
+  nenhuma regra de administração ou banco aberta para a internet chegou ao
+  destino.
+- **Checado e coerente:** a análise da OCI sai sem recomendação ("manter"),
+  porque os três destinos custam de US$ 4,2 mil a 6 mil por mês a mais. Não é
+  efeito do inventário: a análise sem ele diz o mesmo.
+- **Limitações** estão no relatório: os mocks de Azure e OCI não cobram disco de
+  SO, nada foi rodado sobre inventário real, e ficaram fora desta entrega a
+  expansão do empacotador sem aviso, a classificação do Filestore e o
+  isolamento entre VNets da Azure.
+- **Impacto para trás:** só documentação, um script e uma linha no
+  `.env.example`. **Para frente:** a I10 (coleta ativa) segue bloqueada pela D1.

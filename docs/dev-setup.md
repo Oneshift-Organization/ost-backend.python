@@ -132,6 +132,32 @@ Endpoints:
 - http://127.0.0.1:8000/docs — Swagger UI
 - http://127.0.0.1:8000/v1/health — sanity check
 
+## 5.1 Inventário (opcional)
+
+O inventário da infraestrutura fica atrás de `INVENTORY_ENABLED` (default
+`false`). Para ligar em dev:
+
+```bash
+.venv/bin/alembic upgrade head          # tabelas inventories, inventory_resources, inventory_relations
+INVENTORY_ENABLED=true .venv/bin/uvicorn app.main:app --reload --reload-dir app
+```
+
+Mocks coerentes com os de billing (as mesmas contas, projetos e recursos), para
+testar o fluxo inteiro sem cliente real:
+
+```bash
+PYTHONPATH=. python scripts/gerar_mocks_billing.py --destino /tmp/mocks
+PYTHONPATH=. python scripts/gerar_mocks_inventario.py --billing /tmp/mocks --destino /tmp/inv
+
+curl -X POST http://127.0.0.1:8000/v1/inventories \
+  -F "files=@/tmp/inv/gcp_asset_inventory_2025-12-31.json.gz"
+# depois: GET /v1/inventories/{id}/topology, /correlation?report_id=, e
+# POST /v1/analyses/start/{report_id} com {"inventory_id": "..."}
+```
+
+Catálogo completo e os comandos de export de cada nuvem:
+[`endpoints/inventories.md`](endpoints/inventories.md).
+
 ## Testes
 
 ```bash
