@@ -1168,3 +1168,56 @@ vem depois.
   existentes não mudaram (o formatador tinha reescrito uma linha antiga, e ela
   foi restaurada). **Para frente:** a I7 usa a mesma correlação para congelar
   cobertura e custo no payload.
+
+### I7 — topologia na análise
+
+- **Entregue:** `use_cases/analysis/topologia_no_payload.py` (validação do
+  inventário, montagem do bloco, compactação para o LLM, sequência de migração
+  imposta), `inventory_id` em `AnalysisStartOptions` e em `GET
+  /v1/analyses/{report_id}/request`, o orquestrador compacta o bloco antes de
+  logar e de mandar ao modelo, e `impose_decision` passa por `impor_topologia`
+  (o mesmo funil do LLM e do agente).
+- **Teste que importa:** neutralidade (com e sem inventário, o payload é
+  idêntico fora de `topologia`), validação antes do job (404, 409 e 422, e
+  nenhum job criado), flag desligada, congelamento (declarar depois não muda a
+  análise feita) e a ordem imposta (a sequência abre com "Onda 0 — fundação",
+  e os riscos de rede viram flags `[alta]`/`[media]`).
+- **Achados ao ler o payload, e o que foi feito com cada um:**
+  1. **Posicionamento fragmentado.** Agrupar por (subrede, conjunto de grupos)
+     partia o pool C7G (79 instâncias medidas) em dezenas de posicionamentos,
+     mais linhas que as máquinas que o empacotador aprova. Agora é uma linha por
+     subrede (a subrede carrega a zona), os grupos são a união e
+     `conjuntos_de_grupos` diz quando a consolidação juntou posturas diferentes.
+  2. **Balanced PD classificado como HDD no billing.** O inventário via 42
+     discos SSD onde o billing media 500 GB de SSD. A regra `*pd capacity*`
+     levava o disco padrão do GCP (94% do custo de disco do bill real) para
+     `storage_hdd`, e a taxa de SSD de referência do GCP era a do pd-ssd, não a
+     do pd-balanced. Corrigido fora desta branch (`fix/gcp-balanced-pd`, já na
+     develop), com análise geral: custo conservado e recomendação mantida nos
+     quatro bills; GB estimado do CSV real de 19,5 TB para 10,2 TB (medido: ~7
+     TB); o Terraform do GCP pede pd-balanced; cada destino respeita a faixa de
+     tamanho de disco (st1 >= 125 GiB e outros).
+  3. **Mock de inventário do GCP:** `sizeGb` saía multiplicado por 10 (discos de
+     boot de 1,8 TB).
+  4. **Mock de billing do GCP:** todo disco nascia na zona "a", e as VMs, em a, b
+     e c. Resultado: 12 discos de boot para 26 VMs e 38 ociosos (US$ 552/mês,
+     11% do bill). O disco agora nasce na zona de uma VM do projeto, pelo menos
+     um por VM, e o id inclui o SKU (o mesmo disco aparecia como Standard e
+     Balanced PD). Agora são 26 boots e 21 ociosos (US$ 271/mês): os discos dos
+     projetos que pagam PD sem pagar compute naquela região, o que vem do
+     próprio CSV real.
+- **Números do bloco, com os mocks ingeridos pela API:** AWS 91 KB (resumo 6,8
+  KB, o que o modelo recebe), GCP 25 KB, Azure 20 KB, OCI 10 KB. A cobertura e
+  as lacunas batem com a I6. Os discos batem com o billing: GCP com 26 boots e
+  21 soltos entre os 63 discos medidos; AWS com 36.334 GB de boot e 3.479 GB
+  soltos dentro dos 48.626 GB medidos.
+- **Limitações conhecidas dos mocks (os normalizadores tratam os casos, com
+  teste):** os bills de Azure e OCI não cobram disco de SO, então o bloco não
+  tem boot nessas nuvens; o boot da AWS no mock tem ~497 GB, porque todo volume
+  do CUR mock tem ~500 GB.
+- **Impacto para trás:** sem `inventory_id`, nada muda (é o teste de
+  neutralidade). A anotação de tipo da conversão de moeda tirou um erro antigo
+  do mypy e não criou nenhum. Suíte inteira: 1.146 testes, nenhum pulado.
+- **Para frente:** a I8 lê `detalhe` (subredes, grupos com regras, posicionamento
+  por subrede, versão e rede dos bancos, discos de boot e soltos) do payload
+  persistido, nunca do compacto.

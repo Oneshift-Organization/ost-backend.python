@@ -18,6 +18,7 @@ from app.core.config import get_settings
 from app.domain.interfaces.i_llm_client import ILLMClient
 from app.schemas.analysis_v2 import AnalysisV2Response
 from app.use_cases.analysis.decision_support import impose_decision, prepare_decision_payload
+from app.use_cases.analysis.topologia_no_payload import compactar_topologia
 
 if TYPE_CHECKING:
     from app.domain.analysis import MigrationContext
@@ -88,6 +89,9 @@ class LLMOrchestrator:
             context_payload["gasto_total"] = total_spend
             context_payload["moeda"] = currency
 
+        # O detalhe da topologia (rede, regras, posicionamento) é para o
+        # Terraform: não vai ao modelo, nem ao log do que foi enviado a ele.
+        context_payload = compactar_topologia(context_payload)
         log_llm_input_payload(
             "pipeline",
             context_payload,

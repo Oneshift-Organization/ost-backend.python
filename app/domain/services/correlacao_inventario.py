@@ -125,17 +125,40 @@ def _recurso_pai_arm(rid: str) -> str | None:
     return "/".join(partes[: i + 4]) if len(partes) > i + 4 else None
 
 
+class IndiceDeApelidos:
+    """``resource_id`` do billing → chave do recurso no inventário.
+
+    Igualdade sem diferenciar caixa, contra todos os apelidos do recurso. Id de
+    sub-recurso da Azure tenta o pai. Quando mais de um recurso tem o mesmo
+    apelido, vence o de papel unidade, depois o de anexo, depois a menor chave:
+    determinístico, e o custo vai para quem de fato o gera.
+    """
+
+    def __init__(self, inventario: Inventario) -> None:
+        tipos = {r.chave: r.tipo for r in inventario.recursos}
+        self._por_apelido: dict[str, list[str]] = defaultdict(list)
+        for r in inventario.recursos:
+            for apelido in r.apelidos | {r.chave.lower()}:
+                self._por_apelido[apelido].append(r.chave)
+        for lista in self._por_apelido.values():
+            lista.sort(key=lambda c: (_prioridade(tipos[c]), c))
+
+    def candidatos(self, resource_id: str) -> list[str]:
+        rid = resource_id.strip().lower()
+        achados = self._por_apelido.get(rid)
+        if not achados and (pai := _recurso_pai_arm(rid)):
+            achados = self._por_apelido.get(pai)
+        return achados or []
+
+    def casar(self, resource_id: str) -> str | None:
+        achados = self.candidatos(resource_id)
+        return achados[0] if achados else None
+
+
 def correlacionar(
     inventario: Inventario, custos: CustosDoBilling, *, captura_estimada: bool = False
 ) -> Correlacao:
-    por_apelido: dict[str, list[str]] = defaultdict(list)
-    tipos = {r.chave: r.tipo for r in inventario.recursos}
-    for r in inventario.recursos:
-        for apelido in r.apelidos | {r.chave.lower()}:
-            por_apelido[apelido].append(r.chave)
-    for lista in por_apelido.values():
-        lista.sort(key=lambda c: (_prioridade(tipos[c]), c))
-
+    apelidos = IndiceDeApelidos(inventario)
     por_id: dict[str, list[CustoDeRecurso]] = defaultdict(list)
     for linha in custos.por_recurso:
         rid = linha.resource_id.strip().lower()
@@ -146,9 +169,7 @@ def correlacionar(
     faltando: list[CustoDeRecurso] = []
     encontrados = ambiguos = 0
     for rid, linhas in sorted(por_id.items()):
-        candidatos = por_apelido.get(rid)
-        if not candidatos and (pai := _recurso_pai_arm(rid)):
-            candidatos = por_apelido.get(pai)
+        candidatos = apelidos.candidatos(rid)
         if not candidatos:
             faltando.extend(linhas)
             continue

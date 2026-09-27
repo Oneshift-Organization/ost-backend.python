@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
@@ -55,6 +56,8 @@ class DecisionContext(BaseModel):
 class AnalysisStartOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision_context: DecisionContext | None = None
+    # Inventário do mesmo provedor, congelado no payload (PLANO_INVENTARIO_API RI14).
+    inventory_id: UUID | None = None
 
 
 class ScoreFactor(BaseModel):

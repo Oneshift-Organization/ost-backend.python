@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from app.domain.analysis import MigrationContext
 from app.domain.entities.analysis_job import AnalysisJob
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.domain.repositories.i_billing_enriched_repo import IBillingEnrichedRepository
@@ -29,6 +31,7 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextUseCase,
 )
 from app.use_cases.analysis.decision_support import impose_decision, prepare_decision_payload
+from app.use_cases.analysis.topologia_no_payload import MontarTopologiaUseCase
 
 # Shorthand used inside _add_financials to silently ignore bad Decimal conversions
 _suppress = contextlib.suppress
@@ -40,7 +43,7 @@ class RunAnalysisPipelineInput:
     report_id: UUID
 
 
-def _fx_from_premissas(ctx) -> FxRate:
+def _fx_from_premissas(ctx: MigrationContext) -> FxRate:
     """Reconstrói a taxa aplicada a partir do ledger (ou identidade)."""
     prem = getattr(ctx, "premissas", None) or {}
     fx = prem.get("fx") or {}
@@ -52,6 +55,16 @@ def _fx_from_premissas(ctx) -> FxRate:
         taxa=Decimal(str(taxa)),
         fonte=fx.get("fonte", "config"),
     )
+
+
+def conversor_da_analise(ctx: MigrationContext) -> Callable[[Decimal], float]:
+    """Moeda de origem → moeda de análise, com a mesma taxa do payload inteiro.
+
+    Quem acrescenta dinheiro ao payload (a topologia do inventário) usa isto:
+    um número em outra moeda misturaria BRL com USD, o que o Precision Engine proíbe.
+    """
+    fx = _fx_from_premissas(ctx)
+    return lambda valor: _money(valor, fx)
 
 
 def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
@@ -640,7 +653,10 @@ class RunAnalysisPipelineUseCase:
         llm_orchestrator: LLMOrchestrator,
         fx_repo: IExchangeRateRepository | None = None,
         price_repo: ICloudPricePointRepository | None = None,
+        *,
+        topologia: MontarTopologiaUseCase | None = None,
     ) -> None:
+        self._topologia = topologia
         self._fx_repo = fx_repo
         self._price_repo = price_repo
         self._job_repo = analysis_job_repo
@@ -651,7 +667,13 @@ class RunAnalysisPipelineUseCase:
         self._sku_repo = sku_repo
         self._orchestrator = llm_orchestrator
 
-    async def execute(self, job: AnalysisJob, *, decision_context: dict | None = None) -> None:
+    async def execute(
+        self,
+        job: AnalysisJob,
+        *,
+        decision_context: dict | None = None,
+        inventario_id: UUID | None = None,
+    ) -> None:
         job.mark_processing()
         # Transação própria e curta ANTES de qualquer I/O externo: o estado
         # intermediário precisa existir no banco enquanto o LLM roda, senão quem
@@ -684,6 +706,18 @@ class RunAnalysisPipelineUseCase:
             pools_json, missing_equiv_ids = _serialize_pools(ctx)
             # Capture payload for persistence before sending to LLM
             llm_input, _ = build_pipeline_llm_input_payload(ctx, decision_context)
+            if inventario_id is not None:
+                # A topologia entra congelada no payload (PLANO_INVENTARIO_API
+                # RI14): mudar a declaração depois não muda a análise feita.
+                if self._topologia is None:
+                    raise RuntimeError("inventário pedido sem o caso de uso de topologia")
+                llm_input["topologia"] = await self._topologia.execute(
+                    user_id=job.user_id,
+                    inventario_id=inventario_id,
+                    report_id=job.report_id,
+                    ctx=ctx,
+                    converter=conversor_da_analise(ctx),
+                )
 
             ui_report = await self._orchestrator.generate_report(
                 context=ctx,
