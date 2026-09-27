@@ -200,6 +200,8 @@ flowchart TD
 | `*Kubernetes*cluster*fee*` / `*GKE*management*` | `gke_control_plane` | — |
 | `*Network*Egress*` / `*Inter-region*` | `network_egress` | — |
 | `*SSD*` storage | `storage_ssd` | — |
+| `*Balanced PD Capacity*` / `*Extreme PD Capacity*` | `storage_ssd` | — |
+| `*PD Capacity*` (o que sobra: Standard PD) | `storage_hdd` | — |
 | `*Cloud SQL*` / `*db-custom-*` | `database` | — |
 
 ### 4.1 `sku_classification_rules` (new table)

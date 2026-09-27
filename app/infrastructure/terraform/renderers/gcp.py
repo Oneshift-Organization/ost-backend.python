@@ -10,6 +10,7 @@ from app.infrastructure.terraform.hcl import (
     referencia,
 )
 from app.infrastructure.terraform.renderers.base import (
+    ajustar_tamanho,
     com_indice,
     instancias_banco,
     nome_banco,
@@ -142,15 +143,19 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
+    tipo = str(cfg.get("disk_type") or "pd-standard")
+    tamanho, nota = ajustar_tamanho(
+        int(cfg.get("size_gb") or 10), minimo=10, maximo=65_536, tipo=tipo
+    )
     n = quantidade_volumes(cfg)
     nome = nome_cloud(bp.project_name, r.logical_name)
-    return comentario(texto_tamanho_disco(cfg)) + "\n" + bloco(
+    return comentario(texto_tamanho_disco(cfg) + nota) + "\n" + bloco(
         "resource", ["google_compute_disk", r.logical_name],
         ([atributo("count", n)] if n > 1 else []) + [
         atributo("name", referencia(f'"{nome}-${{count.index}}"') if n > 1 else nome),
-        atributo("type", str(cfg.get("disk_type") or "pd-standard")),
+        atributo("type", tipo),
         atributo("zone", f"{bp.region}-a"),
-        atributo("size", int(cfg.get("size_gb") or 10)),
+        atributo("size", tamanho),
     ])
 
 

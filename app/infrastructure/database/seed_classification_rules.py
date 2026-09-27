@@ -63,6 +63,12 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*autoclass*", "glob", "object_storage", None, "medium", 49),
     # ── Storage ──
     ("*ssd*", "glob", "storage_ssd", None, "high", 40),
+    # Balanced e Extreme PD são SSD. Sem estas duas, `*pd capacity*` os levava
+    # para `storage_hdd`: o disco padrão das VMs do GCP contava como HDD, o custo
+    # dele era dividido pela taxa do pd-standard (o GB estimado saía ~2,5x) e o
+    # Terraform provisionava disco magnético no destino.
+    ("*balanced pd capacity*", "glob", "storage_ssd", None, "high", 41),
+    ("*extreme pd capacity*", "glob", "storage_ssd", None, "high", 42),
     ("*pd capacity*", "glob", "storage_hdd", None, "medium", 50),
     ("*filestore*", "glob", "storage_hdd", None, "high", 51),
     ("*snapshot*", "glob", "storage_hdd", None, "medium", 52),

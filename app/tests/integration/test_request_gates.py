@@ -166,6 +166,14 @@ def test_object_storage_nao_mapeia_para_block_storage(aws_context) -> None:
                for a in alvos), alvos
 
 
+def test_balanced_pd_e_ssd(gcp_context) -> None:
+    """Balanced PD é SSD e é 94% do custo de disco do bill real. Quando
+    `*pd capacity*` o levava para HDD, o SSD ficava só com o pd-ssd (a relação
+    era a inversa: HDD ~5,5x o SSD) e o GB estimado pelo custo saía ~2,5x."""
+    aux = gcp_context.auxiliary
+    assert aux.storage_ssd > 5 * aux.storage_hdd
+
+
 def test_banco_gerenciado_tem_equivalente(aws_context) -> None:
     """RDS é o 2º maior custo do bill; sem DE-PARA a IA o ignorava."""
     rds = _find_service(aws_context, "AmazonRDS")

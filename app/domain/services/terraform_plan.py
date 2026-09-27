@@ -43,7 +43,7 @@ from app.domain.services.instance_shape import parse_instance_shape
 # já está declarado como estimativa.
 _TAXA_GB_MES: dict[str, dict[str, str]] = {
     "aws": {"storage_ssd": "0.080", "storage_hdd": "0.045", "object_storage": "0.023"},
-    "gcp": {"storage_ssd": "0.170", "storage_hdd": "0.040", "object_storage": "0.020"},
+    "gcp": {"storage_ssd": "0.100", "storage_hdd": "0.040", "object_storage": "0.020"},
     "azure": {"storage_ssd": "0.088", "storage_hdd": "0.045", "object_storage": "0.018"},
     "oci": {"storage_ssd": "0.0255", "storage_hdd": "0.0255", "object_storage": "0.0255"},
 }
@@ -52,6 +52,12 @@ _TAXA_GB_MES: dict[str, dict[str, str]] = {
 _TAXA_DB_VCPU_MES: dict[str, str] = {
     "aws": "62", "gcp": "60", "azure": "73", "oci": "30",
 }
+
+# O plano descreve o disco com os nomes do GCP, que são o vocabulário neutro da
+# derivação; cada renderer traduz a classe. SSD é o pd-balanced, o de propósito
+# geral: é por ele que a taxa de referência cota, e é o par do gp3 e do Premium
+# SSD. Provisionar pd-ssd cobraria o tier de desempenho que a cotação não previu.
+_TIPO_DE_DISCO: dict[str, str] = {"storage_ssd": "pd-balanced", "storage_hdd": "pd-standard"}
 
 # Chave do payload → categoria interna.
 _CATEGORIAS_ARMAZENAMENTO = {
@@ -417,7 +423,7 @@ def _derivar_armazenamento(
                         "size_gb": int(max(por_volume, Decimal("1"))),
                         "volumes": volumes,
                         "size_source": "medido",
-                        "disk_type": ("pd-ssd" if categoria == "storage_ssd" else "pd-standard"),
+                        "disk_type": _TIPO_DE_DISCO[categoria],
                     },
                 )
             )
@@ -439,7 +445,7 @@ def _derivar_armazenamento(
                         "disk_only": True,
                         "size_gb": int(gb),
                         "size_source": "medido" if gb_medido is not None else "estimado",
-                        "disk_type": ("pd-ssd" if categoria == "storage_ssd" else "pd-standard"),
+                        "disk_type": _TIPO_DE_DISCO[categoria],
                     },
                 )
             )
