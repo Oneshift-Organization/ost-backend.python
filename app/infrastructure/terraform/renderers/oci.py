@@ -25,11 +25,16 @@ from app.infrastructure.terraform.hcl import (
 from app.infrastructure.terraform.renderers.base import (
     ajustar_tamanho,
     com_indice,
+    disco_raiz,
+    faixa_de_portas,
+    fontes,
     instancias_banco,
     nome_banco,
     nome_cloud,
     quantidade_volumes,
     texto_banco,
+    texto_espelho,
+    texto_grupo,
     texto_tamanho_disco,
     texto_volume_bucket,
 )
@@ -133,6 +138,7 @@ class AdaptadorOCI:
             TipoRecurso.COMPUTE: _compute,
             TipoRecurso.OBJECT_STORAGE: _bucket,
             TipoRecurso.MANAGED_DATABASE: _banco,
+            TipoRecurso.SECURITY_GROUP: _nsg,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -150,11 +156,14 @@ def _rede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 
 def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
-    return bloco("resource", ["oci_core_subnet", r.logical_name], [
+    espelho = texto_espelho(r.configuration)
+    bloco_hcl = bloco("resource", ["oci_core_subnet", r.logical_name], [
         _compartimento(),
         atributo("vcn_id", referencia(f"oci_core_vcn.{REDE}.id")),
         atributo("cidr_block", str(r.configuration.get("cidr") or "10.0.0.0/24")),
-        atributo("display_name", nome_cloud(bp.project_name, "subnet")),
+        atributo(
+            "display_name", nome_cloud(bp.project_name, r.logical_name if espelho else "subnet")
+        ),
         # `true` aqui deixaria toda instância sem IP público mesmo quando o
         # usuário pediu acesso público — a lógica é invertida no nome.
         atributo(
@@ -162,6 +171,7 @@ def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             not bool(r.configuration.get("public_access")),
         ),
     ])
+    return comentario(espelho) + "\n" + bloco_hcl if espelho else bloco_hcl
 
 
 def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -176,13 +186,22 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     por_instancia = max(1, vcpus // max(1, instancias))
     ram_instancia = max(1.0, round(ram / max(1, instancias), 1))
     slug = r.logical_name.replace("_", "-")
-
-    return comentario(
+    texto = (
         f"Derivado do pool de família '{cfg.get('source_family')}' "
         f"({cfg.get('vcpus')} vCPU, {cfg.get('ram_gb')} GB no total).\n"
         "Shape flexível: a OCI cobra OCPU e memória separadamente, então o\n"
         "dimensionamento vai em `shape_config` em vez de um nome fechado."
-    ) + "\n" + bloco("resource", ["oci_core_instance", r.logical_name], [
+    )
+    origem = [
+        atributo("source_type", "image", nivel=2),
+        atributo("source_id", referencia("var.image_ocid"), nivel=2),
+    ]
+    raiz = disco_raiz(cfg, minimo=50, maximo=32_768, tipo="boot volume")
+    if raiz is not None:
+        texto += "\n" + raiz[1]
+        origem.append(atributo("boot_volume_size_in_gbs", raiz[0], nivel=2))
+
+    return comentario(texto) + "\n" + bloco("resource", ["oci_core_instance", r.logical_name], [
         atributo("count", instancias),
         _compartimento(),
         atributo("availability_domain", referencia("var.availability_domain")),
@@ -195,14 +214,85 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             atributo("memory_in_gbs", ram_instancia, nivel=2),
         ], nivel=1),
         bloco_aninhado("create_vnic_details", [
-            atributo("subnet_id", referencia(f"oci_core_subnet.{SUBNET}.id"), nivel=2),
-            atributo("assign_public_ip", False, nivel=2),
+            atributo(
+                "subnet_id",
+                referencia(f"oci_core_subnet.{cfg.get('subnet') or SUBNET}.id"),
+                nivel=2,
+            ),
+            atributo("assign_public_ip", bool(cfg.get("public_ip")), nivel=2),
+            *(
+                [atributo("nsg_ids", referencia(
+                    "[" + ", ".join(
+                        f"oci_core_network_security_group.{g}.id" for g in cfg["security_groups"]
+                    ) + "]"
+                ), nivel=2)]
+                if cfg.get("security_groups")
+                else []
+            ),
         ], nivel=1),
-        bloco_aninhado("source_details", [
-            atributo("source_type", "image", nivel=2),
-            atributo("source_id", referencia("var.image_ocid"), nivel=2),
-        ], nivel=1),
+        bloco_aninhado("source_details", origem, nivel=1),
     ])
+
+
+# Número do protocolo IP, como a OCI pede.
+_PROTOCOLO_OCI = {"tcp": "6", "udp": "17", "icmp": "1", "todos": "all"}
+
+
+def _nsg(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """NSG espelhado: uma regra por origem (faixa ou outro NSG), saída liberada."""
+    cfg = r.configuration
+    nsg = f"oci_core_network_security_group.{r.logical_name}.id"
+    partes = [comentario(texto_grupo(cfg)) + "\n" + bloco(
+        "resource", ["oci_core_network_security_group", r.logical_name], [
+            _compartimento(),
+            atributo("vcn_id", referencia(f"oci_core_vcn.{REDE}.id")),
+            atributo("display_name", nome_cloud(bp.project_name, r.logical_name)),
+        ])]
+    n = 0
+    for regra in cfg.get("rules") or []:
+        protocolo = _PROTOCOLO_OCI.get(str(regra.get("protocol")), "all")
+        opcoes = []
+        faixa = faixa_de_portas(regra) if protocolo in ("6", "17") else None
+        if faixa is not None:
+            opcoes = [bloco_aninhado("tcp_options" if protocolo == "6" else "udp_options", [
+                bloco_aninhado("destination_port_range", [
+                    atributo("min", faixa[0], nivel=3),
+                    atributo("max", faixa[1], nivel=3),
+                ], nivel=2),
+            ], nivel=1)]
+        for tipo, valor in fontes(regra):
+            n += 1
+            origem = (
+                [atributo("source", valor), atributo("source_type", "CIDR_BLOCK")]
+                if tipo == "cidr"
+                else [
+                    atributo("source", referencia(f"oci_core_network_security_group.{valor}.id")),
+                    atributo("source_type", "NETWORK_SECURITY_GROUP"),
+                ]
+            )
+            partes.append(bloco(
+                "resource",
+                ["oci_core_network_security_group_security_rule", f"{r.logical_name}_{n}"],
+                [
+                    atributo("network_security_group_id", referencia(nsg)),
+                    atributo("direction", "INGRESS"),
+                    atributo("protocol", protocolo),
+                    *origem,
+                    *opcoes,
+                ],
+            ))
+    partes.append(bloco(
+        "resource",
+        ["oci_core_network_security_group_security_rule", f"{r.logical_name}_saida"],
+        [
+            atributo("network_security_group_id", referencia(nsg)),
+            atributo("direction", "EGRESS"),
+            atributo("protocol", "all"),
+            atributo("destination", "0.0.0.0/0"),
+            atributo("destination_type", "CIDR_BLOCK"),
+        ],
+    ))
+    return "\n\n".join(partes)
 
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:

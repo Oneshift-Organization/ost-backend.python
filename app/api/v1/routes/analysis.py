@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
@@ -27,6 +28,7 @@ from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRe
 from app.infrastructure.repositories.pg_billing_enriched_repo import (
     PgBillingEnrichedRepository,
 )
+from app.infrastructure.repositories.pg_billing_item_repo import PgBillingItemRepository
 from app.infrastructure.repositories.pg_billing_report_repo import (
     PgBillingReportRepository,
 )
@@ -37,6 +39,7 @@ from app.infrastructure.repositories.pg_cloud_sku_repo import PgCloudSkuReposito
 from app.infrastructure.repositories.pg_exchange_rate_repo import (
     PgExchangeRateRepository,
 )
+from app.infrastructure.repositories.pg_inventory_repo import PgInventoryRepository
 from app.infrastructure.repositories.service_repositories import (
     PGServiceComparisonRepository,
     PGServiceMetadataRepository,
@@ -65,8 +68,16 @@ from app.use_cases.analysis.build_migration_context import (
 from app.use_cases.analysis.run_analysis_pipeline import (
     RunAnalysisPipelineUseCase,
     build_pipeline_llm_input_payload,
+    conversor_da_analise,
     serialize_as_legacy,
 )
+from app.use_cases.analysis.topologia_no_payload import (
+    MontarTopologiaUseCase,
+    compactar_topologia,
+    validar_inventario_da_analise,
+)
+from app.use_cases.inventory.consultas import InventarioNaoProcessadoError
+from app.use_cases.inventory.correlacao import ProvedorDiferenteError
 
 logger = logging.getLogger(__name__)
 
@@ -421,6 +432,49 @@ def _erro(
     return HTTPException(status_code=status_code, detail=corpo)
 
 
+async def _validar_inventario(
+    session: AsyncSession, user_id: UUID, report_id: UUID, inventory_id: UUID
+) -> None:
+    """RI14: inventário do usuário, processado e da mesma nuvem do billing."""
+    if not get_settings().inventory_enabled:
+        raise _erro(
+            status.HTTP_404_NOT_FOUND,
+            "INVENTARIO_DESLIGADO",
+            "o inventário não está habilitado neste ambiente",
+            retryable=False,
+        )
+    report = await PgBillingReportRepository(session).get_by_id(report_id, user_id)
+    if report is None:
+        raise _erro(
+            status.HTTP_404_NOT_FOUND,
+            "REPORT_NAO_ENCONTRADO",
+            f"report {report_id} não existe para este usuário",
+            retryable=False,
+        )
+    try:
+        await validar_inventario_da_analise(
+            PgInventoryRepository(session),
+            inventario_id=inventory_id,
+            user_id=user_id,
+            provedor_do_report=report.provider.value if report.provider else None,
+        )
+    except InventarioNaoProcessadoError as e:
+        raise _erro(
+            status.HTTP_409_CONFLICT, "INVENTARIO_NAO_PROCESSADO", str(e), retryable=True
+        ) from e
+    except ProvedorDiferenteError as e:
+        raise _erro(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "INVENTARIO_DE_OUTRA_NUVEM",
+            str(e),
+            retryable=False,
+        ) from e
+    except NotFoundError as e:
+        raise _erro(
+            status.HTTP_404_NOT_FOUND, "INVENTARIO_NAO_ENCONTRADO", str(e), retryable=False
+        ) from e
+
+
 @router.get(
     "/{report_id}/request",
     status_code=status.HTTP_200_OK,
@@ -431,8 +485,12 @@ async def get_analysis_request(
     user: CurrentUser,
     session: DbSession,
     recalcular: bool = False,
+    inventory_id: UUID | None = None,
 ) -> dict:
     user_uuid = UUID(user.sub)
+    if inventory_id is not None:
+        await _validar_inventario(session, user_uuid, report_id, inventory_id)
+        recalcular = True
 
     rep = (
         (
@@ -492,8 +550,9 @@ async def get_analysis_request(
         )
 
         if row is not None and row.llm_input_payload:
+            # A superfície do agente recebe a topologia compacta, como o LLM.
             return {
-                **dict(row.llm_input_payload),
+                **compactar_topologia(dict(row.llm_input_payload)),
                 "_meta": {
                     "origem": "persistida",
                     "report_id": str(report_id),
@@ -512,8 +571,18 @@ async def get_analysis_request(
         ) from e
 
     payload, sem_equivalente = build_pipeline_llm_input_payload(ctx)
+    if inventory_id is not None:
+        payload["topologia"] = await MontarTopologiaUseCase(
+            PgInventoryRepository(session), PgBillingItemRepository(session)
+        ).execute(
+            user_id=user_uuid,
+            inventario_id=inventory_id,
+            report_id=report_id,
+            ctx=ctx,
+            converter=conversor_da_analise(ctx),
+        )
     return {
-        **payload,
+        **compactar_topologia(payload),
         "_meta": {
             "origem": "recalculada",
             "report_id": str(report_id),
@@ -571,6 +640,8 @@ async def _run_analysis_pipeline(
     job_id: UUID,
     sessionmaker,
     decision_context: dict | None = None,
+    *,
+    inventory_id: UUID | None = None,
 ) -> None:
     logger.info("pipeline_started job_id=%s", job_id)
 
@@ -600,10 +671,13 @@ async def _run_analysis_pipeline(
             fx_repo=PgExchangeRateRepository(session),
             price_repo=PgCloudPricePointRepository(session),
             llm_orchestrator=orchestrator,
+            topologia=MontarTopologiaUseCase(
+                PgInventoryRepository(session), PgBillingItemRepository(session)
+            ),
         )
 
         try:
-            await uc.execute(job, decision_context=decision_context)
+            await uc.execute(job, decision_context=decision_context, inventario_id=inventory_id)
             await session.commit()
             logger.info("pipeline_completed job_id=%s", job_id)
         except Exception:
@@ -633,6 +707,10 @@ async def start_analysis(
     options: AnalysisStartOptions | None = None,
 ) -> AnalysisJobResponse:
     user_uuid = UUID(user.sub)
+    inventory_id = options.inventory_id if options else None
+    if inventory_id is not None:
+        # Antes da idempotência: um id inválido não é engolido por um job ativo.
+        await _validar_inventario(session, user_uuid, report_id, inventory_id)
     repo = PgAnalysisJobRepository(session)
 
     existente = await repo.buscar_ativo_por_report(
@@ -692,6 +770,7 @@ async def start_analysis(
         sm,
         options.decision_context.model_dump(exclude_none=True)
         if options and options.decision_context else None,
+        inventory_id=inventory_id,
     )
 
     return AnalysisJobResponse(

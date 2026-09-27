@@ -63,6 +63,8 @@ class TipoRecurso(StrEnum):
     COMPUTE = "compute"
     OBJECT_STORAGE = "object_storage"
     MANAGED_DATABASE = "managed_database"
+    # Só com a topologia do inventário (RI15.4): o billing não tem firewall.
+    SECURITY_GROUP = "security_group"
 
 
 class Categoria(StrEnum):

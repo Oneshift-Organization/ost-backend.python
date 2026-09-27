@@ -9,6 +9,7 @@ from app.domain.services.decision_support import build_decision_support, number
 from app.schemas.analysis_v2 import AnalysisV2Response
 from app.schemas.decision_support import DecisionSupport
 from app.use_cases.analysis.backend_authority import apply_backend_authority
+from app.use_cases.analysis.topologia_no_payload import impor_topologia
 
 
 def _legacy_summary(payload: dict) -> dict:
@@ -120,4 +121,5 @@ def impose_decision(response: AnalysisV2Response, payload: dict) -> AnalysisV2Re
         )
     else:
         update["recommendation"] = decision.selection_reason
-    return response.model_copy(update=update)
+    # A ordem de migração também é do backend quando há inventário (PLANO_INVENTARIO_API RI14).
+    return impor_topologia(response.model_copy(update=update), payload)

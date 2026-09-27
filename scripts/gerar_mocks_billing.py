@@ -1627,18 +1627,31 @@ class GeradorBigQuery:
                 alvos, pesos = vms[:5], [vm["horas"] for vm in vms[:5]]
         elif _SKU_DISCO.search(r["SKU description"]) and quantidade > 0:
             tamanho = quantidade * Decimal(GCP_DIAS) / Decimal(len(dias))
-            n = max(1, math.ceil(tamanho / 200))
-            self._discos += n
             local = _SKU_DISCO.search(r["SKU description"]).group("local") or "Americas"
             regiao = _REGIAO_GCP.get(local, "us-central1")
+            # O disco mora na zona de uma VM do projeto (disco zonal só se anexa
+            # na própria zona): pelo menos um por VM, o resto em rodízio. Sem VM
+            # na região, fica na zona "a" e é disco solto. Antes, todo disco ia
+            # para a zona "a" e as VMs das zonas "b" e "c" ficavam sem boot.
+            zonas = [
+                vm["zona"]
+                for vm in sorted(
+                    self._vms.get((r["Project ID"], regiao), []), key=lambda v: v["global"]
+                )
+            ] or [f"{regiao}-a"]
+            n = max(1, math.ceil(tamanho / 200), len(zonas))
+            self._discos += n
             alvos = [
                 {
                     "nome": f"disk-{r['Project ID']}-{_hash(r['SKU description'], i)[:6]}",
+                    # O SKU entra no id: um disco tem um tipo só. Sem ele, o
+                    # Standard e o Balanced PD do mesmo projeto eram o mesmo disco.
                     "global": (
                         f"//compute.googleapis.com/projects/{r['Project ID']}/zones/"
-                        f"{regiao}-a/disks/{int(_hash('d', r['Project ID'], i)[:15], 16)}"
+                        f"{zonas[i % len(zonas)]}/disks/"
+                        f"{int(_hash('d', r['Project ID'], r['SKU description'], i)[:15], 16)}"
                     ),
-                    "zona": f"{regiao}-a",
+                    "zona": zonas[i % len(zonas)],
                     "regiao": regiao,
                     "horas": Decimal(24 * len(dias)),
                     "app": _escolha(APPS, r["Project ID"], i),

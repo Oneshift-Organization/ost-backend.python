@@ -13,6 +13,11 @@ from app.infrastructure.database.models.cloud_services_metadata import (
 from app.infrastructure.database.models.cloud_price_point import CloudPricePointModel
 from app.infrastructure.database.models.cloud_sku_catalog import CloudSkuCatalogModel
 from app.infrastructure.database.models.exchange_rate import ExchangeRateModel
+from app.infrastructure.database.models.inventory import (
+    InventoryModel,
+    InventoryRelationModel,
+    InventoryResourceModel,
+)
 from app.infrastructure.database.models.service_ontology import ServiceOntologyModel
 from app.infrastructure.database.models.terraform_generation_job import (
     TerraformGenerationJobModel,
@@ -32,6 +37,9 @@ __all__ = [
     "CloudServiceMetadataModel",
     "CloudSkuCatalogModel",
     "ExchangeRateModel",
+    "InventoryModel",
+    "InventoryRelationModel",
+    "InventoryResourceModel",
     "ServiceOntologyModel",
     "TerraformGenerationJobModel",
     "SkuClassificationRuleModel",

@@ -33,7 +33,7 @@ agentes de IA.
 
 | Arquivo | Para quê |
 |---|---|---|
-| [`data-model.md`](data-model.md) | DDL das tabelas (`billing_reports`, `billing_items`, `exchange_rates`, `cloud_price_points`), schema canônico do parser, convenções de `raw_payload`, queries comuns. |
+| [`data-model.md`](data-model.md) | DDL das tabelas (`billing_reports`, `billing_items`, `exchange_rates`, `cloud_price_points`, inventário), schema canônico do parser, convenções de `raw_payload`, queries comuns. |
 | [`parsers.md`](parsers.md) | Guia por provider (AWS CUR/CE, Azure, GCP, OCI) + política `global_zero` do Cost Explorer + como adicionar parser novo. |
 | [`billing-ingestion-pipeline.md`](billing-ingestion-pipeline.md) | Pipeline completa: detecção, 7 parsers, schema canônico, edge cases (NaN, locale, correções). |
 | [`capacity-pool-model.md`](capacity-pool-model.md) | Alinhamento FOCUS: taxonomia universal, buckets de capacidade, agregação por (Project, Family, Region). |
@@ -48,6 +48,8 @@ agentes de IA.
 | [`api-conventions.md`](api-conventions.md) | Convenções transversais: paginação, envelopes, serialização Decimal/datetime, status codes, ordenação. **Leia antes de adicionar rota nova.** |
 | [`endpoints/billing.md`](endpoints/billing.md) | Catálogo `/v1/billing-files`: contratos request/response, status codes, exemplos copy-paste. |
 | [`endpoints/reports.md`](endpoints/reports.md) | Catálogo `/v1/reports`: dashboard de billing agregado por provedor/serviço/período. |
+| [`endpoints/inventories.md`](endpoints/inventories.md) | Catálogo `/v1/inventories`: export de cada nuvem (sem credencial), topologia, correlação com o billing, declarações, e o que muda na análise e no Terraform. |
+| [`auditoria-e2e-2026-09-27-inventario.md`](auditoria-e2e-2026-09-27-inventario.md) | Billing, inventário, análise e Terraform pela API nos 4 mocks: coerência entre os três artefatos, número a número. |
 | [`dev-setup.md`](dev-setup.md) | Rodar local: venv, Postgres via podman, alembic, bypass de auth, troubleshooting. |
 
 ## Fluxo de leitura recomendado

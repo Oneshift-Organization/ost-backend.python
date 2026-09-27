@@ -330,6 +330,79 @@ Populado offline por `python scripts/sync_prices.py` — **nunca** no caminho
 crítico da análise. O matcher prefere estes preços e rebaixa a confiança quando
 cai no `cloud_sku_catalog`.
 
+### Inventário
+
+Migration `a1b2c3d4e5f7` (PLANO_INVENTARIO_API, I5). Três tabelas novas; nada do
+que existe muda. `ON DELETE CASCADE` das filhas: `DELETE /v1/inventories/{id}`
+apaga tudo que deriva do envio. Isolamento por `user_id` em toda query, como no
+billing.
+
+```
+inventories (1)  ──CASCADE──▶  inventory_resources (N)
+                 ──CASCADE──▶  inventory_relations (N)
+```
+
+```sql
+CREATE TABLE inventories (
+    id                      UUID PRIMARY KEY,
+    user_id                 UUID NOT NULL,
+    status                  VARCHAR(20) NOT NULL DEFAULT 'queued',  -- queued → processing → done | failed
+    provider                VARCHAR(10),                            -- aws | gcp | azure | oci
+    source_files            JSONB NOT NULL DEFAULT '[]',
+    detected_formats        JSONB NOT NULL DEFAULT '{}',            -- arquivo → formato detectado
+    captured_at             TIMESTAMPTZ,
+    captured_at_estimated   BOOLEAN NOT NULL DEFAULT false,         -- Resource Graph: data do envio
+    resource_count          INTEGER NOT NULL DEFAULT 0,
+    relation_count          INTEGER NOT NULL DEFAULT 0,
+    rule_count              INTEGER NOT NULL DEFAULT 0,
+    counts                  JSONB NOT NULL DEFAULT '{}',            -- descartado/não modelado, por motivo
+    fingerprint             VARCHAR(64),                            -- SHA-256 do conteúdo normalizado
+    declarations            JSONB NOT NULL DEFAULT '{}',
+    declarations_updated_at TIMESTAMPTZ,
+    error_message           VARCHAR(2000),
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX ix_inventories_user_id_created_at ON inventories (user_id, created_at);
+
+CREATE TABLE inventory_resources (
+    id            BIGSERIAL PRIMARY KEY,
+    inventory_id  UUID NOT NULL REFERENCES inventories(id) ON DELETE CASCADE,
+    user_id       UUID NOT NULL,
+    resource_key  TEXT NOT NULL,          -- ARN, nome do asset do GCP, id do ARM em minúsculas
+    kind          VARCHAR(32) NOT NULL,   -- papel canônico: instancia, banco, subrede, grupo_seguranca…
+    native_type   VARCHAR(200) NOT NULL,  -- AWS::EC2::Instance, compute.googleapis.com/Instance…
+    name          TEXT,
+    account       TEXT,
+    region        VARCHAR(100),
+    zone          VARCHAR(100),
+    state         VARCHAR(20) NOT NULL,
+    attributes    JSONB,
+    tags          JSONB,
+    aliases       JSONB NOT NULL DEFAULT '[]',  -- como o billing cita o recurso (RI13)
+    captured_at   TIMESTAMPTZ,
+    rules         JSONB,                  -- regras de rede, só na linha do grupo de segurança
+    CONSTRAINT uq_inventory_resources_key UNIQUE (inventory_id, resource_key)
+);
+CREATE INDEX ix_inventory_resources_inventory_kind ON inventory_resources (inventory_id, kind);
+
+CREATE TABLE inventory_relations (
+    id            BIGSERIAL PRIMARY KEY,
+    inventory_id  UUID NOT NULL REFERENCES inventories(id) ON DELETE CASCADE,
+    user_id       UUID NOT NULL,
+    source_key    TEXT NOT NULL,
+    target_key    TEXT NOT NULL,
+    kind          VARCHAR(32) NOT NULL,   -- contido_em, protegido_por, anexado_a, membro_de…
+    CONSTRAINT uq_inventory_relations UNIQUE (inventory_id, source_key, target_key, kind)
+);
+CREATE INDEX ix_inventory_relations_inventory ON inventory_relations (inventory_id);
+```
+
+O arquivo bruto enviado é apagado depois da ingestão (RI17); o normalizado fica
+até o `DELETE`. A topologia não é persistida: é recalculada do normalizado com as
+declarações vigentes. A análise que usa o inventário congela a topologia dela no
+`llm_input_payload` do job (chave `topologia`), com o `fingerprint`.
+
 > **Sobre `raw_payload`:** o schema canônico do parser inclui um campo
 > `raw_payload: dict`, mas a **migration 0001 não persiste essa coluna** ainda
 > (decisão MVP — adiada para uma migration futura). Atualmente vive só no

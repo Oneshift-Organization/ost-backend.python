@@ -28,17 +28,23 @@ def renderizar(
     blueprint: TerraformBlueprint,
     *,
     procedencia: dict[str, Any] | None = None,
+    topologia: dict[str, Any] | None = None,
+    moeda: str | None = None,
 ) -> dict[str, str]:
     """Blueprint → `{nome do arquivo: conteúdo}`.
 
     ``procedencia`` é o bloco `premissas` da análise (preços, câmbio, confiança).
     Vai para o README porque um `.tf` parece preciso: sem dizer de quando é o
     preço e de quando é o câmbio, o cliente lê uma foto antiga como estado atual.
+
+    ``topologia`` é o bloco que a análise congelou do inventário (RI15.8): vira a
+    seção "Topologia de origem" do README. ``moeda`` é a da análise, em que vêm
+    os custos da cobertura.
     """
     adaptador = _ADAPTADORES.get(blueprint.provider)
     if adaptador is None:  # pragma: no cover - barrado antes, no schema
         raise ValueError(f"sem adaptador para {blueprint.provider}")
-    return montar(adaptador, blueprint, procedencia)
+    return montar(adaptador, blueprint, procedencia, topologia, moeda)
 
 
 def arquivos_esperados() -> tuple[str, ...]:

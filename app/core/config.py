@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     # desligar não perde dado, as gerações já feitas continuam na tabela.
     terraform_generation_enabled: bool = True
 
+    # Inventário (PLANO_INVENTARIO_API). Desligado por padrão: as tabelas vêm de
+    # uma migração nova, e com a flag desligada as rotas respondem 404 como se
+    # não existissem — dá para deployar antes de migrar sem quebrar nada.
+    inventory_enabled: bool = False
+    inventory_max_files: int = 20
+
     # `terraform validate` contra o schema real do provider. Desligado por
     # decisão de escopo, não por custo: medido em 2026-09-13, com
     # `TF_PLUGIN_CACHE_DIR` quente o `init` leva 0,86s e o `validate` 0,35s. O

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from app.infrastructure.terraform.hcl import (
     atributo,
     bloco,
@@ -12,11 +14,15 @@ from app.infrastructure.terraform.hcl import (
 from app.infrastructure.terraform.renderers.base import (
     ajustar_tamanho,
     com_indice,
+    disco_raiz,
+    faixa_de_portas,
     instancias_banco,
     nome_banco,
     nome_cloud,
     quantidade_volumes,
     texto_banco,
+    texto_espelho,
+    texto_grupo,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
@@ -86,6 +92,7 @@ class AdaptadorGCP:
             TipoRecurso.COMPUTE: _compute,
             TipoRecurso.OBJECT_STORAGE: _bucket,
             TipoRecurso.MANAGED_DATABASE: _banco,
+            TipoRecurso.SECURITY_GROUP: _grupo,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -100,14 +107,17 @@ def _rede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 
 def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
-    return bloco("resource", ["google_compute_subnetwork", r.logical_name], [
-        atributo("name", nome_cloud(bp.project_name, "subnet")),
+    espelho = texto_espelho(r.configuration)
+    nome = nome_cloud(bp.project_name, r.logical_name if espelho else "subnet")
+    bloco_hcl = bloco("resource", ["google_compute_subnetwork", r.logical_name], [
+        atributo("name", nome),
         atributo("ip_cidr_range", str(r.configuration.get("cidr") or "10.0.0.0/24")),
         atributo("region", bp.region),
         atributo("network", referencia(f"google_compute_network.{REDE}.id")),
         # Sem isto, tráfego para APIs do Google sairia pela internet pública.
         atributo("private_ip_google_access", True),
     ])
+    return comentario(espelho) + "\n" + bloco_hcl if espelho else bloco_hcl
 
 
 def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -116,6 +126,14 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         return _disco(r, bp)
 
     slug = r.logical_name.replace("_", "-")
+    inicializacao = [atributo("image", referencia("var.boot_image"), nivel=3)]
+    raiz = disco_raiz(cfg, minimo=10, maximo=65_536, tipo="boot disk")
+    if raiz is not None:
+        inicializacao += [
+            atributo("size", raiz[0], nivel=3),
+            # Sem `type`, o provider cria o boot em pd-standard (HDD).
+            atributo("type", str(cfg.get("root_disk_type") or "pd-balanced"), nivel=3),
+        ]
     corpo = [
         atributo("count", int(cfg.get("instances") or 1)),
         atributo("name", referencia(
@@ -124,21 +142,77 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("machine_type", str(cfg.get("machine_type"))),
         atributo("zone", f"{bp.region}-a"),
         bloco_aninhado("boot_disk", [
-            bloco_aninhado("initialize_params", [
-                atributo("image", referencia("var.boot_image"), nivel=3),
-            ], nivel=2),
+            bloco_aninhado("initialize_params", inicializacao, nivel=2),
         ], nivel=1),
         bloco_aninhado("network_interface", [
             atributo("subnetwork", referencia(
-                f"google_compute_subnetwork.{SUBNET}.id"
+                f"google_compute_subnetwork.{cfg.get('subnet') or SUBNET}.id"
             ), nivel=2),
+            # IP externo só onde a subrede de destino é pública.
+            *([bloco_aninhado("access_config", [], nivel=2)] if cfg.get("public_ip") else []),
         ], nivel=1),
         atributo("labels", {"environment": bp.environment, "managed_by": "oneshift"}),
+        *(
+            [atributo("tags", [tag_de_rede(g) for g in cfg["security_groups"]])]
+            if cfg.get("security_groups")
+            else []
+        ),
     ]
-    return comentario(
+    texto = (
         f"Derivado do pool de família '{cfg.get('source_family')}' "
         f"({cfg.get('vcpus')} vCPU, {cfg.get('ram_gb')} GB no total)."
-    ) + "\n" + bloco("resource", ["google_compute_instance", r.logical_name], corpo)
+    )
+    if raiz is not None:
+        texto += "\n" + raiz[1]
+    return comentario(texto) + "\n" + bloco(
+        "resource", ["google_compute_instance", r.logical_name], corpo
+    )
+
+
+_PROTOCOLO_GCP = {"tcp": "tcp", "udp": "udp", "icmp": "icmp", "todos": "all"}
+
+
+def tag_de_rede(nome_logico: str) -> str:
+    """No GCP o grupo é uma tag de rede: minúsculas, dígitos e hífen, até 63."""
+    return nome_cloud(nome_logico)
+
+
+def _grupo(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """Tag de rede, e um firewall por regra traduzida (faixas e tags na mesma regra).
+
+    O nome do firewall leva um hash curto do grupo: truncar para 63 caracteres
+    podia dar o mesmo nome a regras de grupos de prefixo longo igual.
+    """
+    cfg = r.configuration
+    tag = tag_de_rede(r.logical_name)
+    marca = hashlib.sha256(r.logical_name.encode()).hexdigest()[:6]
+    base = nome_cloud(bp.project_name, r.logical_name, maximo=50)
+    partes = [comentario(texto_grupo(cfg) + f"\nNo GCP o grupo é a tag de rede `{tag}`.")]
+    for i, regra in enumerate(cfg.get("rules") or [], start=1):
+        protocolo = _PROTOCOLO_GCP.get(str(regra.get("protocol")), "all")
+        permitir = [atributo("protocol", protocolo, nivel=2)]
+        faixa = faixa_de_portas(regra) if protocolo in ("tcp", "udp") else None
+        if faixa is not None:
+            porta = str(faixa[0]) if faixa[0] == faixa[1] else f"{faixa[0]}-{faixa[1]}"
+            permitir.append(atributo("ports", [porta], nivel=2))
+        corpo = [
+            atributo("name", f"{base}-{marca}-{i}"),
+            atributo("network", referencia(f"google_compute_network.{REDE}.name")),
+            atributo("direction", "INGRESS"),
+            atributo("priority", 1000),
+            atributo("target_tags", [tag]),
+        ]
+        cidrs = [str(c) for c in regra.get("source_cidrs") or []]
+        grupos = [tag_de_rede(str(g)) for g in regra.get("source_groups") or []]
+        if cidrs:
+            corpo.append(atributo("source_ranges", cidrs))
+        if grupos:
+            corpo.append(atributo("source_tags", grupos))
+        corpo.append(bloco_aninhado("allow", permitir, nivel=1))
+        partes.append(
+            bloco("resource", ["google_compute_firewall", f"{r.logical_name}_{i}"], corpo)
+        )
+    return "\n\n".join(partes)
 
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:

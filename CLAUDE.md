@@ -30,8 +30,10 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Parsers de cloud / adicionar novo / política `global_zero` | [`docs/parsers.md`](docs/parsers.md) |
 | Capacity Pool Model / FOCUS / WorkloadPool / aggregator | [`docs/capacity-pool-model.md`](docs/capacity-pool-model.md) |
 | Exports detalhados (CUR 2.0, BigQuery, Azure, OCI) / base amortizada / fatos medidos / mocks | [`PLANO_CUR_BIGQUERY.md`](PLANO_CUR_BIGQUERY.md) |
+| Inventário (AWS Config, Asset Inventory, Resource Graph) / topologia / dependências / ondas / Terraform com rede | [`PLANO_INVENTARIO_API.md`](PLANO_INVENTARIO_API.md) |
 | Convenções de rota / paginação / serialização | [`docs/api-conventions.md`](docs/api-conventions.md) |
 | Catálogo `/v1/billing-files` | [`docs/endpoints/billing.md`](docs/endpoints/billing.md) |
+| Catálogo `/v1/inventories` / export de cada nuvem / efeito na análise e no Terraform | [`docs/endpoints/inventories.md`](docs/endpoints/inventories.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
 

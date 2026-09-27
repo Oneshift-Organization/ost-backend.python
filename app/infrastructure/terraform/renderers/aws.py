@@ -12,6 +12,8 @@ Duas diferenças que importam em relação ao GCP:
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.infrastructure.terraform.hcl import (
     atributo,
     bloco,
@@ -22,12 +24,17 @@ from app.infrastructure.terraform.hcl import (
 from app.infrastructure.terraform.renderers.base import (
     ajustar_tamanho,
     com_indice,
+    disco_raiz,
     disco_ssd,
+    faixa_de_portas,
+    fontes,
     instancias_banco,
     nome_banco,
     nome_cloud,
     quantidade_volumes,
     texto_banco,
+    texto_espelho,
+    texto_grupo,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
@@ -41,6 +48,7 @@ from app.schemas.terraform import (
 
 REDE = "rede_principal"
 SUBNET = "subnet_principal"
+ZONAS = "disponiveis"
 
 # S3: nome final tem 3 a 63 caracteres, mas `bucket_prefix` é limitado a 37 pelo
 # provider — ele reserva o resto para o sufixo aleatório. O hífen que separa
@@ -74,7 +82,15 @@ class AdaptadorAWS:
         ]
 
     def preambulo(self, bp: TerraformBlueprint) -> list[str]:
-        return []
+        if not any(r.configuration.get("mirror_of") for r in bp.resources):
+            return []
+        # A letra da zona muda de região para região (ap-northeast-1 não tem `b`
+        # para contas novas): as subredes espelhadas pegam a zona pela posição.
+        return [
+            comentario("Zonas disponíveis na região, para as subredes espelhadas da origem.")
+            + "\n"
+            + bloco("data", ["aws_availability_zones", ZONAS], [atributo("state", "available")])
+        ]
 
     def outputs(self, bp: TerraformBlueprint) -> list[str]:
         saidas = []
@@ -98,6 +114,7 @@ class AdaptadorAWS:
             TipoRecurso.COMPUTE: _compute,
             TipoRecurso.OBJECT_STORAGE: _bucket,
             TipoRecurso.MANAGED_DATABASE: _banco,
+            TipoRecurso.SECURITY_GROUP: _grupo,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -111,6 +128,18 @@ def _rede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 
 def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    espelho = texto_espelho(r.configuration)
+    if espelho is not None:
+        return comentario(espelho) + "\n" + bloco("resource", ["aws_subnet", r.logical_name], [
+            atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id")),
+            atributo("cidr_block", str(r.configuration.get("cidr"))),
+            atributo("availability_zone", referencia(
+                f"element(data.aws_availability_zones.{ZONAS}.names, "
+                f"{int(r.configuration.get('zone_index') or 0)})"
+            )),
+            atributo("map_public_ip_on_launch", bool(r.configuration.get("public_access"))),
+            atributo("tags", {"Name": nome_cloud(bp.project_name, r.logical_name)}),
+        ])
     return bloco("resource", ["aws_subnet", r.logical_name], [
         atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id")),
         atributo("cidr_block", str(r.configuration.get("cidr") or "10.0.0.0/24")),
@@ -127,18 +156,92 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         return _disco(r, bp)
 
     slug = r.logical_name.replace("_", "-")
-    return comentario(
+    texto = (
         f"Derivado do pool de família '{cfg.get('source_family')}' "
         f"({cfg.get('vcpus')} vCPU, {cfg.get('ram_gb')} GB no total)."
-    ) + "\n" + bloco("resource", ["aws_instance", r.logical_name], [
+    )
+    corpo = [
         atributo("count", int(cfg.get("instances") or 1)),
         atributo("ami", referencia("var.ami_id")),
         atributo("instance_type", str(cfg.get("machine_type"))),
-        atributo("subnet_id", referencia(f"aws_subnet.{SUBNET}.id")),
+        atributo("subnet_id", referencia(f"aws_subnet.{cfg.get('subnet') or SUBNET}.id")),
+        *_grupos_da_instancia(cfg),
         atributo("tags", referencia(
             f'{{\n    Name = "{nome_cloud(bp.project_name, slug)}-${{count.index}}"\n  }}'
         )),
-    ])
+    ]
+    # st1 e sc1 não podem ser disco de boot: o raiz é gp3, qualquer que seja a
+    # classe na origem. 8 GB é o menor raiz das AMIs Linux comuns.
+    raiz = disco_raiz(cfg, minimo=8, maximo=16_384, tipo="gp3")
+    if raiz is not None:
+        tamanho, linha = raiz
+        texto += "\n" + linha
+        corpo.append(bloco_aninhado("root_block_device", [
+            atributo("volume_size", tamanho, nivel=2),
+            atributo("volume_type", "gp3", nivel=2),
+            atributo("encrypted", True, nivel=2),
+        ], nivel=1))
+    return comentario(texto) + "\n" + bloco("resource", ["aws_instance", r.logical_name], corpo)
+
+
+_PROTOCOLO_AWS = {"tcp": "tcp", "udp": "udp", "icmp": "icmp", "todos": "-1"}
+
+
+def _grupos_da_instancia(cfg: dict[str, Any]) -> list[str]:
+    grupos = cfg.get("security_groups") or []
+    if not grupos:
+        return []
+    return [atributo("vpc_security_group_ids", referencia(
+        "[" + ", ".join(f"aws_security_group.{g}.id" for g in grupos) + "]"
+    ))]
+
+
+def _grupo(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """Grupo espelhado, uma regra de entrada por origem, saída liberada.
+
+    Regra como recurso separado (`aws_vpc_security_group_ingress_rule`), e não
+    bloco `ingress`: dois grupos que se referenciam formariam um ciclo.
+    """
+    cfg = r.configuration
+    nome = nome_cloud(bp.project_name, r.logical_name)
+    grupo = f"aws_security_group.{r.logical_name}.id"
+    partes = [comentario(texto_grupo(cfg)) + "\n" + bloco(
+        "resource", ["aws_security_group", r.logical_name], [
+            atributo("name", nome),
+            atributo("description", "Espelhado da origem pela OneShift"),
+            atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id")),
+            atributo("tags", {"Name": nome}),
+        ])]
+    n = 0
+    for regra in cfg.get("rules") or []:
+        protocolo = _PROTOCOLO_AWS.get(str(regra.get("protocol")), "-1")
+        portas: list[str] = []
+        if protocolo == "icmp":
+            portas = [atributo("from_port", -1), atributo("to_port", -1)]
+        elif protocolo != "-1":
+            faixa = faixa_de_portas(regra) or (0, 65535)
+            portas = [atributo("from_port", faixa[0]), atributo("to_port", faixa[1])]
+        for tipo, valor in fontes(regra):
+            n += 1
+            origem = (
+                atributo("cidr_ipv4", valor)
+                if tipo == "cidr"
+                else atributo(
+                    "referenced_security_group_id", referencia(f"aws_security_group.{valor}.id")
+                )
+            )
+            partes.append(bloco(
+                "resource", ["aws_vpc_security_group_ingress_rule", f"{r.logical_name}_{n}"],
+                [atributo("security_group_id", referencia(grupo)),
+                 atributo("ip_protocol", protocolo), *portas, origem],
+            ))
+    partes.append(bloco(
+        "resource", ["aws_vpc_security_group_egress_rule", f"{r.logical_name}_saida"], [
+            atributo("security_group_id", referencia(grupo)),
+            atributo("ip_protocol", "-1"),
+            atributo("cidr_ipv4", "0.0.0.0/0"),
+        ]))
+    return "\n\n".join(partes)
 
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -216,7 +319,21 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     # RDS cobra por classe de instância, não por vCPU avulso. `m6g` é a linha
     # de propósito geral; o número de vCPU vira o tamanho mais próximo.
     classe = _classe_rds(vcpus)
-    return comentario(
+    subredes = [str(s) for s in cfg.get("db_subnets") or []]
+    grupo = f"{r.logical_name}_subredes"
+    rede = []
+    antes = ""
+    if subredes:
+        antes = comentario(
+            "Subredes espelhadas de onde o banco estava na origem (duas zonas ou mais)."
+        ) + "\n" + bloco("resource", ["aws_db_subnet_group", grupo], [
+            atributo("name", nome_cloud(bp.project_name, r.logical_name, "subredes")),
+            atributo("subnet_ids", referencia(
+                "[" + ", ".join(f"aws_subnet.{s}.id" for s in subredes) + "]"
+            )),
+        ]) + "\n\n"
+        rede = [atributo("db_subnet_group_name", referencia(f"aws_db_subnet_group.{grupo}.name"))]
+    return antes + comentario(
         texto_banco(cfg, vcpus) + "\n"
         f"Traduzido para a classe {classe}, a mais próxima acima.\n"
         "`deletion_protection` fica ligado; desligue conscientemente."
@@ -228,6 +345,8 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("allocated_storage", 100),
         atributo("storage_encrypted", True),
         atributo("multi_az", ha),
+        *rede,
+        *_grupos_da_instancia(cfg),
         atributo("publicly_accessible", False),
         atributo("deletion_protection", True),
         atributo("skip_final_snapshot", False),
