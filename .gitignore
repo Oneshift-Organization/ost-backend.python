@@ -71,6 +71,9 @@ temp/
 # ── Relatórios de auditoria (documentos de trabalho, não versionados) ─────
 AUDITORIA_PRONTIDAO_AGENTE.md
 
+# ── Notas de entrega para o time (documentos de trabalho, não versionados) ─
+docs/entrega-2026-09-27.md
+
 # ── Brain do arquiteto (local-only, não versionado) ───────────────────────
 ost-docs.backend.plan/
 
