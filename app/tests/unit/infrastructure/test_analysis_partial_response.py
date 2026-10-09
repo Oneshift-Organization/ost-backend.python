@@ -44,6 +44,19 @@ def partial_response():
             }
         ],
         "flags": {"pricing_unavailable": True, "lock_in_risk": False, "other": ["Evidence"]},
+        "agent_views": {
+            "finops": {"financial_flags": [
+                {"code": "pricing_unavailable", "message": "Preço ausente",
+                 "impact_area": "finops"},
+                "Alerta legado",
+            ]},
+            "cloud_engineering": {"technical_flags": [
+                {"code": "unknown", "message": "Validar dependências"},
+            ]},
+            "risk_migration": {"risk_flags": [
+                {"code": "lock_in", "message": "Validar portabilidade", "impact_area": "risk"},
+            ]},
+        },
     }
 
 
@@ -114,6 +127,10 @@ async def test_client_validation_then_backend_authority(provider, partial_respon
     assert result.flags["pricing_unavailable"]
     assert result.flags["lock_in_risk"] == []
     assert result.flags["other"] == ["Evidence"]
+    assert result.agent_views.finops.financial_flags[0].message == "Preço ausente"
+    assert result.agent_views.finops.financial_flags[1] == "Alerta legado"
+    assert result.agent_views.cloud_engineering.technical_flags[0].code == "unknown"
+    assert result.agent_views.risk_migration.risk_flags[0].impact_area == "risk"
     assert AnalysisV2Response.model_validate_json(result.model_dump_json()) == result
 
 
@@ -153,7 +170,8 @@ async def test_invalid_dict_must_not_become_blank_success():
 def test_agent_submission_keeps_narrative_and_unknown_prices(partial_response):
     response = receber_analise_do_agente({"decision_support": {}}, partial_response).resposta
     assert response["recommendation_rationale"] == partial_response["recommendation_rationale"]
-    assert response["cross_cloud_equivalents"][0]["estimated_monthly_cost"] is None
+    assert response["cross_cloud_equivalents"] == []  # no trusted mapping snapshot
+    assert response["agent_views"]["finops"]["financial_flags"][0]["code"] == "pricing_unavailable"
     assert response["provider_comparison"] == []  # no trustworthy price snapshot
     assert response["flags"]["pricing_unavailable"]
 

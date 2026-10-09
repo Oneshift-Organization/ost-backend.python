@@ -9,6 +9,7 @@ from app.domain.services.decision_support import build_decision_support, number
 from app.schemas.analysis_v2 import AnalysisV2Response
 from app.schemas.decision_support import DecisionSupport
 from app.use_cases.analysis.backend_authority import apply_backend_authority
+from app.use_cases.analysis.equivalence_projection import project_equivalences
 from app.use_cases.analysis.topologia_no_payload import impor_topologia
 
 
@@ -106,6 +107,7 @@ def impose_decision(response: AnalysisV2Response, payload: dict) -> AnalysisV2Re
         "recommended_provider": (decision.selected_provider or "").upper(),
         "decision_support": decision,
         "analysis_confidence": decision.confidence,
+        "cross_cloud_equivalents": project_equivalences(prepared),
     }
     if selected is None:
         update["savings_summary"] = response.savings_summary.model_copy(

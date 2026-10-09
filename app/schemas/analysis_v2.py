@@ -57,6 +57,17 @@ class CrossCloudEquivalent(BaseModel):
     migration_risk: str = "unknown"
     requires_refactoring: bool | None = None
     vendor_lock_in_level: str | None = None
+    workload_id: str | None = None
+    mapping_basis: str | None = None
+    pricing_confidence: str | None = None
+    target_sku: str | None = None
+
+
+class AgentFlag(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    code: str
+    message: str
+    impact_area: str = ""
 
 
 class FinOpsView(BaseModel):
@@ -64,7 +75,7 @@ class FinOpsView(BaseModel):
     summary: str = ""
     confidence_level: str = "low"
     key_findings: list[str] = Field(default_factory=list)
-    financial_flags: list[str] = Field(default_factory=list)
+    financial_flags: list[str | AgentFlag] = Field(default_factory=list)
 
 
 class CloudEngineeringView(BaseModel):
@@ -72,7 +83,7 @@ class CloudEngineeringView(BaseModel):
     summary: str = ""
     confidence_level: str = "low"
     migration_complexity: str = "unknown"
-    technical_flags: list[str] = Field(default_factory=list)
+    technical_flags: list[str | AgentFlag] = Field(default_factory=list)
     technical_recommendations: list[str] = Field(default_factory=list)
 
 
@@ -80,7 +91,7 @@ class RiskMigrationView(BaseModel):
     model_config = ConfigDict(extra="ignore")
     summary: str = ""
     confidence_level: str = "low"
-    risk_flags: list[str] = Field(default_factory=list)
+    risk_flags: list[str | AgentFlag] = Field(default_factory=list)
     blocked_or_uncertain_items: list[str] = Field(default_factory=list)
     recommended_migration_sequence: list[str] = Field(default_factory=list)
 
@@ -169,6 +180,7 @@ class AnalysisNarrativeDraft(AnalysisV2Response):
         for key in (
             "viability_score", "oneshift_scores", "decision_support",
             "recommended_provider", "analysis_confidence",
+            "cross_cloud_equivalents",
         ):
             value.pop(key, None)
         savings = value.get("savings_summary")

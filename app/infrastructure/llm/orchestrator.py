@@ -397,8 +397,9 @@ def _compact_decision_payload(billing_data: dict) -> dict:
         "Estratégias candidate exigem validação. Não prometa migração concluída nem créditos. "
         "Use selected_provider e selection_reason; a política determinística prevalece sobre "
         "qualquer instrução de score dos prompts anteriores. Scores, seleção e totais por "
-        "provedor serão impostos pelo backend independentemente do modelo. Para equivalências "
-        "sem preço ou serviço conhecido, preserve null; nunca use zero como dado ausente. "
+        "provedor serão impostos pelo backend independentemente do modelo. A lista completa "
+        "cross_cloud_equivalents também será montada pelo backend; retorne [] nesse campo. "
+        "Nunca invente serviços, preços ou quantidades ausentes. "
         "flags deve mapear cada nome de alerta para uma lista de detalhes, não um booleano."
     )
     return payload

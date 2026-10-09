@@ -213,7 +213,7 @@ def _serialize_services(ctx, fx: FxRate) -> list[dict]:
             if sv.equivalents:
                 entry["equivalentes"] = [
                     f"{normalize_provider(e.provider).upper()}:{e.service_name}"
-                    for e in sv.equivalents[:3]
+                    for e in sv.equivalents
                 ]
             # Só quando NÃO é o caso normal: um tipo inferido (palpite do
             # classificador, não casado no catálogo curado) pode gerar DE-PARA
@@ -452,6 +452,7 @@ def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
     return [{
         "name": service.service_name,
         "category": category.category,
+        "service_type": service.service_type,
         "cost": _money(service.total_cost, fx),
         "migration": getattr(service, "migration_expectation", None) or {},
         "source_metadata": getattr(service, "migration_metadata", None) or {},
