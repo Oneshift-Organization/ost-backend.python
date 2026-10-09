@@ -20,7 +20,7 @@ from typing import Any
 
 from app.domain.services.authority import ResultadoAutoridade, Substituicao, aplicar_autoridade
 from app.domain.services.confidence import rebaixar
-from app.schemas.analysis_v2 import AnalysisV2Response
+from app.schemas.analysis_v2 import AnalysisNarrativeDraft, AnalysisV2Response
 from app.use_cases.analysis.decision_support import impose_decision
 
 # Tipos de sugestão que afetam a confiança quando a severidade é alta. Os demais
@@ -166,9 +166,10 @@ def receber_analise_do_agente(
     autoridade = aplicar_autoridade(resposta_agente, verdade)
 
     if "decision_support" in payload_backend:
-        imposed = impose_decision(
-            AnalysisV2Response.resilient_parse(autoridade.resposta), payload_backend,
-        ).model_dump(mode="json")
+        finalized = impose_decision(
+            AnalysisNarrativeDraft.model_validate(autoridade.resposta), payload_backend,
+        )
+        imposed = AnalysisV2Response.model_validate(finalized.model_dump()).model_dump(mode="json")
         # Preserve other agent-surface fields (payback, provenance, etc.).
         corrected = {**autoridade.resposta, **imposed}
         overrides = tuple(Substituicao(key, autoridade.resposta.get(key), value)

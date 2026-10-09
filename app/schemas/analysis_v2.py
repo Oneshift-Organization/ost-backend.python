@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.decision_support import DecisionContext, DecisionSupport
 
@@ -49,14 +49,14 @@ class CrossCloudEquivalent(BaseModel):
     source_provider: str = ""
     source_service: str = ""
     target_provider: str = ""
-    target_service: str = ""
+    target_service: str | None = None
     equivalence_type: str = "unknown"
-    estimated_monthly_cost: float = 0.0
-    cost_delta: float = 0.0
+    estimated_monthly_cost: float | None = None
+    cost_delta: float | None = None
     portability: str = "unknown"
     migration_risk: str = "unknown"
     requires_refactoring: bool | None = None
-    vendor_lock_in_level: str = "unknown"
+    vendor_lock_in_level: str | None = None
 
 
 class FinOpsView(BaseModel):
@@ -119,6 +119,18 @@ class AnalysisV2Response(BaseModel):
     action_plan: list[str] = Field(default_factory=list)
     decision_support: DecisionSupport | None = None
 
+    @field_validator("flags", mode="before")
+    @classmethod
+    def normalize_flag_indicators(cls, value: Any) -> Any:
+        """Accept boolean indicators without losing them or inventing evidence."""
+        if not isinstance(value, dict):
+            return value
+        return {
+            key: (["Sinalizado pela IA; sem detalhes adicionais."] if flag else [])
+            if isinstance(flag, bool) else flag
+            for key, flag in value.items()
+        }
+
     @classmethod
     def resilient_parse(cls, raw: dict[str, Any]) -> AnalysisV2Response:
         """Parse an LLM dict tolerating field-name variations (spec §3).
@@ -137,6 +149,48 @@ class AnalysisV2Response(BaseModel):
                 return cls.model_validate({})
             except Exception:
                 return cls()
+
+
+class AnalysisNarrativeDraft(AnalysisV2Response):
+    """Internal transport only, when deterministic backend authority is available.
+
+    Discard model-authored decisions BEFORE client validation. Inherited defaults
+    are temporary placeholders, never published: the orchestrator imposes the
+    trusted snapshot then validates the public response. Unknown workload prices
+    remain null; this does not relax the legacy/public numeric score contract.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def discard_model_decisions(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        value = _normalize_top(value)
+        for key in (
+            "viability_score", "oneshift_scores", "decision_support",
+            "recommended_provider", "analysis_confidence",
+        ):
+            value.pop(key, None)
+        savings = value.get("savings_summary")
+        if savings is None:
+            value.pop("savings_summary", None)
+        elif isinstance(savings, dict):
+            value["savings_summary"] = {
+                k: v for k, v in savings.items()
+                if k not in {"total_monthly_savings_usd", "percentage_reduction"}
+            }
+        comparisons = value.get("provider_comparison")
+        if isinstance(comparisons, list):
+            owned = {
+                "financial_score", "technical_score", "enterprise_score", "overall_score",
+                "estimated_monthly_cost", "estimated_monthly_savings",
+            }
+            value["provider_comparison"] = [
+                {k: v for k, v in item.items() if k not in owned}
+                if isinstance(item, dict) else item
+                for item in comparisons
+            ]
+        return value
 
 
 # ── Field-alias normalization ─────────────────────────────────────────────────

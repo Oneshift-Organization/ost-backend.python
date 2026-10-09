@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from app.core.config import get_settings
 from app.domain.interfaces.i_llm_client import ILLMClient
-from app.schemas.analysis_v2 import AnalysisV2Response
+from app.schemas.analysis_v2 import AnalysisNarrativeDraft, AnalysisV2Response
 from app.use_cases.analysis.decision_support import impose_decision, prepare_decision_payload
 from app.use_cases.analysis.topologia_no_payload import compactar_topologia
 
@@ -182,27 +182,30 @@ class LLMOrchestrator:
             mcp_bundle,
         )
 
+        deterministic = "decision_support" in billing_data
+        response_model = AnalysisNarrativeDraft if deterministic else AnalysisV2Response
         raw = await client.generate(
             prompt,
-            AnalysisV2Response,
+            response_model,
         )
 
-        if isinstance(raw, AnalysisV2Response):
+        if deterministic and isinstance(raw, (AnalysisV2Response, dict)):
+            result = AnalysisNarrativeDraft.model_validate(
+                raw.model_dump() if isinstance(raw, AnalysisV2Response) else raw
+            )
+        elif isinstance(raw, AnalysisV2Response):
             result = raw
         elif isinstance(raw, dict):
-            result = (
-                AnalysisV2Response.resilient_parse(
-                    raw
-                )
-            )
+            result = AnalysisV2Response.model_validate(raw)
         else:
             raise TypeError(
                 "Expected AnalysisV2Response or dict, "
                 f"got {type(raw).__name__}"
             )
 
-        if "decision_support" in billing_data:
-            return impose_decision(result, billing_data)
+        if deterministic:
+            finalized = impose_decision(result, billing_data)
+            return AnalysisV2Response.model_validate(finalized.model_dump())
 
         if mcp_bundle is not None:
             return _normalize_mcp_viability_score(
@@ -393,8 +396,10 @@ def _compact_decision_payload(billing_data: dict) -> dict:
         "lower_bound/upper_bound são limites por dados ausentes, não confiança estatística. "
         "Estratégias candidate exigem validação. Não prometa migração concluída nem créditos. "
         "Use selected_provider e selection_reason; a política determinística prevalece sobre "
-        "qualquer instrução de score dos prompts anteriores. Os campos numéricos da resposta "
-        "serão impostos pelo backend independentemente do modelo."
+        "qualquer instrução de score dos prompts anteriores. Scores, seleção e totais por "
+        "provedor serão impostos pelo backend independentemente do modelo. Para equivalências "
+        "sem preço ou serviço conhecido, preserve null; nunca use zero como dado ausente. "
+        "flags deve mapear cada nome de alerta para uma lista de detalhes, não um booleano."
     )
     return payload
 
