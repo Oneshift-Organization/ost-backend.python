@@ -57,7 +57,7 @@ def estimate_by_cost_ratio(
     for provider, rate in rates.items():
         if provider == source_provider.lower():
             continue
-        if rate.rate <= 0:
+        if rate.rate <= 0 or rate.unit != src.unit:
             continue
         target_cost = source_cost * (rate.rate / src.rate)
         out.append(

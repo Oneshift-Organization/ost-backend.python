@@ -9,6 +9,7 @@ from app.domain.services.decision_support import build_decision_support, number
 from app.schemas.analysis_v2 import AnalysisV2Response
 from app.schemas.decision_support import DecisionSupport
 from app.use_cases.analysis.backend_authority import apply_backend_authority
+from app.use_cases.analysis.equivalence_pricing import reconcile_pricing
 from app.use_cases.analysis.equivalence_projection import project_equivalences
 from app.use_cases.analysis.topologia_no_payload import impor_topologia
 
@@ -100,6 +101,7 @@ def impose_decision(response: AnalysisV2Response, payload: dict) -> AnalysisV2Re
         numeric["overall_score"] = _legacy_int(selected.lower_bound)
     # Legacy integers remain parseable. New clients MUST use status/value/bounds;
     # the lower bound is NOT an imputed value for missing evidence.
+    equivalents = project_equivalences(prepared)
     update = {
         "oneshift_scores": response.oneshift_scores.model_copy(update=numeric),
         "viability_score": numeric["overall_score"] * 10,
@@ -107,7 +109,8 @@ def impose_decision(response: AnalysisV2Response, payload: dict) -> AnalysisV2Re
         "recommended_provider": (decision.selected_provider or "").upper(),
         "decision_support": decision,
         "analysis_confidence": decision.confidence,
-        "cross_cloud_equivalents": project_equivalences(prepared),
+        "cross_cloud_equivalents": equivalents,
+        "pricing_reconciliation": reconcile_pricing(equivalents, prepared),
     }
     if selected is None:
         update["savings_summary"] = response.savings_summary.model_copy(

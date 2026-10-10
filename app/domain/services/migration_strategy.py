@@ -32,6 +32,51 @@ def normalized(value: object) -> str:
     return " ".join(str(value or "").casefold().split())
 
 
+_PLATFORM_TYPES = frozenset({
+    "relational_database", "nosql_database", "in_memory_database", "cache",
+    "object_storage", "block_storage", "archive_storage", "file_storage",
+    "container_registry", "kubernetes", "container_orchestration", "cdn",
+    "load_balancer", "load_balancing", "managed_kubernetes", "message_broker",
+    "managed_relational_database", "managed_mysql", "managed_postgresql",
+    "managed_redis", "in_memory_cache", "archive_cold_storage", "managed_airflow",
+    "container_instances", "serverless_containers", "managed_kafka", "messaging",
+})
+
+
+def _preliminary(result: WorkloadStrategy, workload: dict, target: dict) -> WorkloadStrategy:
+    """A same-capability pair can support a hypothesis, not confirmed compatibility."""
+    kind = workload.get("service_type")
+    if not kind or kind != target.get("service_type"):
+        return result
+    if workload.get("type_source") not in {"curado", "catalog_alias"}:
+        return result
+    if kind == "virtual_server":
+        strategy = "rehost"
+        missing = ["Confirmar arquitetura CPU, sistema operacional, licenças e dependências."]
+    elif kind in _PLATFORM_TYPES:
+        strategy = "replatform"
+        missing = ["Confirmar engine/versão ou API, formato dos dados e procedimento de migração."]
+    elif kind in {"translation", "natural_language_processing", "conversational_ai"}:
+        strategy = "refactor"
+        missing = ["Revisar SDKs/APIs, qualidade dos modelos, dados e integrações dependentes."]
+    elif (workload.get("migration") or {}).get("classe_migracao") in {
+        "rehost", "replatform", "refactor",
+    }:
+        strategy = workload["migration"]["classe_migracao"]
+        missing = ["Confirmar a aplicabilidade do padrão de migração desta classe de serviço."]
+    else:
+        return result
+    return result.model_copy(update={
+        "strategy": strategy, "status": "candidate", "rule": f"7r.{strategy}.capability",
+        "rationale": "Origem e destino têm a mesma capacidade no catálogo; "
+                     "recomendação preliminar, ainda sem validação da aplicação.",
+        "assumptions": ["O equivalente selecionado atende aos requisitos funcionais da aplicação."],
+        "missing_information": [
+            *missing, "Validar dependências, disponibilidade e janela de mudança.",
+        ],
+    })
+
+
 def technical_evidence(workload: dict, target: dict | None) -> tuple[bool | None, str | None]:
     """Worst known catalog constraint; absence is not False or low lock-in."""
     source = workload.get("migration") or {}
@@ -114,6 +159,8 @@ def classify_strategy(
     if refactor is True:
         strategy = "refactor"
         rationale = "O catálogo registra necessidade de refatoração em origem ou destino."
+    elif workload.get("service_type") in _PLATFORM_TYPES:
+        return _preliminary(result, workload, target)
     elif refactor is False and lock in {"medium", "high"}:
         strategy = "replatform"
         rationale = "Sem refatoração declarada no catálogo, mas com acoplamento de plataforma."
@@ -123,12 +170,40 @@ def classify_strategy(
             "Catálogo sem refatoração e com baixo lock-in; confirmar runtime e dependências."
         )
     else:
-        return result
+        return _preliminary(result, workload, target)
     return result.model_copy(
         update={
             "strategy": strategy,
             "status": "candidate",
             "rule": f"7r.{strategy}.catalog",
             "rationale": rationale,
+            "confidence": "medium",
         }
     )
+
+
+def classify_workload_strategy(
+    workload: dict, provider: str, declared: dict[str, Any] | None = None,
+) -> WorkloadStrategy:
+    """Alternative destinations must agree; never silently pick one to decide a 7 R."""
+    targets = [t for t in workload.get("targets", []) if normalized(t.get("provider")) == provider]
+    targets = sorted(targets, key=lambda t: str(t.get("service_name")))
+    if not targets:
+        return classify_strategy(workload, provider, None, declared)
+    decisions = [classify_strategy(workload, provider, t, declared) for t in targets]
+    result = decisions[0]
+    if len(decisions) == 1:
+        return result
+    alternatives = sorted({str(t["service_name"]) for t in targets if t.get("service_name")})
+    if len({d.strategy for d in decisions}) > 1:
+        result = classify_strategy(workload, provider, None, declared)
+        result.rule = "7r.alternatives_disagree"
+        result.rationale = "As alternativas exigem estratégias diferentes; selecionar o destino."
+    result.target_service = None
+    result.alternative_targets = alternatives
+    result.confidence = "low"
+    result.evidence = [e for d in decisions for e in d.evidence]
+    result.missing_information = sorted({
+        info for d in decisions for info in d.missing_information
+    } | {"Selecionar e validar uma das alternativas de destino."})
+    return result

@@ -61,6 +61,12 @@ class CrossCloudEquivalent(BaseModel):
     mapping_basis: str | None = None
     pricing_confidence: str | None = None
     target_sku: str | None = None
+    source_monthly_cost: float | None = None
+    pricing_method: str | None = None
+    pricing_reason: str | None = None
+    pricing_evidence: dict[str, Any] = Field(default_factory=dict)
+    # Exactly one alternative per priced component enters the provider scenario.
+    included_in_estimate: bool = False
 
 
 class AgentFlag(BaseModel):
@@ -118,6 +124,7 @@ class AnalysisV2Response(BaseModel):
     oneshift_scores: OneshiftScores = Field(default_factory=OneshiftScores)
     provider_comparison: list[ProviderComparison] = Field(default_factory=list)
     cross_cloud_equivalents: list[CrossCloudEquivalent] = Field(default_factory=list)
+    pricing_reconciliation: list[dict[str, Any]] = Field(default_factory=list)
     recommended_provider: str = ""
     recommendation: str = ""
     recommendation_rationale: str = ""
@@ -181,6 +188,7 @@ class AnalysisNarrativeDraft(AnalysisV2Response):
             "viability_score", "oneshift_scores", "decision_support",
             "recommended_provider", "analysis_confidence",
             "cross_cloud_equivalents",
+            "pricing_reconciliation",
         ):
             value.pop(key, None)
         savings = value.get("savings_summary")

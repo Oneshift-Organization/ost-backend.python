@@ -12,10 +12,11 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from app.domain.services.migration_strategy import (
-    classify_strategy,
+    classify_workload_strategy,
     normalized,
     technical_evidence,
 )
+from app.domain.services.service_identity import is_financial_component
 from app.schemas.decision_support import (
     DecisionContext,
     DecisionSupport,
@@ -95,6 +96,7 @@ def decision_workloads(payload: dict) -> list[dict]:
         for w in raw
         if (
             normalized(w.get("category")) not in _NON_WORKLOAD
+            and not is_financial_component(str(w.get("name") or ""))
             and (number(w.get("cost")) or _ZERO) > 0
         )
     ]
@@ -334,10 +336,9 @@ def build_decision_support(payload: dict) -> DecisionSupport:
                     f"Componente declarado não encontrado: {declared_name}; revisar identificação."
                 )
         for workload in workloads:
-            strategy = classify_strategy(
+            strategy = classify_workload_strategy(
                 workload,
                 provider,
-                _targets(workload).get(provider),
                 declarations.get((provider, normalized(workload.get("name")))),
             )
             strategies.append(strategy)
@@ -384,7 +385,7 @@ def build_decision_support(payload: dict) -> DecisionSupport:
     )
     # Hash only decision inputs, not timestamps, UUIDs, narrative or logging metadata.
     snapshot = {
-        "policy": "score-7rs-v1",
+        "policy": "score-7rs-v2",
         "workloads": workloads,
         "rows": rows,
         "current": str(current),

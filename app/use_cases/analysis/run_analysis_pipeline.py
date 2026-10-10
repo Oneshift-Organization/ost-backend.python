@@ -461,6 +461,7 @@ def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
         "targets": [{
             "provider": normalize_provider(eq.provider),
             "service_name": eq.service_name,
+            "service_type": eq.service_type,
             "metadata": eq.metadata or {},
         } for eq in service.equivalents],
     } for category in getattr(ctx, "categories", []) or [] for service in category.services]

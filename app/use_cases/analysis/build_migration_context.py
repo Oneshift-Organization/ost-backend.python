@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -61,7 +61,12 @@ from app.domain.services.provider_consolidation import (
     weakest_confidence,
 )
 from app.domain.services.reconciliation import reconcile
-from app.domain.services.sku_normalization import squash_key
+from app.domain.services.service_identity import (
+    financial_category,
+    is_financial_component,
+    service_key,
+    service_type_hint,
+)
 from app.services.billing_aggregator import BillingAggregator
 from app.use_cases.analysis.leitura_completa import listar_todos
 
@@ -70,6 +75,18 @@ from app.use_cases.analysis.leitura_completa import listar_todos
 class BuildMigrationContextInput:
     user_id: UUID
     report_id: UUID
+
+
+def _reviewed_billing_identity(item, provider: str):
+    """Correct known aliases in memory; do not reprice a registry as a disk."""
+    if is_financial_component(item.service_name, item.category or ""):
+        category = financial_category(item.service_name, item.category or "")
+        component = "commitment" if category in {"commitment", "compromisso"} else "unclassified"
+        return replace(item, component_type=component, category=category)
+    hint = service_type_hint(provider, item.service_name)
+    if hint and hint[1] != item.service_type:
+        return replace(item, category=hint[0], service_type=hint[1], component_type="unclassified")
+    return item
 
 
 PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
@@ -141,6 +158,7 @@ class BuildMigrationContextUseCase:
         )
         if not items:
             raise ValueError(f"report {payload.report_id} has no billing items")
+        items = [_reviewed_billing_identity(item, source_provider) for item in items]
 
         # Bug fix: use cost-weighted dominant period, not first item's period.
         # A CSV can span two months; we want the one with the most spend.
@@ -180,7 +198,6 @@ class BuildMigrationContextUseCase:
         # ── 2. Load source catalog ───────────────────────────────
         source_comparisons = await self._comparison_repo.list_by_provider(source_provider)
         source_metadata = await self._metadata_repo.list_by_providers([source_provider])
-        canonicals = {_normalize(c.service_name): c for c in source_comparisons}
         meta_map = {_normalize(m.service_name): m for m in source_metadata}
         # Índice insensível a espaço/pontuação. Os parsers emitem nomes
         # concatenados (`AmazonRDS`) e o catálogo curado usa nomes com espaço
@@ -190,8 +207,9 @@ class BuildMigrationContextUseCase:
         # capacidade (BigQuery = interactive_query + data_lake + data_warehouse).
         canonicals_squashed: dict[str, list[ServiceComparison]] = {}
         for c in sorted(source_comparisons, key=lambda x: (x.category, x.service_type)):
-            canonicals_squashed.setdefault(squash_key(c.service_name), []).append(c)
-        meta_squashed = {squash_key(m.service_name): m for m in source_metadata}
+            key = service_key(source_provider, c.service_name)
+            canonicals_squashed.setdefault(key, []).append(c)
+        meta_squashed = {service_key(source_provider, m.service_name): m for m in source_metadata}
 
         # ── 3. Load target provider metadata ─────────────────────
         # `sorted`, não `list(set(...))`: a ordem de iteração de um set varia
@@ -205,7 +223,8 @@ class BuildMigrationContextUseCase:
         )
         target_metadata_all = await self._metadata_repo.list_by_providers(target_providers)
         target_meta_map: dict[tuple[str, str], Any] = {
-            (m.provider, m.service_name): m.metadata for m in target_metadata_all
+            (m.provider.lower(), service_key(m.provider, m.service_name)): m.metadata
+            for m in target_metadata_all
         }
         target_docs_map: dict[tuple[str, str], str | None] = {
             (m.provider, m.service_name): m.docs_costs for m in target_metadata_all
@@ -238,7 +257,8 @@ class BuildMigrationContextUseCase:
                         service_name=eq.service_name,
                         category=category,
                         service_type=eq.service_type,
-                        metadata=target_meta_map.get((eq.provider, eq.service_name)),
+                        metadata=target_meta_map.get((eq.provider.lower(),
+                                                      service_key(eq.provider, eq.service_name))),
                         docs_costs=target_docs_map.get((eq.provider, eq.service_name)),
                     )
                     for eq in raw
@@ -251,32 +271,20 @@ class BuildMigrationContextUseCase:
             aliases = PROVIDER_SERVICE_ALIASES.get(source_provider, {})
             return aliases.get(name, name)
 
-        def _match(  # noqa: PLR0911 -- existing ordered catalog-matching fallbacks
+        def _match(
             svc_name: str, hint_type: str | None = None
         ) -> ServiceComparison | None:
             name = _canonical_name(svc_name)
-            n = _normalize(name)
-            comp = canonicals.get(n)
-            if comp:
-                return comp
             # Ponte concatenado <-> espaçado. Quando o serviço tem várias
             # capacidades, prefere a que bate com o tipo que o classificador
             # sugeriu; senão a primeira em ordem determinística.
-            candidates = canonicals_squashed.get(squash_key(name))
+            candidates = canonicals_squashed.get(service_key(source_provider, name))
             if candidates:
                 if hint_type:
                     for cand in candidates:
                         if cand.service_type == hint_type:
                             return cand
                 return candidates[0]
-            if meta_map.get(n) or meta_squashed.get(squash_key(name)):
-                return None
-            for canon_name, comp in canonicals.items():
-                if n in canon_name or canon_name in n:
-                    return comp
-            for canon_name in meta_map:
-                if n in canon_name or canon_name in n:
-                    return None
             return None
 
         def _meta_category(name: str) -> str | None:
@@ -299,15 +307,15 @@ class BuildMigrationContextUseCase:
             service_type = comp.service_type if comp else (
                 raw.get("service_type") or "unknown"
             )
+            hint = service_type_hint(source_provider, raw["service_name"])
+            if hint and comp is None:
+                category_name, service_type = hint
 
-            # Instrumento financeiro, não recurso migrável: custo sem NENHUMA
-            # quantidade de uso (Savings Plan, RI, CUD, créditos, ajustes). Mesmo
-            # invariante do balde `commitment` no agregador — sugerir "migre seu
-            # Savings Plan para Compute Engine" seria conselho sem sentido.
-            # Regra estrutural: nenhum nome de serviço/nuvem é citado.
-            sem_uso = not any(
-                (i.usage_amount or Decimal("0")) > 0 for i in raw["items"]
-            )
+            # Missing quantities occur in aggregate exports too. Only explicit
+            # financial identities/categories suppress functional equivalents.
+            sem_uso = is_financial_component(raw["service_name"], category_name)
+            if sem_uso:
+                category_name = financial_category(raw["service_name"], category_name)
 
             equivs: list[EquivalentService] = []
             if not sem_uso and category_name != "unknown" and service_type != "unknown":
@@ -318,7 +326,9 @@ class BuildMigrationContextUseCase:
             # não recebe expectativa. Derivação determinística no backend.
             svc_meta = meta_map.get(_normalize(_canonical_name(raw["service_name"])))
             if svc_meta is None:
-                svc_meta = meta_squashed.get(squash_key(_canonical_name(raw["service_name"])))
+                svc_meta = meta_squashed.get(service_key(
+                    source_provider, _canonical_name(raw["service_name"]),
+                ))
             expectation = None
             if not sem_uso:
                 expectation = derive_expectation(svc_meta.metadata) if svc_meta else None
@@ -335,7 +345,9 @@ class BuildMigrationContextUseCase:
                 line_count=raw["line_count"],
                 equivalents=equivs,
                 migration_expectation=expectation.as_dict() if expectation else None,
-                type_source="curado" if comp is not None else "inferido",
+                type_source=(
+                    "curado" if comp is not None else ("catalog_alias" if hint else "inferido")
+                ),
                 migration_metadata=svc_meta.metadata if svc_meta and not sem_uso else None,
             )
 
@@ -478,7 +490,8 @@ class BuildMigrationContextUseCase:
                 for opt in l2_options:
                     providers_with_l2.add(opt.provider.lower())
                     # L3: enrich with curated metadata
-                    meta = target_meta_map.get((opt.provider, opt.service_name))
+                    meta = target_meta_map.get((opt.provider.lower(),
+                                               service_key(opt.provider, opt.service_name)))
                     docs = target_docs_map.get((opt.provider, opt.service_name))
                     fin = None
                     if opt.financials is not None:
@@ -558,7 +571,11 @@ class BuildMigrationContextUseCase:
                 # A official prevalece — ordenamos para ela ser aplicada por último.
                 _rank = {"official": 2, "reference": 1, "low": 0}
                 rates: dict[str, CategoryRate] = {}
-                for p in sorted(rate_points, key=lambda x: _rank.get(x.confidence, 0)):
+                for p in sorted(rate_points, key=lambda x: (
+                    _rank.get(x.confidence, 0), str(x.captured_at or ""), x.sku_key,
+                )):
+                    if p.currency != ANALYSIS_CURRENCY:
+                        continue
                     rates[p.provider.lower()] = CategoryRate(
                         provider=p.provider.lower(),
                         rate=p.price,
@@ -578,6 +595,11 @@ class BuildMigrationContextUseCase:
                             "custo_mensal_estimado": round(float(e.estimated_monthly_cost), 2),
                             "delta_custo": round(float(e.cost_delta), 2),
                             "confianca_preco": e.pricing_confidence,
+                            "metodo": "category_rate_ratio",
+                            "taxa_origem": str(rates[source_provider].rate),
+                            "taxa_destino": str(rates[e.provider].rate),
+                            "unidade": rates[e.provider].unit,
+                            "categoria": category,
                         }
                         for e in equivs
                     ]
@@ -632,9 +654,17 @@ class BuildMigrationContextUseCase:
         }
         for fkey, equivs in family_equivalents.items():
             src = family_src.get(fkey, Decimal("0"))
-            for e in equivs:
+            chosen: dict[str, EquivalentService] = {}
+            for e in sorted(equivs, key=lambda e: (
+                e.financials.estimated_monthly_cost
+                if e.financials and e.financials.estimated_monthly_cost is not None
+                else Decimal("Infinity"), e.sku_id or "", e.service_name,
+            )):
                 fin = e.financials
                 if fin is not None and fin.estimated_monthly_cost is not None:
+                    if e.provider.lower() in chosen:
+                        continue
+                    chosen[e.provider.lower()] = e
                     _add(
                         e.provider.lower(),
                         fin.estimated_monthly_cost,

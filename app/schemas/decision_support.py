@@ -110,13 +110,16 @@ class WorkloadStrategy(BaseModel):
     missing_information: list[str] = Field(default_factory=list)
     requires_refactoring: bool | None = None
     vendor_lock_in_level: str | None = None
+    confidence: Literal["low", "medium"] = "low"
+    assumptions: list[str] = Field(default_factory=list)
+    alternative_targets: list[str] = Field(default_factory=list)
     # Catalog suitability is not a migration completion/safety guarantee.
     scope: Literal["billing_component"] = "billing_component"
 
 
 class DecisionSupport(BaseModel):
     contract_version: Literal["oneshift-decision-v1"] = "oneshift-decision-v1"
-    policy_version: Literal["score-7rs-v1"] = "score-7rs-v1"
+    policy_version: Literal["score-7rs-v1", "score-7rs-v2"] = "score-7rs-v2"
     scale: Literal["0-100"] = "0-100"
     source: Literal["backend_rules"] = "backend_rules"
     input_fingerprint: str
