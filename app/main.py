@@ -1,5 +1,6 @@
+import asyncio
 from collections.abc import Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import timedelta
 
 from fastapi import FastAPI, Request, Response
@@ -66,6 +67,42 @@ async def _expirar_geracoes_travadas() -> int:
         return int(resultado.rowcount or 0)
 
 
+# Intervalo entre varreduras. Curto o bastante para o job órfão não passar muito
+# do limite, longo o bastante para dois UPDATEs por minuto não pesarem.
+_INTERVALO_DA_VARREDURA_SEGUNDOS = 60
+
+
+async def _varrer_jobs_travados() -> None:
+    """Uma passada dos dois reapers. Nunca levanta: a varredura não pode derrubar
+    o startup nem matar o laço periódico."""
+    log = get_logger(__name__)
+    try:
+        expirados = await _expirar_jobs_travados()
+        if expirados:
+            log.warning("jobs_travados_expirados", quantidade=expirados)
+    except Exception:
+        log.exception("reaper_falhou")
+    try:
+        geracoes = await _expirar_geracoes_travadas()
+        if geracoes:
+            log.warning("geracoes_terraform_expiradas", quantidade=geracoes)
+    except Exception:
+        log.exception("reaper_terraform_falhou")
+
+
+async def _varredura_periodica() -> None:
+    """Repete a varredura enquanto o processo vive.
+
+    Só no startup não basta. Num deploy o pod novo sobe enquanto o antigo ainda
+    executa a análise: a varredura do startup encontra um job recente, dentro do
+    limite, e o poupa. Minutos depois o pod antigo morre e ninguém mais olha — o
+    job ficava ativo para sempre e a tela, em polling eterno.
+    """
+    while True:
+        await asyncio.sleep(_INTERVALO_DA_VARREDURA_SEGUNDOS)
+        await _varrer_jobs_travados()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     configure_logging()
@@ -73,19 +110,14 @@ async def lifespan(_app: FastAPI):
     log.info("app_startup", env=get_settings().app_env)
     # Jobs órfãos do processo anterior: quem estava executando quando o processo
     # caiu não tem mais dono.
+    await _varrer_jobs_travados()
+    varredura = asyncio.create_task(_varredura_periodica())
     try:
-        expirados = await _expirar_jobs_travados()
-        if expirados:
-            log.warning("jobs_travados_expirados", quantidade=expirados)
-    except Exception:  # startup nunca falha por causa do reaper
-        log.exception("reaper_falhou_no_startup")
-    try:
-        geracoes = await _expirar_geracoes_travadas()
-        if geracoes:
-            log.warning("geracoes_terraform_expiradas", quantidade=geracoes)
-    except Exception:
-        log.exception("reaper_terraform_falhou_no_startup")
-    yield
+        yield
+    finally:
+        varredura.cancel()
+        with suppress(asyncio.CancelledError):
+            await varredura
 
 
 class ErroInternoMiddleware(BaseHTTPMiddleware):
