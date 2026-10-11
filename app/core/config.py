@@ -162,8 +162,10 @@ class Settings(BaseSettings):
 
     # Tempo além do qual um job de análise ativo é considerado perdido. A
     # análise roda em BackgroundTasks no processo web, então um restart deixa
-    # órfãos; o reaper do startup os encerra usando este limite.
-    analysis_job_timeout_minutes: int = 30
+    # órfãos; o reaper (no startup e a cada minuto) os encerra usando este limite.
+    # Uma análise normal leva de 1 a 3 minutos: 10 dá folga sem deixar o usuário
+    # meia hora olhando para um job morto.
+    analysis_job_timeout_minutes: int = 10
 
     # ── Precision Engine v3 — câmbio ────────────────────────────────────
     # Fallback usado quando `exchange_rates` não tem taxa para o par. Formato:
