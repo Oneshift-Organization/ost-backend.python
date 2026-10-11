@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes import (
+    account,
     analysis,
     analysis_agent,
     billing,
@@ -18,3 +19,4 @@ api_router.include_router(analysis_agent.router)
 api_router.include_router(terraform.router)
 api_router.include_router(reports.router, tags=["reports"])
 api_router.include_router(inventory.router)
+api_router.include_router(account.router)

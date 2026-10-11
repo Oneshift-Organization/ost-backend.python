@@ -48,6 +48,7 @@ agentes de IA.
 | [`api-conventions.md`](api-conventions.md) | Convenções transversais: paginação, envelopes, serialização Decimal/datetime, status codes, ordenação. **Leia antes de adicionar rota nova.** |
 | [`endpoints/billing.md`](endpoints/billing.md) | Catálogo `/v1/billing-files`: contratos request/response, status codes, exemplos copy-paste. |
 | [`endpoints/reports.md`](endpoints/reports.md) | Catálogo `/v1/reports`: dashboard de billing agregado por provedor/serviço/período. |
+| [`endpoints/account.md`](endpoints/account.md) | `DELETE /v1/account`: exclusão definitiva da conta e de todos os dados do usuário. |
 | [`endpoints/inventories.md`](endpoints/inventories.md) | Catálogo `/v1/inventories`: export de cada nuvem (sem credencial), topologia, correlação com o billing, declarações, e o que muda na análise e no Terraform. |
 | [`auditoria-e2e-2026-09-27-inventario.md`](auditoria-e2e-2026-09-27-inventario.md) | Billing, inventário, análise e Terraform pela API nos 4 mocks: coerência entre os três artefatos, número a número. |
 | [`dev-setup.md`](dev-setup.md) | Rodar local: venv, Postgres via podman, alembic, bypass de auth, troubleshooting. |
