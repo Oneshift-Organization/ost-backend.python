@@ -78,6 +78,31 @@ def test_full_mapping_retains_families_services_missing_prices_and_alternatives(
     assert unmapped.estimated_monthly_cost is None
 
 
+def test_compute_pool_carries_low_coupling_and_keeps_the_stricter_target(snapshot):
+    """Máquina virtual não pode chegar sem avaliação: do lado de origem ela é
+    rehost (acoplamento baixo, sem reescrita). O destino ainda pode endurecer."""
+    pool = snapshot["pools_computacao"][0]
+    pool["equivalentes"] = [
+        {"provedor": "oci", "nome_servico": "Compute", "sku": "VM.Standard",
+         "metadados": {"requires_refactoring": False}},
+        {"provedor": "gcp", "nome_servico": "Compute Engine", "sku": "n2",
+         "metadados": {"requires_refactoring": False, "vendor_lock_in_level": "medium"}},
+        {"provedor": "azure", "nome_servico": "Virtual Machines", "sku": "D2", "metadados": {}},
+    ]
+
+    rows = {
+        row.target_provider: row
+        for row in project_equivalences(snapshot)
+        if row.source_service == pool["familia"]
+    }
+
+    assert (rows["OCI"].vendor_lock_in_level, rows["OCI"].requires_refactoring) == ("low", False)
+    assert rows["GCP"].vendor_lock_in_level == "medium"  # o destino manda quando é mais restritivo
+    assert rows["AZURE"].vendor_lock_in_level == "low"
+    # Sem evidência do destino não se afirma "não exige".
+    assert rows["AZURE"].requires_refactoring is None
+
+
 def test_projection_stable_with_shuffled_order_and_duplicate_entries(snapshot):
     original = deepcopy(snapshot)
     expected = project_equivalences(snapshot)
