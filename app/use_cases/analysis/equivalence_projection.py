@@ -49,6 +49,12 @@ def _sources(payload: dict) -> list[dict]:
             "source_service": family,
             "targets": pool.get("equivalentes") or [],
             "basis": "family_pool",
+            # Máquina virtual migra por rehost em qualquer nuvem: pouco acoplamento
+            # e nenhuma reescrita do lado de origem. Sem isto o pool chegava sem
+            # evidência e a API devolvia acoplamento vazio para todo o compute.
+            # O que o destino exigir a mais continua valendo: `technical_evidence`
+            # fica com a pior restrição dos dois lados.
+            "source_metadata": {"requires_refactoring": False, "vendor_lock_in_level": "low"},
             "commitment": pool.get("custo_coberto_por_compromisso") is True,
             "cost": sum(float(pool.get(k) or (pool.get("custos") or {}).get(k) or 0)
                         for k in ("custo_computacao", "custo_licenca_so")),
