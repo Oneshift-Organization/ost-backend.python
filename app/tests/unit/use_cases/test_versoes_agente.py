@@ -83,7 +83,7 @@ def test_a_lista_da_trava_cobre_os_imports() -> None:
     cobertos = {c.removesuffix(".py").replace("/", ".") for c in _ARQUIVOS_DA_AUTORIDADE} | {
         _MODULO_DA_TOPOLOGIA
     }
-    fora = {}
+    fora: dict[str, set[str]] = {}
     for caminho in _ARQUIVOS_DA_AUTORIDADE:
         arvore = ast.parse((_RAIZ / caminho).read_text())
         for no in ast.walk(arvore):

@@ -7,7 +7,7 @@
 > | Contrato v1 validado pelo time do MCP, com 4 pontos a fechar | ✅ |
 > | Contrato v2 com os 4 pontos (`MCP.PLAN/09-CONTRATO-SNAPSHOT.md`) | ⏳ confirmar a idempotência pelo conteúdo |
 > | A — fundação: payload extraído, fingerprints e versões | ✅ (revisão no fim do item) |
-> | B — persistência: tabelas, repositórios, flag | ⬜ |
+> | B — persistência: tabelas, repositórios, flag | ✅ (revisão no fim do item) |
 > | C — preparação do snapshot | ⬜ |
 > | D — envio idempotente com parecer | ⬜ depende da confirmação acima |
 > | E — consulta, transição e manutenção | ⬜ |
@@ -183,6 +183,25 @@ versões.
 | B1 | **Migração** `add_agent_snapshots` com as duas tabelas e os índices (§3), com `downgrade` | `alembic upgrade head` e `downgrade -1` no Postgres local; teste de que o índice único trata `inventory_id` nulo como igual | sobe e desce limpo |
 | B2 | **Entidades** (`AgentSnapshot`, `AgentSubmission`), **interfaces** (`IAgentSnapshotRepository`, `IAgentSubmissionRepository`) e **repositórios Pg** | integração dos repositórios: upsert com renovação (inclusive de vencido), lock, busca por `request_hash`, próxima revisão, lista por relatório e por snapshot | domínio sem import de framework |
 | B3 | **Configuração:** `AGENT_SNAPSHOT_ENABLED=false`, `AGENT_SNAPSHOT_TTL_HOURS=24`, `AGENT_SNAPSHOT_RETENTION_DAYS=7`; `.env.example` | unitário de config | flags documentadas |
+
+**Revisão do item B (feito em 12/10/2026)**
+- Migração `e7f8a9b0c1d2` sobe, desce e sobe de novo no Postgres local; o índice
+  de reaproveitamento sai com `NULLS NOT DISTINCT`. `alembic check` não acusa
+  nada nas tabelas novas (o único desvio apontado é antigo:
+  `ix_analysis_jobs_disp`, da `analysis_jobs`).
+- 10 testes de integração dos repositórios: reaproveitamento renova a validade
+  e mantém id e `created_at`; inventário nulo conta como igual; vencido com o
+  mesmo conteúdo volta a valer; **6 preparações simultâneas dão 1 snapshot**;
+  lock isola por usuário; conteúdo e revisão únicos (`IntegrityError` na
+  duplicata); lista do mais recente com isolamento; expurgo preserva quem tem
+  envio; apagar o relatório leva snapshots e envios.
+- O reaproveitamento é detectado comparando o id devolvido pelo `RETURNING` com
+  o id proposto, e o `populate_existing` garante a validade renovada mesmo se a
+  linha já estiver na sessão.
+- `mypy` com o mesmo total da `develop`; nenhum erro novo nos arquivos do item.
+- O `config.py` não foi reformatado: só o bloco novo entrou. O `__init__.py` dos
+  modelos já estava fora da ordem do lint e foi ordenado, porque precisou do
+  import novo.
 
 **Crítica do item B**
 - **Armazenamento duplicado.** Um relatório analisado pela tela e lido pelo
