@@ -7,7 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import (
+    CurrentUser,
+    DbSession,
+    construtor_de_contexto,
+    payload_do_agente_uc,
+)
+from app.api.v1.envelope import erro_do_payload
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.domain.analysis import MigrationContext
@@ -65,19 +71,16 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
 )
+from app.use_cases.analysis.payload_do_agente import PayloadDoAgenteError
 from app.use_cases.analysis.run_analysis_pipeline import (
     RunAnalysisPipelineUseCase,
     build_pipeline_llm_input_payload,
-    conversor_da_analise,
     serialize_as_legacy,
 )
 from app.use_cases.analysis.topologia_no_payload import (
     MontarTopologiaUseCase,
     compactar_topologia,
-    validar_inventario_da_analise,
 )
-from app.use_cases.inventory.consultas import InventarioNaoProcessadoError
-from app.use_cases.inventory.correlacao import ProvedorDiferenteError
 
 logger = logging.getLogger(__name__)
 
@@ -412,9 +415,6 @@ async def get_agents_payload(
     return _build_response(ctx)
 
 
-_ESTADOS_EM_ANDAMENTO = {"queued", "processing"}
-
-
 def _erro(
     status_code: int,
     codigo: str,
@@ -436,43 +436,10 @@ async def _validar_inventario(
     session: AsyncSession, user_id: UUID, report_id: UUID, inventory_id: UUID
 ) -> None:
     """RI14: inventário do usuário, processado e da mesma nuvem do billing."""
-    if not get_settings().inventory_enabled:
-        raise _erro(
-            status.HTTP_404_NOT_FOUND,
-            "INVENTARIO_DESLIGADO",
-            "o inventário não está habilitado neste ambiente",
-            retryable=False,
-        )
-    report = await PgBillingReportRepository(session).get_by_id(report_id, user_id)
-    if report is None:
-        raise _erro(
-            status.HTTP_404_NOT_FOUND,
-            "REPORT_NAO_ENCONTRADO",
-            f"report {report_id} não existe para este usuário",
-            retryable=False,
-        )
     try:
-        await validar_inventario_da_analise(
-            PgInventoryRepository(session),
-            inventario_id=inventory_id,
-            user_id=user_id,
-            provedor_do_report=report.provider.value if report.provider else None,
-        )
-    except InventarioNaoProcessadoError as e:
-        raise _erro(
-            status.HTTP_409_CONFLICT, "INVENTARIO_NAO_PROCESSADO", str(e), retryable=True
-        ) from e
-    except ProvedorDiferenteError as e:
-        raise _erro(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "INVENTARIO_DE_OUTRA_NUVEM",
-            str(e),
-            retryable=False,
-        ) from e
-    except NotFoundError as e:
-        raise _erro(
-            status.HTTP_404_NOT_FOUND, "INVENTARIO_NAO_ENCONTRADO", str(e), retryable=False
-        ) from e
+        await payload_do_agente_uc(session).validar_inventario(user_id, report_id, inventory_id)
+    except PayloadDoAgenteError as e:
+        raise erro_do_payload(e) from e
 
 
 @router.get(
@@ -488,48 +455,14 @@ async def get_analysis_request(
     inventory_id: UUID | None = None,
 ) -> dict:
     user_uuid = UUID(user.sub)
-    if inventory_id is not None:
-        await _validar_inventario(session, user_uuid, report_id, inventory_id)
-        recalcular = True
-
-    rep = (
-        (
-            await session.execute(
-                select(BillingReportModel).where(
-                    BillingReportModel.id == report_id,
-                    BillingReportModel.user_id == user_uuid,
-                )
-            )
-        )
-        .scalars()
-        .first()
-    )
-
-    if rep is None:
-        raise _erro(
-            status.HTTP_404_NOT_FOUND,
-            "REPORT_NAO_ENCONTRADO",
-            f"report {report_id} não existe para este usuário",
-            retryable=False,
-        )
-
-    if rep.status in _ESTADOS_EM_ANDAMENTO:
-        raise _erro(
-            status.HTTP_409_CONFLICT,
-            "REPORT_NAO_PRONTO",
-            f"ingestão ainda em andamento (status={rep.status})",
-            retryable=True,
-            status_report=rep.status,
-        )
-
-    if rep.status != "done":
-        raise _erro(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "REPORT_FALHOU",
-            f"ingestão não concluiu (status={rep.status})",
-            retryable=False,
-            status_report=rep.status,
-        )
+    montador = payload_do_agente_uc(session)
+    try:
+        if inventory_id is not None:
+            await montador.validar_inventario(user_uuid, report_id, inventory_id)
+            recalcular = True
+        await montador.exigir_pronto(user_uuid, report_id)
+    except PayloadDoAgenteError as e:
+        raise erro_do_payload(e) from e
 
     if not recalcular:
         row = (
@@ -561,32 +494,15 @@ async def get_analysis_request(
             }
 
     try:
-        ctx = await _build_ctx(user_uuid, report_id, session)
-    except HTTPException as e:
-        raise _erro(
-            e.status_code,
-            "CONTEXTO_INDISPONIVEL",
-            str(e.detail),
-            retryable=False,
-        ) from e
-
-    payload, sem_equivalente = build_pipeline_llm_input_payload(ctx)
-    if inventory_id is not None:
-        payload["topologia"] = await MontarTopologiaUseCase(
-            PgInventoryRepository(session), PgBillingItemRepository(session)
-        ).execute(
-            user_id=user_uuid,
-            inventario_id=inventory_id,
-            report_id=report_id,
-            ctx=ctx,
-            converter=conversor_da_analise(ctx),
-        )
+        montado = await montador.montar(user_uuid, report_id, inventory_id)
+    except PayloadDoAgenteError as e:
+        raise erro_do_payload(e) from e
     return {
-        **compactar_topologia(payload),
+        **compactar_topologia(montado.payload),
         "_meta": {
             "origem": "recalculada",
             "report_id": str(report_id),
-            "pools_sem_equivalente": sem_equivalente,
+            "pools_sem_equivalente": montado.pools_sem_equivalente,
         },
     }
 
@@ -1103,23 +1019,8 @@ async def _build_ctx(
     report_id: UUID,
     session,
 ) -> MigrationContext:
-    uc = BuildMigrationContextUseCase(
-        PgBillingReportRepository(session),
-        PgBillingEnrichedRepository(session),
-        PGServiceMetadataRepository(session),
-        PGServiceComparisonRepository(session),
-        sku_repo=PgCloudSkuRepository(session),
-        fx_repo=PgExchangeRateRepository(session),
-        price_repo=PgCloudPricePointRepository(session),
-    )
-
     try:
-        return await uc.execute(
-            BuildMigrationContextInput(
-                user_id=user_id,
-                report_id=report_id,
-            )
-        )
+        return await construtor_de_contexto(session)(user_id, report_id)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -8,6 +9,7 @@ from app.core.config import get_settings
 from app.core.exceptions import UnauthorizedError
 from app.core.logging import get_logger
 from app.core.security import verify_jwt
+from app.domain.analysis import MigrationContext
 from app.infrastructure.database.session import get_db_session
 from app.infrastructure.repositories.pg_billing_dashboard_repo import (
     PgBillingDashboardRepository,
@@ -19,15 +21,35 @@ from app.infrastructure.repositories.pg_billing_item_repo import PgBillingItemRe
 from app.infrastructure.repositories.pg_billing_report_repo import (
     PgBillingReportRepository,
 )
+from app.infrastructure.repositories.pg_cloud_price_point_repo import (
+    PgCloudPricePointRepository,
+)
 from app.infrastructure.repositories.pg_cloud_sku_repo import PgCloudSkuRepository
+from app.infrastructure.repositories.pg_exchange_rate_repo import (
+    PgExchangeRateRepository,
+)
+from app.infrastructure.repositories.pg_inventory_repo import PgInventoryRepository
 from app.infrastructure.repositories.pg_sku_classification_rule_repo import (
     PgSkuClassificationRuleRepository,
 )
 from app.infrastructure.repositories.pg_unmapped_billing_repo import (
     PgUnmappedBillingRepository,
 )
+from app.infrastructure.repositories.service_repositories import (
+    PGServiceComparisonRepository,
+    PGServiceMetadataRepository,
+)
 from app.schemas.auth import UserClaims
 from app.use_cases.analysis.build_billing_enriched import BuildBillingEnrichedUseCase
+from app.use_cases.analysis.build_migration_context import (
+    BuildMigrationContextInput,
+    BuildMigrationContextUseCase,
+)
+from app.use_cases.analysis.payload_do_agente import (
+    ConstrutorDeContexto,
+    MontarPayloadDoAgenteUseCase,
+)
+from app.use_cases.analysis.topologia_no_payload import MontarTopologiaUseCase
 from app.use_cases.billing.get_billing_job_status import GetBillingJobStatusUseCase
 from app.use_cases.billing.ingest_billing_file import IngestBillingFileUseCase
 from app.use_cases.billing.list_billing_items import ListBillingItemsUseCase
@@ -157,3 +179,34 @@ GenerateBillingDashboardUC = Annotated[
     GenerateBillingDashboardUseCase,
     Depends(_generate_billing_dashboard_uc),
 ]
+
+
+def construtor_de_contexto(session: AsyncSession) -> ConstrutorDeContexto:
+    """O contexto de migração de um relatório, com os repositórios desta sessão."""
+    uc = BuildMigrationContextUseCase(
+        PgBillingReportRepository(session),
+        PgBillingEnrichedRepository(session),
+        PGServiceMetadataRepository(session),
+        PGServiceComparisonRepository(session),
+        sku_repo=PgCloudSkuRepository(session),
+        fx_repo=PgExchangeRateRepository(session),
+        price_repo=PgCloudPricePointRepository(session),
+    )
+
+    async def construir(user_id: UUID, report_id: UUID) -> MigrationContext:
+        return await uc.execute(BuildMigrationContextInput(user_id=user_id, report_id=report_id))
+
+    return construir
+
+
+def payload_do_agente_uc(session: AsyncSession) -> MontarPayloadDoAgenteUseCase:
+    """O mesmo montador para o `/request` e para a preparação de snapshot."""
+    return MontarPayloadDoAgenteUseCase(
+        relatorios=PgBillingReportRepository(session),
+        inventarios=PgInventoryRepository(session),
+        contexto=construtor_de_contexto(session),
+        topologia=MontarTopologiaUseCase(
+            PgInventoryRepository(session), PgBillingItemRepository(session)
+        ),
+        inventario_habilitado=get_settings().inventory_enabled,
+    )
