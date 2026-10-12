@@ -6,7 +6,10 @@ Contrato: `MCP.PLAN/09-CONTRATO-SNAPSHOT.md` (v2). Plano:
 
 from __future__ import annotations
 
+import asyncio
+import json
 from collections.abc import AsyncIterator, Iterator
+from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -18,11 +21,14 @@ from sqlalchemy import text
 
 from app.api.deps import _DEV_USER
 from app.core import config
+from app.domain.entities.agent_snapshot import AgentSnapshot, agora
 from app.domain.entities.billing_report import BillingReport, JobStatus
 from app.domain.services.fingerprint_payload import hash_canonico
 from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.repositories.pg_agent_snapshot_repo import PgAgentSnapshotRepository
 from app.infrastructure.repositories.pg_billing_report_repo import PgBillingReportRepository
 from app.main import create_app
+from app.schemas.agent_snapshot import EnvioDoAgenteIn
 
 from .conftest import TEST_USER, _cleanup, _ingest
 
@@ -235,3 +241,306 @@ async def test_com_inventario_entrega_compacto_e_guarda_o_detalhe(
         finally:
             await _apagar_snapshots(oci)
             await _apagar_inventario(iid)
+
+
+# ── envio ───────────────────────────────────────────────────────────────
+
+_PARECER = {
+    "posicao": "diverge",
+    "motivo": "A economia depende de cargas com lock-in alto.",
+    "riscos": ["residência de dados"],
+}
+_ENVIO = {
+    "recommendation": "migrar para Azure",
+    "recommendation_rationale": "melhor rede",
+    "strategic_notes": ["nota"],
+    "action_plan": ["passo 1"],
+    "provider_comparison": [
+        {"provider": "oci", "estimated_monthly_cost": 1.0, "strengths": ["preço"]}
+    ],
+    "sugestoes": [
+        {
+            "tipo": "contestacao_preco",
+            "severidade": "alta",
+            "titulo": "preço defasado",
+            "detalhe": "abaixo do que conheço",
+            "referencia": "OCI/E5/sa-saopaulo-1",
+        }
+    ],
+    "payback": {"meses": 7, "premissa_custo_migracao_usd": 18000, "base": "12 cargas"},
+    "parecer": _PARECER,
+}
+
+
+async def _preparar(c: AsyncClient, rid: UUID, inventario: UUID | None = None) -> dict[str, Any]:
+    corpo: dict[str, Any] = {"report_id": str(rid)}
+    if inventario is not None:
+        corpo["inventory_id"] = str(inventario)
+    r = await c.post("/v1/agent/snapshots", json=corpo)
+    assert r.status_code in (200, 201), r.text
+    resposta: dict[str, Any] = r.json()
+    return resposta
+
+
+async def _enviar(c: AsyncClient, snapshot_id: str, corpo: dict[str, Any]) -> Any:
+    return await c.post(f"/v1/agent/snapshots/{snapshot_id}/submissions", json=corpo)
+
+
+async def _sql(comando: str, **params: Any) -> None:
+    async with get_sessionmaker()() as s:
+        await s.execute(text(comando), params)
+        await s.commit()
+
+
+async def test_relatorio_sem_analise_previa_recebe_o_envio(app: FastAPI, oci: UUID) -> None:
+    """O cenário que hoje dá PAYLOAD_AUSENTE: billing novo, direto para o agente."""
+    try:
+        async with _cliente(app) as c:
+            snap = await _preparar(c, oci)
+            r = await _enviar(c, snap["snapshot"]["snapshot_id"], _ENVIO)
+        assert r.status_code == 201, r.text
+        corpo = r.json()
+        envio, analise = corpo["submission"], corpo["analysis"]
+        assert envio["revision"] == 1
+        assert envio["fingerprint"] == snap["snapshot"]["fingerprint"]
+        assert envio["versions"] == snap["snapshot"]["versions"]
+        esperado = EnvioDoAgenteIn.model_validate(_ENVIO).model_dump(mode="json")
+        assert envio["request_hash"] == hash_canonico(esperado)
+
+        # A decisão e o texto da recomendação são do backend, do payload lido.
+        decisao = snap["payload"]["decision_support"]
+        assert analise["decision_support"] == decisao
+        escolhido = decisao["selected_provider"]
+        assert analise["recommendation"] == (
+            f"Avaliar {escolhido.upper()}. {decisao['selection_reason']}"
+            if escolhido
+            else decisao["selection_reason"]
+        )
+        # O julgamento do agente fica.
+        assert analise["parecer_agente"] == _PARECER
+        assert analise["recommendation_rationale"] == "melhor rede"
+        assert analise["action_plan"] == ["passo 1"]
+        contestacao = next(s for s in analise["sugestoes"] if s["origem"] == "agente")
+        assert contestacao["efeito_backend"] == "confianca_rebaixada"
+        assert envio["campos_sobrescritos"] >= 1
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_mesmo_corpo_e_repeticao_e_corpo_novo_e_revisao(app: FastAPI, oci: UUID) -> None:
+    try:
+        async with _cliente(app) as c:
+            sid = (await _preparar(c, oci))["snapshot"]["snapshot_id"]
+            r1 = await _enviar(c, sid, _ENVIO)
+            r2 = await _enviar(c, sid, _ENVIO)
+            reordenado = dict(reversed(list(_ENVIO.items())))  # ordem não conta
+            r3 = await _enviar(c, sid, reordenado)
+            r4 = await _enviar(c, sid, {**_ENVIO, "action_plan": ["outro passo"]})
+        assert (r1.status_code, r2.status_code, r3.status_code, r4.status_code) == (
+            201,
+            200,
+            200,
+            201,
+        )
+        assert r2.headers["Idempotent-Replayed"] == "true"
+        assert "Idempotent-Replayed" not in r1.headers
+        assert r2.json() == r1.json() == r3.json()
+        assert r4.json()["submission"]["revision"] == 2
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_envios_simultaneos(app: FastAPI, oci: UUID) -> None:
+    """Garantia do banco, não de consulta prévia: iguais viram um envio só;
+    diferentes viram revisões sem buraco nem repetição."""
+    try:
+        async with _cliente(app) as c:
+            sid = (await _preparar(c, oci))["snapshot"]["snapshot_id"]
+            iguais = await asyncio.gather(*(_enviar(c, sid, _ENVIO) for _ in range(4)))
+            diferentes = await asyncio.gather(
+                *(_enviar(c, sid, {**_ENVIO, "action_plan": [f"p{i}"]}) for i in range(4))
+            )
+        assert sorted(r.status_code for r in iguais) == [200, 200, 200, 201]
+        assert len({r.json()["submission"]["submission_id"] for r in iguais}) == 1
+        assert all(r.status_code == 201 for r in diferentes)
+        assert sorted(r.json()["submission"]["revision"] for r in diferentes) == [2, 3, 4, 5]
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_envio_nao_toca_na_analise_da_tela(app: FastAPI, oci: UUID) -> None:
+    """O defeito da rota antiga: o envio gravava por cima da análise da tela."""
+    job_id = uuid4()
+    tela = {"recommendation": "texto do LLM da tela", "strategic_notes": ["a", "b", "c"]}
+    await _sql(
+        "insert into analysis_jobs (job_id, user_id, report_id, status, created_at, "
+        "ai_structured_output, llm_input_payload) values (:j, :u, :r, 'COMPLETED', now(), "
+        "cast(:o as jsonb), cast('{\"gasto_total\": 1}' as jsonb))",
+        j=job_id,
+        u=HTTP_USER,
+        r=oci,
+        o=json.dumps(tela),
+    )
+    try:
+        async with _cliente(app) as c:
+            snap = await _preparar(c, oci)
+            assert (await _enviar(c, snap["snapshot"]["snapshot_id"], _ENVIO)).status_code == 201
+        async with get_sessionmaker()() as s:
+            linha = (
+                await s.execute(
+                    text(
+                        "select ai_structured_output, agent_raw_output, sugestoes "
+                        "from analysis_jobs where job_id = :j"
+                    ),
+                    {"j": job_id},
+                )
+            ).one()
+        assert linha.ai_structured_output == tela
+        assert linha.agent_raw_output is None and linha.sugestoes is None
+    finally:
+        await _sql("delete from analysis_jobs where job_id = :j", j=job_id)
+        await _apagar_snapshots(oci)
+
+
+async def test_vencido_recusa_envio_novo_mas_devolve_o_gravado(app: FastAPI, oci: UUID) -> None:
+    try:
+        async with _cliente(app) as c:
+            sid = (await _preparar(c, oci))["snapshot"]["snapshot_id"]
+            primeiro = await _enviar(c, sid, _ENVIO)
+            await _sql(
+                "update agent_snapshots set expires_at = now() - interval '1 hour' where id = :i",
+                i=sid,
+            )
+            novo = await _enviar(c, sid, {**_ENVIO, "action_plan": ["depois de vencer"]})
+            repetido = await _enviar(c, sid, _ENVIO)
+        assert (novo.status_code, _detalhe(novo)["codigo"]) == (410, "SNAPSHOT_EXPIRADO")
+        assert _detalhe(novo)["retryable"] is False
+        assert repetido.status_code == 200
+        assert repetido.json() == primeiro.json()
+    finally:
+        await _apagar_snapshots(oci)
+
+
+@pytest.mark.parametrize(
+    ("campo", "valor_antigo"),
+    [("authority", "agent-authority-v0"), ("decision_policy", "score-7rs-v2")],
+)
+async def test_versao_anterior_e_recusada_sem_reinterpretar(
+    app: FastAPI, oci: UUID, campo: str, valor_antigo: str
+) -> None:
+    try:
+        async with _cliente(app) as c:
+            sid = (await _preparar(c, oci))["snapshot"]["snapshot_id"]
+            await _sql(
+                "update agent_snapshots set versions = "
+                "jsonb_set(versions, :p, to_jsonb(cast(:v as text))) where id = :i",
+                p=[campo],
+                v=valor_antigo,
+                i=sid,
+            )
+            r = await _enviar(c, sid, _ENVIO)
+        assert r.status_code == 409
+        d = _detalhe(r)
+        assert (d["codigo"], d["motivo"], d["retryable"]) == (
+            "SNAPSHOT_DESATUALIZADO",
+            "versao",
+            False,
+        )
+        assert d["versoes_divergentes"] == [campo]
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_relatorio_que_deixou_de_estar_pronto(app: FastAPI, oci: UUID) -> None:
+    try:
+        async with _cliente(app) as c:
+            sid = (await _preparar(c, oci))["snapshot"]["snapshot_id"]
+            await _sql("update billing_reports set status = 'processing' where id = :r", r=oci)
+            r = await _enviar(c, sid, _ENVIO)
+        assert r.status_code == 409
+        assert (_detalhe(r)["codigo"], _detalhe(r)["motivo"]) == (
+            "SNAPSHOT_DESATUALIZADO",
+            "relatorio",
+        )
+    finally:
+        await _sql("update billing_reports set status = 'done' where id = :r", r=oci)
+        await _apagar_snapshots(oci)
+
+
+async def test_inventario_alterado_ou_apagado(
+    app: FastAPI, oci: UUID, mocks_inventario: Any
+) -> None:
+    try:
+        async with _cliente(app) as c:
+            iid = await _inventario(c, mocks_inventario.oci)
+            try:
+                sid = (await _preparar(c, oci, iid))["snapshot"]["snapshot_id"]
+                declarado = await c.put(
+                    f"/v1/inventories/{iid}/declarations",
+                    json={"criticidade": {"aplicacoes": {"checkout": "alta"}}},
+                )
+                assert declarado.status_code == 200, declarado.text
+                alterado = await _enviar(c, sid, _ENVIO)
+                # Preparar de novo traz o estado atual e volta a aceitar.
+                sid2 = (await _preparar(c, oci, iid))["snapshot"]["snapshot_id"]
+                aceito = await _enviar(c, sid2, _ENVIO)
+            finally:
+                await _apagar_inventario(iid)
+            apagado = await _enviar(c, sid2, {**_ENVIO, "action_plan": ["outro"]})
+        for r in (alterado, apagado):
+            assert r.status_code == 409
+            assert (_detalhe(r)["codigo"], _detalhe(r)["motivo"]) == (
+                "SNAPSHOT_DESATUALIZADO",
+                "inventario",
+            )
+        assert aceito.status_code == 201
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_snapshot_de_outro_usuario_ou_inexistente(app: FastAPI, oci: UUID) -> None:
+    alheio = AgentSnapshot(
+        user_id=TEST_USER,
+        report_id=oci,
+        inventory_id=None,
+        inventory_marker=None,
+        fingerprint="a" * 64,
+        payload_fingerprint="b" * 64,
+        versions={},
+        payload={},
+        expires_at=agora() + timedelta(hours=1),
+    )
+    async with get_sessionmaker()() as s:
+        await PgAgentSnapshotRepository(s).gravar_ou_reaproveitar(alheio)
+        await s.commit()
+    try:
+        async with _cliente(app) as c:
+            for sid in (alheio.id, uuid4()):
+                r = await _enviar(c, str(sid), _ENVIO)
+                assert r.status_code == 404
+                assert _detalhe(r)["codigo"] == "SNAPSHOT_NAO_ENCONTRADO"
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_payback_sem_premissa_e_corpo_invalido(app: FastAPI, oci: UUID) -> None:
+    try:
+        async with _cliente(app) as c:
+            sid = (await _preparar(c, oci))["snapshot"]["snapshot_id"]
+            sem_premissa = await _enviar(
+                c, sid, {**_ENVIO, "payback": {"meses": 7, "base": "chute"}}
+            )
+            parecer_ruim = await _enviar(
+                c, sid, {**_ENVIO, "parecer": {"posicao": "talvez", "motivo": "x"}}
+            )
+        assert sem_premissa.status_code == 422
+        assert parecer_ruim.status_code == 422
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_envio_com_flag_desligada(monkeypatch: pytest.MonkeyPatch, oci: UUID) -> None:
+    for app in _app(monkeypatch, AGENT_SNAPSHOT_ENABLED="false"):
+        async with _cliente(app) as c:
+            r = await _enviar(c, str(uuid4()), _ENVIO)
+        assert (r.status_code, _detalhe(r)["codigo"]) == (404, "SNAPSHOT_DESLIGADO")

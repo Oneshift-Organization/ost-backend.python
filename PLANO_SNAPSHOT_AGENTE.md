@@ -9,7 +9,7 @@
 > | A — fundação: payload extraído, fingerprints e versões | ✅ (revisão no fim do item) |
 > | B — persistência: tabelas, repositórios, flag | ✅ (revisão no fim do item) |
 > | C — preparação do snapshot | ✅ (revisão no fim do item) |
-> | D — envio idempotente com parecer | ⬜ depende da confirmação acima |
+> | D — envio idempotente com parecer | ✅ (revisão no fim do item); falta a confirmação do MCP sobre a idempotência pelo conteúdo |
 > | E — consulta, transição e manutenção | ⬜ |
 > | F — validação e entrega | ⬜ |
 
@@ -266,6 +266,31 @@ versões.
 | D2 | **`SubmeterAnaliseUseCase`**, em uma transação, na ordem do contrato §3.3: trava o snapshot do usuário (`404`); procura (`snapshot_id`, `request_hash`) e devolve o gravado se existir (D14); checa validade (`410`); checa versão, inventário e relatório (`409` com `motivo`); aplica `receber_analise_do_agente` sobre o payload do snapshot; grava com a próxima revisão | unitários da sequência e de cada desvio | nenhum caminho grava parcialmente |
 | D3 | **Rota:** `201` novo, `200` repetição com `Idempotent-Replayed: true`; erros do contrato §3.5 | integração | contrato §3 atendido |
 | D4 | **Parecer preservado:** o parecer volta intacto depois da camada de decisão (`impose_decision` reconstrói a resposta) | integração com `decision_support` e `topologia` presentes | a discordância não se perde |
+
+**Revisão do item D (feito em 12/10/2026)**
+- **O `parecer` entrou num schema novo** (`EnvioDoAgenteIn`, que estende o
+  `AgentAnalysisIn`), não no antigo: no antigo, a rota
+  `/v1/agent/analyses/{id}/result` passaria a devolver `"parecer": null`, uma
+  mudança de contrato. O plano dizia "a rota antiga aceita o parecer"; a decisão
+  final é que ela não muda.
+- **O parecer não passa pela autoridade:** sai do corpo antes da correção e
+  volta em `analysis.parecer_agente`. Garantido por construção e por teste com
+  espião, não por depender de nenhuma etapa da correção preservar uma chave
+  desconhecida.
+- **Categoria nova `EXPIRADO` → 410** no tradutor de erros.
+- 10 testes unitários (a ordem do contrato §3.3: repetição antes da validade e
+  da versão, cada motivo de desatualização, isolamento, hash e revisão).
+- 12 testes pela HTTP: relatório novo direto para o agente (**o cenário que
+  hoje dá `PAYLOAD_AUSENTE`**), decisão e texto da recomendação do payload lido,
+  julgamento do agente preservado, repetição `200` com o cabeçalho e o mesmo
+  corpo (inclusive com as chaves em outra ordem), revisão nova para corpo novo,
+  **4 envios iguais simultâneos → 1 envio; 4 diferentes → revisões 2 a 5**,
+  **a análise da tela intacta depois do envio**, vencido recusa corpo novo e
+  devolve o gravado, versão anterior (`authority` e `decision_policy`) recusada
+  com `versoes_divergentes`, relatório fora de `done`, inventário alterado
+  (declaração) e apagado, snapshot de outro usuário, corpo inválido e flag
+  desligada.
+- `mypy` com o mesmo total da `develop`.
 
 **Crítica do item D**
 - **"Desatualizado" é estreito.** Cobre versão, inventário apagado ou alterado

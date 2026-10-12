@@ -14,6 +14,7 @@ from app.domain.analysis import MigrationContext
 from app.infrastructure.database.session import get_db_session
 from app.infrastructure.repositories.pg_agent_snapshot_repo import (
     PgAgentSnapshotRepository,
+    PgAgentSubmissionRepository,
 )
 from app.infrastructure.repositories.pg_billing_dashboard_repo import (
     PgBillingDashboardRepository,
@@ -45,6 +46,7 @@ from app.infrastructure.repositories.service_repositories import (
 )
 from app.schemas.auth import UserClaims
 from app.use_cases.agent.preparar_snapshot import PrepararSnapshotUseCase
+from app.use_cases.agent.submeter_analise import SubmeterAnaliseUseCase
 from app.use_cases.analysis.build_billing_enriched import BuildBillingEnrichedUseCase
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
@@ -223,4 +225,13 @@ def preparar_snapshot_uc(session: AsyncSession) -> PrepararSnapshotUseCase:
         snapshots=PgAgentSnapshotRepository(session),
         inventarios=PgInventoryRepository(session),
         validade=timedelta(hours=get_settings().agent_snapshot_ttl_hours),
+    )
+
+
+def submeter_analise_uc(session: AsyncSession) -> SubmeterAnaliseUseCase:
+    return SubmeterAnaliseUseCase(
+        snapshots=PgAgentSnapshotRepository(session),
+        envios=PgAgentSubmissionRepository(session),
+        relatorios=PgBillingReportRepository(session),
+        inventarios=PgInventoryRepository(session),
     )

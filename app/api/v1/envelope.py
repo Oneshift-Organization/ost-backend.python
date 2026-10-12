@@ -16,6 +16,7 @@ _STATUS_POR_CATEGORIA = {
     Categoria.NAO_ENCONTRADO: status.HTTP_404_NOT_FOUND,
     Categoria.CONFLITO: status.HTTP_409_CONFLICT,
     Categoria.INVALIDO: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    Categoria.EXPIRADO: status.HTTP_410_GONE,
 }
 
 

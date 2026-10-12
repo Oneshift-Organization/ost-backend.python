@@ -43,6 +43,7 @@ class Categoria(StrEnum):
     NAO_ENCONTRADO = "nao_encontrado"
     CONFLITO = "conflito"
     INVALIDO = "invalido"
+    EXPIRADO = "expirado"
 
 
 class PayloadDoAgenteError(Exception):
