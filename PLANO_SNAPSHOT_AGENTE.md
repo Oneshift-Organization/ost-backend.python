@@ -8,7 +8,7 @@
 > | Contrato v2 com os 4 pontos (`MCP.PLAN/09-CONTRATO-SNAPSHOT.md`) | ⏳ confirmar a idempotência pelo conteúdo |
 > | A — fundação: payload extraído, fingerprints e versões | ✅ (revisão no fim do item) |
 > | B — persistência: tabelas, repositórios, flag | ✅ (revisão no fim do item) |
-> | C — preparação do snapshot | ⬜ |
+> | C — preparação do snapshot | ✅ (revisão no fim do item) |
 > | D — envio idempotente com parecer | ⬜ depende da confirmação acima |
 > | E — consulta, transição e manutenção | ⬜ |
 > | F — validação e entrega | ⬜ |
@@ -225,6 +225,29 @@ versões.
 | C1 | **`PrepararSnapshotUseCase`:** usa o A2, monta `versions` (A4), calcula os dois hashes (A3), faz o upsert (D5) e devolve o snapshot, a visão do agente (`compactar_topologia`) e se foi reaproveitado | unitários com repositório falso: cria, reaproveita, renova validade, reaproveita vencido com o mesmo fingerprint, conteúdo ou versão diferente gera outro | regra de reaproveitamento coberta |
 | C2 | **Rota e schemas:** `201` cria, `200` reaproveita; corpo `{snapshot, payload, pools_sem_equivalente}`; erros do contrato §2.6; `404 SNAPSHOT_DESLIGADO` com a flag desligada | integração: flag desligada, relatório inexistente e de outro usuário, ingestão em andamento, inventário em cada erro | contrato §2 atendido campo a campo |
 | C3 | **Coerência:** o `payload` do snapshot é igual ao do `GET /request?recalcular=true` (sem `_meta`), com e sem inventário; `payload_fingerprint` confere com o `payload` devolvido | integração | os dois caminhos não divergem |
+
+**Revisão do item C (feito em 12/10/2026)**
+- **Defeito do item B achado aqui e corrigido:** o reaproveitamento renovava só
+  a validade. Declarações do inventário reenviadas iguais mudam a data e não o
+  conteúdo; o snapshot seria reaproveitado com o marcador antigo, e o envio o
+  recusaria como desatualizado logo depois de confirmado. O `ON CONFLICT` agora
+  renova também o marcador, com teste no repositório.
+- 6 testes unitários (fingerprint com versões, representação compacta e payload
+  completo guardado, reaproveitamento de vencido com validade renovada, conteúdo
+  ou versão de autoridade diferente geram outro snapshot, marcador do
+  inventário).
+- 8 testes pela HTTP: os dois interruptores, relatório inexistente e de outro
+  usuário, ingestão em andamento (envelope exato), inventário desligado,
+  inexistente e de outra nuvem, `201` e depois `200` com o mesmo id, e **o
+  `payload` igual ao do `/request` recalculado**, sem e com inventário, com o
+  detalhe de rede só no banco.
+- **Decisão tomada aqui:** as rotas exigem `AGENT_SNAPSHOT_ENABLED` **e**
+  `AGENT_FLOW_ENABLED`; desligar o interruptor geral do agente desliga também o
+  snapshot. Os dois casos respondem `SNAPSHOT_DESLIGADO`, o único código do
+  contrato.
+- **Limite conhecido:** corpo inválido responde `422` mesmo com a flag
+  desligada, porque a validação do FastAPI vem antes do handler. É o mesmo
+  comportamento das rotas `/v1/agent/*` que já existem.
 
 **Crítica do item C**
 - **A preparação sempre recalcula**, mesmo quando reaproveita: o fingerprint só

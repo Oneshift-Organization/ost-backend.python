@@ -55,7 +55,7 @@ def _snap(
         user_id=extra.pop("user_id", USER),
         report_id=report_id,
         inventory_id=extra.pop("inventory_id", None),
-        inventory_marker=None,
+        inventory_marker=extra.pop("inventory_marker", None),
         fingerprint=fingerprint,
         payload_fingerprint="p" * 64,
         versions={"authority": "agent-authority-v1"},
@@ -96,6 +96,18 @@ async def test_mesmo_conteudo_reaproveita_e_renova_a_validade(_db_ready: None) -
         assert segundo.id == primeiro.id
         assert segundo.expires_at > primeiro.expires_at
         assert segundo.created_at == primeiro.created_at
+    finally:
+        await _apagar(rid)
+
+
+async def test_reaproveitar_atualiza_o_marcador_do_inventario(_db_ready: None) -> None:
+    rid = await _report()
+    inv = uuid4()
+    try:
+        a, _ = await _gravar(_snap(rid, inventory_id=inv, inventory_marker="fp|ontem"))
+        b, reaproveitado = await _gravar(_snap(rid, inventory_id=inv, inventory_marker="fp|hoje"))
+        assert reaproveitado and b.id == a.id
+        assert b.inventory_marker == "fp|hoje"
     finally:
         await _apagar(rid)
 

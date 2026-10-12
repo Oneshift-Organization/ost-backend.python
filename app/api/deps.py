@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -11,6 +12,9 @@ from app.core.logging import get_logger
 from app.core.security import verify_jwt
 from app.domain.analysis import MigrationContext
 from app.infrastructure.database.session import get_db_session
+from app.infrastructure.repositories.pg_agent_snapshot_repo import (
+    PgAgentSnapshotRepository,
+)
 from app.infrastructure.repositories.pg_billing_dashboard_repo import (
     PgBillingDashboardRepository,
 )
@@ -40,6 +44,7 @@ from app.infrastructure.repositories.service_repositories import (
     PGServiceMetadataRepository,
 )
 from app.schemas.auth import UserClaims
+from app.use_cases.agent.preparar_snapshot import PrepararSnapshotUseCase
 from app.use_cases.analysis.build_billing_enriched import BuildBillingEnrichedUseCase
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
@@ -209,4 +214,13 @@ def payload_do_agente_uc(session: AsyncSession) -> MontarPayloadDoAgenteUseCase:
             PgInventoryRepository(session), PgBillingItemRepository(session)
         ),
         inventario_habilitado=get_settings().inventory_enabled,
+    )
+
+
+def preparar_snapshot_uc(session: AsyncSession) -> PrepararSnapshotUseCase:
+    return PrepararSnapshotUseCase(
+        montador=payload_do_agente_uc(session),
+        snapshots=PgAgentSnapshotRepository(session),
+        inventarios=PgInventoryRepository(session),
+        validade=timedelta(hours=get_settings().agent_snapshot_ttl_hours),
     )

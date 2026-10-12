@@ -45,10 +45,17 @@ class PgAgentSnapshotRepository:
             created_at=snapshot.created_at,
             expires_at=snapshot.expires_at,
         )
-        # Conteúdo igual: renova a validade, mantém o resto (inclusive o id).
+        # Conteúdo igual: renova a validade e o marcador do inventário; mantém o
+        # resto (inclusive o id). O marcador precisa acompanhar: declarações
+        # reenviadas iguais mudam a data mas não o conteúdo, e o marcador antigo
+        # faria o envio recusar como desatualizado um snapshot que acabou de ser
+        # confirmado.
         stmt = novo.on_conflict_do_update(
             index_elements=_CHAVE_DE_CONTEUDO,
-            set_={"expires_at": novo.excluded.expires_at},
+            set_={
+                "expires_at": novo.excluded.expires_at,
+                "inventory_marker": novo.excluded.inventory_marker,
+            },
         ).returning(AgentSnapshotModel)
         # `populate_existing`: se o snapshot já estiver na sessão, a validade
         # renovada tem de aparecer no objeto devolvido.
