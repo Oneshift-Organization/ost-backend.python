@@ -1,6 +1,7 @@
 """Deterministic score ledger. Missing evidence forms bounds, never an invented grade.
 
-Policy v1: financial 40%, technical 40%, governance 20%. Bounds are arithmetic
+Policy v3: financial 50%, technical 50%. Governance declarations only block a
+destination; they are not a score axis. Bounds are arithmetic
 limits from unknown factors, NOT statistical confidence intervals. No I/O/LLM.
 """
 
@@ -46,11 +47,6 @@ _NON_WORKLOAD = frozenset(
     }
 )
 _LOCK_SCORE = {"low": 100, "medium": 50, "high": 0}
-_GOVERNANCE = (
-    ("region_approved", "Região e residência de dados", "0.4"),
-    ("compliance_approved", "Requisitos de conformidade", "0.4"),
-    ("operations_ready", "Prontidão operacional", "0.2"),
-)
 
 
 def number(value: object) -> Decimal | None:
@@ -168,7 +164,7 @@ def _financial(row: dict, current: Decimal | None) -> ScoreAxis:
     return _axis(
         "financial",
         "Financeiro",
-        "0.4",
+        "0.5",
         [
             _factor(
                 "savings",
@@ -233,7 +229,7 @@ def _technical(workloads: list[dict], provider: str) -> ScoreAxis:
     return _axis(
         "technical",
         "Técnico",
-        "0.4",
+        "0.5",
         [
             _factor(
                 "refactoring",
@@ -253,37 +249,11 @@ def _technical(workloads: list[dict], provider: str) -> ScoreAxis:
     )
 
 
-def _enterprise(evidence: dict) -> ScoreAxis:
-    factors = []
-    for key, label, weight in _GOVERNANCE:
-        value = evidence.get(key)
-        factors.append(
-            _factor(
-                key,
-                label,
-                weight,
-                "declarado atendido: 100; não atendido: 0",
-                [
-                    (
-                        _ONE,
-                        Decimal(100 if value else 0) if type(value) is bool else None,
-                        {
-                            "source": "user_declared",
-                            "value": value,
-                            "evidence": evidence.get("evidence"),
-                        },
-                    ),
-                ],
-            )
-        )
-    return _axis("enterprise", "Corporativo e governança", "0.2", factors)
-
-
 def _scenario(
     row: dict, current: Decimal | None, workloads: list[dict], evidence: dict
 ) -> ScenarioScore:
     provider = normalized(row.get("provedor"))
-    axes = [_financial(row, current), _technical(workloads, provider), _enterprise(evidence)]
+    axes = [_financial(row, current), _technical(workloads, provider)]
     lower = sum((Decimal(str(a.lower_bound)) * Decimal(str(a.weight)) for a in axes), _ZERO)
     upper = sum((Decimal(str(a.upper_bound)) * Decimal(str(a.weight)) for a in axes), _ZERO)
     coverage = sum((Decimal(str(a.coverage)) * Decimal(str(a.weight)) for a in axes), _ZERO)
@@ -385,7 +355,7 @@ def build_decision_support(payload: dict) -> DecisionSupport:
     )
     # Hash only decision inputs, not timestamps, UUIDs, narrative or logging metadata.
     snapshot = {
-        "policy": "score-7rs-v2",
+        "policy": "score-7rs-v3",
         "workloads": workloads,
         "rows": rows,
         "current": str(current),
@@ -409,7 +379,7 @@ def build_decision_support(payload: dict) -> DecisionSupport:
         strategy_summary=summary,
         confidence=confidence,
         limitations=[
-            "Política de regras v1 (40/40/20), não modelo treinado nem probabilidade de sucesso.",
+            "Política de regras v3 (50/50), não modelo treinado nem probabilidade de sucesso.",
             "Limites representam fatores desconhecidos, não intervalo estatístico.",
             "Billing não comprova dependências, topologia, compliance ou autorização para migrar.",
             "Economia recorrente não inclui todo o investimento de migração "

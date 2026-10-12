@@ -119,7 +119,7 @@ class WorkloadStrategy(BaseModel):
 
 class DecisionSupport(BaseModel):
     contract_version: Literal["oneshift-decision-v1"] = "oneshift-decision-v1"
-    policy_version: Literal["score-7rs-v1", "score-7rs-v2"] = "score-7rs-v2"
+    policy_version: Literal["score-7rs-v1", "score-7rs-v2", "score-7rs-v3"] = "score-7rs-v3"
     scale: Literal["0-100"] = "0-100"
     source: Literal["backend_rules"] = "backend_rules"
     input_fingerprint: str
