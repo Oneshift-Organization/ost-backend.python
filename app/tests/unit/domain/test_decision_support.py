@@ -78,7 +78,7 @@ def decision_payload() -> dict:
 def test_complete_score_and_exact_contributions(decision_payload):
     result = build_decision_support(decision_payload)
     assert result.score.status == "complete"
-    assert result.score.value == 97.2  # F=93 * .4 + T=100 * .4 + E=100 * .2
+    assert result.score.value == 96.5  # F=93 * .5 + T=100 * .5
     assert sum(a.contribution for a in result.score.axes) == result.score.value
     assert result.score.axes[0].value == 93
     assert result.workload_strategies[0].strategy == "rehost"
@@ -87,15 +87,13 @@ def test_complete_score_and_exact_contributions(decision_payload):
     assert len(result.input_fingerprint) == 64
 
 
-def test_missing_governance_is_not_zero_or_redistributed(decision_payload):
+def test_governance_is_not_a_score_axis(decision_payload):
     decision_payload.pop("decision_context")
     result = build_decision_support(decision_payload)
-    assert result.score.value is None
-    assert result.score.status == "partial"
-    assert result.score.axes[2].value is None
-    assert result.score.lower_bound == 77.2
-    assert result.score.upper_bound == 97.2
-    assert result.score.coverage == 0.8
+    assert [a.id for a in result.score.axes] == ["financial", "technical"]
+    assert result.score.status == "complete"
+    assert result.score.value == 96.5
+    assert result.score.coverage == 1.0
     assert result.confidence == "high"  # separate from score/data completeness
 
 
@@ -278,7 +276,7 @@ def test_model_cannot_forge_score_strategy_or_provider(decision_payload):
     assert result.recommended_provider == "OCI"
     assert result.oneshift_scores.overall_score == 97
     assert result.provider_comparison[0].provider == "OCI"
-    assert result.decision_support.score.value == 97.2
+    assert result.decision_support.score.value == 96.5
     assert AnalysisV2Response.model_validate(result.model_dump()).decision_support
 
 
@@ -297,7 +295,7 @@ def test_agent_receipt_uses_same_engine_and_keeps_contestation_separate(decision
         ],
     )
     assert result.resposta["viability_score"] == 970
-    assert result.resposta["decision_support"]["score"]["value"] == 97.2
+    assert result.resposta["decision_support"]["score"]["value"] == 96.5
     assert result.confianca_final == "medium"
     assert result.resposta["decision_support"]["confidence"] == "high"
     assert result.autoridade.substituicoes
@@ -451,8 +449,8 @@ async def test_real_pipeline_persists_authoritative_snapshot_and_scores(
     await pipeline.execute(job, decision_context=decision_payload["decision_context"])
     assert job.status == "COMPLETED", job.error
     saved = job.ai_structured_output
-    assert saved["decision_support"]["score"]["value"] == 97.2
+    assert saved["decision_support"]["score"]["value"] == 96.5
     assert saved["oneshift_scores"]["overall_score"] == 97
     assert saved["decision_support"] == job.llm_input_payload["decision_support"]
     assert job.llm_input_payload["decision_context"] == decision_payload["decision_context"]
-    assert "97.2/100" in job.llm_output
+    assert "96.5/100" in job.llm_output

@@ -9,7 +9,7 @@ Análises já persistidas não são recalculadas. Não requer migration de banco
 o snapshot e o resultado usam os campos JSON existentes.
 
 `decision_support` é um campo aditivo de `AnalysisV2Response`. Contrato
-`oneshift-decision-v1`, política `score-7rs-v1`, escala 0–100. O backend o
+`oneshift-decision-v1`, política `score-7rs-v3`, escala 0–100. O backend o
 recalcula após inferência, inclusive no fallback e na submissão do agente.
 Entradas do agente não podem substituir scores nem estratégias.
 
@@ -19,9 +19,8 @@ Política inicial normativa e versionada, não calibrada com migrações reais:
 
 | Eixo | Peso global | Fatores e pesos internos |
 |---|---:|---|
-| Financeiro | 40% | economia 70%; cobertura de preços 30% |
-| Técnico | 40% | refatoração 60%; lock-in 40% |
-| Corporativo | 20% | região 40%; conformidade 40%; operação 20% |
+| Financeiro | 50% | economia 70%; cobertura de preços 30% |
+| Técnico | 50% | refatoração 60%; lock-in 40% |
 
 - Economia: `clamp(50 + 100 * economia_mensal / custo_atual, 0, 100)`.
 - Cobertura: `100 * cobertura` calculada no resumo financeiro.
@@ -31,8 +30,9 @@ Política inicial normativa e versionada, não calibrada com migrações reais:
 - Fatores técnicos são ponderados pelo custo positivo dos componentes. Impostos,
   compromissos e itens não classificados não são aplicações migráveis.
   Mapeamento de tipo inferido não confirma compatibilidade técnica.
-- Corporativo: `true`=100, `false`=0, desconhecido permanece desconhecido.
-  Declarações do responsável são identificadas como tal, não certificações.
+- Governança não pontua (removida do score na `score-7rs-v3`). Declarar
+  `region_approved` ou `compliance_approved` como `false` continua bloqueando
+  o destino. Declarações do responsável não são certificações.
 
 Cada fator expõe regra, entradas, cobertura e contribuição. Arredondamento
 decimal para duas casas; pequenas diferenças de 0,01 podem aparecer ao somar
