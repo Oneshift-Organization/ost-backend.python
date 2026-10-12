@@ -75,7 +75,15 @@ async def _job_com_payload(report_id: UUID, user_id: UUID, session):
     "/{report_id}/result",
     response_model=AgentAnalysisOut,
     status_code=status.HTTP_200_OK,
-    summary="Recebe a análise do agente, corrige os números e persiste",
+    deprecated=True,
+    summary="DEPRECADO — use POST /v1/agent/snapshots/{snapshot_id}/submissions",
+    description=(
+        "Grava a análise do agente por cima da última análise do relatório, "
+        "inclusive a feita pela tela, e só funciona se o relatório já tiver uma "
+        "análise gravada. O substituto corrige contra o snapshot lido e não toca "
+        "nas análises da tela (PLANO_SNAPSHOT_AGENTE). Use só com relatório de "
+        "teste; a remoção será combinada com o time do MCP."
+    ),
 )
 async def submeter_analise(
     report_id: UUID,

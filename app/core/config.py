@@ -84,6 +84,18 @@ class Settings(BaseSettings):
     inventory_enabled: bool = False
     inventory_max_files: int = 20
 
+    # Snapshot de leitura e envio idempotente do agente (PLANO_SNAPSHOT_AGENTE).
+    # Desligado por padrão pelo mesmo motivo do inventário: as tabelas vêm de uma
+    # migração nova, e com a flag desligada as rotas `/v1/agent/snapshots` e
+    # `/v1/agent/submissions` respondem 404 como se não existissem.
+    agent_snapshot_enabled: bool = False
+    # Validade do snapshot desde a última preparação. Cobre uma conversa e limita
+    # a idade de preço e câmbio que o envio aceita.
+    agent_snapshot_ttl_hours: int = 24
+    # Snapshot vencido há mais que isto e SEM envio é apagado pela varredura.
+    # Com envio, fica: é o lastro do que o agente disse e da repetição.
+    agent_snapshot_retention_days: int = 7
+
     # `terraform validate` contra o schema real do provider. Desligado por
     # decisão de escopo, não por custo: medido em 2026-09-13, com
     # `TF_PLUGIN_CACHE_DIR` quente o `init` leva 0,86s e o `validate` 0,35s. O

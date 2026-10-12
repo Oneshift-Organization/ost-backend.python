@@ -151,8 +151,17 @@ descartaria a escrita).
 
 ## Idempotência
 
-- Endpoints de criação ainda não têm `Idempotency-Key`. Adicionar quando tivermos
-  retry agressivo (cliente mobile, GitHub Actions).
+- **Envio do agente (`POST /v1/agent/snapshots/{id}/submissions`): idempotente
+  pelo conteúdo.** O mesmo corpo validado no mesmo snapshot devolve o envio
+  gravado (`200` e `Idempotent-Replayed: true`); corpo diferente é uma revisão
+  nova. Garantido no banco (lock de linha e constraint única), não por consulta
+  prévia. Sem `Idempotency-Key`: o resultado é função pura do snapshot e do
+  corpo, e uma chave só obrigaria o cliente a persisti-la entre reinícios. Ver
+  [`endpoints/agent-snapshots.md`](endpoints/agent-snapshots.md).
+- **Preparação de snapshot (`POST /v1/agent/snapshots`):** o mesmo conteúdo
+  devolve o mesmo snapshot (`200`, `reused: true`), via `INSERT … ON CONFLICT`.
+- Os demais endpoints de criação não têm `Idempotency-Key`. Adicionar quando
+  houver retry agressivo (cliente mobile, GitHub Actions).
 - Operações idempotentes por design:
   - `IngestBillingFileUseCase`: `delete_by_report` + INSERT em uma transação.
   - `bulk_insert` usa `ON CONFLICT (id) DO NOTHING`.

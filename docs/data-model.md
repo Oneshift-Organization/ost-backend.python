@@ -403,6 +403,60 @@ até o `DELETE`. A topologia não é persistida: é recalculada do normalizado c
 declarações vigentes. A análise que usa o inventário congela a topologia dela no
 `llm_input_payload` do job (chave `topologia`), com o `fingerprint`.
 
+### Snapshot do agente
+
+Migration `e7f8a9b0c1d2` (PLANO_SNAPSHOT_AGENTE, item B). Duas tabelas novas;
+nada do que existe muda. **Exige PostgreSQL 15+** (`NULLS NOT DISTINCT`). As
+rotas que as usam ficam atrás de `AGENT_SNAPSHOT_ENABLED`, então o deploy pode
+vir antes da migração.
+
+```
+billing_reports (1) ──CASCADE──▶ agent_snapshots (N) ──CASCADE──▶ agent_submissions (N)
+```
+
+```sql
+CREATE TABLE agent_snapshots (
+    id                    UUID PRIMARY KEY,
+    user_id               UUID NOT NULL,
+    report_id             UUID NOT NULL REFERENCES billing_reports(id) ON DELETE CASCADE,
+    inventory_id          UUID,             -- sem FK: inventário apagado vira SNAPSHOT_DESATUALIZADO
+    inventory_marker      VARCHAR(200),     -- fingerprint do inventário | declarations_updated_at
+    fingerprint           VARCHAR(64) NOT NULL,  -- SHA-256 de {versions, payload completo}
+    payload_fingerprint   VARCHAR(64) NOT NULL,  -- SHA-256 da representação entregue ao agente
+    versions              JSONB NOT NULL,        -- contract, decision_policy, topology, authority
+    payload               JSONB NOT NULL,        -- completo, com topologia.detalhe
+    pools_sem_equivalente JSONB NOT NULL DEFAULT '[]',
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at            TIMESTAMPTZ NOT NULL
+);
+-- Reaproveitamento: INSERT … ON CONFLICT sobre este índice.
+CREATE UNIQUE INDEX uq_agent_snapshots_conteudo
+    ON agent_snapshots (user_id, report_id, inventory_id, fingerprint) NULLS NOT DISTINCT;
+CREATE INDEX ix_agent_snapshots_expires_at ON agent_snapshots (expires_at);
+
+CREATE TABLE agent_submissions (
+    id                  UUID PRIMARY KEY,
+    snapshot_id         UUID NOT NULL REFERENCES agent_snapshots(id) ON DELETE CASCADE,
+    user_id             UUID NOT NULL,
+    report_id           UUID NOT NULL,   -- desnormalizado para a consulta por relatório
+    request_hash        VARCHAR(64) NOT NULL,  -- SHA-256 do corpo validado: a idempotência
+    revision            INTEGER NOT NULL,
+    agent_raw           JSONB NOT NULL,  -- o que o agente mandou
+    analysis            JSONB NOT NULL,  -- a análise corrigida, que a API devolve
+    campos_sobrescritos INTEGER NOT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_agent_submissions_conteudo UNIQUE (snapshot_id, request_hash),
+    CONSTRAINT uq_agent_submissions_revisao UNIQUE (snapshot_id, revision)
+);
+CREATE INDEX ix_agent_submissions_user_report_created
+    ON agent_submissions (user_id, report_id, created_at);
+```
+
+Validade de 24 h (`AGENT_SNAPSHOT_TTL_HOURS`), renovada a cada reaproveitamento.
+A varredura periódica apaga o snapshot vencido há mais de
+`AGENT_SNAPSHOT_RETENTION_DAYS` (7) **que não tem envio**; com envio, ele fica.
+A exclusão de conta alcança as duas tabelas pela cascata do `billing_reports`.
+
 > **Sobre `raw_payload`:** o schema canônico do parser inclui um campo
 > `raw_payload: dict`, mas a **migration 0001 não persiste essa coluna** ainda
 > (decisão MVP — adiada para uma migration futura). Atualmente vive só no

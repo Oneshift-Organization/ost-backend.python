@@ -34,6 +34,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Convenções de rota / paginação / serialização | [`docs/api-conventions.md`](docs/api-conventions.md) |
 | Catálogo `/v1/billing-files` | [`docs/endpoints/billing.md`](docs/endpoints/billing.md) |
 | Catálogo `/v1/inventories` / export de cada nuvem / efeito na análise e no Terraform | [`docs/endpoints/inventories.md`](docs/endpoints/inventories.md) |
+| Caminho do agente (MCP): snapshot de leitura, envio idempotente, versões | [`docs/endpoints/agent-snapshots.md`](docs/endpoints/agent-snapshots.md) · [`PLANO_SNAPSHOT_AGENTE.md`](PLANO_SNAPSHOT_AGENTE.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
 
