@@ -6,19 +6,32 @@ de outro usuário ficam intactos.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import text
 
+from app.domain.entities.agent_snapshot import AgentSnapshot, AgentSubmission, agora
 from app.domain.entities.analysis_job import AnalysisJob
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.repositories.pg_account_repo import PgAccountRepository
+from app.infrastructure.repositories.pg_agent_snapshot_repo import (
+    PgAgentSnapshotRepository,
+    PgAgentSubmissionRepository,
+)
 from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
 
 from .conftest import FIXTURES, _cleanup, _ingest
 
-_TABELAS = ("billing_reports", "billing_items", "billing_enriched", "analysis_jobs")
+_TABELAS = (
+    "billing_reports",
+    "billing_items",
+    "billing_enriched",
+    "analysis_jobs",
+    "agent_snapshots",
+    "agent_submissions",
+)
 
 
 async def _criar_dados(user_id: UUID) -> UUID:
@@ -26,6 +39,32 @@ async def _criar_dados(user_id: UUID) -> UUID:
     async with get_sessionmaker()() as s:
         await PgAnalysisJobRepository(s).create(
             AnalysisJob(job_id=uuid4(), user_id=user_id, report_id=report_id)
+        )
+        # Snapshot e envio do agente caem por cascata do billing_reports.
+        snapshot, _ = await PgAgentSnapshotRepository(s).gravar_ou_reaproveitar(
+            AgentSnapshot(
+                user_id=user_id,
+                report_id=report_id,
+                inventory_id=None,
+                inventory_marker=None,
+                fingerprint="a" * 64,
+                payload_fingerprint="b" * 64,
+                versions={},
+                payload={},
+                expires_at=agora() + timedelta(hours=1),
+            )
+        )
+        await PgAgentSubmissionRepository(s).gravar(
+            AgentSubmission(
+                snapshot_id=snapshot.id,
+                user_id=user_id,
+                report_id=report_id,
+                request_hash="c" * 64,
+                revision=1,
+                agent_raw={},
+                analysis={},
+                campos_sobrescritos=0,
+            )
         )
         await s.commit()
     return report_id

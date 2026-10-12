@@ -18,10 +18,16 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import CurrentUser, DbSession, preparar_snapshot_uc, submeter_analise_uc
+from app.api.deps import (
+    CurrentUser,
+    DbSession,
+    consultar_envios_uc,
+    preparar_snapshot_uc,
+    submeter_analise_uc,
+)
 from app.api.v1.envelope import erro, erro_do_payload
 from app.core.config import get_settings
 from app.domain.entities.agent_snapshot import AgentSnapshot, AgentSubmission
@@ -29,7 +35,9 @@ from app.schemas.agent_snapshot import (
     EnvioDoAgenteIn,
     EnvioOut,
     EnvioRegistradoOut,
+    EnvioResumidoOut,
     PrepararSnapshotIn,
+    ResumoDaAnaliseOut,
     SnapshotOut,
     SnapshotPreparadoOut,
 )
@@ -168,4 +176,66 @@ def _envio_out(envio: AgentSubmission, snapshot: AgentSnapshot) -> EnvioRegistra
             created_at=envio.created_at,
         ),
         analysis=envio.analysis,
+    )
+
+
+@router.get(
+    "/submissions/{submission_id}",
+    response_model=EnvioRegistradoOut,
+    summary="Um envio do agente, com a análise corrigida",
+)
+async def obter_envio(
+    submission_id: UUID, user: CurrentUser, session: DbSession
+) -> EnvioRegistradoOut:
+    """O mesmo corpo da resposta do envio. É o caminho para recuperar um
+    resultado pelo id."""
+    _exigir_flags()
+    encontrado = await consultar_envios_uc(session).obter(UUID(user.sub), submission_id)
+    if encontrado is None:
+        raise erro(
+            status.HTTP_404_NOT_FOUND,
+            "ENVIO_NAO_ENCONTRADO",
+            f"envio {submission_id} não existe para este usuário",
+            retryable=False,
+        )
+    return _envio_out(*encontrado)
+
+
+@router.get(
+    "/submissions",
+    response_model=list[EnvioResumidoOut],
+    summary="Envios do agente, do mais recente para o mais antigo, com as revisões",
+)
+async def listar_envios(
+    user: CurrentUser,
+    session: DbSession,
+    report_id: UUID | None = None,
+    snapshot_id: UUID | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[EnvioResumidoOut]:
+    """Filtra por relatório ou por snapshot. Cada item traz um resumo; a análise
+    completa vem pelo id."""
+    _exigir_flags()
+    encontrados = await consultar_envios_uc(session).listar(
+        UUID(user.sub), report_id=report_id, snapshot_id=snapshot_id, limite=limit
+    )
+    return [
+        EnvioResumidoOut(
+            submission=_envio_out(envio, snapshot).submission,
+            analysis_summary=_resumo(envio.analysis),
+        )
+        for envio, snapshot in encontrados
+    ]
+
+
+def _resumo(analise: dict[str, Any]) -> ResumoDaAnaliseOut:
+    def texto(chave: str) -> str | None:
+        valor = analise.get(chave)
+        return str(valor) if valor not in (None, "") else None
+
+    return ResumoDaAnaliseOut(
+        recommended_provider=texto("recommended_provider"),
+        recommendation=texto("recommendation"),
+        analysis_confidence=texto("analysis_confidence"),
+        sugestoes=len(analise.get("sugestoes") or []),
     )

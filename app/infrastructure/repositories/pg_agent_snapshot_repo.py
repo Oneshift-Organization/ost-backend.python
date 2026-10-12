@@ -64,6 +64,13 @@ class PgAgentSnapshotRepository:
         await self._s.flush()
         return _snapshot(modelo), modelo.id != snapshot.id
 
+    async def obter(self, snapshot_id: UUID, user_id: UUID) -> AgentSnapshot | None:
+        stmt = select(AgentSnapshotModel).where(
+            AgentSnapshotModel.id == snapshot_id, AgentSnapshotModel.user_id == user_id
+        )
+        modelo = (await self._s.execute(stmt)).scalar_one_or_none()
+        return _snapshot(modelo) if modelo else None
+
     async def travar(self, snapshot_id: UUID, user_id: UUID) -> AgentSnapshot | None:
         stmt = (
             select(AgentSnapshotModel)

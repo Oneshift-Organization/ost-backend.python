@@ -45,6 +45,7 @@ from app.infrastructure.repositories.service_repositories import (
     PGServiceMetadataRepository,
 )
 from app.schemas.auth import UserClaims
+from app.use_cases.agent.consultar_envios import ConsultarEnviosUseCase
 from app.use_cases.agent.preparar_snapshot import PrepararSnapshotUseCase
 from app.use_cases.agent.submeter_analise import SubmeterAnaliseUseCase
 from app.use_cases.analysis.build_billing_enriched import BuildBillingEnrichedUseCase
@@ -234,4 +235,11 @@ def submeter_analise_uc(session: AsyncSession) -> SubmeterAnaliseUseCase:
         envios=PgAgentSubmissionRepository(session),
         relatorios=PgBillingReportRepository(session),
         inventarios=PgInventoryRepository(session),
+    )
+
+
+def consultar_envios_uc(session: AsyncSession) -> ConsultarEnviosUseCase:
+    return ConsultarEnviosUseCase(
+        snapshots=PgAgentSnapshotRepository(session),
+        envios=PgAgentSubmissionRepository(session),
     )

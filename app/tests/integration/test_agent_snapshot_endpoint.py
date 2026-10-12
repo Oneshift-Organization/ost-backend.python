@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
+from app import main
 from app.api.deps import _DEV_USER
 from app.core import config
 from app.domain.entities.agent_snapshot import AgentSnapshot, agora
@@ -544,3 +545,94 @@ async def test_envio_com_flag_desligada(monkeypatch: pytest.MonkeyPatch, oci: UU
         async with _cliente(app) as c:
             r = await _enviar(c, str(uuid4()), _ENVIO)
         assert (r.status_code, _detalhe(r)["codigo"]) == (404, "SNAPSHOT_DESLIGADO")
+
+
+# ── consulta, transição e manutenção (item E) ───────────────────────────
+
+
+async def test_consulta_por_id_e_lista_com_revisoes(app: FastAPI, oci: UUID) -> None:
+    try:
+        async with _cliente(app) as c:
+            sid = (await _preparar(c, oci))["snapshot"]["snapshot_id"]
+            r1 = (await _enviar(c, sid, _ENVIO)).json()
+            r2 = (await _enviar(c, sid, {**_ENVIO, "action_plan": ["revisão 2"]})).json()
+            item = await c.get(f"/v1/agent/submissions/{r1['submission']['submission_id']}")
+            por_relatorio = await c.get(f"/v1/agent/submissions?report_id={oci}")
+            por_snapshot = await c.get(f"/v1/agent/submissions?snapshot_id={sid}&limit=1")
+            fora_da_faixa = await c.get("/v1/agent/submissions?limit=0")
+            inexistente = await c.get(f"/v1/agent/submissions/{uuid4()}")
+        assert item.status_code == 200 and item.json() == r1
+        lista = por_relatorio.json()
+        assert [e["submission"]["revision"] for e in lista] == [2, 1]
+        assert lista[0]["submission"] == r2["submission"]
+        resumo = lista[0]["analysis_summary"]
+        assert resumo["recommendation"] == r2["analysis"]["recommendation"]
+        assert resumo["sugestoes"] == len(r2["analysis"]["sugestoes"])
+        assert [e["submission"]["revision"] for e in por_snapshot.json()] == [2]
+        assert fora_da_faixa.status_code == 422
+        assert inexistente.status_code == 404
+        assert _detalhe(inexistente)["codigo"] == "ENVIO_NAO_ENCONTRADO"
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_expurgo_so_com_a_flag_e_so_sem_envio(
+    monkeypatch: pytest.MonkeyPatch, oci: UUID
+) -> None:
+    try:
+        for app in _app(monkeypatch):
+            async with _cliente(app) as c:
+                vazio = (await _preparar(c, oci))["snapshot"]["snapshot_id"]
+                usado = (await _preparar(c, oci, None))["snapshot"]["snapshot_id"]
+        assert vazio == usado  # mesmo conteúdo: um snapshot só
+        await _sql(
+            "update agent_snapshots set expires_at = now() - interval '30 days' where id = :i",
+            i=vazio,
+        )
+        for _ in _app(monkeypatch, AGENT_SNAPSHOT_ENABLED="false"):
+            assert await main._expurgar_snapshots_do_agente() == 0
+        for _ in _app(monkeypatch):
+            assert await main._expurgar_snapshots_do_agente() >= 1
+        async with get_sessionmaker()() as s:
+            restante = (
+                await s.execute(
+                    text("select count(*) from agent_snapshots where id = :i"), {"i": vazio}
+                )
+            ).scalar()
+        assert restante == 0
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_expurgo_preserva_o_snapshot_com_envio(
+    monkeypatch: pytest.MonkeyPatch, oci: UUID
+) -> None:
+    try:
+        for app in _app(monkeypatch):
+            async with _cliente(app) as c:
+                sid = (await _preparar(c, oci))["snapshot"]["snapshot_id"]
+                assert (await _enviar(c, sid, _ENVIO)).status_code == 201
+            await _sql(
+                "update agent_snapshots set expires_at = now() - interval '30 days' where id = :i",
+                i=sid,
+            )
+            await main._expurgar_snapshots_do_agente()
+            async with _cliente(app) as c:
+                repetido = await _enviar(c, sid, _ENVIO)
+        assert repetido.status_code == 200
+    finally:
+        await _apagar_snapshots(oci)
+
+
+async def test_openapi_marca_a_rota_antiga_como_deprecated(app: FastAPI) -> None:
+    async with _cliente(app) as c:
+        caminhos = (await c.get("/openapi.json")).json()["paths"]
+    assert caminhos["/v1/agent/analyses/{report_id}/result"]["post"]["deprecated"] is True
+    assert "deprecated" not in caminhos["/v1/agent/analyses/{report_id}/result"]["get"]
+    for novo in (
+        "/v1/agent/snapshots",
+        "/v1/agent/snapshots/{snapshot_id}/submissions",
+        "/v1/agent/submissions",
+        "/v1/agent/submissions/{submission_id}",
+    ):
+        assert novo in caminhos

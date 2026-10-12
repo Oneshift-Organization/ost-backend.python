@@ -93,3 +93,18 @@ class EnvioRegistradoOut(BaseModel):
     analysis: dict[str, Any] = Field(
         description="A análise corrigida. É ela que o agente deve narrar ao usuário."
     )
+
+
+class ResumoDaAnaliseOut(BaseModel):
+    recommended_provider: str | None
+    recommendation: str | None
+    analysis_confidence: str | None
+    sugestoes: int = Field(description="Quantidade de sugestões (do agente e do backend).")
+
+
+class EnvioResumidoOut(BaseModel):
+    """Item da lista de envios. A análise completa vem por
+    `GET /v1/agent/submissions/{submission_id}`."""
+
+    submission: EnvioOut
+    analysis_summary: ResumoDaAnaliseOut

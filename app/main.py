@@ -12,11 +12,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.domain.entities.agent_snapshot import agora
 from app.domain.entities.analysis_job import agora_utc
 from app.infrastructure.database.models.terraform_generation_job import (
     TerraformGenerationJobModel,
 )
 from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.repositories.pg_agent_snapshot_repo import PgAgentSnapshotRepository
 from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
 
 
@@ -67,6 +69,24 @@ async def _expirar_geracoes_travadas() -> int:
         return int(resultado.rowcount or 0)
 
 
+async def _expurgar_snapshots_do_agente() -> int:
+    """Apaga snapshots do agente vencidos há mais que a retenção e sem envio.
+
+    Só com a flag ligada: com ela desligada a tabela pode nem existir ainda (o
+    deploy vem antes da migração), e a varredura não pode logar erro a cada
+    minuto por isso. Snapshot com envio fica: é o lastro do que o agente disse
+    ao usuário e da repetição idempotente.
+    """
+    settings = get_settings()
+    if not settings.agent_snapshot_enabled:
+        return 0
+    limite = agora() - timedelta(days=settings.agent_snapshot_retention_days)
+    async with get_sessionmaker()() as session:
+        apagados = await PgAgentSnapshotRepository(session).expurgar(limite)
+        await session.commit()
+    return apagados
+
+
 # Intervalo entre varreduras. Curto o bastante para o job órfão não passar muito
 # do limite, longo o bastante para dois UPDATEs por minuto não pesarem.
 _INTERVALO_DA_VARREDURA_SEGUNDOS = 60
@@ -88,6 +108,12 @@ async def _varrer_jobs_travados() -> None:
             log.warning("geracoes_terraform_expiradas", quantidade=geracoes)
     except Exception:
         log.exception("reaper_terraform_falhou")
+    try:
+        snapshots = await _expurgar_snapshots_do_agente()
+        if snapshots:
+            log.info("snapshots_do_agente_expurgados", quantidade=snapshots)
+    except Exception:
+        log.exception("expurgo_de_snapshots_falhou")
 
 
 async def _varredura_periodica() -> None:

@@ -10,7 +10,7 @@
 > | B — persistência: tabelas, repositórios, flag | ✅ (revisão no fim do item) |
 > | C — preparação do snapshot | ✅ (revisão no fim do item) |
 > | D — envio idempotente com parecer | ✅ (revisão no fim do item); falta a confirmação do MCP sobre a idempotência pelo conteúdo |
-> | E — consulta, transição e manutenção | ⬜ |
+> | E — consulta, transição e manutenção | ✅ (revisão no fim do item) |
 > | F — validação e entrega | ⬜ |
 
 ## 0. Por que este plano existe
@@ -324,6 +324,23 @@ versões.
 | E2 | `deprecated=True` no `POST /v1/agent/analyses/{report_id}/result`, com a descrição apontando para o substituto | o teste da rota antiga continua passando | o OpenAPI mostra deprecated e nada mais muda |
 | E3 | **Expurgo:** snapshots vencidos há mais de `AGENT_SNAPSHOT_RETENTION_DAYS` e **sem envio** são apagados na varredura periódica, só com a flag ligada | integração: apaga o vencido sem envio, preserva o com envio | a varredura não loga erro com a flag desligada nem sem a tabela |
 | E4 | **Exclusão de conta** leva snapshots e envios | integração com `DELETE /v1/account` | nada sobra do usuário |
+
+**Revisão do item E (feito em 12/10/2026)**
+- `GET /v1/agent/submissions/{id}` devolve o mesmo corpo do envio;
+  `GET /v1/agent/submissions` filtra por `report_id` ou `snapshot_id`, `limit`
+  1 a 100, com `analysis_summary` (provedor, recomendação, confiança e a
+  quantidade de sugestões). Envio inexistente ou de outro usuário dá
+  `404 ENVIO_NAO_ENCONTRADO`, um código que o contrato v2 não listava: entra no
+  documento da F6.
+- O `POST` antigo aparece como deprecated no OpenAPI, com a descrição do
+  defeito e do substituto; o `GET` antigo não muda. Teste confere o OpenAPI.
+- O expurgo entrou na varredura periódica como terceira etapa, isolada das
+  outras duas (uma falha não derruba o reaper), e não faz nada com a flag
+  desligada. Testado: com a flag desligada não apaga; ligada, apaga o vencido
+  sem envio; o vencido com envio fica, e a repetição dele continua dando `200`.
+- A exclusão de conta foi verificada **no teste que já existia** (#27): ele
+  passou a criar snapshot e envio e a conferir as duas tabelas. Os dois somem
+  por cascata, e o vizinho fica intacto.
 
 **Crítica do item E**
 - **A rota antiga continua sobrescrevendo a análise da tela até ser removida.**
