@@ -5,13 +5,13 @@
 > | Item | Estado |
 > |---|---|
 > | Contrato v1 validado pelo time do MCP, com 4 pontos a fechar | ✅ |
-> | Contrato v2 com os 4 pontos (`MCP.PLAN/09-CONTRATO-SNAPSHOT.md`) | ⏳ confirmar a idempotência pelo conteúdo |
+> | Contrato v2 com os 4 pontos (`MCP.PLAN/09-CONTRATO-SNAPSHOT.md`) | ⏳ o time do MCP confirmar a idempotência pelo conteúdo e a lista com resumo |
 > | A — fundação: payload extraído, fingerprints e versões | ✅ (revisão no fim do item) |
 > | B — persistência: tabelas, repositórios, flag | ✅ (revisão no fim do item) |
 > | C — preparação do snapshot | ✅ (revisão no fim do item) |
 > | D — envio idempotente com parecer | ✅ (revisão no fim do item); falta a confirmação do MCP sobre a idempotência pelo conteúdo |
 > | E — consulta, transição e manutenção | ✅ (revisão no fim do item) |
-> | F — validação e entrega | ⬜ |
+> | F — validação e entrega | ✅ validação e documentação; merge na `develop` com a flag desligada |
 
 ## 0. Por que este plano existe
 
@@ -205,8 +205,8 @@ versões.
 
 **Crítica do item B**
 - **Armazenamento duplicado.** Um relatório analisado pela tela e lido pelo
-  agente guarda o payload duas vezes (171 KB no billing AWS real, 97 KB no
-  GCP). Aceitável no volume atual. Se crescer, o snapshot pode apontar para o
+  agente guarda o payload duas vezes (153 KB no billing AWS real, 81 KB no
+  GCP, em JSON compacto). Aceitável no volume atual. Se crescer, o snapshot pode apontar para o
   payload da análise quando o conteúdo for igual. Sem otimização prematura.
 - **`NULLS NOT DISTINCT` exige PG 15+.** Local e CI usam 16, e o `CLAUDE.md`
   registra 16 no ambiente compartilhado. **Ajuste:** a F7 confere a versão antes
@@ -365,6 +365,47 @@ versões.
 | F6 | **Documentação:** `docs/endpoints/agent-snapshots.md` (o contrato validado), `docs/data-model.md`, `docs/api-conventions.md` (seção de idempotência, que hoje diz "ainda não há"), `PLANO_API_V2.md` §9 e §10 (corrigir "nenhum bloqueio neste repositório", o estado da flag, a fila de sync que não existe), índice do `CLAUDE.md`; no MCP.PLAN, o 09 passa a "implementado" |
 | F7 | **Entrega:** merge na `develop`. No ambiente dev: conferir a versão do Postgres, `alembic upgrade head` e só então `AGENT_SNAPSHOT_ENABLED=true`. Avisar o time do MCP |
 
+**Revisão do item F (feito em 12/10/2026)**
+
+| verificação | resultado |
+|---|---|
+| Bateria do time do MCP (F1) | coberta pelos 26 testes de `test_agent_snapshot_endpoint.py`, inclusive dois inventários independentes e contexto ausente (o mesmo erro do `/request`) |
+| Testes novos no total | 68: 26 de rota, 11 de repositório, 10 do envio, 6 da preparação, 8 de versões e trava, 7 de hash |
+| Suíte completa, local (Python 3.14) | **1.440 passaram, 24 pulados** (os pulados precisam do binário do Terraform) |
+| Suíte completa, Python 3.12 (a da CI), em container | **1.440 passaram, 24 pulados** |
+| `mypy` | mesmo total da `develop` |
+| `ruff` | limpo em todos os arquivos tocados |
+| E2E pela API (F3), 4 casos: CSV real da AWS, CSV real do GCP, mock GCP com inventário, mock OCI com inventário | todos coerentes: payload = `/request`; `payload_fingerprint` recalculado por fora; reaproveitamento; decisão do payload lido; parecer intacto; repetição idêntica com o cabeçalho; revisão 2; consulta e lista |
+| Exemplos reais para o time do MCP | `MCP.PLAN/exemplos/snapshot/` (GCP e OCI com inventário, cada chamada e os erros) |
+
+**Achado de ambiente, não de código:** 4 testes de classificação falharam na
+primeira rodada (Balanced PD como HDD, linhas órfãs no Azure e na OCI). Falharam
+igual na `develop`, numa worktree: o banco local estava com as regras de
+classificação antigas. Depois do `seed_classification_rules`, passaram. É o
+mesmo passo que o ambiente dev ainda deve (memória "pendências do ambiente").
+
+**Tamanho do payload corrigido:** em JSON compacto, o que a API devolve, são
+153 KB (AWS) e 81 KB (GCP). Os 171 e 97 KB citados antes incluíam espaços de
+formatação. Corrigido no contrato, no plano e no MCP.PLAN.
+
+**Análise de impacto**
+
+| onde | efeito |
+|---|---|
+| `GET /v1/analyses/{id}/request` e validação de inventário do `/start` | refatorados para o use case comum, **sem mudança de comportamento** (126 casos idênticos, testes existentes sem alteração) |
+| `POST /v1/agent/analyses/{id}/result` | só a marcação de deprecated e o texto do OpenAPI; comportamento igual |
+| Rotas novas | atrás de `AGENT_SNAPSHOT_ENABLED=false`: nada muda em dev e produção até ligar |
+| Banco | migração nova, só tabelas novas. A imagem não migra sozinha; com a flag desligada, nada consulta as tabelas. Exige PG 15+ (a CI usa 16 e roda `alembic upgrade head`) |
+| Varredura periódica | etapa nova isolada; não faz nada com a flag desligada |
+| Exclusão de conta | alcança as tabelas novas por cascata, com teste |
+| Front | nada muda; a tela continua nas rotas antigas |
+| MCP | o MCP atual continua funcionando nas rotas antigas; a migração deles segue o contrato v2 |
+| Desempenho | preparação de cerca de 1 s por chamada e uma gravação de 40 a 150 KB por snapshot novo |
+
+**Para ligar no dev:** conferir a versão do Postgres (15+),
+`alembic upgrade head`, `seed_classification_rules` (pendência anterior) e só
+então `AGENT_SNAPSHOT_ENABLED=true`. Depois, avisar o time do MCP.
+
 **Crítica do item F**
 - **O E2E não cobre o cliente MCP real.** Só a API. O caminho completo
   (tool → API) depende do time do MCP rodar a develop deles contra a nossa. Os
@@ -394,7 +435,7 @@ versões.
 4. **O defeito da rota antiga continua até a remoção.** É a maior fragilidade
    da transição. Mitigação: condição de uso combinada e data de remoção depois
    da migração do MCP.
-5. **Tamanho do payload:** 171 KB no billing AWS real, cerca de 43 mil tokens
+5. **Tamanho do payload:** 153 KB no billing AWS real, cerca de 39 mil tokens
    por leitura. O contrato tem `versions.contract` para uma visão compacta
    futura, mas este plano não a entrega.
 6. **O que este plano não faz:** não muda regra de autoridade (fica no plano de

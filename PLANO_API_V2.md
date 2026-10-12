@@ -365,7 +365,30 @@ valor tenha deixado de ser reprodutível.**
 # 9. O que falta para o fluxo novo funcionar
 
 Os oito blocos estão prontos e mergeados em `develop`. O fluxo MCP+Agente **não
-funciona ponta a ponta** por três motivos, nenhum deles neste repositório.
+funcionava ponta a ponta**, e uma parte do motivo **era deste repositório**, ao
+contrário do que esta seção dizia até 11/10/2026 (ver 9.0).
+
+> **Revisão de 12/10/2026.** O §9 dizia "nenhum deles neste repositório" e que a
+> flag estava `false`. As duas coisas estavam erradas ou desatualizadas: o envio
+> do agente tinha uma lacuna no backend (9.0), e o padrão da flag é `true`
+> desde 13/09 (9.3).
+
+## 9.0 O envio do agente dependia de análise feita pela tela · **resolvido no código**
+
+Encontrado em 11/10/2026 na API local. `GET /v1/analyses/{id}/request`
+recalculava sem gravar, e `POST /v1/agent/analyses/{id}/result` exigia uma
+análise gravada: num relatório novo, respondia `409 PAYLOAD_AUSENTE` com
+`retryable: true`, e repetir o GET não resolvia (o agente entraria em loop).
+Com análise gravada, o envio corrigia contra "a última análise", não contra o
+que o agente leu, e **gravava por cima da análise da tela**, apagando o texto do
+LLM. O teste de integração não pegava porque inseria a análise à mão.
+
+Resolvido pelo [`PLANO_SNAPSHOT_AGENTE.md`](PLANO_SNAPSHOT_AGENTE.md), com o
+desenho proposto pelo time do MCP: `POST /v1/agent/snapshots` grava o snapshot
+lido, e `POST /v1/agent/snapshots/{id}/submissions` corrige contra ele, com
+idempotência pelo conteúdo, versões e transação, sem tocar nas análises da tela.
+Atrás de `AGENT_SNAPSHOT_ENABLED` (padrão `false`). A rota antiga ficou
+deprecated (10.6).
 
 ## 9.1 O MCP precisa implementar as três tools · **bloqueante**
 
@@ -382,8 +405,10 @@ e testes. **Ainda não foi entregue ao responsável.**
 A terceira é a que fecha o circuito com o `POST /v1/agent/analyses/{id}/result`
 deste repo. Especificada em `MCP.PLAN/08-CONTESTACAO-E-SUGESTOES.md`.
 
-O MCP hoje é só um servidor de prompts: `grep -rn "fetch|axios" src/` não retorna
-nada. Não é ajuste — é capacidade nova.
+~~O MCP hoje é só um servidor de prompts~~. **Atualização de 11/10/2026:** a
+revisão do time do MCP mostrou que as três tools já estão implementadas na
+develop do `ost-mcp.nodejs` (`0550305`). O que falta do lado deles é migrar para
+o contrato de snapshot (`MCP.PLAN/09-CONTRATO-SNAPSHOT.md`).
 
 ## 9.2 O cliente MCP precisa mandar a identidade do usuário
 
@@ -395,8 +420,10 @@ Sem isso as tools respondem `SEM_CREDENCIAL` e nada funciona.
 
 ## 9.3 Ligar o interruptor
 
-`AGENT_FLOW_ENABLED=true` no ambiente. Hoje `false` em dev e produção — as rotas
-`/v1/agent/*` respondem 404 como se não existissem.
+`AGENT_FLOW_ENABLED=true` no ambiente. ~~Hoje `false` em dev e produção~~: o
+padrão no código é `true` desde 13/09/2026; falta confirmar que o ambiente não
+sobrescreve. As rotas de snapshot pedem também `AGENT_SNAPSHOT_ENABLED=true`, que
+só deve ser ligado depois da migração `e7f8a9b0c1d2`.
 
 **Ligar não desliga o legado.** A virada real é o frontend parar de chamar
 `POST /v1/analyses/start`.
@@ -465,3 +492,19 @@ Os fetchers coletam `us-east-1` (AWS), `eastus` (Azure), `us-central1` (GCP). Um
 bill com carga em São Paulo é cotado com preço da Virgínia, que é mais barato —
 a economia estimada sai otimista. Corrigir exige mapear a região do bill para a
 do provedor-alvo.
+
+## 10.5 A "fila de sync" das contestações não existe
+
+O §4.2 e o adendo do MCP prometem que as contestações de preço do agente viram
+fila de sync. Elas são gravadas e exibidas, e nada mais: nenhum processo as lê,
+verifica ou ressincroniza. Registrado em 11/10/2026. A verificação de
+contestação contra a fonte oficial de preço fica para o plano de autoridade,
+depois do preço por região.
+
+## 10.6 A rota antiga do envio sobrescreve a análise da tela
+
+`POST /v1/agent/analyses/{report_id}/result` grava a resposta do agente por cima
+da última análise com payload do relatório, inclusive a feita pela tela.
+Deprecated desde 12/10/2026, sem mudança de comportamento; a condição combinada
+com o time do MCP é usá-la só com relatório de teste até migrarem para o envio
+por snapshot. **A remoção precisa de data**, senão vira dívida permanente.

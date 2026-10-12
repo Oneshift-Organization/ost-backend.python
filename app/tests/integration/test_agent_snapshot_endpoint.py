@@ -636,3 +636,52 @@ async def test_openapi_marca_a_rota_antiga_como_deprecated(app: FastAPI) -> None
         "/v1/agent/submissions/{submission_id}",
     ):
         assert novo in caminhos
+
+
+# ── bateria do time do MCP: os cenários que faltavam (F1) ────────────────
+
+
+async def test_dois_inventarios_dao_dois_snapshots_independentes(
+    app: FastAPI, oci: UUID, mocks_inventario: Any
+) -> None:
+    async with _cliente(app) as c:
+        a = await _inventario(c, mocks_inventario.oci)
+        b = await _inventario(c, mocks_inventario.oci)
+        try:
+            snap_a = await _preparar(c, oci, a)
+            snap_b = await _preparar(c, oci, b)
+            assert snap_a["snapshot"]["snapshot_id"] != snap_b["snapshot"]["snapshot_id"]
+            assert snap_a["payload"]["topologia"]["inventario_id"] == str(a)
+            assert snap_b["payload"]["topologia"]["inventario_id"] == str(b)
+            # Mexer em B não afeta o envio contra A.
+            await _apagar_inventario(b)
+            r = await _enviar(c, snap_a["snapshot"]["snapshot_id"], _ENVIO)
+            assert r.status_code == 201, r.text
+            assert r.json()["submission"]["snapshot_id"] == snap_a["snapshot"]["snapshot_id"]
+            r_b = await _enviar(c, snap_b["snapshot"]["snapshot_id"], _ENVIO)
+            assert _detalhe(r_b)["motivo"] == "inventario"
+        finally:
+            await _apagar_snapshots(oci)
+            await _apagar_inventario(a)
+            await _apagar_inventario(b)
+
+
+async def test_relatorio_pronto_sem_dados_e_contexto_indisponivel(
+    app: FastAPI, _db_ready: None
+) -> None:
+    vazio = BillingReport(user_id=HTTP_USER, source_filename="vazio.csv")
+    vazio.status = JobStatus.DONE
+    async with get_sessionmaker()() as s:
+        await PgBillingReportRepository(s).save(vazio)
+        await s.commit()
+    try:
+        async with _cliente(app) as c:
+            r = await c.post("/v1/agent/snapshots", json={"report_id": str(vazio.id)})
+            req = await c.get(f"/v1/analyses/{vazio.id}/request")
+        assert r.status_code in (404, 422)
+        assert _detalhe(r)["codigo"] == "CONTEXTO_INDISPONIVEL"
+        assert _detalhe(r)["retryable"] is False
+        # O mesmo erro do /request, pelo mesmo montador.
+        assert (req.status_code, _detalhe(req)) == (r.status_code, _detalhe(r))
+    finally:
+        await _cleanup(vazio.id)
