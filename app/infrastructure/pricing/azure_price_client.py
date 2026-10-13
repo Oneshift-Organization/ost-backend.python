@@ -9,6 +9,7 @@ pay-as-you-go: exclui Windows, Spot e Low Priority. Sem dependência externa
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -26,6 +27,17 @@ _HTTP_TOO_MANY_REQUESTS = 429
 # Famílias workhorse de propósito geral/compute/memória. Especializadas (M mem
 # extrema, L storage, N GPU, H HPC, G) têm preço distorcido para compute comum.
 _GENERAL_FAMILIES = frozenset({"b", "d", "e", "f"})
+# Computação confidencial (DCsv3, ECasv5): enclave e memória cifrada, preço de
+# especializada. Começa com D e E, então passava no filtro de família e virava
+# destino de pool comum.
+_CONFIDENCIAIS = frozenset({"dc", "ec"})
+_SERIE = re.compile(r"^Standard_([A-Za-z]+)\d")
+
+
+def _serie(arm: str) -> str:
+    """`Standard_DC2s_v3` → `dc`; `Standard_D4s_v5` → `d`."""
+    m = _SERIE.match(arm)
+    return m.group(1).lower() if m else ""
 
 
 def _espera(tentativa: int, retry_after: str | None) -> float:
@@ -106,6 +118,8 @@ def fetch_azure_vm_prices(
                 continue
             family = arm.split("_", 1)[1][:1].lower() if "_" in arm else ""
             if family not in _GENERAL_FAMILIES:
+                continue
+            if _serie(arm) in _CONFIDENCIAIS:
                 continue
             price = Decimal(str(item.get("retailPrice") or 0))
             if price <= 0:

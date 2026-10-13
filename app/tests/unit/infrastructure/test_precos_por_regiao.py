@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from app.infrastructure.pricing import aws_price_client as aws
+from app.infrastructure.pricing import azure_price_client as azure
 from app.infrastructure.pricing import category_rate_client as crc
 from app.infrastructure.pricing import gcp_price_client as gcp
 from app.infrastructure.pricing import oci_price_client as oci
@@ -412,3 +413,21 @@ def test_sync_pede_uma_regiao_por_zona_sem_repetir() -> None:
     assert regioes["aws"] == ["sa-east-1", "us-east-2"], "texas usa a vizinha us-east-2"
     assert regioes["gcp"] == ["southamerica-east1", "us-central1", "us-south1"]
     assert regioes["oci"] == ["sa-saopaulo-1", "us-chicago-1"]
+
+
+# ── Azure: computação confidencial fora ──────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("arm", "serie"),
+    [
+        ("Standard_DC2s_v3", "dc"),
+        ("Standard_EC4as_v5", "ec"),
+        ("Standard_D4s_v5", "d"),
+        ("Standard_DS2_v2", "ds"),
+        ("Standard_B2pts_v2", "b"),
+    ],
+)
+def test_serie_da_azure(arm: str, serie: str) -> None:
+    assert azure._serie(arm) == serie
+    assert (serie in azure._CONFIDENCIAIS) is (serie in {"dc", "ec"})

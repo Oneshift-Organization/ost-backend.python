@@ -704,8 +704,14 @@ class BuildMigrationContextUseCase:
                     zona=zona_categorias,
                     regiao_origem=regiao_origem,
                 )
+                # Só avisa o que um sync corrige: taxa oficial do provedor
+                # existe, mas não na zona. Taxa que só existe como referência
+                # (banco, disco da Azure) não tem fonte regional para buscar.
+                com_oficial = {
+                    p.provider.lower() for p in rate_points if p.confidence == "official"
+                }
                 for prov, taxa in rates.items():
-                    if taxa.approximate:
+                    if taxa.approximate and prov in com_oficial:
                         cotacoes_aproximadas.append(
                             {
                                 "provedor": prov,
