@@ -154,6 +154,13 @@ mais antigo, com as revisões. Cada item:
 }
 ```
 
+## `GET /v1/agent/submissions/{submission_id}/service-couplings`
+
+O acoplamento por serviço calculado do snapshot que o agente leu: o mesmo corpo
+de `GET /v1/analyses/{job_id}/service-couplings`. Contrato em
+[`service-couplings.md`](service-couplings.md). `404 ENVIO_NAO_ENCONTRADO`;
+`409 ANALISE_SEM_SERVICOS` quando o payload não tem a lista de serviços.
+
 ## Garantias e manutenção
 
 - Concorrência no banco: reaproveitamento por `INSERT … ON CONFLICT` no índice

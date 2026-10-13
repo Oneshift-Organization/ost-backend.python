@@ -24,12 +24,14 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import (
     CurrentUser,
     DbSession,
+    consultar_acoplamento_uc,
     consultar_envios_uc,
     preparar_snapshot_uc,
     submeter_analise_uc,
 )
 from app.api.v1.envelope import erro, erro_do_payload
 from app.core.config import get_settings
+from app.core.exceptions import ConflictError, NotFoundError
 from app.domain.entities.agent_snapshot import AgentSnapshot, AgentSubmission
 from app.schemas.agent_snapshot import (
     EnvioDoAgenteIn,
@@ -41,6 +43,7 @@ from app.schemas.agent_snapshot import (
     SnapshotOut,
     SnapshotPreparadoOut,
 )
+from app.schemas.service_couplings import ServiceCouplingsResponse
 from app.use_cases.agent.submeter_analise import EnvioRegistrado
 from app.use_cases.analysis.payload_do_agente import PayloadDoAgenteError
 
@@ -199,6 +202,30 @@ async def obter_envio(
             retryable=False,
         )
     return _envio_out(*encontrado)
+
+
+@router.get(
+    "/submissions/{submission_id}/service-couplings",
+    response_model=ServiceCouplingsResponse,
+    summary="Acoplamento por serviço do payload que o agente leu",
+)
+async def obter_acoplamento_do_envio(
+    submission_id: UUID, user: CurrentUser, session: DbSession
+) -> ServiceCouplingsResponse:
+    """A mesma visão de `GET /v1/analyses/{job_id}/service-couplings`, calculada
+    do snapshot do envio. PLANO_LOCKIN_INVENTARIO §4."""
+    _exigir_flags()
+    try:
+        visao = await consultar_acoplamento_uc(session).do_envio(UUID(user.sub), submission_id)
+    except NotFoundError as e:
+        raise erro(
+            status.HTTP_404_NOT_FOUND, "ENVIO_NAO_ENCONTRADO", str(e), retryable=False
+        ) from e
+    except ConflictError as e:
+        raise erro(
+            status.HTTP_409_CONFLICT, "ANALISE_SEM_SERVICOS", str(e), retryable=False
+        ) from e
+    return ServiceCouplingsResponse.de(visao)
 
 
 @router.get(

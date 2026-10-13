@@ -23,10 +23,12 @@ from app import main
 from app.api.deps import _DEV_USER
 from app.core import config
 from app.domain.entities.agent_snapshot import AgentSnapshot, agora
+from app.domain.entities.analysis_job import AnalysisJob, AnalysisStatus
 from app.domain.entities.billing_report import BillingReport, JobStatus
 from app.domain.services.fingerprint_payload import hash_canonico
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.repositories.pg_agent_snapshot_repo import PgAgentSnapshotRepository
+from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
 from app.infrastructure.repositories.pg_billing_report_repo import PgBillingReportRepository
 from app.main import create_app
 from app.schemas.agent_snapshot import EnvioDoAgenteIn
@@ -686,3 +688,80 @@ async def test_relatorio_pronto_sem_dados_e_contexto_indisponivel(
         assert (req.status_code, _detalhe(req)) == (r.status_code, _detalhe(r))
     finally:
         await _cleanup(vazio.id)
+
+
+# ── acoplamento por serviço (PLANO_LOCKIN_INVENTARIO A4) ────────────────
+
+
+async def _job(rid: UUID, payload: dict[str, Any] | None, **campos: Any) -> UUID:
+    job = AnalysisJob(
+        job_id=uuid4(),
+        user_id=campos.pop("user_id", HTTP_USER),
+        report_id=rid,
+        status=campos.pop("status", AnalysisStatus.COMPLETED),
+        llm_input_payload=payload,
+    )
+    async with get_sessionmaker()() as s:
+        await PgAnalysisJobRepository(s).create(job)
+        await s.commit()
+    return job.job_id
+
+
+async def test_acoplamento_da_analise_e_do_envio_sao_a_mesma_visao(app: FastAPI, oci: UUID) -> None:
+    try:
+        async with _cliente(app) as c:
+            preparado = await _preparar(c, oci)
+            snapshot_id = preparado["snapshot"]["snapshot_id"]
+            enviado = await _enviar(c, snapshot_id, _ENVIO)
+            assert enviado.status_code in (200, 201), enviado.text
+            envio_id = enviado.json()["submission"]["submission_id"]
+            do_envio = await c.get(f"/v1/agent/submissions/{envio_id}/service-couplings")
+            assert do_envio.status_code == 200, do_envio.text
+
+            async with get_sessionmaker()() as s:
+                completo = (
+                    await s.execute(
+                        text("select payload from agent_snapshots where id = :i"),
+                        {"i": snapshot_id},
+                    )
+                ).scalar_one()
+            job_id = await _job(oci, completo)
+            da_analise = await c.get(f"/v1/analyses/{job_id}/service-couplings")
+            assert da_analise.status_code == 200, da_analise.text
+
+        corpo = da_analise.json()
+        assert corpo == do_envio.json()
+        assert corpo["versao"] == "acoplamento-v1"
+        assert corpo["reconciliacao"]["status"] == "fecha"
+        assert corpo["resumo"]["servicos"] == len(corpo["servicos"])
+        assert len({s["id"] for s in corpo["servicos"]}) == len(corpo["servicos"])
+    finally:
+        await _sql("delete from analysis_jobs where report_id = :r", r=oci)
+        await _apagar_snapshots(oci)
+
+
+async def test_acoplamento_recusa_o_que_nao_pode_mostrar(app: FastAPI, oci: UUID) -> None:
+    try:
+        pendente = await _job(oci, {"decision_workloads": []}, status=AnalysisStatus.PENDING)
+        antiga = await _job(oci, {"pools_computacao": []})
+        de_outro = await _job(oci, {"decision_workloads": []}, user_id=TEST_USER)
+        async with _cliente(app) as c:
+            r_pendente = await c.get(f"/v1/analyses/{pendente}/service-couplings")
+            r_antiga = await c.get(f"/v1/analyses/{antiga}/service-couplings")
+            r_outro = await c.get(f"/v1/analyses/{de_outro}/service-couplings")
+            r_sem_job = await c.get(f"/v1/analyses/{uuid4()}/service-couplings")
+            r_sem_envio = await c.get(f"/v1/agent/submissions/{uuid4()}/service-couplings")
+        assert (r_pendente.status_code, r_antiga.status_code) == (409, 409)
+        assert "decision_workloads" in r_antiga.json()["detail"]
+        assert (r_outro.status_code, r_sem_job.status_code) == (404, 404)
+        assert r_sem_envio.status_code == 404
+        assert _detalhe(r_sem_envio)["codigo"] == "ENVIO_NAO_ENCONTRADO"
+    finally:
+        await _sql("delete from analysis_jobs where report_id = :r", r=oci)
+
+
+async def test_acoplamento_do_envio_segue_a_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    for app in _app(monkeypatch, AGENT_SNAPSHOT_ENABLED="false"):
+        async with _cliente(app) as c:
+            r = await c.get(f"/v1/agent/submissions/{uuid4()}/service-couplings")
+        assert (r.status_code, _detalhe(r)["codigo"]) == (404, "SNAPSHOT_DESLIGADO")
