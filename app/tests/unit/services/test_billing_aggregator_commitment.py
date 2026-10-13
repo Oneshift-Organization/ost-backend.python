@@ -126,3 +126,38 @@ async def test_cost_conservation_holds() -> None:
     res = await agg.aggregate(lines, "aws")
     pool_cost = sum((p.monthly_cost for p in res.pools), Decimal("0"))
     assert pool_cost + res.auxiliary.commitment == Decimal("170")
+
+
+@pytest.mark.asyncio
+async def test_compute_commitment_is_separated_from_database_reservations() -> None:
+    """Do compromisso, só o que paga máquina virtual vai para `commitment_compute`
+    (PLANO_EMPACOTAMENTO, F2). Reserva de RDS continua só em `commitment`."""
+    agg = BillingAggregator()
+    res = await agg.aggregate(
+        [
+            _line(
+                component_type="core",
+                cost="8184",
+                usage_amount=None,
+                usage_unit=None,
+                usage_type="ComputeSP:3yrNoUpfront",
+            ),
+            _line(
+                component_type="core",
+                cost="550.56",
+                usage_amount=None,
+                usage_unit=None,
+                usage_type="HeavyUsage:db.r8g.2xl",
+            ),
+            _line(
+                component_type="commitment",
+                cost="94.88",
+                usage_amount=None,
+                usage_unit=None,
+                usage_type="EC2SP:r7g.1yrNoUpfront",
+            ),
+        ],
+        "aws",
+    )
+    assert res.auxiliary.commitment == Decimal("8829.44")
+    assert res.auxiliary.commitment_compute == Decimal("8278.88")

@@ -57,8 +57,12 @@ _HASH_POR_VERSAO = {
     # v2: payback.meses derivado da premissa do agente (PLANO_PRECO_REGIONAL D11).
     # SHA-256 do código das regras, não credencial. Entre parênteses porque o
     # gitleaks lia "authority": "<hex>" na mesma linha como chave de API.
+    # Hash trocado sem subir a versão (PLANO_EMPACOTAMENTO): `reconcile_pricing`
+    # passou a ler `premissas.compromisso_de_compute`, que só existe em payload
+    # preparado depois da mudança. Snapshot antigo reconcilia igual (teste em
+    # test_equivalence_pricing.py).
     "agent-authority-v2": (
-        "5a8d8a3a90538ce1491868bdc37a02b4b143e865e37ae50e6cafd0897b0b92ee"
+        "7329f9fd996a9a63d2f182528642c22bca96d5b543a33594593384a03f543b66"
     ),
 }
 

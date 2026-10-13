@@ -24,6 +24,7 @@ v2 passarem.
 | V3.3 | Classificação de serviço | Cloud Filestore, MSK e os nomes de serviço da OCI | fila, item 5; achados do acoplamento |
 | V3.4 | Herança de classe para serviço curado sem lock-in | 15 dos 24 serviços do bill AWS seguem "a confirmar" | revisão do bloco A do acoplamento |
 | V3.5 | Bloco C do acoplamento | exclusividade e dependência do inventário entram no score | `PLANO_LOCKIN_INVENTARIO` §5 |
+| V3.6 | Pool coberto por compromisso marcado na tabela de equivalência | o C7G aparece a 7–8x pool a pool; o total já está certo | `PLANO_EMPACOTAMENTO` §5.1 |
 
 ### V3.1 Contestação verificável
 
@@ -59,6 +60,7 @@ com o que o agente disse, sem score e sem número.
 |---|---|---|
 | Cloud Filestore (GCP) | inferido `block_storage`; SKU em `storage_hdd`, o que gera cerca de 1.570 GB de disco HDD fantasma no Terraform | alias para `file_storage` (o catálogo já tem EFS, Azure Files, Filestore e OCI File Storage); SKU fora de `storage_hdd` |
 | Source Repository, SKU "Storage" | `storage_hdd` (custo zero no bill real) | `object_storage`, como o Artifact Registry |
+| Reserva de RDS e ElastiCache (`HeavyUsage:db.*`, `cache.*`) | `core`/`virtual_server` no enriquecimento | categoria do serviço de origem (banco, cache) — `PLANO_EMPACOTAMENTO` §5.3 |
 | Amazon MSK | inferido `relational_database` no bill real e `network` no mock | o MSK não está no catálogo: curar a linha como `stream_ingestion` (o tipo de Kinesis, Event Hubs e Pub/Sub), com o OCI Streaming compatível com Kafka como equivalente, e o alias |
 | OCI: `COMPUTE`, `DATABASE`, `BLOCK_STORAGE`, `OBJECT_STORAGE`, `NETWORK`, `LOAD_BALANCER` | 5 de 6 sem categoria no mock, fora do score | aliases revisados em `service_identity` |
 
@@ -101,6 +103,11 @@ o disco inteiro é cotado no meio-oeste (`PLANO_PRECO_REGIONAL` R4).
 - Sem região na linha, cai na zona dominante, com a fração declarada.
 - Medir nos 6 relatórios: só deve mudar bill com custo relevante fora da zona
   dominante.
+
+### P1b Burstable na origem para destino sem burstable
+
+T3A, T4G e T2 do bill AWS saem 3–6x no GCP: a vCPU burstable tem base de
+20–40% e é cotada como vCPU cheia (`PLANO_EMPACOTAMENTO` §5.2).
 
 ### P2 `perf_coef` (desempenho por vCPU entre gerações)
 

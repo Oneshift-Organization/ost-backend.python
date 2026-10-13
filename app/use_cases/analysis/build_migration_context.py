@@ -806,6 +806,8 @@ class BuildMigrationContextUseCase:
             fp.pool_key.as_str(): convert(fp.monthly_cost, fx) or Decimal("0")
             for fp in family_pools
         }
+        family_vcpus = {fp.pool_key.as_str(): fp.capacity.vcpus for fp in family_pools}
+        vcpus_cotados: dict[str, Decimal] = {}
         for fkey, equivs in family_equivalents.items():
             src = family_src.get(fkey, Decimal("0"))
             chosen: dict[str, EquivalentService] = {}
@@ -825,6 +827,27 @@ class BuildMigrationContextUseCase:
                         src,
                         fin.pricing_confidence,
                     )
+                    vcpus_cotados[e.provider.lower()] = vcpus_cotados.get(
+                        e.provider.lower(), Decimal("0")
+                    ) + family_vcpus.get(fkey, Decimal("0"))
+        # O compromisso que paga máquina virtual (Savings Plan de compute, reserva
+        # de EC2, CUD) sai da origem junto com os pools: o destino foi cotado
+        # on-demand pelas horas medidas, inclusive as que o compromisso pagava.
+        # Sem isto ele ficava no saldo mantido ao custo atual e o destino pagava
+        # as horas e a taxa do plano. Proporcional à capacidade que o provedor
+        # cotou: quem não cotou um pool não ganha o crédito dele.
+        compromisso_compute = (
+            convert(auxiliary.commitment_compute, fx) or Decimal("0")
+            if auxiliary is not None
+            else Decimal("0")
+        )
+        vcpus_dos_pools = sum(family_vcpus.values(), Decimal("0"))
+        compromisso_por_provedor: dict[str, Decimal] = {}
+        if compromisso_compute > 0 and vcpus_dos_pools > 0:
+            for provider, vcpus in vcpus_cotados.items():
+                parte = compromisso_compute * min(Decimal("1"), vcpus / vcpus_dos_pools)
+                compromisso_por_provedor[provider] = parte
+                _tally[provider]["covered"] += parte
         for category, cat_equivs in category_equivalents.items():
             src = convert(getattr(auxiliary, category, Decimal("0")), fx) or Decimal("0")
             for ce in cat_equivs:
@@ -903,6 +926,45 @@ class BuildMigrationContextUseCase:
                 else {}
             ),
             "fator_utilizacao": 1.0,
+            # Como o compute foi cotado: pela capacidade-hora medida, não por
+            # máquina inteira ligada o mês todo (PLANO_EMPACOTAMENTO).
+            "cotacao_compute": {
+                "base": "capacidade_hora",
+                "explicacao": (
+                    "Cada pool é cotado pelas horas de vCPU e de memória que rodou "
+                    "na origem: preço da instância de destino x 730 h x a fração "
+                    "dela que o pool ocupa. O número de instâncias é o "
+                    "dimensionamento para provisionar, arredondado para cima. "
+                    "Uma máquina pequena ligada o mês inteiro pode custar até "
+                    "uma instância inteira no destino."
+                ),
+            },
+            # Só aparece quando existe: o compromisso que paga máquina virtual
+            # saiu da origem junto com os pools (domain/services/compromisso_de_compute).
+            **(
+                {
+                    "compromisso_de_compute": {
+                        "valor": round(float(compromisso_compute), 2),
+                        "por_provedor": {
+                            k: round(float(v), 2)
+                            for k, v in sorted(compromisso_por_provedor.items())
+                        },
+                        "explicacao": (
+                            "Savings Plan, reserva ou CUD que paga horas de "
+                            "máquina virtual. O destino foi cotado on-demand "
+                            "pelas horas medidas, inclusive as que o compromisso "
+                            "pagava; por isso o compromisso sai da origem junto "
+                            "com os pools, na proporção da capacidade que cada "
+                            "provedor cotou, em vez de ficar no saldo mantido ao "
+                            "custo atual. Comprar compromisso no destino reduz o "
+                            "custo cotado. Pool a pool, o custo de origem segue "
+                            "líquido do compromisso e não é comparável sozinho."
+                        ),
+                    }
+                }
+                if compromisso_compute > 0
+                else {}
+            ),
             # Onde cada coisa foi cotada (PLANO_PRECO_REGIONAL). Sem isto um
             # número de São Paulo e um da Virgínia são indistinguíveis.
             "regioes": _ledger_de_regioes(

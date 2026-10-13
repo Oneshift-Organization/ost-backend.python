@@ -21,6 +21,7 @@ from app.domain.entities.workload_pool import (
     WorkloadPool,
 )
 from app.domain.services.azure_shape import parse_azure_shape
+from app.domain.services.compromisso_de_compute import paga_maquina_virtual
 from app.domain.services.instance_shape import parse_instance_shape
 from app.domain.services.regioes import regiao_da_linha
 from app.domain.services.sku_matcher import extract_family
@@ -154,6 +155,7 @@ class BillingAggregator:
         pool_buckets: dict[PoolKey, dict[str, Any]] = defaultdict(_novo_bucket)
         aux_totals: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
         commitment_cost = Decimal("0")
+        commitment_compute = Decimal("0")
         orphan_cost = Decimal("0")
         orphan_skus: list[str] = []
         confidence_breakdown: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
@@ -184,10 +186,14 @@ class BillingAggregator:
 
             if component_type == "commitment":
                 commitment_cost += cost
+                if paga_maquina_virtual(item.usage_type, item.service_name):
+                    commitment_compute += cost
             elif component_type in _COMPUTE_ROLES:
                 destino, sobra = self._accumulate_compute(pool_buckets, item, component_type, cost)
                 if destino == _COMPROMISSO:
                     commitment_cost += sobra
+                    if paga_maquina_virtual(item.usage_type, item.service_name):
+                        commitment_compute += sobra
                 elif destino == _ORFAO:
                     orphan_cost += sobra
                     orphan_skus.append(item.sku_id or item.usage_type or "unknown")
@@ -246,6 +252,7 @@ class BillingAggregator:
                 network_egress=aux_totals["network_egress"],
                 database=aux_totals["database"],
                 commitment=commitment_cost,
+                commitment_compute=commitment_compute,
                 orphan=orphan_cost,
                 orphan_skus=tuple(sorted(set(orphan_skus))),
             ),
