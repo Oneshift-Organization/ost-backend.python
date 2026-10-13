@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from app.domain.analysis import MigrationContext
+from app.domain.analysis import FinancialEstimate, MigrationContext
 from app.domain.entities.analysis_job import AnalysisJob
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.domain.repositories.i_billing_enriched_repo import IBillingEnrichedRepository
@@ -467,6 +467,36 @@ def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
     } for category in getattr(ctx, "categories", []) or [] for service in category.services]
 
 
+def _serialize_financeiro(fin: FinancialEstimate) -> dict[str, object]:
+    """O bloco `financeiro` de um equivalente: custo, delta e proveniência."""
+    fin_dict: dict[str, object] = {}
+    if fin.estimated_monthly_cost is not None:
+        fin_dict["custo_mensal_estimado"] = _round2(fin.estimated_monthly_cost)
+    if fin.cost_delta is not None:
+        fin_dict["delta_custo"] = _round2(fin.cost_delta)
+    fin_dict["confianca_preco"] = fin.pricing_confidence
+    # Proveniência: sem ela, "official" pode ser de ontem ou de três meses e
+    # ninguém sabe. A IDADE é o que torna isso acionável — é o número que
+    # deixa um consumidor (tela ou agente) decidir se confia ou contesta.
+    origem = getattr(fin, "price_source", None)
+    if origem:
+        fin_dict["preco_origem"] = origem
+    capturado = getattr(fin, "price_captured_at", None)
+    if capturado is not None:
+        fin_dict["preco_capturado_em"] = capturado.date().isoformat()
+        fin_dict["preco_idade_dias"] = max(
+            0, (datetime.now(UTC).replace(tzinfo=None) - _naive(capturado)).days
+        )
+    # Onde o preço vale. `aproximada` só aparece quando é verdade: a região
+    # pedida não tinha preço e a cotação usou outra (PLANO_PRECO_REGIONAL D6).
+    regiao = getattr(fin, "price_region", None)
+    if regiao:
+        fin_dict["preco_regiao"] = regiao
+    if getattr(fin, "price_region_approximate", False):
+        fin_dict["preco_regiao_aproximada"] = True
+    return fin_dict
+
+
 def _serialize_equivalent(equiv) -> dict:
     """Serialize a single EquivalentService to a JSON-safe dict.
 
@@ -493,6 +523,10 @@ def _serialize_equivalent(equiv) -> dict:
     instances = getattr(equiv, "instances", 1)
     if instances > 1:
         d["instancias"] = instances
+    # Só aparece quando é verdade: a cotação trocou x86 por ARM (ou o inverso)
+    # porque o destino não tinha a mesma arquitetura cobrindo o pool.
+    if getattr(equiv, "architecture_mismatch", False):
+        d["arquitetura_diferente"] = True
 
     tm = getattr(equiv, "technical_match", None)
     if tm is not None:
@@ -502,25 +536,7 @@ def _serialize_equivalent(equiv) -> dict:
 
     fin = getattr(equiv, "financials", None)
     if fin is not None:
-        fin_dict: dict[str, object] = {}
-        if fin.estimated_monthly_cost is not None:
-            fin_dict["custo_mensal_estimado"] = _round2(fin.estimated_monthly_cost)
-        if fin.cost_delta is not None:
-            fin_dict["delta_custo"] = _round2(fin.cost_delta)
-        fin_dict["confianca_preco"] = fin.pricing_confidence
-        # Proveniência: sem ela, "official" pode ser de ontem ou de três meses e
-        # ninguém sabe. A IDADE é o que torna isso acionável — é o número que
-        # deixa um consumidor (tela ou agente) decidir se confia ou contesta.
-        origem = getattr(fin, "price_source", None)
-        if origem:
-            fin_dict["preco_origem"] = origem
-        capturado = getattr(fin, "price_captured_at", None)
-        if capturado is not None:
-            fin_dict["preco_capturado_em"] = capturado.date().isoformat()
-            fin_dict["preco_idade_dias"] = max(
-                0, (datetime.now(UTC).replace(tzinfo=None) - _naive(capturado)).days
-            )
-        d["financeiro"] = fin_dict
+        d["financeiro"] = _serialize_financeiro(fin)
 
     meta = getattr(equiv, "metadata", None)
     if meta:

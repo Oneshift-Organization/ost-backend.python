@@ -29,7 +29,7 @@ from app.domain.repositories.i_billing_report_repo import IBillingReportReposito
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
-from app.domain.services.alertas import avaliar_cambio
+from app.domain.services.alertas import avaliar_cambio, avaliar_regioes
 from app.domain.services.category_calculator import (
     CategoryRate,
     estimate_by_cost_ratio,
@@ -49,6 +49,7 @@ from app.domain.services.migration_expectation import (
     derive_expectation,
     learn_class_defaults,
 )
+from app.domain.services.perfil_de_familia import perfil
 from app.domain.services.pool_aggregation import aggregate_by_family
 from app.domain.services.premissas_detalhadas import (
     base_de_custo,
@@ -61,6 +62,14 @@ from app.domain.services.provider_consolidation import (
     weakest_confidence,
 )
 from app.domain.services.reconciliation import reconcile
+from app.domain.services.regioes import (
+    ZONA_PADRAO,
+    escolher_regiao_de_preco,
+    regiao_canonica,
+    regiao_da_linha,
+    regiao_dominante,
+    zona_da_regiao,
+)
 from app.domain.services.service_identity import (
     financial_category,
     is_financial_component,
@@ -110,6 +119,89 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         "Simple Workflow Service": "AWS Step Functions",
     },
 }
+
+
+_RANK_CONFIANCA = {"official": 2, "reference": 1, "low": 0}
+
+
+def _taxas_por_provedor(
+    pontos: list[Any],
+    categoria: str,
+    *,
+    source_provider: str,
+    zona: str,
+    regiao_origem: str | None,
+) -> dict[str, CategoryRate]:
+    """Uma taxa por provedor, da região escolhida para ele.
+
+    A região vem primeiro (`regioes.escolher_regiao_de_preco`); dentro dela,
+    `official` vence `reference`, e a captura mais recente desempata. Taxa
+    oficial de outra região entra como `reference`.
+    """
+    por_provedor: dict[str, list[Any]] = {}
+    for p in pontos:
+        if p.currency == ANALYSIS_CURRENCY:
+            por_provedor.setdefault(p.provider.lower(), []).append(p)
+    taxas: dict[str, CategoryRate] = {}
+    for prov, pts in sorted(por_provedor.items()):
+        preferidas = [regiao_canonica(zona, prov)]
+        if prov == source_provider.lower():
+            preferidas.insert(0, regiao_origem)
+        escolha = escolher_regiao_de_preco(
+            prov, preferidas, {p.region for p in pts}, service_type=categoria
+        )
+        if escolha is None:
+            continue
+        melhor = max(
+            (p for p in pts if p.region == escolha.regiao),
+            key=lambda x: (
+                _RANK_CONFIANCA.get(x.confidence, 0),
+                str(x.captured_at or ""),
+                x.sku_key,
+            ),
+        )
+        confianca = melhor.confidence
+        if escolha.aproximada and confianca == "official":
+            confianca = "reference"
+        taxas[prov] = CategoryRate(
+            provider=prov,
+            rate=melhor.price,
+            unit=melhor.unit,
+            confidence=confianca,
+            region=escolha.regiao,
+            approximate=escolha.aproximada,
+        )
+    return taxas
+
+
+def _sem_repetir(itens: list[dict[str, str]]) -> list[dict[str, str]]:
+    vistos = {tuple(sorted(i.items())): i for i in itens}
+    return [vistos[k] for k in sorted(vistos)]
+
+
+def _ledger_de_regioes(
+    *,
+    zona_por_pool: dict[str, str],
+    pools_sem_zona: list[str],
+    zona_categorias: str,
+    regiao_origem_categorias: str | None,
+    aproximadas: list[dict[str, str]],
+) -> dict[str, Any]:
+    pools_por_zona: dict[str, list[str]] = {}
+    for pool, zona in sorted(zona_por_pool.items()):
+        if pool not in pools_sem_zona:
+            pools_por_zona.setdefault(zona, []).append(pool)
+    ledger: dict[str, Any] = {
+        "zona_padrao": ZONA_PADRAO,
+        "pools_por_zona": pools_por_zona,
+        "zona_categorias": zona_categorias,
+        "regiao_origem_categorias": regiao_origem_categorias,
+    }
+    if pools_sem_zona:
+        ledger["pools_sem_zona"] = sorted(pools_sem_zona)
+    if aproximadas:
+        ledger["cotacoes_aproximadas"] = aproximadas
+    return ledger
 
 
 def _normalize(name: str) -> str:
@@ -472,23 +564,50 @@ class BuildMigrationContextUseCase:
         pool_equivalents: dict[str, list[EquivalentService]] = {}
         database_equivalents: list[EquivalentService] = []
 
+        # ── 9a. Regiões: onde cada pool roda e onde cada destino é cotado ──
+        # Cada pool é cotado na zona dele (São Paulo cota São Paulo em todos os
+        # provedores). Sem isto, todo bill era comparado com preço dos EUA.
+        zona_por_pool: dict[str, str] = {}
+        pools_sem_zona: list[str] = []
+        for fpool in family_pools:
+            zona = zona_da_regiao(source_provider, fpool.pool_key.region)
+            if zona is None:
+                pools_sem_zona.append(fpool.pool_key.as_str())
+                zona = ZONA_PADRAO
+            zona_por_pool[fpool.pool_key.as_str()] = zona
+        cotacoes_aproximadas: list[dict[str, str]] = []
+
         if self._matcher is not None and target_providers:
             curated_compute = await _get_equivalents("compute", "virtual_server")
 
             for fpool in family_pools:
                 monthly_cost_analysis = convert(fpool.monthly_cost, fx) or Decimal("0")
+                zona = zona_por_pool[fpool.pool_key.as_str()]
+                pedidas = {p: regiao_canonica(zona, p) for p in target_providers}
                 l2_options = await self._matcher.match_pool(
                     vcpus=fpool.capacity.vcpus,
                     ram_gib=fpool.capacity.ram_gib,
                     monthly_cost=monthly_cost_analysis,
                     service_type="virtual_server",
                     target_providers=target_providers,
+                    regioes={p: [r] for p, r in pedidas.items()},
+                    perfil_origem=perfil(source_provider, fpool.pool_key.machine_family),
                 )
                 providers_with_l2: set[str] = set()
-                equivs: list[EquivalentService] = []
+                equivs = []
 
                 for opt in l2_options:
                     providers_with_l2.add(opt.provider.lower())
+                    _fo = opt.financials
+                    if _fo is not None and _fo.price_region_approximate:
+                        cotacoes_aproximadas.append(
+                            {
+                                "provedor": opt.provider.lower(),
+                                "pedida": str(pedidas.get(opt.provider) or "?"),
+                                "cotada": str(_fo.price_region),
+                                "uso": "compute",
+                            }
+                        )
                     # L3: enrich with curated metadata
                     meta = target_meta_map.get((opt.provider.lower(),
                                                service_key(opt.provider, opt.service_name)))
@@ -502,6 +621,8 @@ class BuildMigrationContextUseCase:
                             pricing_confidence=opt.financials.pricing_confidence,
                             price_source=opt.financials.price_source,
                             price_captured_at=opt.financials.price_captured_at,
+                            price_region=opt.financials.price_region,
+                            price_region_approximate=opt.financials.price_region_approximate,
                         )
                     tm = None
                     if opt.technical_match is not None:
@@ -521,6 +642,7 @@ class BuildMigrationContextUseCase:
                         docs_costs=docs,
                         technical_match=tm,
                         financials=fin,
+                        architecture_mismatch=opt.architecture_mismatch,
                     ))
 
                 # L3-only curated fallback for providers without hardware match
@@ -553,6 +675,14 @@ class BuildMigrationContextUseCase:
         # Storage/egress não têm hardware; reprecificamos o custo (confiável) pela
         # razão de taxas por provedor. Provider-agnóstico, sem lógica por nuvem.
         category_equivalents: dict[str, list[dict[str, Any]]] = {}
+        # Os custos auxiliares não são separados por região: a taxa é a da zona
+        # dominante do bill (a de mais custo entre as linhas com região). A
+        # origem usa a própria região quando houver taxa dela (PLANO D7).
+        dominante = regiao_dominante(
+            (source_provider, regiao_da_linha(source_provider, i.region, i.usage_type), i.cost)
+            for i in items
+        )
+        zona_categorias, regiao_origem = dominante or (ZONA_PADRAO, None)
         if auxiliary is not None and self._price_repo is not None:
             aux_by_category = {
                 "storage_ssd": auxiliary.storage_ssd,
@@ -567,21 +697,33 @@ class BuildMigrationContextUseCase:
                 rate_points = await self._price_repo.rates_for_category(category)
                 if not rate_points:
                     continue
-                # Um provedor pode ter taxa official (fetch) E reference (seed).
-                # A official prevalece — ordenamos para ela ser aplicada por último.
-                _rank = {"official": 2, "reference": 1, "low": 0}
-                rates: dict[str, CategoryRate] = {}
-                for p in sorted(rate_points, key=lambda x: (
-                    _rank.get(x.confidence, 0), str(x.captured_at or ""), x.sku_key,
-                )):
-                    if p.currency != ANALYSIS_CURRENCY:
-                        continue
-                    rates[p.provider.lower()] = CategoryRate(
-                        provider=p.provider.lower(),
-                        rate=p.price,
-                        unit=p.unit,
-                        confidence=p.confidence,
-                    )
+                rates = _taxas_por_provedor(
+                    rate_points,
+                    category,
+                    source_provider=source_provider,
+                    zona=zona_categorias,
+                    regiao_origem=regiao_origem,
+                )
+                # Só avisa o que um sync corrige: taxa oficial do provedor
+                # existe, mas não na zona. Taxa que só existe como referência
+                # (banco, disco da Azure) não tem fonte regional para buscar.
+                com_oficial = {
+                    p.provider.lower() for p in rate_points if p.confidence == "official"
+                }
+                for prov, taxa in rates.items():
+                    if taxa.approximate and prov in com_oficial:
+                        cotacoes_aproximadas.append(
+                            {
+                                "provedor": prov,
+                                "pedida": str(
+                                    (regiao_origem if prov == source_provider else None)
+                                    or regiao_canonica(zona_categorias, prov)
+                                    or "?"
+                                ),
+                                "cotada": str(taxa.region),
+                                "uso": category,
+                            }
+                        )
                 source_cost = convert(aux_cost, fx) or Decimal("0")
                 equivs = estimate_by_cost_ratio(
                     source_provider=source_provider,
@@ -600,6 +742,18 @@ class BuildMigrationContextUseCase:
                             "taxa_destino": str(rates[e.provider].rate),
                             "unidade": rates[e.provider].unit,
                             "categoria": category,
+                            "taxa_origem_regiao": rates[source_provider].region,
+                            "taxa_destino_regiao": rates[e.provider].region,
+                            **(
+                                {"taxa_origem_aproximada": True}
+                                if rates[source_provider].approximate
+                                else {}
+                            ),
+                            **(
+                                {"taxa_destino_aproximada": True}
+                                if rates[e.provider].approximate
+                                else {}
+                            ),
                         }
                         for e in equivs
                     ]
@@ -701,6 +855,11 @@ class BuildMigrationContextUseCase:
         # somando moedas diferentes — e o rótulo `SEM_TAXA_CAMBIO` morria no
         # ledger sem que ninguém lesse.
         alertas = [a for a in (avaliar_cambio(fx, datetime.now(UTC).date()),) if a]
+        alertas += avaliar_regioes(
+            sem_zona=pools_sem_zona,
+            zona_padrao=ZONA_PADRAO,
+            aproximadas=_sem_repetir(cotacoes_aproximadas),
+        )
         confianca = avaliar_confianca(_custo_por_confianca).com_rebaixamento(
             [a.titulo for a in alertas if a.rebaixa]
         )
@@ -744,6 +903,15 @@ class BuildMigrationContextUseCase:
                 else {}
             ),
             "fator_utilizacao": 1.0,
+            # Onde cada coisa foi cotada (PLANO_PRECO_REGIONAL). Sem isto um
+            # número de São Paulo e um da Virgínia são indistinguíveis.
+            "regioes": _ledger_de_regioes(
+                zona_por_pool=zona_por_pool,
+                pools_sem_zona=pools_sem_zona,
+                zona_categorias=zona_categorias,
+                regiao_origem_categorias=regiao_origem,
+                aproximadas=_sem_repetir(cotacoes_aproximadas),
+            ),
             # Fração do gasto de compute cuja capacidade foi estimada por shape
             # (instance-hours → vCPU/RAM) em vez de faturada por-vCPU.
             "dimensionamento_estimado": (

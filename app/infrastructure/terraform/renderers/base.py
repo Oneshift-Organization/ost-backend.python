@@ -16,6 +16,7 @@ import re
 from collections import Counter
 from typing import Any, Protocol
 
+from app.domain.services.regioes import regiao_canonica, zona_da_regiao
 from app.infrastructure.terraform.hcl import (
     arquivo,
     atributo,
@@ -246,15 +247,49 @@ def readme(
     if topologia:
         partes += [_secao_topologia(topologia, moeda)]
     partes += [_secao_procedencia(procedencia)]
-    partes += [
+    partes += [_secao_custo(bp.provider.value, bp.region, procedencia)]
+    return "\n".join(partes).rstrip() + "\n"
+
+
+def _secao_custo(destino: str, regiao: str, premissas: dict[str, Any]) -> str:
+    """Onde a análise cotou o destino, e se a região escolhida é a mesma metrópole.
+
+    O pacote continua sem número: ele provisiona parte da fatura, e um total
+    aqui seria lido como o custo deste pacote. Mas a região importa — São Paulo
+    custa ~1,6x a Virgínia — e o cliente precisa saber se escolheu onde a
+    análise cotou.
+    """
+    linhas = [
         "## Sobre custo",
         "",
-        "Este pacote **não declara economia**. A cotação da análise usa uma "
-        "região de referência por provedor, que pode não ser a região escolhida "
-        "aqui — publicar um número seria comparar preços de lugares diferentes.",
+        "Este pacote **não declara economia**: a comparação de custo está na "
+        "análise, com as premissas, e cobre a fatura inteira, não só o que este "
+        "pacote provisiona.",
         "",
     ]
-    return "\n".join(partes).rstrip() + "\n"
+    zonas = sorted((premissas.get("regioes") or {}).get("pools_por_zona") or {})
+    cotadas = sorted({r for z in zonas if (r := regiao_canonica(z, destino))})
+    if not cotadas:
+        # Análise anterior à cotação regional: uma região fixa por provedor.
+        linhas += [
+            "A análise que gerou este pacote cotou cada provedor numa região de "
+            "referência fixa, que pode não ser a escolhida aqui.",
+            "",
+        ]
+        return "\n".join(linhas)
+    linhas += [
+        f"A análise cotou {destino.upper()} em {', '.join(f'`{r}`' for r in cotadas)}: "
+        "a região equivalente de onde cada carga roda hoje.",
+        "",
+    ]
+    if zona_da_regiao(destino, regiao) not in zonas:
+        linhas += [
+            f"⚠️ A região escolhida aqui, `{regiao}`, fica em outra metrópole. O preço "
+            "dela não é o que a análise cotou, e pode ser bem diferente (São Paulo "
+            "custa cerca de 1,6 vez a Virgínia).",
+            "",
+        ]
+    return "\n".join(linhas)
 
 
 def _secao_premissas(premissas: list[Premissa]) -> str:

@@ -14,7 +14,12 @@ from app.domain.entities.cloud_price_point import CloudPricePoint
 from app.domain.entities.cloud_sku import CloudSku
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
-from app.domain.services.equivalence_matcher import EquivalenceMatcher
+from app.domain.services.equivalence_matcher import (
+    EquivalenceMatcher,
+    EquivalentOption,
+    FinancialEstimate,
+)
+from app.domain.services.perfil_de_familia import perfil
 
 
 class _SkuRepo(ICloudSkuRepository):
@@ -44,7 +49,7 @@ class _PriceRepo(ICloudPricePointRepository):
         self._by = by_provider
 
     async def find(self, *, provider, service_type, region=None):
-        return self._by.get(provider, [])
+        return [p for p in self._by.get(provider, []) if region is None or p.region == region]
 
     async def rates_for_category(self, category: str):
         return []
@@ -52,7 +57,13 @@ class _PriceRepo(ICloudPricePointRepository):
     async def providers_with_prices(self, service_type: str) -> list[str]:
         return list(self._by)
 
+    async def regioes_com_preco(self, provider: str, service_type: str) -> list[str]:
+        return sorted({p.region for p in self._by.get(provider, [])})
+
     async def bulk_upsert(self, points):
+        return len(points), 0
+
+    async def substituir(self, points: list[CloudPricePoint]) -> tuple[int, int]:
         return len(points), 0
 
 
@@ -140,3 +151,111 @@ async def test_empate_prefere_menos_instancias() -> None:
         )
         assert opts[0].instances == 2, "deveria preferir 2x16vCPU a 8x4vCPU"
         assert opts[0].sku_id == "Standard_D16"
+
+
+# ── Cotação por região (PLANO_PRECO_REGIONAL R4) ─────────────────────────────
+
+
+def _vm(provider: str, region: str, price: str) -> CloudPricePoint:
+    return CloudPricePoint(
+        provider=provider, sku_key="vm-4x16", service_name="VM", service_type="virtual_server",
+        region=region, price=Decimal(price), currency="USD", unit="instance_hour",
+        vcpus=Decimal("4"), ram_gib=Decimal("16"), source="api", confidence="official",
+        captured_at=datetime.now(UTC),
+    )
+
+
+async def _cotar(
+    repo: _PriceRepo, provider: str, regioes: dict[str, list[str | None]] | None
+) -> FinancialEstimate:
+    matcher = EquivalenceMatcher(_SkuRepo({}), repo)
+    [opt] = await matcher.match_pool(
+        vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("100"),
+        service_type="virtual_server", target_providers=[provider], regioes=regioes,
+    )
+    assert opt.financials is not None
+    return opt.financials
+
+
+@pytest.mark.asyncio
+async def test_cota_na_regiao_pedida_e_nao_na_mais_barata() -> None:
+    repo = _PriceRepo({"aws": [_vm("aws", "us-east-1", "0.10"), _vm("aws", "sa-east-1", "0.16")]})
+    fin = await _cotar(repo, "aws", {"aws": ["sa-east-1"]})
+    assert fin.unit_price == Decimal("0.16")
+    assert fin.price_region == "sa-east-1"
+    assert not fin.price_region_approximate
+    assert fin.pricing_confidence == "official"
+
+
+@pytest.mark.asyncio
+async def test_sem_preco_da_regiao_aproxima_e_rebaixa_o_rotulo() -> None:
+    repo = _PriceRepo({"aws": [_vm("aws", "us-east-1", "0.10"), _vm("aws", "us-west-2", "0.11")]})
+    fin = await _cotar(repo, "aws", {"aws": ["sa-east-1"]})
+    assert fin.price_region == "us-east-1", "cai na região da zona padrão"
+    assert fin.price_region_approximate
+    assert fin.pricing_confidence == "reference", "preço oficial de outra região não é oficial aqui"
+
+
+@pytest.mark.asyncio
+async def test_oci_tem_preco_global_de_compute() -> None:
+    repo = _PriceRepo({"oci": [_vm("oci", "us-ashburn-1", "0.05")]})
+    fin = await _cotar(repo, "oci", {"oci": ["sa-saopaulo-1"]})
+    assert fin.price_region == "us-ashburn-1"
+    assert not fin.price_region_approximate
+    assert fin.pricing_confidence == "official"
+
+
+@pytest.mark.asyncio
+async def test_sem_regioes_mantem_o_comportamento_antigo() -> None:
+    repo = _PriceRepo({"aws": [_vm("aws", "us-east-1", "0.10"), _vm("aws", "sa-east-1", "0.16")]})
+    fin = await _cotar(repo, "aws", None)
+    assert fin.unit_price == Decimal("0.10")
+    assert fin.price_region is None
+
+
+# ── Perfil de família (PLANO_PRECO_REGIONAL R5) ──────────────────────────────
+
+
+def _aws(sku: str, price: str) -> CloudPricePoint:
+    return CloudPricePoint(
+        provider="aws", sku_key=sku, service_name="Amazon EC2", service_type="virtual_server",
+        region="us-east-1", price=Decimal(price), currency="USD", unit="instance_hour",
+        vcpus=Decimal("4"), ram_gib=Decimal("16"), source="api", confidence="official",
+        captured_at=datetime.now(UTC),
+    )
+
+
+async def _cotar_perfil(pontos: list[CloudPricePoint], familia: str) -> EquivalentOption:
+    matcher = EquivalenceMatcher(_SkuRepo({}), _PriceRepo({"aws": pontos}))
+    [opt] = await matcher.match_pool(
+        vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("100"),
+        service_type="virtual_server", target_providers=["aws"],
+        perfil_origem=perfil("gcp", familia),
+    )
+    return opt
+
+
+@pytest.mark.asyncio
+async def test_x86_nao_vira_arm_quando_ha_x86() -> None:
+    opt = await _cotar_perfil([_aws("m7g.xlarge", "0.16"), _aws("m7a.xlarge", "0.23")], "E2")
+    assert opt.sku_id == "m7a.xlarge"
+    assert not opt.architecture_mismatch
+
+
+@pytest.mark.asyncio
+async def test_carga_sustentada_nao_vira_burstable() -> None:
+    opt = await _cotar_perfil([_aws("t3.xlarge", "0.16"), _aws("m7a.xlarge", "0.23")], "N2")
+    assert opt.sku_id == "m7a.xlarge"
+
+
+@pytest.mark.asyncio
+async def test_sem_a_mesma_arquitetura_usa_a_outra_e_marca() -> None:
+    opt = await _cotar_perfil([_aws("m7g.xlarge", "0.16")], "E2")
+    assert opt.sku_id == "m7g.xlarge"
+    assert opt.architecture_mismatch
+
+
+@pytest.mark.asyncio
+async def test_arm_cotado_em_arm() -> None:
+    opt = await _cotar_perfil([_aws("m7g.xlarge", "0.20"), _aws("m7a.xlarge", "0.15")], "C4A")
+    assert opt.sku_id == "m7g.xlarge"

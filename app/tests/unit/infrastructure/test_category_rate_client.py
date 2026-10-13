@@ -29,8 +29,11 @@ def test_azure_egress_takes_first_tier_max(monkeypatch) -> None:
     assert pts[0].confidence == "official"
 
 
-def _oci_item(name: str, value: float) -> dict:
-    return {"displayName": name, "currencyCodeLocalizations": [{"prices": [{"value": value}]}]}
+def _oci_item(name: str, *values: float) -> dict:
+    return {
+        "displayName": name,
+        "currencyCodeLocalizations": [{"prices": [{"value": v} for v in values]}],
+    }
 
 
 def test_oci_block_storage_and_egress(monkeypatch) -> None:
@@ -38,7 +41,10 @@ def test_oci_block_storage_and_egress(monkeypatch) -> None:
         "items": [
             _oci_item("Storage - Block Volume - Storage", 0.0255),
             _oci_item("Storage - Block Volume - Free 200GB", 0.0),  # free tier ignorado
-            _oci_item("Outbound Data Transfer - Originating in APAC", 0.0085),
+            # 10 TB grátis, depois a taxa: a primeira faixa paga é a que vale.
+            _oci_item(
+                "Outbound Data Transfer - Originating in North America, Europe, and UK", 0, 0.0085
+            ),
         ]
     }
     monkeypatch.setattr(crc, "_get", lambda url, timeout: payload)
@@ -47,3 +53,4 @@ def test_oci_block_storage_and_egress(monkeypatch) -> None:
     assert pts["storage_hdd"].price == Decimal("0.0255")
     assert pts["network_egress"].price == Decimal("0.0085")
     assert all(p.confidence == "official" for p in pts.values())
+    assert {p.region for p in pts.values()} == {"us-ashburn-1"}

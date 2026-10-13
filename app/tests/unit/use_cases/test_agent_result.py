@@ -7,6 +7,8 @@ porque trocá-lo por um palpite custaria a reprodutibilidade.
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.use_cases.analysis.agent_result import (
     mapear_verdade,
     processar_sugestoes,
@@ -103,6 +105,49 @@ def test_payback_do_agente_sobrevive() -> None:
     é exigir a premissa no schema de entrada, não sobrescrever."""
     r = receber_analise_do_agente(_payload(), _agente())
     assert r.resposta["savings_summary"]["payback_period_months"] == 4
+
+
+# ── payback derivado da premissa (PLANO_PRECO_REGIONAL D11) ─────────────
+
+
+def _com_payback(meses: int, premissa: float) -> dict[str, Any]:
+    return {
+        **_agente(),
+        "payback": {"meses": meses, "premissa_custo_migracao_usd": premissa, "base": "3 squads"},
+    }
+
+
+def test_payback_e_a_premissa_dividida_pela_economia_do_backend() -> None:
+    r = receber_analise_do_agente(_payload(), _com_payback(meses=2, premissa=10_000))
+
+    payback = r.resposta["payback"]
+    assert payback["meses"] == 5, "⌈10000 ÷ 2487,53⌉"
+    assert payback["premissa_custo_migracao_usd"] == 10_000, "a premissa é do agente"
+    assert payback["base"] == "3 squads"
+    assert payback["economia_mensal_usd"] == 2487.53
+    assert payback["calculado_pelo_backend"] is True
+    assert r.resposta["savings_summary"]["payback_period_months"] == 5
+    assert ("payback.meses", 2, 5) in {
+        (s.caminho, s.valor_agente, s.valor_backend) for s in r.autoridade.substituicoes
+    }
+
+
+def test_sem_economia_nao_ha_payback() -> None:
+    payload = _payload()
+    payload["resumo_executivo"]["recomendado"] = None
+    r = receber_analise_do_agente(payload, _com_payback(meses=6, premissa=10_000))
+    assert r.resposta["payback"]["meses"] is None
+    assert "não se paga" in r.resposta["payback"]["motivo_backend"]
+
+
+def test_premissa_zero_paga_na_hora() -> None:
+    r = receber_analise_do_agente(_payload(), _com_payback(meses=1, premissa=0))
+    assert r.resposta["payback"]["meses"] == 0
+
+
+def test_meses_iguais_nao_contam_como_sobrescrita() -> None:
+    r = receber_analise_do_agente(_payload(), _com_payback(meses=5, premissa=10_000))
+    assert "payback.meses" not in {s.caminho for s in r.autoridade.substituicoes}
 
 
 # ── sugestões ───────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -9,6 +10,8 @@ from app.domain.entities.cloud_price_point import CloudPricePoint
 from app.domain.entities.cloud_sku import CloudSku
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
+from app.domain.services.perfil_de_familia import Perfil, aceita, mesma_arquitetura, perfil
+from app.domain.services.regioes import RegiaoDePreco, escolher_regiao_de_preco
 
 _HOURS_PER_MONTH = Decimal("730")
 # Peso do desperdício no score de packing. 0 = escolhe sempre o mais barato
@@ -43,6 +46,20 @@ class FinancialEstimate:
     # velho — e contestar o segundo.
     price_source: str | None = None
     price_captured_at: datetime | None = None
+    # Onde o preço vale. `aproximada` quando não havia preço da região pedida e
+    # a cotação usou outra: o rótulo cai de `official` para `reference`, porque
+    # preço oficial de outra região não é oficial para esta.
+    price_region: str | None = None
+    price_region_approximate: bool = False
+
+
+@dataclass(frozen=True)
+class _Candidatos:
+    skus: list[CloudSku]
+    confianca: str
+    origem: str | None
+    capturado_em: datetime | None
+    regiao: RegiaoDePreco | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +72,9 @@ class EquivalentOption:
     instances: int = 1
     technical_match: TechnicalMatch | None = None
     financials: FinancialEstimate | None = None
+    # O destino não tinha candidato da arquitetura da origem que cobrisse o
+    # pool, e o escolhido é da outra (x86 ↔ ARM): migrar exige replataforma.
+    architecture_mismatch: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,40 +104,61 @@ class EquivalenceMatcher:
         self._price_repo = price_repo
 
     async def _candidates(
-        self, provider: str, service_type: str, default_confidence: str
-    ) -> tuple[list[CloudSku], str, str | None, datetime | None]:
+        self,
+        provider: str,
+        service_type: str,
+        default_confidence: str,
+        regioes: Sequence[str | None] | None = None,
+    ) -> _Candidatos:
         """Candidatos + confiança + **proveniência** do preço.
 
         Price points oficiais primeiro, catálogo seed como fallback. É o seam
         que troca preço ~30% errado por preço real sem mudar o packing.
 
-        A proveniência é devolvida junto porque é aqui — e só aqui — que se sabe
-        de onde o preço veio. Antes ela morria neste ponto: a função convertia
-        ``CloudPricePoint`` em ``CloudSku`` e devolvia só a string "official",
-        descartando ``source`` e ``captured_at``.
+        Com ``regioes`` (as preferidas, em ordem), consulta só uma região: a
+        escolhida por `regioes.escolher_regiao_de_preco`. Sem isso, os preços de
+        todas as regiões entravam juntos e o packer escolhia o mais barato entre
+        elas, que é sempre o dos EUA.
 
-        Quando há vários price points, a captura reportada é a **mais antiga**:
-        num conjunto de candidatos, o mais velho é que limita a confiança.
+        A proveniência é devolvida junto porque é aqui — e só aqui — que se sabe
+        de onde o preço veio. Quando há vários price points, a captura reportada
+        é a **mais antiga**: num conjunto de candidatos, o mais velho é que
+        limita a confiança.
         """
         if self._price_repo is not None:
-            points = await self._price_repo.find(
-                provider=provider, service_type=service_type
-            )
+            escolha: RegiaoDePreco | None = None
+            if regioes is None:
+                points = await self._price_repo.find(provider=provider, service_type=service_type)
+            else:
+                escolha = escolher_regiao_de_preco(
+                    provider,
+                    regioes,
+                    await self._price_repo.regioes_com_preco(provider, service_type),
+                    service_type=service_type,
+                )
+                points = (
+                    await self._price_repo.find(
+                        provider=provider, service_type=service_type, region=escolha.regiao
+                    )
+                    if escolha is not None
+                    else []
+                )
             if points:
                 capturas = [p.captured_at for p in points if p.captured_at is not None]
                 fontes = {p.source for p in points if p.source}
-                return (
+                return _Candidatos(
                     [_pricepoint_to_sku(p) for p in points],
-                    "official",
+                    "reference" if escolha is not None and escolha.aproximada else "official",
                     sorted(fontes)[0] if fontes else None,
                     min(capturas) if capturas else None,
+                    escolha,
                 )
         catalog = await self._sku_repo.find_equivalents(
             provider=provider, service_type=service_type, limit=_CANDIDATE_LIMIT
         )
         # Catálogo seed não tem data de captura — é seed, não coleta. Dizer a
         # origem já basta para o consumidor saber que não é preço oficial.
-        return catalog, default_confidence, "seed_catalog", None
+        return _Candidatos(catalog, default_confidence, "seed_catalog", None)
 
     async def get_equivalents(
         self,
@@ -224,8 +265,19 @@ class EquivalenceMatcher:
         service_type: str,
         target_providers: list[str],
         pricing_confidence: str = "low",
+        regioes: Mapping[str, Sequence[str | None]] | None = None,
+        perfil_origem: Perfil | None = None,
     ) -> list[EquivalentOption]:
         """Return the best-value covering mix per target provider for a pool.
+
+        ``regioes`` maps each target provider to the regions to quote, in order
+        of preference (see ``domain/services/regioes``). Without it, prices of
+        every synced region compete and the cheapest region wins.
+
+        ``perfil_origem`` (see ``domain/services/perfil_de_familia``) filters
+        the candidates: burstable only replaces burstable, and the same
+        architecture is tried first. A mix of the other architecture is used
+        only when none of the same covers the pool, and comes flagged.
 
         ``monthly_cost`` MUST already be expressed in the analysis currency
         (see ``domain/services/currency.py``) — this method does no conversion
@@ -243,11 +295,16 @@ class EquivalenceMatcher:
             # Candidatos: price points reais primeiro (confiança por-provedor),
             # senão catálogo seed. O packer precisa deles sem filtro de min_vcpus
             # — ele considera SKUs pequenos multiplicados e grandes que cobrem só.
-            candidates, confidence, origem_preco, capturado_em = await self._candidates(
-                provider, service_type, pricing_confidence
+            cands = await self._candidates(
+                provider,
+                service_type,
+                pricing_confidence,
+                None if regioes is None else regioes.get(provider, ()),
             )
 
-            best = _best_packing(vcpus, ram_gib, candidates)
+            best, arquitetura_diferente = _packing_por_perfil(
+                vcpus, ram_gib, cands.skus, perfil_origem
+            )
             if best is None:
                 continue
 
@@ -270,14 +327,40 @@ class EquivalenceMatcher:
                         unit_price=cand.price_per_unit,
                         estimated_monthly_cost=estimated_monthly,
                         cost_delta=cost_delta,
-                        pricing_confidence=confidence,
-                        price_source=origem_preco,
-                        price_captured_at=capturado_em,
+                        pricing_confidence=cands.confianca,
+                        price_source=cands.origem,
+                        price_captured_at=cands.capturado_em,
+                        price_region=cands.regiao.regiao if cands.regiao else None,
+                        price_region_approximate=bool(cands.regiao and cands.regiao.aproximada),
                     ),
+                    architecture_mismatch=arquitetura_diferente,
                 )
             )
 
         return options
+
+
+def _packing_por_perfil(
+    vcpus: Decimal,
+    ram_gib: Decimal,
+    candidates: list[CloudSku],
+    origem: Perfil | None,
+) -> tuple[tuple[CloudSku, int, Decimal] | None, bool]:
+    """Melhor mix respeitando o perfil da origem; e se trocou de arquitetura.
+
+    Burstable fora quando a origem não é. Mesma arquitetura primeiro; a outra
+    só quando nenhum mix da mesma cobre o pool.
+    """
+    if origem is None:
+        return _best_packing(vcpus, ram_gib, candidates), False
+    aceitos = [c for c in candidates if aceita(origem, perfil(c.provider, c.sku_id))]
+    mesma = [c for c in aceitos if mesma_arquitetura(origem, perfil(c.provider, c.sku_id))]
+    best = _best_packing(vcpus, ram_gib, mesma)
+    if best is not None:
+        return best, False
+    outra = [c for c in aceitos if c not in mesma]
+    best = _best_packing(vcpus, ram_gib, outra)
+    return best, best is not None
 
 
 def _pricepoint_to_sku(p: CloudPricePoint) -> CloudSku:

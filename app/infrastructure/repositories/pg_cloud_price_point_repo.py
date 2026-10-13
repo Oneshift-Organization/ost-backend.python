@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,6 +68,40 @@ class PgCloudPricePointRepository:
         )
         result = await self._session.execute(stmt)
         return [row[0] for row in result.all()]
+
+    async def regioes_com_preco(self, provider: str, service_type: str) -> list[str]:
+        stmt = (
+            select(CloudPricePointModel.region)
+            .where(
+                CloudPricePointModel.provider.ilike(provider),
+                CloudPricePointModel.service_type == service_type,
+            )
+            .distinct()
+        )
+        result = await self._session.execute(stmt)
+        return sorted(row[0] for row in result.all())
+
+    async def substituir(self, points: list[CloudPricePoint]) -> tuple[int, int]:
+        if not points:
+            return (0, 0)
+        gravados, _ = await self.bulk_upsert(points)
+        conjuntos: dict[tuple[str, str, str, str], set[str]] = {}
+        for p in points:
+            chave = (p.provider.lower(), p.region, p.service_type, p.source)
+            conjuntos.setdefault(chave, set()).add(p.sku_key)
+        removidos = 0
+        for (provider, region, service_type, source), chaves in conjuntos.items():
+            result = await self._session.execute(
+                delete(CloudPricePointModel).where(
+                    CloudPricePointModel.provider == provider,
+                    CloudPricePointModel.region == region,
+                    CloudPricePointModel.service_type == service_type,
+                    CloudPricePointModel.source == source,
+                    CloudPricePointModel.sku_key.not_in(chaves),
+                )
+            )
+            removidos += int(getattr(result, "rowcount", 0) or 0)
+        return (gravados, removidos)
 
     async def bulk_upsert(self, points: list[CloudPricePoint]) -> tuple[int, int]:
         if not points:

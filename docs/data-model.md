@@ -323,12 +323,21 @@ CREATE INDEX ix_price_points_provider_type
 |---|---|
 | `service_type` | `virtual_server` para compute; para não-compute guarda a **categoria** (`storage_ssd`, `network_egress`, `database`) |
 | `unit` | `instance_hour` (compute) · `gb_month` (storage) · `gb` (egress) · `db_vcpu_month` |
+| `region` | região do provedor (`sa-east-1`, `southamerica-east1`, `brazilsouth`, `sa-saopaulo-1`). As taxas de referência digitadas usam `us-east`, que conta como Virgínia |
 | `confidence` | `official` (API do provedor) · `reference` (taxa publicada, digitada) · `low` |
-| `source` | `azure_retail_api`, `oci_cetools_api`, `published_reference_2026` |
+| `source` | `aws_pricing_calculator`, `aws_price_list_bulk`, `gcp_billing_catalog_api`, `azure_retail_api`, `oci_cetools_api`, `published_reference_2026` |
 
 Populado offline por `python scripts/sync_prices.py` — **nunca** no caminho
 crítico da análise. O matcher prefere estes preços e rebaixa a confiança quando
 cai no `cloud_sku_catalog`.
+
+**Região (PLANO_PRECO_REGIONAL).** Cada pool é cotado na zona dele
+(`domain/services/regioes.py`): um pool em São Paulo consulta `sa-east-1`,
+`southamerica-east1`, `brazilsouth` e `sa-saopaulo-1`. Sem preço da região, a
+escolha cai em outra da mesma zona, no preço global (compute e armazenamento da
+OCI) ou, por último, na Virgínia, e o rótulo `official` vira `reference`. O
+sync substitui o conjunto (provedor, região, tipo, fonte) que coletou: o que a
+coleta não trouxe sai.
 
 ### Inventário
 

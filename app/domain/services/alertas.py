@@ -21,6 +21,7 @@ Módulo puro — entra dataclass, sai dataclass. Sem I/O, sem framework.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
@@ -150,3 +151,55 @@ def avaliar_cambio(fx: FxRate, hoje: date) -> Alerta | None:
         )
 
     return None
+
+
+def avaliar_regioes(
+    *,
+    sem_zona: Sequence[str],
+    zona_padrao: str,
+    aproximadas: Sequence[Mapping[str, str]],
+) -> list[Alerta]:
+    """Alertas da cotação regional (PLANO_PRECO_REGIONAL D5 e D6).
+
+    Nenhum rebaixa por si: o preço de outra região já entra como `reference`, e
+    a confiança da análise cai pela razão de custo oficial. Rebaixar de novo
+    contaria o mesmo problema duas vezes.
+
+    - **região de origem desconhecida**: o pool foi cotado na zona padrão. Num
+      bill de São Paulo isso deixa a economia de sair ~60% otimista;
+    - **preço de outra região**: o destino não tinha preço sincronizado na
+      região equivalente. O detalhe diz qual sync roda para corrigir.
+    """
+    alertas: list[Alerta] = []
+    if sem_zona:
+        alertas.append(
+            Alerta(
+                tipo="dado_faltante",
+                severidade="media",
+                titulo="Região de origem não identificada",
+                detalhe=(
+                    f"{len(sem_zona)} pool(s) sem região que a tabela de zonas "
+                    f"reconheça ({', '.join(sem_zona[:5])}). Os destinos foram "
+                    f"cotados na zona padrão ({zona_padrao}). Se a carga roda em "
+                    "outra metrópole, a diferença de preço regional não está na conta."
+                ),
+                referencia=", ".join(sem_zona[:5]),
+            )
+        )
+    if aproximadas:
+        pares = sorted({f"{a['provedor']} {a['pedida']} → {a['cotada']}" for a in aproximadas})
+        alertas.append(
+            Alerta(
+                tipo="dado_faltante",
+                severidade="media",
+                titulo="Preço de outra região na cotação",
+                detalhe=(
+                    "Sem preço sincronizado na região equivalente; a cotação usou "
+                    f"outra: {'; '.join(pares[:6])}. Esses valores entram como "
+                    "'reference'. Para corrigir, rode `scripts/sync_prices.py` com "
+                    "a zona da carga em `--zonas`."
+                ),
+                referencia="; ".join(pares[:6]),
+            )
+        )
+    return alertas

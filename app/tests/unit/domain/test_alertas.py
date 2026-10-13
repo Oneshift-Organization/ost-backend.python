@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from app.domain.services.alertas import ORIGEM_BACKEND, avaliar_cambio
+from app.domain.services.alertas import ORIGEM_BACKEND, avaliar_cambio, avaliar_regioes
 from app.domain.services.confidence import ConfiancaAnalise, avaliar_confianca
 from app.domain.services.currency import FxRate, identity_rate, taxa_desconhecida
 
@@ -121,3 +121,27 @@ def test_dois_motivos_rebaixam_um_degrau_so() -> None:
         por_rotulo={},
     )
     assert conf.com_rebaixamento(["a", "b"]).nivel == "medium"
+
+
+# ── Cotação regional (PLANO_PRECO_REGIONAL R4) ───────────────────────────────
+
+
+def test_regioes_sem_problema_nao_alertam() -> None:
+    assert avaliar_regioes(sem_zona=[], zona_padrao="virginia", aproximadas=[]) == []
+
+
+def test_regiao_desconhecida_e_preco_de_outra_regiao_alertam_sem_rebaixar() -> None:
+    alertas = avaliar_regioes(
+        sem_zona=["E2/global"],
+        zona_padrao="virginia",
+        aproximadas=[
+            {"provedor": "azure", "pedida": "brazilsouth", "cotada": "eastus", "uso": "compute"}
+        ],
+    )
+    assert [a.titulo for a in alertas] == [
+        "Região de origem não identificada",
+        "Preço de outra região na cotação",
+    ]
+    assert "virginia" in alertas[0].detalhe
+    assert "azure brazilsouth → eastus" in alertas[1].detalhe
+    assert not any(a.rebaixa for a in alertas), "o rótulo reference já rebaixa"

@@ -8,7 +8,9 @@ pay-as-you-go: exclui Windows, Spot e Low Priority. Sem dependência externa
 
 from __future__ import annotations
 
+import http.client
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -26,23 +28,55 @@ _HTTP_TOO_MANY_REQUESTS = 429
 # Famílias workhorse de propósito geral/compute/memória. Especializadas (M mem
 # extrema, L storage, N GPU, H HPC, G) têm preço distorcido para compute comum.
 _GENERAL_FAMILIES = frozenset({"b", "d", "e", "f"})
+# Computação confidencial (DCsv3, ECasv5): enclave e memória cifrada, preço de
+# especializada. Começa com D e E, então passava no filtro de família e virava
+# destino de pool comum.
+_CONFIDENCIAIS = frozenset({"dc", "ec"})
+_SERIE = re.compile(r"^Standard_([A-Za-z]+)\d")
 
 
-def _get_json(url: str, *, timeout: float, retries: int = 4) -> dict[str, Any]:
-    """GET com User-Agent e backoff exponencial em 429 (a API rate-limita)."""
+def _serie(arm: str) -> str:
+    """`Standard_DC2s_v3` → `dc`; `Standard_D4s_v5` → `d`."""
+    m = _SERIE.match(arm)
+    return m.group(1).lower() if m else ""
+
+
+def _espera(tentativa: int, retry_after: str | None) -> float:
+    """Segundos até a próxima tentativa: o `Retry-After` da API, se vier."""
+    try:
+        return min(float(retry_after), 60.0) if retry_after else float(2**tentativa)
+    except ValueError:
+        return float(2**tentativa)
+
+
+def _get_json(url: str, *, timeout: float, retries: int = 6) -> dict[str, Any]:
+    """GET com User-Agent e backoff em 429, timeout e erro de conexão.
+
+    Uma coleta de cinco regiões faz ~40 chamadas seguidas e a API responde 429
+    ou segura a conexão até estourar o tempo. Desistir na primeira derrubava o
+    sync inteiro.
+    """
     req = urllib.request.Request(  # noqa: S310 - host fixo (prices.azure.com)
         url, headers={"User-Agent": "oneshift-pricing/1.0"}
     )
     for attempt in range(retries):
+        ultima = attempt == retries - 1
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - host fixo
                 data: dict[str, Any] = json.loads(resp.read())
                 return data
         except urllib.error.HTTPError as e:
-            if e.code == _HTTP_TOO_MANY_REQUESTS and attempt < retries - 1:
-                time.sleep(2 ** attempt)
-                continue
-            raise
+            if e.code != _HTTP_TOO_MANY_REQUESTS or ultima:
+                raise
+            time.sleep(_espera(attempt, e.headers.get("Retry-After")))
+        except (TimeoutError, ConnectionError, http.client.HTTPException, urllib.error.URLError):
+            # A API derruba a conexão de três jeitos: handshake TLS que estoura
+            # o tempo (URLError), conexão fechada sem resposta
+            # (RemoteDisconnected) e timeout de leitura. HTTPError, subclasse
+            # de URLError, já foi tratado acima.
+            if ultima:
+                raise
+            time.sleep(_espera(attempt, None))
     return {}
 
 
@@ -89,6 +123,8 @@ def fetch_azure_vm_prices(
                 continue
             family = arm.split("_", 1)[1][:1].lower() if "_" in arm else ""
             if family not in _GENERAL_FAMILIES:
+                continue
+            if _serie(arm) in _CONFIDENCIAIS:
                 continue
             price = Decimal(str(item.get("retailPrice") or 0))
             if price <= 0:

@@ -39,7 +39,7 @@ agentes de IA.
 | [`capacity-pool-model.md`](capacity-pool-model.md) | Alinhamento FOCUS: taxonomia universal, buckets de capacidade, agregação por (Project, Family, Region). |
 | [`sku-matching.md`](sku-matching.md) | Acurácia do SKU matching: Matching Ladder (L0–L5), `component_type`, `sku_classification_rules`, gate `sku_coverage_ratio ≥ 95%`. |
 | [`cross-cloud-equivalence.md`](cross-cloud-equivalence.md) | Equivalência cross-cloud por Capacity Pool (DE-PARA): `match_pool`, `equivalents` aninhados, alinhamento FOCUS, LLM seleciona em vez de inventar. |
-| [`precision-engine.md`](precision-engine.md) | **Motor de precisão — o que está construído**: o que existe hoje (FX, preços oficiais Azure/OCI, shape de instância, razão de taxa por categoria, consolidação por provedor, autoridade do backend sobre o LLM, camada de reconciliação) e o que segue pendente. Divergências do plano original estão marcadas. |
+| [`precision-engine.md`](precision-engine.md) | **Motor de precisão — o que está construído**: o que existe hoje (FX, preços oficiais dos 4 provedores por região, shape de instância, arquitetura e burstable no packer, razão de taxa por categoria, consolidação por provedor, autoridade do backend sobre o LLM, camada de reconciliação) e o que segue pendente. Divergências do plano original estão marcadas. |
 
 ### Operação
 

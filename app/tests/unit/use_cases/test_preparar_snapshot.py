@@ -145,7 +145,7 @@ async def test_versao_de_autoridade_diferente_gera_outro_snapshot(
 ) -> None:
     snapshots = _Snapshots()
     a = await _uc(_PAYLOAD, snapshots)[0].execute(USER, REPORT)
-    monkeypatch.setattr(versoes, "AUTHORITY_VERSION", "agent-authority-v2")
+    monkeypatch.setattr(versoes, "AUTHORITY_VERSION", f"{versoes.AUTHORITY_VERSION}-proxima")
     b = await _uc(_PAYLOAD, snapshots)[0].execute(USER, REPORT)
     assert b.snapshot.payload == a.snapshot.payload
     assert b.snapshot.fingerprint != a.snapshot.fingerprint

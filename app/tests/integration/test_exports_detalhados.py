@@ -12,6 +12,7 @@ from decimal import Decimal
 import pytest
 import pytest_asyncio
 
+from app.domain.analysis import MigrationContext
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.repositories.pg_billing_enriched_repo import (
     PgBillingEnrichedRepository,
@@ -258,10 +259,22 @@ async def test_cur_e_legado_concordam_na_capacidade(ctx_cur, aws_context) -> Non
     tem de bater (o legado só estima o shape pelo nome; o C7G não tem tamanho
     que a estimativa erre)."""
     cur = _pool(ctx_cur, "C7G/us-east-1").capacity.vcpus
-    legado = next(
-        fp for fp in aws_context.family_pools if fp.pool_key.machine_family == "C7G"
-    ).capacity.vcpus
+    legado = _pool(aws_context, "C7G/us-east-1").capacity.vcpus
     assert abs(cur - legado) < Decimal("0.5")
+
+
+async def test_cur_e_legado_concordam_nas_regioes(
+    ctx_cur: MigrationContext, aws_context: MigrationContext
+) -> None:
+    """O legado não tem coluna de região; tira do prefixo do UsageType, do mesmo
+    jeito que o gerador do mock CUR. Os dois têm de chegar às mesmas regiões
+    (PLANO_PRECO_REGIONAL R2)."""
+    def regioes(ctx: MigrationContext) -> set[str]:
+        return {fp.pool_key.region for fp in ctx.family_pools if fp.monthly_cost > 1}
+
+    assert regioes(aws_context) == regioes(ctx_cur) == {"us-east-1", "sa-east-1"}
+    t3a_sp = _pool(aws_context, "T3A/sa-east-1")
+    assert abs(t3a_sp.capacity.vcpus - _pool(ctx_cur, "T3A/sa-east-1").capacity.vcpus) < 0.5
 
 
 # ── E9: Azure e OCI ─────────────────────────────────────────────────────────

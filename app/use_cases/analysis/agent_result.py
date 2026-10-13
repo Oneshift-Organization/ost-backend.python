@@ -16,10 +16,12 @@ Ele vira sinal, não fonte.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.domain.services.authority import ResultadoAutoridade, Substituicao, aplicar_autoridade
 from app.domain.services.confidence import rebaixar
+from app.domain.services.payback import calcular_payback
 from app.schemas.analysis_v2 import AnalysisNarrativeDraft, AnalysisV2Response
 from app.use_cases.analysis.decision_support import impose_decision
 
@@ -156,6 +158,75 @@ def sugestoes_do_backend(payload_backend: dict[str, Any]) -> list[dict[str, Any]
     return [dict(s) for s in (premissas.get("sugestoes_backend") or [])]
 
 
+def _economia_do_selecionado(resposta: dict[str, Any], payload_backend: dict[str, Any]) -> Decimal:
+    """Economia mensal do provedor que a análise corrigida recomenda.
+
+    Com decisão do backend, `savings_summary` já sai dela. Sem decisão (payload
+    antigo), vem do `resumo_executivo` — a mesma fonte que `mapear_verdade` usa.
+    """
+    resumo_resposta = resposta.get("savings_summary")
+    if isinstance(resumo_resposta, dict) and "total_monthly_savings_usd" in resumo_resposta:
+        bruto: Any = resumo_resposta["total_monthly_savings_usd"]
+    else:
+        resumo = payload_backend.get("resumo_executivo") or {}
+        recomendado = str(resumo.get("recomendado") or "").lower()
+        linha = next(
+            (
+                p
+                for p in resumo.get("por_provedor") or []
+                if str(p.get("provedor", "")).lower() == recomendado
+            ),
+            None,
+        )
+        bruto = linha.get("economia_mensal") if linha and recomendado else 0
+    try:
+        return Decimal(str(bruto or 0))
+    except InvalidOperation:
+        return Decimal("0")
+
+
+def _derivar_payback(
+    autoridade: ResultadoAutoridade, payload_backend: dict[str, Any]
+) -> ResultadoAutoridade:
+    """`payback.meses` = ⌈premissa do agente ÷ economia do backend⌉ (PLANO D11).
+
+    A premissa (custo de migração) continua do agente: o backend não a modela.
+    A divisão passa a ser do backend, e o `meses` que o agente mandou vira
+    sobrescrita registrada, como qualquer número que ele calculasse.
+    """
+    resposta = autoridade.resposta
+    payback = resposta.get("payback")
+    if not isinstance(payback, dict) or payback.get("premissa_custo_migracao_usd") is None:
+        return autoridade
+    try:
+        custo = Decimal(str(payback["premissa_custo_migracao_usd"]))
+    except InvalidOperation:
+        return autoridade
+    economia = _economia_do_selecionado(resposta, payload_backend)
+    calculado = calcular_payback(custo, economia)
+
+    novo_payback = {
+        **payback,
+        "meses": calculado.meses,
+        "economia_mensal_usd": float(economia),
+        "calculado_pelo_backend": True,
+    }
+    if calculado.motivo:
+        novo_payback["motivo_backend"] = calculado.motivo
+    corrigida = {**resposta, "payback": novo_payback}
+    resumo = corrigida.get("savings_summary")
+    if isinstance(resumo, dict):
+        corrigida["savings_summary"] = {**resumo, "payback_period_months": calculado.meses}
+
+    substituicoes = autoridade.substituicoes
+    if payback.get("meses") != calculado.meses:
+        substituicoes = (
+            *substituicoes,
+            Substituicao("payback.meses", payback.get("meses"), calculado.meses),
+        )
+    return ResultadoAutoridade(corrigida, substituicoes)
+
+
 def receber_analise_do_agente(
     payload_backend: dict[str, Any],
     resposta_agente: dict[str, Any],
@@ -176,6 +247,8 @@ def receber_analise_do_agente(
                           for key, value in imposed.items()
                           if autoridade.resposta.get(key) != value)
         autoridade = ResultadoAutoridade(corrected, autoridade.substituicoes + overrides)
+
+    autoridade = _derivar_payback(autoridade, payload_backend)
 
     conf_inicial = str(
         autoridade.resposta.get("analysis_confidence")

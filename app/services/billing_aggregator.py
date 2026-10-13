@@ -22,6 +22,7 @@ from app.domain.entities.workload_pool import (
 )
 from app.domain.services.azure_shape import parse_azure_shape
 from app.domain.services.instance_shape import parse_instance_shape
+from app.domain.services.regioes import regiao_da_linha
 from app.domain.services.sku_matcher import extract_family
 
 if TYPE_CHECKING:
@@ -388,10 +389,13 @@ class BillingAggregator:
 
     @staticmethod
     def _pool_key(item: BillingEnriched) -> PoolKey:
+        # A região sai da coluna do export ou, no bill agregado, da própria
+        # linha (prefixo do UsageType, localidade do SKU). Sem ela, um bill com
+        # carga em São Paulo e na Virgínia virava um pool só, cotado num lugar só.
         return PoolKey(
             project_id=item.project_id or "_unknown",
             machine_family=BillingAggregator._family_of(item),
-            region=item.region or "global",
+            region=regiao_da_linha(item.provider, item.region, item.usage_type) or "global",
         )
 
     @staticmethod

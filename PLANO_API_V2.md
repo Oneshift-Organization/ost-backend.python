@@ -486,12 +486,14 @@ pod. A correção definitiva é um PR no `ost-infra`.
 vermelho. A correção é um `needs:` no job de build, mas o workflow é mantido por
 outra pessoa — combinar antes.
 
-## 10.4 Preço só de uma região por provedor
+## 10.4 Preço só de uma região por provedor — **resolvido em 12/10/2026**
 
-Os fetchers coletam `us-east-1` (AWS), `eastus` (Azure), `us-central1` (GCP). Um
-bill com carga em São Paulo é cotado com preço da Virgínia, que é mais barato —
-a economia estimada sai otimista. Corrigir exige mapear a região do bill para a
-do provedor-alvo.
+Os fetchers coletavam `us-east-1` (AWS), `eastus` (Azure), `us-central1` (GCP).
+Um bill com carga em São Paulo era cotado com preço da Virgínia, ~1,6x mais
+barato, e a economia de sair saía otimista. Resolvido em
+[`PLANO_PRECO_REGIONAL.md`](PLANO_PRECO_REGIONAL.md): cada pool é cotado na zona
+dele, com `financeiro.preco_regiao` no payload e aviso quando falta preço da
+região.
 
 ## 10.5 A "fila de sync" das contestações não existe
 
