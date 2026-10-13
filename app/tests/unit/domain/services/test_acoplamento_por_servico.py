@@ -233,3 +233,47 @@ def test_gasto_sem_categoria_aparece_fora_do_score() -> None:
     assert r.resumo.fora_do_score == 1
     # Fora do escopo continua só o financeiro (o imposto de 40).
     assert (r.reconciliacao.fora_do_escopo, r.reconciliacao.status) == (Decimal("40"), "fecha")
+
+
+def test_inventario_preenche_nivel_vazio_e_dependencia_sobe() -> None:
+    payload = _payload()
+    payload["topologia"] = {
+        "detalhe": {
+            "servicos": {
+                "AmazonEKS": {
+                    "nivel": "low",
+                    "motivo": "sozinho",
+                    "migra_junto_com": [],
+                    "exclusividade": {
+                        "nivel": "high",
+                        "motivo": "API própria",
+                        "fracao": 1.0,
+                        "recursos": ["c1"],
+                    },
+                },
+                "AmazonRDS": {
+                    "nivel": "high",
+                    "motivo": "Banco acessado por outras aplicações.",
+                    "migra_junto_com": [{"servico": "AmazonEC2", "custo": 1, "natureza": "dados"}],
+                    "exclusividade": {
+                        "nivel": "low",
+                        "motivo": "PostgreSQL",
+                        "fracao": 1.0,
+                        "recursos": ["db"],
+                    },
+                },
+            }
+        }
+    }
+    r = montar_acoplamento_por_servico(payload)
+    servicos = _por_nome(r)
+    eks, rds = servicos["AmazonEKS"], servicos["AmazonRDS"]
+    assert (r.com_inventario, r.eixo_de_dependencia) == (True, True)
+    # EKS: nível vazio; exclusividade alta do inventário vence a classe (baixa).
+    assert eks.nivel_sugerido == "high"
+    assert {s.fonte for s in eks.sugestoes} == {"classe", "inventario"}
+    # RDS: catálogo médio; a dependência alta sobe, o motor aberto só informa.
+    assert (rds.nivel, rds.nivel_sugerido) == ("medium", "high")
+    assert [s.fonte for s in rds.sugestoes] == ["inventario", "dependencias"]
+    assert r.resumo.migram_em_grupo == 1
+    assert servicos["AmazonS3"].dependencias is None

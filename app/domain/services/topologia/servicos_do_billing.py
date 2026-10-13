@@ -28,9 +28,11 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.domain.entities.topologia import Inventario
 from app.domain.services.correlacao_inventario import CustosDoBilling, IndiceDeApelidos
+from app.domain.services.topologia.exclusividade import classificar
 from app.domain.services.topologia.modelo import Acoplamento, AnaliseDeTopologia
 
 _ZERO = Decimal(0)
@@ -56,6 +58,19 @@ class Vizinho:
 
 
 @dataclass(frozen=True, slots=True)
+class Exclusividade:
+    """O nível mais alto que as regras deram aos recursos do serviço (B3)."""
+
+    nivel: str
+    motivo: str
+    fracao: Decimal  # do custo no inventário, com recurso nesse nível
+    recursos: tuple[str, ...]
+
+
+_ORDEM_DO_NIVEL = {"low": 1, "medium": 2, "high": 3}
+
+
+@dataclass(frozen=True, slots=True)
 class DependenciasDoServico:
     servico: str
     nivel: str  # low | medium | high
@@ -71,6 +86,7 @@ class DependenciasDoServico:
     custo_no_inventario: Decimal
     custo_do_grupo: Decimal
     regioes: tuple[str, ...]
+    exclusividade: Exclusividade | None = None
 
     @property
     def cobertura(self) -> Decimal | None:
@@ -89,6 +105,8 @@ def dependencias_por_servico(
     custo: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     casado: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     chaves: dict[str, set[str]] = defaultdict(set)
+    custo_da_chave: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: _ZERO))
+    recurso = {r.chave: r for r in inventario.recursos}
     regioes: dict[str, set[str]] = defaultdict(set)
     por_unidade: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: _ZERO))
     for linha in custos.por_recurso:
@@ -98,6 +116,7 @@ def dependencias_por_servico(
             continue
         casado[linha.servico] += linha.custo
         chaves[linha.servico].add(chave)
+        custo_da_chave[linha.servico][chave] += linha.custo
         if regiao := (regiao_do_recurso.get(chave) or linha.regiao):
             regioes[linha.servico].add(regiao)
         unidade = analise.unidade_de.get(chave)
@@ -152,8 +171,34 @@ def dependencias_por_servico(
             custo_no_inventario=casado[servico],
             custo_do_grupo=sum((c for g in grupos for c in por_grupo[g].values()), _ZERO),
             regioes=tuple(sorted(regioes[servico])),
+            exclusividade=_exclusividade(custo_da_chave[servico], recurso),
         )
     return resultado
+
+
+def _exclusividade(
+    custo_da_chave: Mapping[str, Decimal], recurso: Mapping[str, Any]
+) -> Exclusividade | None:
+    achados = [
+        (regra, chave, custo)
+        for chave, custo in custo_da_chave.items()
+        if chave in recurso and (regra := classificar(recurso[chave])) is not None
+    ]
+    if not achados:
+        return None
+    maior = max(_ORDEM_DO_NIVEL[r.nivel] for r, _, _ in achados)
+    no_nivel = sorted(
+        ((r, c, custo) for r, c, custo in achados if _ORDEM_DO_NIVEL[r.nivel] == maior),
+        key=lambda x: (-x[2], x[1]),
+    )
+    total = sum(custo_da_chave.values(), _ZERO)
+    custo_no_nivel = sum((c for _, _, c in no_nivel), _ZERO)
+    return Exclusividade(
+        nivel=no_nivel[0][0].nivel,
+        motivo=no_nivel[0][0].motivo,
+        fracao=(custo_no_nivel / total).quantize(Decimal("0.0001")) if total > 0 else _ZERO,
+        recursos=tuple(c for _, c, _ in no_nivel[:5]),
+    )
 
 
 def _migra_junto(

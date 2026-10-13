@@ -3,8 +3,7 @@
 > Prioridade: **0**. A tela "Acoplamento dos serviços" exibe dado inconsistente
 > hoje.
 >
-> **Estado (13/10/2026):** bloco A implementado (A1 a A4) e bloco B sem o B3
-> (B1, B2 e B4), contrato em
+> **Estado (13/10/2026):** blocos A e B implementados, contrato em
 > [`docs/endpoints/service-couplings.md`](docs/endpoints/service-couplings.md).
 > A implementação mudou o desenho do A2 e corrigiu uma premissa da §2; ver §9 e §10. Decisão: **endpoint novo, só de leitura**, calculado do payload
 > determinístico já salvo. A lista `cross_cloud_equivalents` (tabela de preço
@@ -147,7 +146,7 @@ linhas na tabela por destino), baixo 6, médio 3, alto 0, a confirmar 15;
 82.020,40 nas linhas + 10.083,09 fora do escopo = 92.103,48. Os 15 "a
 confirmar" agora são lacuna real de catálogo, não artefato de tela (§9).
 
-### Bloco B — inventário: dependência e exclusividade (B1, B2 e B4 feitos; B3 pendente)
+### Bloco B — inventário: dependência e exclusividade (feito)
 
 A topologia já calcula o que precisa: dependências com natureza (`dados`,
 `encaminhamento`, `servico`, `administrativo`, `declarada`) e acoplamento
@@ -307,7 +306,18 @@ foi exposto (`all_workloads`, `is_scored_workload`) sem mudar comportamento.
   com o WordPress, imagem de marketplace cobrada como serviço); o Cloud SQL não
   casa. Vale conferir o apelido do Cloud SQL no normalizador do Asset Inventory.
 
-**Pendente: B3 (exclusividade pelos atributos do recurso).** Exige tabela
-`lockin_rules` (migration e seed) e regras por motor/variante. O inventário já
-traz `motor` e `versao` de banco e `tipo_maquina`; a regra é data-driven, sem
-if/else por nuvem.
+**B3 (exclusividade pelos atributos do recurso), feito.** Mudança em relação
+ao plano: as regras ficaram numa tabela de dados no domínio
+(`domain/services/topologia/exclusividade.py`), não numa tabela `lockin_rules`
+no banco. São 13, mudam por revisão de código e não por operação, e assim não
+há migration nem seed a mais para o ambiente. Padrão do motor ou do tipo nativo
+→ nível e motivo, a primeira que casa vence: DynamoDB, Spanner, Bigtable e
+Cosmos DB alto; Aurora, Oracle e SQL Server médio; PostgreSQL, MySQL, MariaDB,
+Redis, Valkey e Memcached baixo. Por serviço, vale o maior nível entre os
+recursos, com a fração do custo. Vira a sugestão `inventario` (qualquer nível,
+inclusive baixo, porque é evidência do que o cliente usa). No mock da OCI, o
+Autonomous Database sai médio pela licença Oracle.
+
+**Ficou para o bloco C:** o tipo do recurso confirmar o `service_type` de um
+serviço inferido (muda o score), e a exclusividade do inventário entrar no
+`technical_evidence`.

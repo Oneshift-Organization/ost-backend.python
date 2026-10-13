@@ -103,10 +103,12 @@ ganha a dimensão de dependência:
 {
   "nome": "DATABASE", "custo": 999.94, "entra_no_score": false,
   "nivel": null, "nivel_sugerido": "high",
-  "sugestoes": [{
-    "nivel": "high", "fonte": "dependencias",
-    "motivo": "Banco acessado por outras aplicações: migram juntos, ou exigem janela conjunta ou replicação."
-  }],
+  "sugestoes": [
+    {"nivel": "medium", "fonte": "inventario",
+     "motivo": "Oracle: migra, mas licença e edição mudam a conta e limitam o destino."},
+    {"nivel": "high", "fonte": "dependencias",
+     "motivo": "Banco acessado por outras aplicações: migram juntos, ou exigem janela conjunta ou replicação."}
+  ],
   "dependencias": {
     "nivel": "high",
     "motivo": "Banco acessado por outras aplicações: migram juntos, ou exigem janela conjunta ou replicação.",
@@ -120,7 +122,13 @@ ganha a dimensão de dependência:
     "dependentes": 2,
     "banco_compartilhado": true, "grupo_grande": false,
     "custo_do_grupo": 1397.93, "cobertura": 1.0,
-    "regioes": ["sa-saopaulo-1"]
+    "regioes": ["sa-saopaulo-1"],
+    "exclusividade": {
+      "nivel": "medium",
+      "motivo": "Oracle: migra, mas licença e edição mudam a conta e limitam o destino.",
+      "fracao": 1.0,
+      "recursos": ["ocid1.autonomousdatabase.oc1.sa-saopaulo-1.adbprod"]
+    }
   },
   "alertas": ["Categoria não identificada: fica fora do score até ser classificada."]
 }
@@ -149,8 +157,8 @@ Um serviço só com hipótese (bill GCP de referência):
 | `nivel` | acoplamento do lado da origem: o ponto de onde o score parte. `null` = **a confirmar** (sem nota no catálogo, ou tipo inferido) |
 | `fonte` | `catalogo` (metadado curado) ou `informado` (contrato direto, `/analyses/direct`) |
 | `por_destino` | o nível que o eixo técnico do score usa em cada cenário: o pior entre origem e destino. `null` quando o destino não tem mapeamento único (ausente ou ambíguo), e o score trata como desconhecido |
-| `sugestoes[]` | hipóteses que o score **não** usa, cada uma com `fonte` e `motivo`: `classe` (nota herdada do tipo de serviço), `arquitetura` (pool sem família da mesma arquitetura em algum destino), `dependencias` (o inventário mostra que migra junto: médio; banco compartilhado ou grupo grande: alto). Dependência baixa não vira sugestão |
-| `dependencias` | só com inventário: o que **migra junto** (mesma unidade, ou dependência forte de dados ou encaminhamento), o que precisa ir **antes** (`depende_de`, dependência de ordem), quantos serviços dependem deste, grupo e onda de migração (`ondas` vazio = grupo independente), custo do grupo, `cobertura` (fração do custo do serviço com recurso no inventário) e regiões. `null` sem inventário, ou quando nenhum recurso do serviço foi achado nele (billing sem `resource_id`, como o Cost Explorer agregado) |
+| `sugestoes[]` | hipóteses que o score **não** usa, cada uma com `fonte` e `motivo`: `classe` (nota herdada do tipo de serviço), `arquitetura` (pool sem família da mesma arquitetura em algum destino), `inventario` (exclusividade pelos atributos dos recursos: motor do banco, tipo nativo; qualquer nível, inclusive baixo), `dependencias` (o inventário mostra que migra junto: médio; banco compartilhado ou grupo grande: alto; dependência baixa não vira sugestão) |
+| `dependencias` | só com inventário: o que **migra junto** (mesma unidade, ou dependência forte de dados ou encaminhamento), o que precisa ir **antes** (`depende_de`, dependência de ordem), quantos serviços dependem deste, grupo e onda de migração (`ondas` vazio = grupo independente), custo do grupo, `cobertura` (fração do custo do serviço com recurso no inventário), regiões e `exclusividade` (o maior nível que as regras deram aos recursos do serviço, com motivo, fração do custo e até 5 recursos; regras em `domain/services/topologia/exclusividade.py`). `null` sem inventário, ou quando nenhum recurso do serviço foi achado nele (billing sem `resource_id`, como o Cost Explorer agregado) |
 | `nivel_sugerido` | a maior sugestão, só quando subiria o `nivel` ou preencheria o vazio |
 | `pools[]` | os pools de compute, dentro do serviço de máquinas virtuais onde está o custo deles. `regiao: null` quando o billing não informa (antes aparecia como `global`) |
 | `pools_sem_servico[]` | pools sem um serviço curado de máquinas virtuais para ancorar; não se inventa dono |

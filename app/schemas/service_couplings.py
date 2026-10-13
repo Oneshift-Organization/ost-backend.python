@@ -71,6 +71,15 @@ class VizinhoOut(BaseModel):
     )
 
 
+class ExclusividadeOut(BaseModel):
+    """Pelos atributos dos recursos do serviço no inventário (motor do banco, tipo nativo)."""
+
+    nivel: Nivel
+    motivo: str
+    fracao: float = Field(description="fração do custo no inventário com recurso nesse nível")
+    recursos: list[str]
+
+
 class DependenciasOut(BaseModel):
     """Do inventário: o que precisa migrar junto ou antes (PLANO_LOCKIN_INVENTARIO B)."""
 
@@ -88,6 +97,7 @@ class DependenciasOut(BaseModel):
         description="fração do custo do serviço com recurso encontrado no inventário"
     )
     regioes: list[str]
+    exclusividade: ExclusividadeOut | None = None
 
 
 class ServicoOut(BaseModel):
