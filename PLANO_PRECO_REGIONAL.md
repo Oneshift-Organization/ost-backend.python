@@ -331,7 +331,7 @@ O que explica cada mudança:
 - **Bills GCP:** sair para AWS ou Azure deixa de compensar (cerca de US$ 900 →
   US$ 125–150). O compute de `southamerica-east1` é cotado em São Paulo e os
   tipos de máquina são os reais.
-- **Bills AWS:** a economia da OCI cai 10% a 13%. Os pools Graviton (C7G, M7G,
+- **Bills AWS:** a economia da OCI cai de 9% a 13%. Os pools Graviton (C7G, M7G,
   R7G…) deixaram de ser cotados em x86 (`E3`) e vão para ARM (`A2`), mais caro
   na OCI; no GCP, para `c4a`. A cobertura sobe (72,0% → 78,6% no real; 84,8% →
   91,4% no CUR).
