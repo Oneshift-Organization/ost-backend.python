@@ -4,14 +4,14 @@
 >
 > | Item | Estado |
 > |---|---|
-> | R1 — regiões: zonas, região da linha, escolha do preço | ⏳ |
-> | R2 — pools por região real | ⏳ |
-> | R3 — coleta por região e preços oficiais de categoria (AWS, GCP, Azure, OCI) | ⏳ |
-> | R4 — cotação regional no matcher e nas categorias, com proveniência | ⏳ |
-> | R5 — equivalência de família: arquitetura e burstable; formas reais do GCP | ⏳ |
-> | R6 — payback derivado da premissa do agente | ⏳ |
-> | R7 — Terraform: região cotada no README | ⏳ |
-> | R8 — validação antes/depois, documentação e entrega | ⏳ |
+> | R1 — regiões: zonas, região da linha, escolha do preço | ✅ `1c3620e` |
+> | R2 — pools por região real | ✅ `220b485` |
+> | R3 — coleta por região e preços oficiais de categoria (AWS, GCP, Azure, OCI) | ✅ `f3b8f27`, `14c3fc1`, `964d893` |
+> | R4 — cotação regional no matcher e nas categorias, com proveniência | ✅ `5002a29`, `65bf27d` |
+> | R5 — equivalência de família: arquitetura e burstable; formas reais do GCP | ✅ `91b8cea` (formas do GCP em R3) |
+> | R6 — payback derivado da premissa do agente | ✅ `fe3065e` |
+> | R7 — Terraform: região cotada no README | ✅ `51bb319`, `02f9e95` |
+> | R8 — validação antes/depois, documentação e entrega | ✅ ver §6 e §7 |
 
 Prioridade 2 da lista de 12/10/2026: itens 3 (preço por região) e 4 (preços
 oficiais de AWS e GCP), mais `family_equivalence` e payback.
@@ -249,3 +249,61 @@ muda: a regra de decisão é a mesma, só os insumos melhoram.
   a v2 da autoridade.
 - **Fora do plano, de propósito:** compromisso (1 e 3 anos) por região,
   `perf_coef`, preço de banco gerenciado oficial e licença de SO por região.
+
+
+## 6. Revisão de cada etapa (depois de implementar)
+
+**R1.** A tabela de zonas é julgamento, não dado: "Texas cota AWS em
+`us-east-2`" é a vizinha mais próxima, não a única defensável. Os testes travam
+a consistência da tabela (canônica dentro da zona, nenhuma região em duas
+zonas), não a geografia. `americas` é grupo de preço do GCP, não região; ir para
+o meio-oeste é convenção declarada. Prefixo de região novo da AWS que não
+estiver no mapa cai em "região desconhecida", com aviso, não num vizinho.
+
+**R2.** A chave dos pools muda nos bills agregados: `E2/global` vira
+`E2/americas`, `E2/southamerica-east1` e `E2/us-south1`. É correção, mas a tela
+vê pools novos e um rótulo (`americas`) que não é nome de região. Inventário não
+é afetado: só existe para export detalhado, que já tinha região.
+
+**R3.** Duas fontes da AWS (EC2 e EBS) são o endpoint da calculadora pública,
+não uma API documentada; S3 e transferência vêm da Price List Bulk, que é
+oficial. O destino do egress Premium do GCP (o próprio continente) é convenção.
+A Retail API da Azure limita e derruba conexões: cinco regiões levaram de 10 a
+30 minutos e duas tentativas caíram antes do retry cobrir `URLError` e
+`RemoteDisconnected`. **Risco da substituição:** se uma fonte devolver lista
+parcial sem erro, o sync apaga preços bons do mesmo conjunto. Hoje só a Azure
+pagina (8 páginas fixas), e o recorte é o mesmo a cada coleta.
+
+**R4.** As categorias usam a zona dominante: o bill GCP real tem cerca de 3,5% do compute
+em São Paulo, e o disco dele é todo cotado no meio-oeste. O primeiro aviso de
+"preço de outra região" disparava por banco e disco da Azure, que só existem
+como referência: corrigido para avisar só o que um sync resolve. A confiança da
+análise subiu de `low` para `medium` em cinco dos seis relatórios, porque as
+taxas oficiais de categoria substituíram as digitadas; não porque a cotação
+ficou mais otimista.
+
+**R5.** O perfil vem do nome. A regra do `p` da Azure e do `g` da AWS pode errar
+num nome futuro; nome sem perfil não filtra. Pool burstable aceita destino
+burstable, mas o modo de crédito (unlimited ou não) não é modelado. Família de
+disco local (IS4GEN, i*) continua cotada como uso geral: perde o NVMe local e
+não há aviso. A série DC/EC da Azure (confidencial) passava no filtro de família
+e foi tirada da coleta.
+
+**R6.** O payback é tão bom quanto a premissa do agente: o backend garante a
+conta, não o custo de migração. A tela continua sem payback. A autoridade subiu
+para `agent-authority-v2`: snapshot preparado antes responde `409 versao` no
+envio e o MCP prepara de novo.
+
+**R7.** O README diz onde a análise cotou e avisa metrópole diferente; continua
+sem número de economia.
+
+## 7. Análise de impacto
+
+| quem | o que muda | ação |
+|---|---|---|
+| Tela | campos novos e opcionais no payload (`preco_regiao`, `preco_regiao_aproximada`, `arquitetura_diferente`, `taxa_*_regiao`, `premissas.regioes`); pools do bill agregado com região; dois avisos novos de `origem: backend` | registrar no guia do front |
+| Agente (MCP) | autoridade v2; `payback.meses` calculado pelo backend; os mesmos campos novos no snapshot | nota no `MCP.PLAN` |
+| Análises gravadas | nada (payload congelado) | — |
+| Dev e produção | sem o sync por zona, um pool de São Paulo é cotado com o preço antigo dos EUA, sai `reference` e com aviso. Os 24 preços antigos do GCP (com `e2-standard-64`) só saem quando o sync novo rodar lá | rodar `sync_prices.py` por zona (dev-setup §4.2) |
+| CI | sem rede, compute vem do catálogo seed e categorias da referência; nada muda | — |
+| Decisão | a política (`score-7rs-v3`) não muda; os insumos mudam | — |

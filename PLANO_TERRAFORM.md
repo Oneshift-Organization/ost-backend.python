@@ -155,7 +155,7 @@ Registrado aqui para não ser descoberto tarde:
 | falta | saída |
 |---|---|
 | rede (VCN/VPC, subnet, security list) | usuário informa CIDR; o resto é template |
-| região de destino real | usuário escolhe — **mas a cotação usa região fixa** (`us-central1` no GCP, dívida §10.4 do `PLANO_API_V2`). Consequência: **o README gerado não pode citar economia**, ou cita número de outra região. |
+| região de destino real | usuário escolhe. Desde 12/10/2026 a análise cota o destino na zona da carga (`PLANO_PRECO_REGIONAL`); o README diz onde foi cotado e avisa quando a região escolhida é de outra metrópole. Continua **sem citar economia**: o pacote provisiona só parte da fatura. |
 | imagem de SO, chave SSH, tags | variáveis com default vazio |
 | engine e versão do banco | variável + assumption |
 | object storage | fora do MVP (§1) |

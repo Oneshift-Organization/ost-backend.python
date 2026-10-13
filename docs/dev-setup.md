@@ -115,12 +115,25 @@ PYTHONPATH=. python scripts/sync_prices.py --providers categories
 ## 4.2 Preços oficiais (opcional, precisa de rede)
 
 ```bash
-python scripts/sync_prices.py --providers azure,oci,categories,categories-live
+PYTHONPATH=. python -u scripts/sync_prices.py --providers aws,gcp,oci,categories-live
+PYTHONPATH=. python -u scripts/sync_prices.py --providers azure   # o mais lento
 ```
 
-Popula `cloud_price_points` das APIs públicas (Azure Retail, OCI cetools). Roda
-**offline**, nunca no caminho crítico. Sem isso a análise funciona, mas os
-equivalentes ficam com `confianca_preco: low` (catálogo seed).
+Popula `cloud_price_points` das APIs públicas (AWS, GCP Catalog, Azure Retail,
+OCI cetools), em cada região das zonas pedidas. Padrão: `virginia`,
+`meio-oeste`, `sao-paulo`, `texas`, `california`; `--zonas todas` para as 11.
+Roda **offline**, nunca no caminho crítico. O GCP exige `GCP_BILLING_API_KEY`;
+sem ela sai vazio e os outros seguem. Cada provedor grava num commit próprio:
+uma API fora do ar não descarta as outras.
+
+Sem isso a análise funciona, mas os equivalentes ficam com `confianca_preco:
+low` (catálogo seed). Com o sync de uma zona só, uma carga de outra zona é
+cotada com preço de fora e sai `reference`, com o aviso "Preço de outra região
+na cotação".
+
+> ⚠️ A Retail API da Azure limita requisições (429) e derruba conexões. O
+> cliente espera e tenta de novo, mas cinco regiões levam de 10 a 30 minutos.
+> Rode a Azure separada.
 
 ## 5. Subir a API
 

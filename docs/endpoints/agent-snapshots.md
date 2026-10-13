@@ -48,7 +48,7 @@ recalculado, sem LLM), grava e devolve. **Grava: não é uma leitura.**
     "fingerprint": "…",           // SHA-256 de {versions, payload completo}
     "payload_fingerprint": "…",   // SHA-256 do JSON canônico do "payload" abaixo
     "versions": {"contract": "agent-snapshot-v1", "decision_policy": "score-7rs-v3",
-                 "topology": null, "authority": "agent-authority-v1"},
+                 "topology": null, "authority": "agent-authority-v2"},
     "created_at": "…", "expires_at": "…", "reused": false
   },
   "payload": { /* as chaves do /request; topologia compacta */ },
@@ -90,6 +90,12 @@ O corpo de `POST /v1/agent/analyses/{id}/result` mais o campo opcional
   "parecer": {"posicao": "diverge", "motivo": "…", "riscos": ["…"]}
 }
 ```
+
+**Payback.** Com `payback.premissa_custo_migracao_usd`, o backend calcula
+`payback.meses = ⌈premissa ÷ economia mensal do provedor selecionado⌉` e
+sobrescreve o `meses` enviado (conta em `campos_sobrescritos`). A resposta traz
+`economia_mensal_usd` e `calculado_pelo_backend: true`. Sem economia,
+`meses: null` e `motivo_backend`. Desde `agent-authority-v2`.
 
 `parecer.posicao` é `concorda` ou `diverge` em relação a
 `decision_support.selected_provider`; `motivo` tem de 1 a 2.000 caracteres;
