@@ -14,10 +14,13 @@ from decimal import Decimal
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.cloud_price_point import CloudPricePoint
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.repositories.pg_cloud_price_point_repo import PgCloudPricePointRepository
+
+_Repo = tuple[PgCloudPricePointRepository, AsyncSession]
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -51,7 +54,7 @@ async def repo(_db_ready):
         await s.commit()
 
 
-async def test_regioes_com_preco(repo) -> None:
+async def test_regioes_com_preco(repo: _Repo) -> None:
     r, s = repo
     await r.substituir([_ponto("a", "sa-east-1"), _ponto("b", "us-east-1")])
     await r.substituir([_ponto("x", "eu-west-1", tipo="storage_ssd")])
@@ -60,7 +63,7 @@ async def test_regioes_com_preco(repo) -> None:
     assert await r.regioes_com_preco(_PROVEDOR.upper(), "storage_ssd") == ["eu-west-1"]
 
 
-async def test_substituir_remove_so_o_que_saiu_do_mesmo_conjunto(repo) -> None:
+async def test_substituir_remove_so_o_que_saiu_do_mesmo_conjunto(repo: _Repo) -> None:
     r, s = repo
     await r.substituir(
         [
@@ -85,7 +88,7 @@ async def test_substituir_remove_so_o_que_saiu_do_mesmo_conjunto(repo) -> None:
     }
 
 
-async def test_find_filtra_por_regiao(repo) -> None:
+async def test_find_filtra_por_regiao(repo: _Repo) -> None:
     r, s = repo
     await r.substituir([_ponto("a", "sa-east-1"), _ponto("b", "us-east-1")])
     await s.flush()

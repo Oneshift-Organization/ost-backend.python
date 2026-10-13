@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from app.domain.analysis import MigrationContext
+from app.domain.analysis import FinancialEstimate, MigrationContext
 from app.domain.entities.analysis_job import AnalysisJob
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.domain.repositories.i_billing_enriched_repo import IBillingEnrichedRepository
@@ -467,7 +467,7 @@ def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
     } for category in getattr(ctx, "categories", []) or [] for service in category.services]
 
 
-def _serialize_financeiro(fin) -> dict[str, object]:
+def _serialize_financeiro(fin: FinancialEstimate) -> dict[str, object]:
     """O bloco `financeiro` de um equivalente: custo, delta e proveniência."""
     fin_dict: dict[str, object] = {}
     if fin.estimated_monthly_cost is not None:

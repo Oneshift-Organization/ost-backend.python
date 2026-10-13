@@ -594,7 +594,7 @@ class BuildMigrationContextUseCase:
                     perfil_origem=perfil(source_provider, fpool.pool_key.machine_family),
                 )
                 providers_with_l2: set[str] = set()
-                equivs: list[EquivalentService] = []
+                equivs = []
 
                 for opt in l2_options:
                     providers_with_l2.add(opt.provider.lower())

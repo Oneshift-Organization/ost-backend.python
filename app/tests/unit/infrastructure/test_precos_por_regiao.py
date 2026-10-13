@@ -30,7 +30,9 @@ def _por_chave(pontos: list[Any]) -> dict[tuple[str, str, str], Decimal]:
 # ── AWS ──────────────────────────────────────────────────────────────────────
 
 
-def _bulk(produtos: dict[str, dict[str, Any]], faixas: dict[str, list[tuple[str, str]]]) -> dict:
+def _bulk(
+    produtos: dict[str, dict[str, Any]], faixas: dict[str, list[tuple[str, str]]]
+) -> dict[str, Any]:
     return {
         "products": {sku: {"attributes": a} for sku, a in produtos.items()},
         "terms": {
@@ -64,7 +66,7 @@ _EBS = {
 }
 
 
-def _s3(regiao: str, preco: str) -> dict:
+def _s3(regiao: str, preco: str) -> dict[str, Any]:
     return _bulk(
         {
             "a": {
@@ -84,7 +86,7 @@ def _s3(regiao: str, preco: str) -> dict:
     )
 
 
-def _dt(rotulo: str, preco: str) -> dict:
+def _dt(rotulo: str, preco: str) -> dict[str, Any]:
     return _bulk(
         {
             "out": {
@@ -144,8 +146,10 @@ def test_aws_regiao_nova_tem_rotulo() -> None:
 # ── GCP: compute ─────────────────────────────────────────────────────────────
 
 
-def _sku(desc: str, grupo: str, regioes: list[str], *precos: str, familia: str = "Compute") -> dict:
-    def _preco(v: str) -> dict:
+def _sku(
+    desc: str, grupo: str, regioes: list[str], *precos: str, familia: str = "Compute"
+) -> dict[str, Any]:
+    def _preco(v: str) -> dict[str, Any]:
         unidades, _, frac = v.partition(".")
         return {"units": unidades, "nanos": int((frac + "000000000")[:9])}
 
@@ -237,7 +241,7 @@ _SKUS_STORAGE = [
 
 @pytest.fixture
 def _catalogo(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _resposta(url: str, *, timeout: float) -> dict:
+    def _resposta(url: str, *, timeout: float) -> dict[str, Any]:
         if gcp.STORAGE_SERVICE in url:
             return {"skus": _SKUS_STORAGE}
         return {"skus": _SKUS_COMPUTE}
@@ -310,7 +314,7 @@ def test_gcp_categorias_por_regiao() -> None:
 
 
 def test_azure_blob_e_egress_com_regiao(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _resposta(url: str, timeout: float) -> dict:
+    def _resposta(url: str, timeout: float) -> dict[str, Any]:
         if "Bandwidth" in url:
             return {
                 "Items": [
@@ -360,7 +364,7 @@ def test_azure_blob_e_egress_com_regiao(monkeypatch: pytest.MonkeyPatch) -> None
 # ── OCI ──────────────────────────────────────────────────────────────────────
 
 
-def _oci(nome: str, *faixas: float, metrica: str = "") -> dict:
+def _oci(nome: str, *faixas: float, metrica: str = "") -> dict[str, Any]:
     return {
         "displayName": nome,
         "metricName": metrica,

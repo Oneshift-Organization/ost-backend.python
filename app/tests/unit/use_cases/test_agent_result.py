@@ -7,6 +7,8 @@ porque trocá-lo por um palpite custaria a reprodutibilidade.
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.use_cases.analysis.agent_result import (
     mapear_verdade,
     processar_sugestoes,
@@ -108,7 +110,7 @@ def test_payback_do_agente_sobrevive() -> None:
 # ── payback derivado da premissa (PLANO_PRECO_REGIONAL D11) ─────────────
 
 
-def _com_payback(meses: int, premissa: float) -> dict:
+def _com_payback(meses: int, premissa: float) -> dict[str, Any]:
     return {
         **_agente(),
         "payback": {"meses": meses, "premissa_custo_migracao_usd": premissa, "base": "3 squads"},

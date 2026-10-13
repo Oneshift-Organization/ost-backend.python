@@ -43,6 +43,7 @@ PRECO_GLOBAL: Mapping[str, frozenset[str]] = {
 def tem_preco_global(provedor: str, service_type: str) -> bool:
     return service_type in PRECO_GLOBAL.get(provedor.lower(), frozenset())
 
+
 # Rótulo da região das taxas de referência digitadas (`seed_category_rates`).
 # Não é região de provedor nenhum: é "costa leste dos EUA" de propósito.
 REGIAO_DE_REFERENCIA = "us-east"

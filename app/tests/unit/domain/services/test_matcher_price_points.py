@@ -14,7 +14,11 @@ from app.domain.entities.cloud_price_point import CloudPricePoint
 from app.domain.entities.cloud_sku import CloudSku
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
-from app.domain.services.equivalence_matcher import EquivalenceMatcher
+from app.domain.services.equivalence_matcher import (
+    EquivalenceMatcher,
+    EquivalentOption,
+    FinancialEstimate,
+)
 from app.domain.services.perfil_de_familia import perfil
 
 
@@ -53,13 +57,13 @@ class _PriceRepo(ICloudPricePointRepository):
     async def providers_with_prices(self, service_type: str) -> list[str]:
         return list(self._by)
 
-    async def regioes_com_preco(self, provider, service_type):
+    async def regioes_com_preco(self, provider: str, service_type: str) -> list[str]:
         return sorted({p.region for p in self._by.get(provider, [])})
 
     async def bulk_upsert(self, points):
         return len(points), 0
 
-    async def substituir(self, points):
+    async def substituir(self, points: list[CloudPricePoint]) -> tuple[int, int]:
         return len(points), 0
 
 
@@ -161,12 +165,15 @@ def _vm(provider: str, region: str, price: str) -> CloudPricePoint:
     )
 
 
-async def _cotar(repo: _PriceRepo, provider: str, regioes):
+async def _cotar(
+    repo: _PriceRepo, provider: str, regioes: dict[str, list[str | None]] | None
+) -> FinancialEstimate:
     matcher = EquivalenceMatcher(_SkuRepo({}), repo)
     [opt] = await matcher.match_pool(
         vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("100"),
         service_type="virtual_server", target_providers=[provider], regioes=regioes,
     )
+    assert opt.financials is not None
     return opt.financials
 
 
@@ -218,7 +225,7 @@ def _aws(sku: str, price: str) -> CloudPricePoint:
     )
 
 
-async def _cotar_perfil(pontos: list[CloudPricePoint], familia: str):
+async def _cotar_perfil(pontos: list[CloudPricePoint], familia: str) -> EquivalentOption:
     matcher = EquivalenceMatcher(_SkuRepo({}), _PriceRepo({"aws": pontos}))
     [opt] = await matcher.match_pool(
         vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("100"),
