@@ -16,7 +16,9 @@ gasto por construção, e o nível é o que o score usa:
   e destino; desconhecido quando o mapeamento é ambíguo ou falta).
 
 O que o score não usa — a nota herdada do tipo de serviço, um pool sem a mesma
-arquitetura no destino — vai em ``sugestoes``, nunca em ``nivel``. Os pools de
+arquitetura no destino, a dependência do inventário — vai em ``sugestoes``,
+nunca em ``nivel``. Serviço sem categoria identificada também é listado (é gasto
+real), marcado ``entra_no_score=False``; fora da lista fica só o financeiro. Os pools de
 compute aparecem dentro da linha de máquinas virtuais, que é onde está o custo.
 
 Função pura, sem I/O.
@@ -30,12 +32,16 @@ from decimal import Decimal
 from typing import Any
 
 from app.domain.services.decision_support import (
+    UNCLASSIFIED,
+    all_workloads,
     decision_workloads,
+    is_scored_workload,
     number,
     unique_targets,
 )
 from app.domain.services.migration_strategy import normalized, technical_evidence
 from app.domain.services.perfil_de_familia import perfil
+from app.domain.services.service_identity import is_financial_component
 from app.domain.services.sku_normalization import normalize_provider
 
 VERSAO = "acoplamento-v1"
@@ -88,6 +94,11 @@ class AcoplamentoDeServico:
     por_destino: Mapping[str, str | None]
     pools: tuple[PoolDoServico, ...]
     alertas: tuple[str, ...]
+    # Do inventário (bloco B): o que migra junto, de quem depende, onda e grupo.
+    # None sem inventário, ou sem recurso deste serviço encontrado nele.
+    dependencias: Mapping[str, Any] | None = None
+    # Serviço sem categoria identificada: é gasto real, mas o score não o lê.
+    entra_no_score: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +109,8 @@ class Resumo:
     high: int
     a_confirmar: int
     a_confirmar_com_sugestao: int
+    migram_em_grupo: int = 0
+    fora_do_score: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +132,10 @@ class AcoplamentoPorServico:
     servicos: tuple[AcoplamentoDeServico, ...]
     pools_sem_servico: tuple[PoolDoServico, ...]
     reconciliacao: Reconciliacao
+    # A análise foi feita com inventário; e, nela, a topologia já ligou recurso a
+    # serviço (análises de antes do bloco B têm inventário sem esse eixo).
+    com_inventario: bool = False
+    eixo_de_dependencia: bool = False
 
 
 def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPorServico:
@@ -130,9 +147,14 @@ def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPor
     origem = _provedor(dados.get("provedor_origem") or dados.get("source_provider")) or None
     custo_atual = _custo_atual(dados)
     cenarios = _cenarios(dados, origem)
-    no_escopo = decision_workloads(dados)
 
-    linhas = [_linha(w, cenarios, custo_atual) for w in no_escopo]
+    topologia = dados.get("topologia")
+    com_inventario = isinstance(topologia, Mapping)
+    por_servico = _dependencias_do_inventario(topologia)
+
+    linhas = [
+        _linha(w, cenarios, custo_atual, por_servico) for w in all_workloads(dados) if _listado(w)
+    ]
     pools = tuple(_pool(p, origem) for p in dados.get("pools_computacao") or [])
     linhas, sem_servico = _anexar_pools(linhas, pools)
     linhas.sort(key=lambda s: (-s.custo, s.nome.casefold(), s.id))
@@ -146,36 +168,67 @@ def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPor
         servicos=tuple(linhas),
         pools_sem_servico=sem_servico,
         reconciliacao=_reconciliacao(dados, linhas, custo_atual),
+        com_inventario=com_inventario,
+        eixo_de_dependencia=por_servico is not None,
     )
+
+
+def _listado(workload: Mapping[str, Any]) -> bool:
+    """Tudo que o score lê, mais o gasto sem categoria. Fica de fora só o
+    financeiro (imposto, crédito, desconto, compromisso, suporte) e o custo zero."""
+    if is_scored_workload(dict(workload)):
+        return True
+    return (
+        normalized(workload.get("category")) in UNCLASSIFIED
+        and not is_financial_component(str(workload.get("name") or ""))
+        and (number(workload.get("cost")) or _ZERO) > 0
+    )
+
+
+def _dependencias_do_inventario(topologia: Any) -> Mapping[str, Any] | None:
+    """`topologia.detalhe.servicos`, gravado na análise com inventário (B1)."""
+    if not isinstance(topologia, Mapping):
+        return None
+    servicos = (topologia.get("detalhe") or {}).get("servicos")
+    return servicos if isinstance(servicos, Mapping) else None
 
 
 # ── linha de serviço ─────────────────────────────────────────────────────────
 
 
 def _linha(
-    workload: dict[str, Any], cenarios: Sequence[str], custo_atual: Decimal | None
+    workload: dict[str, Any],
+    cenarios: Sequence[str],
+    custo_atual: Decimal | None,
+    por_servico: Mapping[str, Any] | None,
 ) -> AcoplamentoDeServico:
     nome = str(workload.get("name") or "Serviço não identificado")
     categoria = normalized(workload.get("category"))
     custo = number(workload.get("cost")) or _ZERO
     inferido = workload.get("type_source") == "inferido"
-    # Sem destino, `technical_evidence` devolve exatamente o lado da origem: é
-    # o ponto de partida do score, e o inferido sai desconhecido como lá.
-    _, nivel = technical_evidence(workload, None)
-    nivel = nivel if nivel in _ORDEM else None
-    alvos = unique_targets(workload)
+    no_score = is_scored_workload(workload)
+    nivel: str | None = None
     por_destino: dict[str, str | None] = {}
-    for provedor in cenarios:
-        alvo = alvos.get(provedor)
-        lock = technical_evidence(workload, alvo)[1] if alvo else None
-        por_destino[provedor] = lock if lock in _ORDEM else None
+    if no_score:
+        # Sem destino, `technical_evidence` devolve exatamente o lado da origem:
+        # é o ponto de partida do score, e o inferido sai desconhecido como lá.
+        _, lock = technical_evidence(workload, None)
+        nivel = lock if lock in _ORDEM else None
+        alvos = unique_targets(workload)
+        for provedor in cenarios:
+            alvo = alvos.get(provedor)
+            lock = technical_evidence(workload, alvo)[1] if alvo else None
+            por_destino[provedor] = lock if lock in _ORDEM else None
 
-    sugestoes = _sugestoes_de_classe(workload)
-    alertas = (
-        ("Tipo de serviço inferido pelo classificador; a nota só vale depois de confirmado.",)
-        if inferido
-        else ()
-    )
+    dependencias = (por_servico or {}).get(nome)
+    sugestoes = (*_sugestoes_de_classe(workload), *_sugestoes_de_dependencia(dependencias))
+    alertas: tuple[str, ...] = ()
+    if not no_score:
+        alertas = ("Categoria não identificada: fica fora do score até ser classificada.",)
+    elif inferido:
+        alertas = (
+            "Tipo de serviço inferido pelo classificador; a nota só vale depois de confirmado.",
+        )
     return AcoplamentoDeServico(
         id=f"service/{categoria}/{nome}",
         nome=nome,
@@ -191,7 +244,20 @@ def _linha(
         por_destino=por_destino,
         pools=(),
         alertas=alertas,
+        dependencias=dependencias if isinstance(dependencias, Mapping) else None,
+        entra_no_score=no_score,
     )
+
+
+def _sugestoes_de_dependencia(dependencias: Any) -> tuple[Sugestao, ...]:
+    """Só médio e alto viram sugestão: dependência baixa não diz nada sobre
+    exclusividade, e não deve preencher um nível vazio."""
+    if not isinstance(dependencias, Mapping):
+        return ()
+    nivel = dependencias.get("nivel")
+    if nivel not in ("medium", "high"):
+        return ()
+    return (Sugestao(nivel=nivel, fonte="dependencias", motivo=str(dependencias.get("motivo"))),)
 
 
 def _sugestoes_de_classe(workload: dict[str, Any]) -> tuple[Sugestao, ...]:
@@ -335,6 +401,10 @@ def _resumo(linhas: Sequence[AcoplamentoDeServico]) -> Resumo:
         a_confirmar_com_sugestao=sum(
             1 for s in linhas if s.nivel is None and s.nivel_sugerido is not None
         ),
+        migram_em_grupo=sum(
+            1 for s in linhas if s.dependencias and s.dependencias.get("migra_junto_com")
+        ),
+        fora_do_score=sum(1 for s in linhas if not s.entra_no_score),
     )
 
 
@@ -343,8 +413,8 @@ def _reconciliacao(
     linhas: Sequence[AcoplamentoDeServico],
     custo_atual: Decimal | None,
 ) -> Reconciliacao:
-    """O que ficou de fora (imposto, crédito, compromisso, custo zero) é a
-    diferença entre todos os serviços do payload e os listados."""
+    """O que ficou de fora (imposto, crédito, desconto, compromisso, suporte,
+    custo zero) é a diferença entre todos os serviços do payload e os listados."""
     brutos = _custos_brutos(dados)
     soma_bruta = sum(brutos, _ZERO)
     soma_linhas = sum((s.custo for s in linhas), _ZERO)
@@ -363,12 +433,7 @@ def _reconciliacao(
 
 
 def _custos_brutos(dados: Mapping[str, Any]) -> list[Decimal]:
-    if "decision_workloads" in dados:
-        return [number(w.get("cost")) or _ZERO for w in dados.get("decision_workloads") or []]
-    return [
-        number((w.get("source_usage") or {}).get("billed_cost")) or _ZERO
-        for w in dados.get("workloads") or []
-    ]
+    return [number(w.get("cost")) or _ZERO for w in all_workloads(dict(dados))]
 
 
 def _custo_atual(dados: Mapping[str, Any]) -> Decimal | None:

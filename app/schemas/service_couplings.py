@@ -62,6 +62,34 @@ class PoolOut(BaseModel):
         )
 
 
+class VizinhoOut(BaseModel):
+    servico: str
+    custo: float | None = None
+    natureza: str = Field(
+        description="mesma_unidade | dados | encaminhamento | servico | declarada | "
+        "administrativo | mesmo_grupo"
+    )
+
+
+class DependenciasOut(BaseModel):
+    """Do inventário: o que precisa migrar junto ou antes (PLANO_LOCKIN_INVENTARIO B)."""
+
+    nivel: Nivel
+    motivo: str
+    grupos: list[str]
+    ondas: list[int] = Field(description="vazio quando o grupo é independente (sem ordem)")
+    migra_junto_com: list[VizinhoOut]
+    depende_de: list[VizinhoOut] = Field(description="dependência de ordem: o outro vai antes")
+    dependentes: int
+    banco_compartilhado: bool
+    grupo_grande: bool
+    custo_do_grupo: float
+    cobertura: float | None = Field(
+        description="fração do custo do serviço com recurso encontrado no inventário"
+    )
+    regioes: list[str]
+
+
 class ServicoOut(BaseModel):
     id: str
     nome: str
@@ -83,6 +111,13 @@ class ServicoOut(BaseModel):
     )
     pools: list[PoolOut]
     alertas: list[str]
+    dependencias: DependenciasOut | None = Field(
+        default=None,
+        description="null sem inventário ou sem recurso deste serviço encontrado nele",
+    )
+    entra_no_score: bool = Field(
+        description="false para gasto sem categoria identificada: listado, mas fora do score"
+    )
 
     @classmethod
     def de(cls, s: AcoplamentoDeServico) -> ServicoOut:
@@ -102,6 +137,8 @@ class ServicoOut(BaseModel):
                 "por_destino": dict(s.por_destino),
                 "pools": [PoolOut.de(p) for p in s.pools],
                 "alertas": list(s.alertas),
+                "dependencias": dict(s.dependencias) if s.dependencias else None,
+                "entra_no_score": s.entra_no_score,
             }
         )
 
@@ -113,11 +150,15 @@ class ResumoOut(BaseModel):
     high: int
     a_confirmar: int
     a_confirmar_com_sugestao: int
+    migram_em_grupo: int
+    fora_do_score: int
 
 
 class ReconciliacaoOut(BaseModel):
     soma_linhas: float
-    fora_do_escopo: float = Field(description="imposto, crédito, compromisso e custo zero")
+    fora_do_escopo: float = Field(
+        description="imposto, crédito, desconto, compromisso, suporte e custo zero"
+    )
     custo_atual: float | None
     diferenca: float | None
     status: Literal["fecha", "diferenca_de_escopo", "sem_custo_atual"]
@@ -132,6 +173,10 @@ class ServiceCouplingsResponse(BaseModel):
     servicos: list[ServicoOut]
     pools_sem_servico: list[PoolOut]
     reconciliacao: ReconciliacaoOut
+    com_inventario: bool
+    eixo_de_dependencia: bool = Field(
+        description="a análise ligou recurso do inventário a serviço da fatura"
+    )
 
     @classmethod
     def de(cls, r: AcoplamentoPorServico) -> ServiceCouplingsResponse:
@@ -154,5 +199,7 @@ class ServiceCouplingsResponse(BaseModel):
                     "diferenca": _dinheiro(rec.diferenca) if rec.diferenca is not None else None,
                     "status": rec.status,
                 },
+                "com_inventario": r.com_inventario,
+                "eixo_de_dependencia": r.eixo_de_dependencia,
             }
         )

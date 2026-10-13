@@ -42,6 +42,7 @@ from app.domain.repositories.i_custo_por_recurso import ILeitorDeCustoPorRecurso
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
 from app.domain.services.correlacao_inventario import (
     Correlacao,
+    CustosDoBilling,
     IndiceDeApelidos,
     correlacionar,
 )
@@ -49,6 +50,7 @@ from app.domain.services.instance_shape import parse_instance_shape
 from app.domain.services.topologia import analisar_topologia
 from app.domain.services.topologia.indice import Indice
 from app.domain.services.topologia.modelo import AnaliseDeTopologia, Nivel, Severidade
+from app.domain.services.topologia.servicos_do_billing import Vizinho, dependencias_por_servico
 from app.schemas.analysis_v2 import AnalysisV2Response
 from app.use_cases.inventory.consultas import exigir_processado, obter_do_usuario
 from app.use_cases.inventory.correlacao import ProvedorDiferenteError
@@ -118,6 +120,7 @@ class MontarTopologiaUseCase:
             correlacao=correlacao,
             ctx=ctx,
             converter=converter,
+            custos=custos,
         )
 
 
@@ -129,6 +132,7 @@ def montar_topologia(
     correlacao: Correlacao,
     ctx: Any,
     converter: Converter,
+    custos: CustosDoBilling | None = None,
 ) -> dict[str, Any]:
     indice = Indice(conteudo)
     apelidos = IndiceDeApelidos(conteudo)
@@ -149,7 +153,44 @@ def montar_topologia(
             "bancos": bancos,
             "bancos_sem_grupo": bancos_sem_grupo,
             "discos": _discos(conteudo, correlacao),
+            # Dependências por serviço da fatura (PLANO_LOCKIN_INVENTARIO B1). Lido
+            # pela visão de acoplamento; não vai ao LLM nem ao agente.
+            **(
+                {"servicos": _servicos(conteudo, analise, custos, converter)}
+                if custos is not None
+                else {}
+            ),
         },
+    }
+
+
+def _servicos(
+    conteudo: Inventario,
+    analise: AnaliseDeTopologia,
+    custos: CustosDoBilling,
+    converter: Converter,
+) -> dict[str, Any]:
+    def vizinho(v: Vizinho) -> dict[str, Any]:
+        return {"servico": v.servico, "custo": converter(v.custo), "natureza": v.natureza}
+
+    return {
+        nome: {
+            "nivel": d.nivel,
+            "motivo": d.motivo,
+            "grupos": list(d.grupos),
+            "ondas": list(d.ondas),
+            "migra_junto_com": [vizinho(v) for v in d.migra_junto_com],
+            "depende_de": [
+                {"servico": v.servico, "natureza": v.natureza} for v in d.depende_de
+            ],
+            "dependentes": d.dependentes,
+            "banco_compartilhado": d.banco_compartilhado,
+            "grupo_grande": d.grupo_grande,
+            "custo_do_grupo": converter(d.custo_do_grupo),
+            "cobertura": float(d.cobertura) if d.cobertura is not None else None,
+            "regioes": list(d.regioes),
+        }
+        for nome, d in dependencias_por_servico(conteudo, analise, custos).items()
     }
 
 

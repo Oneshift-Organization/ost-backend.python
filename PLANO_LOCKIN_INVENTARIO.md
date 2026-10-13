@@ -3,9 +3,10 @@
 > Prioridade: **0**. A tela "Acoplamento dos serviços" exibe dado inconsistente
 > hoje.
 >
-> **Estado (13/10/2026):** bloco A implementado (A1 a A4), contrato em
+> **Estado (13/10/2026):** bloco A implementado (A1 a A4) e bloco B sem o B3
+> (B1, B2 e B4), contrato em
 > [`docs/endpoints/service-couplings.md`](docs/endpoints/service-couplings.md).
-> A implementação mudou o desenho do A2 e corrigiu uma premissa da §2; ver §9. Decisão: **endpoint novo, só de leitura**, calculado do payload
+> A implementação mudou o desenho do A2 e corrigiu uma premissa da §2; ver §9 e §10. Decisão: **endpoint novo, só de leitura**, calculado do payload
 > determinístico já salvo. A lista `cross_cloud_equivalents` (tabela de preço
 > por destino) **não muda** nos blocos A e B. Só o bloco C, versionado, mexe no
 > score.
@@ -146,7 +147,7 @@ linhas na tabela por destino), baixo 6, médio 3, alto 0, a confirmar 15;
 82.020,40 nas linhas + 10.083,09 fora do escopo = 92.103,48. Os 15 "a
 confirmar" agora são lacuna real de catálogo, não artefato de tela (§9).
 
-### Bloco B — inventário: dependência e exclusividade (ainda sem mudar score)
+### Bloco B — inventário: dependência e exclusividade (B1, B2 e B4 feitos; B3 pendente)
 
 A topologia já calcula o que precisa: dependências com natureza (`dados`,
 `encaminhamento`, `servico`, `administrativo`, `declarada`) e acoplamento
@@ -275,3 +276,38 @@ igual porque `nivel` já é "o que o score usa".
   classificação).
 - Bloco B é o que mais reduz o "a confirmar" com evidência: tipo do recurso
   confirma o `service_type` e os atributos dão a exclusividade.
+
+## 10. Revisão do bloco B (13/10/2026)
+
+**Feito**
+- B1/B2: `domain/services/topologia/servicos_do_billing.py` liga cada linha de
+  custo com `resource_id` ao recurso do inventário (`IndiceDeApelidos`), à
+  unidade e ao grupo de movimentação. Nível: banco compartilhado ou grupo
+  grande → alto; migra junto com outro serviço → médio; resto → baixo. A
+  natureza do "migra junto" é a mais concreta entre mesma unidade, dados,
+  encaminhamento, serviço, declarada, administrativa e mesmo grupo.
+- Congelado na análise em `topologia.detalhe.servicos` (`montar_topologia`
+  recebe os custos por recurso). Fica fora do que o LLM e o agente recebem; não
+  muda a análise corrigida nem a versão da topologia.
+- B4: a visão lê o bloco; médio e alto viram sugestão `dependencias`;
+  `com_inventario`, `eixo_de_dependencia`, `resumo.migram_em_grupo`.
+
+**Correção que o mock da OCI mostrou:** a visão copiava o filtro do score e
+escondia gasto sem categoria (`unknown`): 5 dos 6 serviços do mock sumiam e
+caíam em "fora do escopo" junto com imposto. Agora são linhas com
+`entra_no_score: false`, e `fora_do_escopo` é só o financeiro. O filtro do score
+foi exposto (`all_workloads`, `is_scored_workload`) sem mudar comportamento.
+
+**Achados**
+- No mock da OCI os serviços chegam como `DATABASE`, `BLOCK_STORAGE`,
+  `OBJECT_STORAGE`… sem categoria: 5 de 6 ficam fora do score. É lacuna de
+  classificação dos nomes de serviço da OCI, mesma fila do Filestore/Source
+  Repositories e do MSK.
+- No mock GCP com inventário, só o Compute Engine se liga a recurso (migra junto
+  com o WordPress, imagem de marketplace cobrada como serviço); o Cloud SQL não
+  casa. Vale conferir o apelido do Cloud SQL no normalizador do Asset Inventory.
+
+**Pendente: B3 (exclusividade pelos atributos do recurso).** Exige tabela
+`lockin_rules` (migration e seed) e regras por motor/variante. O inventário já
+traz `motor` e `versao` de banco e `tipo_maquina`; a regra é data-driven, sem
+if/else por nuvem.

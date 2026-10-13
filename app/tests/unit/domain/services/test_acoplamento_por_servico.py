@@ -216,3 +216,20 @@ def test_contrato_direto_usa_os_workloads_informados() -> None:
 def test_sem_lista_de_servicos_recusa() -> None:
     with pytest.raises(PayloadSemServicosError):
         montar_acoplamento_por_servico({"pools_computacao": []})
+
+
+def test_gasto_sem_categoria_aparece_fora_do_score() -> None:
+    payload = _payload()
+    payload["decision_workloads"].append(
+        _workload(
+            "DATABASE", 60, categoria="unknown", tipo="unknown", inferido=True, classe="medium"
+        )
+    )
+    payload["gasto_total"] = 1050.0
+    r = montar_acoplamento_por_servico(payload)
+    db = _por_nome(r)["DATABASE"]
+    assert (db.entra_no_score, db.nivel, dict(db.por_destino)) == (False, None, {})
+    assert db.nivel_sugerido == "medium" and "fora do score" in db.alertas[0]
+    assert r.resumo.fora_do_score == 1
+    # Fora do escopo continua só o financeiro (o imposto de 40).
+    assert (r.reconciliacao.fora_do_escopo, r.reconciliacao.status) == (Decimal("40"), "fecha")
