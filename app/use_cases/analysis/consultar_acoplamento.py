@@ -21,6 +21,14 @@ from app.domain.services.acoplamento_por_servico import (
 from app.use_cases.agent.consultar_envios import ConsultarEnviosUseCase
 
 
+class AnaliseNaoConcluidaError(ConflictError):
+    """Ainda rodando: repetir depois."""
+
+
+class AnaliseSemServicosError(ConflictError):
+    """Payload anterior à lista de serviços: só uma análise nova resolve."""
+
+
 class ConsultarAcoplamentoUseCase:
     def __init__(self, jobs: IAnalysisJobRepository, envios: ConsultarEnviosUseCase) -> None:
         self._jobs = jobs
@@ -31,7 +39,9 @@ class ConsultarAcoplamentoUseCase:
         if job is None:
             raise NotFoundError(f"análise {job_id} não encontrada")
         if job.status != AnalysisStatus.COMPLETED or not job.llm_input_payload:
-            raise ConflictError(f"a análise {job_id} ainda não foi concluída (status {job.status})")
+            raise AnaliseNaoConcluidaError(
+                f"a análise {job_id} ainda não foi concluída (status {job.status})"
+            )
         return _montar(job.llm_input_payload)
 
     async def do_envio(self, user_id: UUID, submission_id: UUID) -> AcoplamentoPorServico:
@@ -46,4 +56,4 @@ def _montar(payload: Mapping[str, Any]) -> AcoplamentoPorServico:
     try:
         return montar_acoplamento_por_servico(payload)
     except PayloadSemServicosError as e:
-        raise ConflictError(str(e)) from e
+        raise AnaliseSemServicosError(str(e)) from e

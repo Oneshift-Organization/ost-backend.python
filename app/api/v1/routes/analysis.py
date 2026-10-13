@@ -14,9 +14,9 @@ from app.api.deps import (
     consultar_acoplamento_uc,
     payload_do_agente_uc,
 )
-from app.api.v1.envelope import erro_do_payload
+from app.api.v1.envelope import erro, erro_do_payload
 from app.core.config import get_settings
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import NotFoundError
 from app.domain.analysis import MigrationContext
 from app.domain.entities.analysis_job import AnalysisJob, DispStatus, agora_utc
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
@@ -72,6 +72,10 @@ from app.schemas.service_couplings import ServiceCouplingsResponse
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
+)
+from app.use_cases.analysis.consultar_acoplamento import (
+    AnaliseNaoConcluidaError,
+    AnaliseSemServicosError,
 )
 from app.use_cases.analysis.payload_do_agente import PayloadDoAgenteError
 from app.use_cases.analysis.run_analysis_pipeline import (
@@ -947,15 +951,24 @@ async def get_service_couplings(
     """Uma linha por serviço, calculada do payload salvo da análise.
 
     Substitui, na tela de acoplamento, a leitura de `cross_cloud_equivalents`
-    (tabela de preço por destino). 409 quando a análise não terminou ou é
-    anterior à lista de serviços. PLANO_LOCKIN_INVENTARIO §4.
+    (tabela de preço por destino). `409 ANALISE_NAO_CONCLUIDA` (repetir) ou
+    `409 ANALISE_SEM_SERVICOS` (análise anterior à lista de serviços).
+    Contrato: docs/endpoints/service-couplings.md.
     """
     try:
         visao = await consultar_acoplamento_uc(session).da_analise(UUID(user.sub), job_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+        raise erro(
+            status.HTTP_404_NOT_FOUND, "ANALISE_NAO_ENCONTRADA", str(e), retryable=False
+        ) from e
+    except AnaliseNaoConcluidaError as e:
+        raise erro(
+            status.HTTP_409_CONFLICT, "ANALISE_NAO_CONCLUIDA", str(e), retryable=True
+        ) from e
+    except AnaliseSemServicosError as e:
+        raise erro(
+            status.HTTP_409_CONFLICT, "ANALISE_SEM_SERVICOS", str(e), retryable=False
+        ) from e
     return ServiceCouplingsResponse.de(visao)
 
 

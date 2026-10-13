@@ -37,11 +37,14 @@ antigas também saem corrigidas**, desde que tenham a lista de serviços.
 Sem paginação: são dezenas de linhas (24 no bill AWS de referência) e a tela
 pagina no cliente.
 
-| Status | Quando |
-|---|---|
-| 200 | visão montada |
-| 404 | análise ou envio não existe, ou é de outro usuário (`ENVIO_NAO_ENCONTRADO` na rota do agente) |
-| 409 | análise ainda não concluída, ou anterior à lista de serviços (`decision_workloads`); `ANALISE_SEM_SERVICOS` na rota do agente. A tela mantém o comportamento antigo nesse caso |
+Erros no envelope `{"detail": {"codigo", "mensagem", "retryable"}}`:
+
+| Status | `codigo` | Quando | `retryable` |
+|---|---|---|---|
+| 404 | `ANALISE_NAO_ENCONTRADA` / `ENVIO_NAO_ENCONTRADO` | não existe ou é de outro usuário | não |
+| 409 | `ANALISE_NAO_CONCLUIDA` | a análise ainda está rodando | **sim** |
+| 409 | `ANALISE_SEM_SERVICOS` | análise anterior à lista de serviços (`decision_workloads`); a tela mantém o comportamento antigo | não |
+| 404 | `SNAPSHOT_DESLIGADO` | só na rota do agente, com as flags desligadas | não |
 
 ## Resposta
 

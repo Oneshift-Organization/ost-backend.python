@@ -752,8 +752,14 @@ async def test_acoplamento_recusa_o_que_nao_pode_mostrar(app: FastAPI, oci: UUID
             r_sem_job = await c.get(f"/v1/analyses/{uuid4()}/service-couplings")
             r_sem_envio = await c.get(f"/v1/agent/submissions/{uuid4()}/service-couplings")
         assert (r_pendente.status_code, r_antiga.status_code) == (409, 409)
-        assert "decision_workloads" in r_antiga.json()["detail"]
+        assert (_detalhe(r_pendente)["codigo"], _detalhe(r_pendente)["retryable"]) == (
+            "ANALISE_NAO_CONCLUIDA",
+            True,
+        )
+        assert _detalhe(r_antiga)["codigo"] == "ANALISE_SEM_SERVICOS"
+        assert "decision_workloads" in _detalhe(r_antiga)["mensagem"]
         assert (r_outro.status_code, r_sem_job.status_code) == (404, 404)
+        assert _detalhe(r_sem_job)["codigo"] == "ANALISE_NAO_ENCONTRADA"
         assert r_sem_envio.status_code == 404
         assert _detalhe(r_sem_envio)["codigo"] == "ENVIO_NAO_ENCONTRADO"
     finally:
