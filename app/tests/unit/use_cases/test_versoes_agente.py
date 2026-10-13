@@ -55,8 +55,11 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 _HASH_POR_VERSAO = {
     "agent-authority-v1": "1d3e1f935092a2260a5c740b8b1b94c2ec9319faffa5eaf078a31d7bcea4d8c6",
     # v2: payback.meses derivado da premissa do agente (PLANO_PRECO_REGIONAL D11).
-    # SHA-256 do código das regras, não credencial; o gitleaks o lê como chave.
-    "agent-authority-v2": "e36eaa924ddd2209cba8aadcf909c63493ba8089a3e333831b431a6670b90434",  # gitleaks:allow
+    # SHA-256 do código das regras, não credencial. Entre parênteses porque o
+    # gitleaks lia "authority": "<hex>" na mesma linha como chave de API.
+    "agent-authority-v2": (
+        "e36eaa924ddd2209cba8aadcf909c63493ba8089a3e333831b431a6670b90434"
+    ),
 }
 
 

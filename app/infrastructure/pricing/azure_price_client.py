@@ -49,7 +49,7 @@ def _espera(tentativa: int, retry_after: str | None) -> float:
 
 
 def _get_json(url: str, *, timeout: float, retries: int = 6) -> dict[str, Any]:
-    """GET com User-Agent e backoff em 429 e em timeout (a API rate-limita).
+    """GET com User-Agent e backoff em 429, timeout e erro de conexão.
 
     Uma coleta de cinco regiões faz ~40 chamadas seguidas e a API responde 429
     ou segura a conexão até estourar o tempo. Desistir na primeira derrubava o
@@ -68,7 +68,9 @@ def _get_json(url: str, *, timeout: float, retries: int = 6) -> dict[str, Any]:
             if e.code != _HTTP_TOO_MANY_REQUESTS or ultima:
                 raise
             time.sleep(_espera(attempt, e.headers.get("Retry-After")))
-        except TimeoutError:
+        except (TimeoutError, urllib.error.URLError):
+            # URLError cobre o handshake TLS que estoura o tempo, que não chega
+            # como TimeoutError. HTTPError (subclasse) já foi tratado acima.
             if ultima:
                 raise
             time.sleep(_espera(attempt, None))
