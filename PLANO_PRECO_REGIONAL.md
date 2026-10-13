@@ -307,3 +307,42 @@ sem número de economia.
 | Dev e produção | sem o sync por zona, um pool de São Paulo é cotado com o preço antigo dos EUA, sai `reference` e com aviso. Os 24 preços antigos do GCP (com `e2-standard-64`) só saem quando o sync novo rodar lá | rodar `sync_prices.py` por zona (dev-setup §4.2) |
 | CI | sem rede, compute vem do catálogo seed e categorias da referência; nada muda | — |
 | Decisão | a política (`score-7rs-v3`) não muda; os insumos mudam | — |
+
+## 8. Antes e depois (R8, 13/10/2026)
+
+Antes: código da `develop` (`21c8734`). Depois: esta branch, com o sync por zona
+completo no banco local (Azure: 4.256 preços buscados, 521 removidos). Mesmos
+seis relatórios, sem LLM (`payload_do_agente_uc.montar`). Economia em US$/mês;
+negativo é o destino sair mais caro.
+
+| relatório | decisão | confiança | economia antes → depois |
+|---|---|---|---|
+| GCP Cost Table (real) | OCI = OCI | low (0,33) → medium (0,89) | AWS 873,85 → 125,94 · Azure 993,06 → 152,07 · OCI 2.797,51 → 2.628,79 |
+| AWS Cost Explorer (real) | OCI = OCI | low (0,42) → medium (0,67) | Azure −19.572,21 → −21.922,40 · GCP −30.490,41 → −32.361,14 · OCI 28.883,76 → 25.169,75 |
+| GCP BigQuery (mock) | OCI = OCI | low (0,28) → medium (0,87) | AWS 377,50 → −88,58 · Azure 572,49 → −23,05 · OCI 2.428,86 → 2.410,85 |
+| AWS CUR (mock) | OCI = OCI | low (0,41) → medium (0,66) | Azure −10.396,90 → −12.732,49 · GCP −20.939,51 → −23.115,47 · OCI 39.546,07 → 35.990,47 |
+| Azure (mock) | OCI = OCI | low (0,51) → medium (0,63) | AWS 597,49 → −67,31 · GCP −1.563,88 → −413,51 · OCI 3.872,38 → 3.925,68 |
+| OCI São Paulo (mock) | nenhum = nenhum | high (1,0) = high | AWS −1.991,11 → −4.881,33 · Azure −1.412,51 → −4.856,95 · GCP −3.118,04 → −3.708,49 |
+
+O que explica cada mudança:
+
+- **Mesma decisão nos seis.** A confiança sobe em cinco porque as taxas de
+  categoria passaram a ser oficiais, não porque a economia ficou mais otimista.
+- **Bills GCP:** sair para AWS ou Azure deixa de compensar (cerca de US$ 900 →
+  US$ 125–150). O compute de `southamerica-east1` é cotado em São Paulo e os
+  tipos de máquina são os reais.
+- **Bills AWS:** a economia da OCI cai 10% a 13%. Os pools Graviton (C7G, M7G,
+  R7G…) deixaram de ser cotados em x86 (`E3`) e vão para ARM (`A2`), mais caro
+  na OCI; no GCP, para `c4a`. A cobertura sobe (72,0% → 78,6% no real; 84,8% →
+  91,4% no CUR).
+- **OCI de São Paulo:** sair piora muito; os outros três cotam em São Paulo,
+  cerca de 1,6× a Virgínia.
+- **Não é desta branch:** o pool C7G do bill AWS real (US$ 2.823) cota de 3× a
+  6× o custo de origem em todos os destinos, igual na `develop` (Azure
+  US$ 14.483 antes, US$ 14.121 agora). A capacidade vem das instance-hours e o
+  custo parece coberto por compromisso; fica para a fila de precisão.
+
+Checagens da R8: E2E do snapshot 4/4 coerentes (`scripts/e2e_snapshot_agente.py`);
+1.573 testes passando e 24 pulados (binário do Terraform) no Python 3.12 da CI
+e no local; ruff e mypy sem erro novo em relação à `develop` (os erros antigos
+do repo continuam: 245 de ruff, 957 de mypy).
