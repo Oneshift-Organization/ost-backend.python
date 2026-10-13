@@ -11,11 +11,12 @@ from app.api.deps import (
     CurrentUser,
     DbSession,
     construtor_de_contexto,
+    consultar_acoplamento_uc,
     payload_do_agente_uc,
 )
 from app.api.v1.envelope import erro_do_payload
 from app.core.config import get_settings
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.domain.analysis import MigrationContext
 from app.domain.entities.analysis_job import AnalysisJob, DispStatus, agora_utc
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
@@ -67,6 +68,7 @@ from app.schemas.analysis import (
 )
 from app.schemas.analysis_v2 import AnalysisV2Response, LegacyAnalysisRequest
 from app.schemas.decision_support import AnalysisStartOptions
+from app.schemas.service_couplings import ServiceCouplingsResponse
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
@@ -929,6 +931,32 @@ async def get_analysis_result(
         llm_input_payload=job.llm_input_payload,
         created_at=job.created_at,
     )
+
+
+@router.get(
+    "/{job_id}/service-couplings",
+    response_model=ServiceCouplingsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Acoplamento por serviço da fatura, com o nível que o score usa",
+)
+async def get_service_couplings(
+    job_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+) -> ServiceCouplingsResponse:
+    """Uma linha por serviço, calculada do payload salvo da análise.
+
+    Substitui, na tela de acoplamento, a leitura de `cross_cloud_equivalents`
+    (tabela de preço por destino). 409 quando a análise não terminou ou é
+    anterior à lista de serviços. PLANO_LOCKIN_INVENTARIO §4.
+    """
+    try:
+        visao = await consultar_acoplamento_uc(session).da_analise(UUID(user.sub), job_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    return ServiceCouplingsResponse.de(visao)
 
 
 async def _run_legacy_analysis_pipeline(

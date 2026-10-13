@@ -1,0 +1,158 @@
+"""Resposta de `GET …/service-couplings` (PLANO_LOCKIN_INVENTARIO, §4).
+
+Uma linha por serviço da fatura, com o nível que o score usa e, à parte, as
+sugestões que ele não usa. Os contadores da tela vêm de `resumo`, nunca da
+contagem de linhas de `cross_cloud_equivalents`.
+"""
+
+from __future__ import annotations
+
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+from app.domain.services.acoplamento_por_servico import (
+    AcoplamentoDeServico,
+    AcoplamentoPorServico,
+    PoolDoServico,
+    Sugestao,
+)
+
+Nivel = Literal["low", "medium", "high"]
+
+
+def _dinheiro(valor: Decimal) -> float:
+    return float(valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+class SugestaoOut(BaseModel):
+    nivel: Nivel
+    fonte: Literal["classe", "arquitetura", "inventario", "dependencias"]
+    motivo: str
+
+    @classmethod
+    def de(cls, s: Sugestao) -> SugestaoOut:
+        return cls.model_validate({"nivel": s.nivel, "fonte": s.fonte, "motivo": s.motivo})
+
+
+class PoolOut(BaseModel):
+    familia: str
+    regiao: str | None = Field(description="null quando o billing não informa a região")
+    custo: float
+    arquitetura: Literal["x86", "arm"] | None
+    burstable: bool | None
+    coberto_por_compromisso: bool
+    destinos_sem_mesma_arquitetura: list[str]
+    sugestoes: list[SugestaoOut]
+
+    @classmethod
+    def de(cls, p: PoolDoServico) -> PoolOut:
+        return cls.model_validate(
+            {
+                "familia": p.familia,
+                "regiao": p.regiao,
+                "custo": _dinheiro(p.custo),
+                "arquitetura": p.arquitetura,
+                "burstable": p.burstable,
+                "coberto_por_compromisso": p.coberto_por_compromisso,
+                "destinos_sem_mesma_arquitetura": list(p.destinos_sem_mesma_arquitetura),
+                "sugestoes": [SugestaoOut.de(s) for s in p.sugestoes],
+            }
+        )
+
+
+class ServicoOut(BaseModel):
+    id: str
+    nome: str
+    categoria: str
+    service_type: str | None
+    tipo_inferido: bool
+    custo: float
+    fracao: float | None = Field(description="custo ÷ gasto total do período")
+    nivel: Nivel | None = Field(
+        description="lado da origem, o mesmo de onde o score parte; null = a confirmar"
+    )
+    fonte: Literal["catalogo", "informado"] | None
+    nivel_sugerido: Nivel | None = Field(
+        description="maior sugestão, só quando subiria ou preencheria o nível"
+    )
+    sugestoes: list[SugestaoOut]
+    por_destino: dict[str, Nivel | None] = Field(
+        description="o que o eixo técnico do score usa em cada cenário"
+    )
+    pools: list[PoolOut]
+    alertas: list[str]
+
+    @classmethod
+    def de(cls, s: AcoplamentoDeServico) -> ServicoOut:
+        return cls.model_validate(
+            {
+                "id": s.id,
+                "nome": s.nome,
+                "categoria": s.categoria,
+                "service_type": s.service_type,
+                "tipo_inferido": s.tipo_inferido,
+                "custo": _dinheiro(s.custo),
+                "fracao": float(s.fracao) if s.fracao is not None else None,
+                "nivel": s.nivel,
+                "fonte": s.fonte,
+                "nivel_sugerido": s.nivel_sugerido,
+                "sugestoes": [SugestaoOut.de(x) for x in s.sugestoes],
+                "por_destino": dict(s.por_destino),
+                "pools": [PoolOut.de(p) for p in s.pools],
+                "alertas": list(s.alertas),
+            }
+        )
+
+
+class ResumoOut(BaseModel):
+    servicos: int
+    low: int
+    medium: int
+    high: int
+    a_confirmar: int
+    a_confirmar_com_sugestao: int
+
+
+class ReconciliacaoOut(BaseModel):
+    soma_linhas: float
+    fora_do_escopo: float = Field(description="imposto, crédito, compromisso e custo zero")
+    custo_atual: float | None
+    diferenca: float | None
+    status: Literal["fecha", "diferenca_de_escopo", "sem_custo_atual"]
+
+
+class ServiceCouplingsResponse(BaseModel):
+    versao: str
+    moeda: str
+    provedor_origem: str | None
+    custo_atual: float | None
+    resumo: ResumoOut
+    servicos: list[ServicoOut]
+    pools_sem_servico: list[PoolOut]
+    reconciliacao: ReconciliacaoOut
+
+    @classmethod
+    def de(cls, r: AcoplamentoPorServico) -> ServiceCouplingsResponse:
+        rec = r.reconciliacao
+        return cls.model_validate(
+            {
+                "versao": r.versao,
+                "moeda": r.moeda,
+                "provedor_origem": r.provedor_origem,
+                "custo_atual": _dinheiro(r.custo_atual) if r.custo_atual is not None else None,
+                "resumo": ResumoOut.model_validate(r.resumo, from_attributes=True),
+                "servicos": [ServicoOut.de(s) for s in r.servicos],
+                "pools_sem_servico": [PoolOut.de(p) for p in r.pools_sem_servico],
+                "reconciliacao": {
+                    "soma_linhas": _dinheiro(rec.soma_linhas),
+                    "fora_do_escopo": _dinheiro(rec.fora_do_escopo),
+                    "custo_atual": (
+                        _dinheiro(rec.custo_atual) if rec.custo_atual is not None else None
+                    ),
+                    "diferenca": _dinheiro(rec.diferenca) if rec.diferenca is not None else None,
+                    "status": rec.status,
+                },
+            }
+        )

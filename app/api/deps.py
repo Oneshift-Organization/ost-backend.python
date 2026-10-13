@@ -16,6 +16,7 @@ from app.infrastructure.repositories.pg_agent_snapshot_repo import (
     PgAgentSnapshotRepository,
     PgAgentSubmissionRepository,
 )
+from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
 from app.infrastructure.repositories.pg_billing_dashboard_repo import (
     PgBillingDashboardRepository,
 )
@@ -53,6 +54,7 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
 )
+from app.use_cases.analysis.consultar_acoplamento import ConsultarAcoplamentoUseCase
 from app.use_cases.analysis.payload_do_agente import (
     ConstrutorDeContexto,
     MontarPayloadDoAgenteUseCase,
@@ -242,4 +244,10 @@ def consultar_envios_uc(session: AsyncSession) -> ConsultarEnviosUseCase:
     return ConsultarEnviosUseCase(
         snapshots=PgAgentSnapshotRepository(session),
         envios=PgAgentSubmissionRepository(session),
+    )
+
+
+def consultar_acoplamento_uc(session: AsyncSession) -> ConsultarAcoplamentoUseCase:
+    return ConsultarAcoplamentoUseCase(
+        jobs=PgAnalysisJobRepository(session), envios=consultar_envios_uc(session)
     )

@@ -99,7 +99,8 @@ def decision_workloads(payload: dict) -> list[dict]:
     return _canonical(workloads)
 
 
-def _targets(workload: dict) -> dict[str, dict]:
+def unique_targets(workload: dict) -> dict[str, dict]:
+    """The one mapping per provider the technical axis reads; ambiguous ones drop."""
     grouped: dict[str, list[dict]] = {}
     for target in workload.get("targets") or []:
         key = normalized(target.get("provider"))
@@ -204,7 +205,7 @@ def _technical(workloads: list[dict], provider: str) -> ScoreAxis:
     refactors: list = []
     locks: list = []
     for workload in workloads:
-        target = _targets(workload).get(provider)
+        target = unique_targets(workload).get(provider)
         refactor, lock = technical_evidence(workload, target) if target else (None, None)
         cost = number(workload.get("cost")) or _ZERO
         evidence = {

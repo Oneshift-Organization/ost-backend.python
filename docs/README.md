@@ -51,6 +51,7 @@ agentes de IA.
 | [`endpoints/account.md`](endpoints/account.md) | `DELETE /v1/account`: exclusão definitiva da conta e de todos os dados do usuário. |
 | [`endpoints/inventories.md`](endpoints/inventories.md) | Catálogo `/v1/inventories`: export de cada nuvem (sem credencial), topologia, correlação com o billing, declarações, e o que muda na análise e no Terraform. |
 | [`endpoints/agent-snapshots.md`](endpoints/agent-snapshots.md) | Caminho do agente (MCP): snapshot de leitura gravado, envio idempotente pelo conteúdo, versões, revisões e consulta. |
+| [`endpoints/service-couplings.md`](endpoints/service-couplings.md) | Acoplamento por serviço da fatura (`…/service-couplings`): uma linha por serviço, nível que o score usa, sugestões à parte, pools dentro das máquinas virtuais. Fonte da tela "Acoplamento dos serviços". |
 | [`auditoria-e2e-2026-09-27-inventario.md`](auditoria-e2e-2026-09-27-inventario.md) | Billing, inventário, análise e Terraform pela API nos 4 mocks: coerência entre os três artefatos, número a número. |
 | [`dev-setup.md`](dev-setup.md) | Rodar local: venv, Postgres via podman, alembic, bypass de auth, troubleshooting. |
 
