@@ -250,14 +250,32 @@ def _linha(
 
 
 def _sugestoes_de_dependencia(dependencias: Any) -> tuple[Sugestao, ...]:
-    """Só médio e alto viram sugestão: dependência baixa não diz nada sobre
-    exclusividade, e não deve preencher um nível vazio."""
+    """Do inventário saem duas sugestões independentes:
+
+    - ``inventario``: a exclusividade pelos atributos do recurso (motor do
+      banco, tipo nativo). Qualquer nível conta, inclusive baixo: é evidência
+      sobre o que o cliente usa, e pode preencher um nível vazio;
+    - ``dependencias``: só médio e alto. Dependência baixa não diz nada sobre
+      exclusividade e não deve preencher um nível vazio.
+    """
     if not isinstance(dependencias, Mapping):
         return ()
+    sugestoes: list[Sugestao] = []
+    exclusividade = dependencias.get("exclusividade")
+    if isinstance(exclusividade, Mapping) and exclusividade.get("nivel") in _ORDEM:
+        sugestoes.append(
+            Sugestao(
+                nivel=str(exclusividade["nivel"]),
+                fonte="inventario",
+                motivo=str(exclusividade.get("motivo")),
+            )
+        )
     nivel = dependencias.get("nivel")
-    if nivel not in ("medium", "high"):
-        return ()
-    return (Sugestao(nivel=nivel, fonte="dependencias", motivo=str(dependencias.get("motivo"))),)
+    if nivel in ("medium", "high"):
+        sugestoes.append(
+            Sugestao(nivel=nivel, fonte="dependencias", motivo=str(dependencias.get("motivo")))
+        )
+    return tuple(sugestoes)
 
 
 def _sugestoes_de_classe(workload: dict[str, Any]) -> tuple[Sugestao, ...]:

@@ -189,6 +189,16 @@ def _servicos(
             "custo_do_grupo": converter(d.custo_do_grupo),
             "cobertura": float(d.cobertura) if d.cobertura is not None else None,
             "regioes": list(d.regioes),
+            "exclusividade": (
+                {
+                    "nivel": d.exclusividade.nivel,
+                    "motivo": d.exclusividade.motivo,
+                    "fracao": float(d.exclusividade.fracao),
+                    "recursos": list(d.exclusividade.recursos),
+                }
+                if d.exclusividade
+                else None
+            ),
         }
         for nome, d in dependencias_por_servico(conteudo, analise, custos).items()
     }

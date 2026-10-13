@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 
+from app.domain.entities.topologia import TipoDeRecurso
 from app.domain.services.correlacao_inventario import CustoDeRecurso, CustosDoBilling
 from app.domain.services.topologia import analisar_topologia
+from app.domain.services.topologia.exclusividade import classificar
 from app.domain.services.topologia.servicos_do_billing import dependencias_por_servico
 
-from .construtores import camadas_app_banco, inventario, regra
+from .construtores import banco, camadas_app_banco, inventario, recurso, regra, sg, vm
 
 
 def _custos(*linhas: tuple[str, str, str]) -> CustosDoBilling:
@@ -98,3 +101,33 @@ def test_servico_sem_recurso_no_inventario_fica_de_fora() -> None:
     inv = inventario(rec, rels)
     r = dependencias_por_servico(inv, analisar_topologia(inv), _custos(("x-1", "S3", "9")))
     assert r == {}
+
+
+def test_exclusividade_pelo_motor_do_banco() -> None:
+    inv = inventario(
+        [
+            vm("vm-a"),
+            banco("db-aurora", motor="aurora-postgresql"),
+            banco("db-pg", motor="postgres"),
+            sg("sg-x"),
+        ]
+    )
+    r = dependencias_por_servico(
+        inv,
+        analisar_topologia(inv),
+        _custos(("db-aurora", "RDS", "300"), ("db-pg", "RDS", "100"), ("vm-a", "EC2", "50")),
+    )
+    rds = r["RDS"].exclusividade
+    assert rds is not None
+    assert (rds.nivel, rds.recursos, rds.fracao) == ("medium", ("db-aurora",), Decimal("0.75"))
+    assert "Aurora" in rds.motivo
+    # Máquina sem regra: sem exclusividade pelo inventário (não é "baixo").
+    assert r["EC2"].exclusividade is None
+
+
+def test_regras_casam_tipo_nativo_e_motor() -> None:
+    dynamo = replace(recurso("t1", TipoDeRecurso.OUTRO), tipo_nativo="AWS::DynamoDB::Table")
+    assert classificar(dynamo).nivel == "high"  # type: ignore[union-attr]
+    assert classificar(banco("b1", motor="SQLSERVER-SE")).nivel == "medium"  # type: ignore[union-attr]
+    assert classificar(banco("b2", motor="mysql")).nivel == "low"  # type: ignore[union-attr]
+    assert classificar(banco("b3")) is None
