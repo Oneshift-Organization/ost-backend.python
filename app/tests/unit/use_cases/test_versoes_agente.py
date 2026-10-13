@@ -27,6 +27,7 @@ _RAIZ = Path(__file__).resolve().parents[4]
 _ARQUIVOS_DA_AUTORIDADE = (
     "app/use_cases/analysis/agent_result.py",
     "app/domain/services/authority.py",
+    "app/domain/services/payback.py",
     "app/domain/services/confidence.py",
     "app/use_cases/analysis/decision_support.py",
     "app/domain/services/decision_support.py",
@@ -53,6 +54,9 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
     "agent-authority-v1": "1d3e1f935092a2260a5c740b8b1b94c2ec9319faffa5eaf078a31d7bcea4d8c6",
+    # v2: payback.meses derivado da premissa do agente (PLANO_PRECO_REGIONAL D11).
+    # SHA-256 do código das regras, não credencial; o gitleaks o lê como chave.
+    "agent-authority-v2": "e36eaa924ddd2209cba8aadcf909c63493ba8089a3e333831b431a6670b90434",  # gitleaks:allow
 }
 
 

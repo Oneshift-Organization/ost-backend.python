@@ -96,7 +96,12 @@ _CLASSIFICACAO: dict[str, Categoria] = {
     "cross_cloud_equivalents.*.requires_refactoring": Categoria.JULGAMENTO,
     "cross_cloud_equivalents.*.vendor_lock_in_level": Categoria.JULGAMENTO,
     "cross_cloud_equivalents.*.equivalence_type": Categoria.JULGAMENTO,
+    # ── derivação a partir de premissa declarada ────────────────────────
+    # O agente declara o custo de migração; o backend divide pela economia
+    # (`agent_result._derivar_payback`, PLANO_PRECO_REGIONAL D11).
+    "payback.meses": Categoria.DERIVACAO,
     # ── sem base: exige premissa declarada ──────────────────────────────
+    # Sem a premissa do agente, continua sem base e sai nulo.
     "savings_summary.payback_period_months": Categoria.SEM_BASE,
     "oneshift_scores.technical_score": Categoria.SEM_BASE,
     "oneshift_scores.enterprise_score": Categoria.SEM_BASE,

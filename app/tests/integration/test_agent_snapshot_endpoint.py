@@ -30,6 +30,7 @@ from app.infrastructure.repositories.pg_agent_snapshot_repo import PgAgentSnapsh
 from app.infrastructure.repositories.pg_billing_report_repo import PgBillingReportRepository
 from app.main import create_app
 from app.schemas.agent_snapshot import EnvioDoAgenteIn
+from app.use_cases.agent.versoes import AUTHORITY_VERSION
 
 from .conftest import TEST_USER, _cleanup, _ingest
 
@@ -192,7 +193,7 @@ async def test_cria_e_depois_reaproveita(app: FastAPI, oci: UUID) -> None:
         assert s1["snapshot_id"] == s2["snapshot_id"]
         assert s1["fingerprint"] == s2["fingerprint"]
         assert s2["expires_at"] >= s1["expires_at"]
-        assert s1["versions"]["authority"] == "agent-authority-v1"
+        assert s1["versions"]["authority"] == AUTHORITY_VERSION
         assert s1["versions"]["topology"] is None
         assert s1["inventory_id"] is None
     finally:
