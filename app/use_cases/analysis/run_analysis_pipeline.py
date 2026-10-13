@@ -523,6 +523,10 @@ def _serialize_equivalent(equiv) -> dict:
     instances = getattr(equiv, "instances", 1)
     if instances > 1:
         d["instancias"] = instances
+    # Só aparece quando é verdade: a cotação trocou x86 por ARM (ou o inverso)
+    # porque o destino não tinha a mesma arquitetura cobrindo o pool.
+    if getattr(equiv, "architecture_mismatch", False):
+        d["arquitetura_diferente"] = True
 
     tm = getattr(equiv, "technical_match", None)
     if tm is not None:

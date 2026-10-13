@@ -10,6 +10,7 @@ from app.domain.entities.cloud_price_point import CloudPricePoint
 from app.domain.entities.cloud_sku import CloudSku
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
+from app.domain.services.perfil_de_familia import Perfil, aceita, mesma_arquitetura, perfil
 from app.domain.services.regioes import RegiaoDePreco, escolher_regiao_de_preco
 
 _HOURS_PER_MONTH = Decimal("730")
@@ -71,6 +72,9 @@ class EquivalentOption:
     instances: int = 1
     technical_match: TechnicalMatch | None = None
     financials: FinancialEstimate | None = None
+    # O destino não tinha candidato da arquitetura da origem que cobrisse o
+    # pool, e o escolhido é da outra (x86 ↔ ARM): migrar exige replataforma.
+    architecture_mismatch: bool = False
 
 
 @dataclass(frozen=True)
@@ -262,12 +266,18 @@ class EquivalenceMatcher:
         target_providers: list[str],
         pricing_confidence: str = "low",
         regioes: Mapping[str, Sequence[str | None]] | None = None,
+        perfil_origem: Perfil | None = None,
     ) -> list[EquivalentOption]:
         """Return the best-value covering mix per target provider for a pool.
 
         ``regioes`` maps each target provider to the regions to quote, in order
         of preference (see ``domain/services/regioes``). Without it, prices of
         every synced region compete and the cheapest region wins.
+
+        ``perfil_origem`` (see ``domain/services/perfil_de_familia``) filters
+        the candidates: burstable only replaces burstable, and the same
+        architecture is tried first. A mix of the other architecture is used
+        only when none of the same covers the pool, and comes flagged.
 
         ``monthly_cost`` MUST already be expressed in the analysis currency
         (see ``domain/services/currency.py``) — this method does no conversion
@@ -292,7 +302,9 @@ class EquivalenceMatcher:
                 None if regioes is None else regioes.get(provider, ()),
             )
 
-            best = _best_packing(vcpus, ram_gib, cands.skus)
+            best, arquitetura_diferente = _packing_por_perfil(
+                vcpus, ram_gib, cands.skus, perfil_origem
+            )
             if best is None:
                 continue
 
@@ -321,10 +333,34 @@ class EquivalenceMatcher:
                         price_region=cands.regiao.regiao if cands.regiao else None,
                         price_region_approximate=bool(cands.regiao and cands.regiao.aproximada),
                     ),
+                    architecture_mismatch=arquitetura_diferente,
                 )
             )
 
         return options
+
+
+def _packing_por_perfil(
+    vcpus: Decimal,
+    ram_gib: Decimal,
+    candidates: list[CloudSku],
+    origem: Perfil | None,
+) -> tuple[tuple[CloudSku, int, Decimal] | None, bool]:
+    """Melhor mix respeitando o perfil da origem; e se trocou de arquitetura.
+
+    Burstable fora quando a origem não é. Mesma arquitetura primeiro; a outra
+    só quando nenhum mix da mesma cobre o pool.
+    """
+    if origem is None:
+        return _best_packing(vcpus, ram_gib, candidates), False
+    aceitos = [c for c in candidates if aceita(origem, perfil(c.provider, c.sku_id))]
+    mesma = [c for c in aceitos if mesma_arquitetura(origem, perfil(c.provider, c.sku_id))]
+    best = _best_packing(vcpus, ram_gib, mesma)
+    if best is not None:
+        return best, False
+    outra = [c for c in aceitos if c not in mesma]
+    best = _best_packing(vcpus, ram_gib, outra)
+    return best, best is not None
 
 
 def _pricepoint_to_sku(p: CloudPricePoint) -> CloudSku:

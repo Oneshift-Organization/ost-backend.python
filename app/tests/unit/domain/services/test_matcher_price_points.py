@@ -15,6 +15,7 @@ from app.domain.entities.cloud_sku import CloudSku
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.services.equivalence_matcher import EquivalenceMatcher
+from app.domain.services.perfil_de_familia import perfil
 
 
 class _SkuRepo(ICloudSkuRepository):
@@ -203,3 +204,51 @@ async def test_sem_regioes_mantem_o_comportamento_antigo() -> None:
     fin = await _cotar(repo, "aws", None)
     assert fin.unit_price == Decimal("0.10")
     assert fin.price_region is None
+
+
+# ── Perfil de família (PLANO_PRECO_REGIONAL R5) ──────────────────────────────
+
+
+def _aws(sku: str, price: str) -> CloudPricePoint:
+    return CloudPricePoint(
+        provider="aws", sku_key=sku, service_name="Amazon EC2", service_type="virtual_server",
+        region="us-east-1", price=Decimal(price), currency="USD", unit="instance_hour",
+        vcpus=Decimal("4"), ram_gib=Decimal("16"), source="api", confidence="official",
+        captured_at=datetime.now(UTC),
+    )
+
+
+async def _cotar_perfil(pontos: list[CloudPricePoint], familia: str):
+    matcher = EquivalenceMatcher(_SkuRepo({}), _PriceRepo({"aws": pontos}))
+    [opt] = await matcher.match_pool(
+        vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("100"),
+        service_type="virtual_server", target_providers=["aws"],
+        perfil_origem=perfil("gcp", familia),
+    )
+    return opt
+
+
+@pytest.mark.asyncio
+async def test_x86_nao_vira_arm_quando_ha_x86() -> None:
+    opt = await _cotar_perfil([_aws("m7g.xlarge", "0.16"), _aws("m7a.xlarge", "0.23")], "E2")
+    assert opt.sku_id == "m7a.xlarge"
+    assert not opt.architecture_mismatch
+
+
+@pytest.mark.asyncio
+async def test_carga_sustentada_nao_vira_burstable() -> None:
+    opt = await _cotar_perfil([_aws("t3.xlarge", "0.16"), _aws("m7a.xlarge", "0.23")], "N2")
+    assert opt.sku_id == "m7a.xlarge"
+
+
+@pytest.mark.asyncio
+async def test_sem_a_mesma_arquitetura_usa_a_outra_e_marca() -> None:
+    opt = await _cotar_perfil([_aws("m7g.xlarge", "0.16")], "E2")
+    assert opt.sku_id == "m7g.xlarge"
+    assert opt.architecture_mismatch
+
+
+@pytest.mark.asyncio
+async def test_arm_cotado_em_arm() -> None:
+    opt = await _cotar_perfil([_aws("m7g.xlarge", "0.20"), _aws("m7a.xlarge", "0.15")], "C4A")
+    assert opt.sku_id == "m7g.xlarge"

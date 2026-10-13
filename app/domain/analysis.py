@@ -72,6 +72,9 @@ class EquivalentService:
     docs_costs: str | None = None
     technical_match: TechnicalMatch | None = None
     financials: FinancialEstimate | None = None
+    # Candidato de outra arquitetura (x86 ↔ ARM), usado porque nenhum da mesma
+    # cobria o pool. Migrar assim é replataforma (`perfil_de_familia`).
+    architecture_mismatch: bool = False
 
 
 @dataclass(frozen=True)

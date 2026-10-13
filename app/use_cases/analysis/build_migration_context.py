@@ -49,6 +49,7 @@ from app.domain.services.migration_expectation import (
     derive_expectation,
     learn_class_defaults,
 )
+from app.domain.services.perfil_de_familia import perfil
 from app.domain.services.pool_aggregation import aggregate_by_family
 from app.domain.services.premissas_detalhadas import (
     base_de_custo,
@@ -590,6 +591,7 @@ class BuildMigrationContextUseCase:
                     service_type="virtual_server",
                     target_providers=target_providers,
                     regioes={p: [r] for p, r in pedidas.items()},
+                    perfil_origem=perfil(source_provider, fpool.pool_key.machine_family),
                 )
                 providers_with_l2: set[str] = set()
                 equivs: list[EquivalentService] = []
@@ -640,6 +642,7 @@ class BuildMigrationContextUseCase:
                         docs_costs=docs,
                         technical_match=tm,
                         financials=fin,
+                        architecture_mismatch=opt.architecture_mismatch,
                     ))
 
                 # L3-only curated fallback for providers without hardware match
