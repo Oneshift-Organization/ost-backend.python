@@ -38,6 +38,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Preço por região / zonas / fontes oficiais / família (arquitetura, burstable) / payback | [`PLANO_PRECO_REGIONAL.md`](PLANO_PRECO_REGIONAL.md) · [`docs/precision-engine.md`](docs/precision-engine.md) |
 | Caminho do agente (MCP): snapshot de leitura, envio idempotente, versões | [`docs/endpoints/agent-snapshots.md`](docs/endpoints/agent-snapshots.md) · [`PLANO_SNAPSHOT_AGENTE.md`](PLANO_SNAPSHOT_AGENTE.md) |
 | `decision_support` compacto para o agente (`agent-snapshot-v2`, rota de detalhe) | [`PLANO_DECISION_SUPPORT_COMPACTO.md`](PLANO_DECISION_SUPPORT_COMPACTO.md) |
+| Lote da autoridade v3 (contestação verificável, classificação, bloco C) e fila de precisão (custos por zona, `perf_coef`) | [`PLANO_AUTORIDADE_V3_E_PRECISAO.md`](PLANO_AUTORIDADE_V3_E_PRECISAO.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
 

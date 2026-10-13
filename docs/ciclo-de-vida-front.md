@@ -14,6 +14,7 @@ Todas as rotas exigem `Authorization: Bearer <jwt do Supabase>`.
 | 3 | *(opcional)* **Drill-down** | `GET /v1/billing-files/{job_id}/items` | `?limit=50&offset=0` | linhas, `cost DESC` | — |
 | 4 | **Disparar a análise** | `POST /v1/analyses/start/{report_id}` | nada no corpo<br>opcional: `?external_id=<uuid>` | `202` + `job_id` da análise | imediatamente |
 | 5 | **Aguardar a análise** | `GET /v1/analyses/{job_id}/result` | — | `status` + `result` | polling até `COMPLETED` |
+| 5b | **Tela de acoplamento** | `GET /v1/analyses/{job_id}/service-couplings` | — | uma linha por serviço, `resumo` com os contadores | depois de `COMPLETED` |
 | 6 | **Listar análises** | `GET /v1/analyses` | `?limit=50`<br>`?incluir_depreciadas=true` só na lixeira | array de `AnalysisJobSummary` | — |
 | 7 | **"Excluir" análise** | `PUT /v1/analyses/{job_id}/disp-status` | `{"disp_status": 0}` | `200` | tirar o card da lista |
 | 7b | **Desfazer** | `PUT /v1/analyses/{job_id}/disp-status` | `{"disp_status": 1}` | `200` | recarregar a lista |
@@ -141,6 +142,7 @@ Todas as rotas novas usam o mesmo envelope:
 | `409` | `ANALISE_NAO_CONCLUIDA` | análise ainda rodando | **repetir** depois |
 | `409` | `GERACAO_NAO_CONCLUIDA` | download antes de terminar | **repetir** depois |
 | `409` | `PAYLOAD_AUSENTE` | análise sem payload gravado | refazer a análise |
+| `409` | `ANALISE_SEM_SERVICOS` | acoplamento de análise antiga, sem a lista de serviços | manter a tela antiga; não repetir |
 | `422` | — | corpo inválido (formato Pydantic padrão) | corrigir o formulário |
 
 `404` para recurso de outro usuário é deliberado: um `403` confirmaria que ele
@@ -173,3 +175,37 @@ segundos.
 
 Um job que morre por reinício do processo é encerrado como `FAILED` pelo reaper
 do startup — então o polling não fica eterno esperando um `COMPLETED` que não vem.
+
+---
+
+## 8. O que mudou para a tela em 13/10/2026
+
+**Acoplamento dos serviços (passo 5b).** A tela passa a ler
+`GET /v1/analyses/{job_id}/service-couplings` em vez de montar a lista a partir
+de `cross_cloud_equivalents`. Contrato completo em
+[`endpoints/service-couplings.md`](endpoints/service-couplings.md). O essencial:
+
+- contadores de `resumo` (`low`, `medium`, `high`, `a_confirmar`), nunca da
+  contagem de linhas da tabela de equivalência;
+- "Do total" = `fracao`; a soma fica ≤ 100%, o resto é `reconciliacao.fora_do_escopo`;
+- badge = `nivel`; com `nivel` nulo e `nivel_sugerido` presente, "A confirmar ·
+  provável <nível>", com o `motivo` de `sugestoes[]` no detalhe;
+- pools de compute dentro da linha de máquinas virtuais (`pools[]`), com
+  `regiao: null` = "região não informada";
+- `entra_no_score: false` = gasto sem categoria identificada;
+- com inventário, `dependencias`: "migra junto com …", custo do grupo, "depois
+  de …", onda, e a exclusividade pelo motor do banco.
+
+Some da tela: a linha "Bancos de dados (agregado)" e as repetições por destino.
+
+**Preço por região (campos novos e opcionais no resultado).** Em cada
+equivalente de pool: `preco_regiao` (onde o preço vale), `preco_regiao_aproximada`
+(não havia preço da região; o rótulo cai para `reference`) e
+`arquitetura_diferente` (só havia a outra arquitetura no destino). Em
+`premissas.regioes`, onde cada pool foi cotado. Dois avisos novos com
+`origem: "backend"`: "Região de origem não identificada" e "Preço de outra
+região na cotação". Pools de bill agregado passam a ter região
+(`E2/southamerica-east1`); `americas` é grupo de preço do GCP, não região.
+
+**Payback.** Continua fora da tela. Só o envio do agente traz `payback`, agora
+com `meses` calculado pelo backend (`calculado_pelo_backend: true`).
