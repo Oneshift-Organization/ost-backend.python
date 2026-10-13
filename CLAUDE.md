@@ -37,6 +37,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Catálogo `/v1/inventories` / export de cada nuvem / efeito na análise e no Terraform | [`docs/endpoints/inventories.md`](docs/endpoints/inventories.md) |
 | Preço por região / zonas / fontes oficiais / família (arquitetura, burstable) / payback | [`PLANO_PRECO_REGIONAL.md`](PLANO_PRECO_REGIONAL.md) · [`docs/precision-engine.md`](docs/precision-engine.md) |
 | Caminho do agente (MCP): snapshot de leitura, envio idempotente, versões | [`docs/endpoints/agent-snapshots.md`](docs/endpoints/agent-snapshots.md) · [`PLANO_SNAPSHOT_AGENTE.md`](PLANO_SNAPSHOT_AGENTE.md) |
+| `decision_support` compacto para o agente (`agent-snapshot-v2`, rota de detalhe) | [`PLANO_DECISION_SUPPORT_COMPACTO.md`](PLANO_DECISION_SUPPORT_COMPACTO.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
 
