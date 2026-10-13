@@ -143,6 +143,7 @@ Todas as rotas novas usam o mesmo envelope:
 | `409` | `GERACAO_NAO_CONCLUIDA` | download antes de terminar | **repetir** depois |
 | `409` | `PAYLOAD_AUSENTE` | análise sem payload gravado | refazer a análise |
 | `409` | `ANALISE_SEM_SERVICOS` | acoplamento de análise antiga, sem a lista de serviços | manter a tela antiga; não repetir |
+| `409` | `ANALISE_FALHOU` | acoplamento de análise que terminou com falha | não repetir; a análise precisa ser refeita |
 | `422` | — | corpo inválido (formato Pydantic padrão) | corrigir o formulário |
 
 `404` para recurso de outro usuário é deliberado: um `403` confirmaria que ele
@@ -194,7 +195,11 @@ de `cross_cloud_equivalents`. Contrato completo em
   `regiao: null` = "região não informada";
 - `entra_no_score: false` = gasto sem categoria identificada;
 - com inventário, `dependencias`: "migra junto com …", custo do grupo, "depois
-  de …", onda, e a exclusividade pelo motor do banco.
+  de …", onda, e a exclusividade pelo motor do banco;
+- adaptação e equivalente de cada destino em `refatoracao_por_destino` e
+  `equivalente_por_destino` (o mesmo que o score usa), mais `classe_migracao` e
+  `esforco`. Não casar `cross_cloud_equivalents` pelo nome do serviço: o compute
+  aparece lá por pool ("E2 · americas"), não como "Compute Engine".
 
 Some da tela: a linha "Bancos de dados (agregado)" e as repetições por destino.
 

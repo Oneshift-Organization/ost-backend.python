@@ -128,6 +128,15 @@ class ServicoOut(BaseModel):
     entra_no_score: bool = Field(
         description="false para gasto sem categoria identificada: listado, mas fora do score"
     )
+    equivalente_por_destino: dict[str, str | None] = Field(
+        description="serviço equivalente em cada cenário; null sem mapeamento único"
+    )
+    refatoracao_por_destino: dict[str, bool | None] = Field(
+        description="exige refatoração no destino (pior entre origem e destino); "
+        "null quando um dos lados não diz"
+    )
+    classe_migracao: str | None = Field(description="classe 7R de partida no catálogo")
+    esforco: str | None = Field(description="esforço de migração no catálogo")
 
     @classmethod
     def de(cls, s: AcoplamentoDeServico) -> ServicoOut:
@@ -149,6 +158,10 @@ class ServicoOut(BaseModel):
                 "alertas": list(s.alertas),
                 "dependencias": dict(s.dependencias) if s.dependencias else None,
                 "entra_no_score": s.entra_no_score,
+                "equivalente_por_destino": dict(s.equivalente_por_destino),
+                "refatoracao_por_destino": dict(s.refatoracao_por_destino),
+                "classe_migracao": s.classe_migracao,
+                "esforco": s.esforco,
             }
         )
 

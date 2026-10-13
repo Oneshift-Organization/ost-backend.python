@@ -39,8 +39,10 @@ def _workload(
     }
 
 
-def _alvo(provedor: str, lock: str | None = None) -> dict[str, Any]:
-    meta = {"vendor_lock_in_level": lock} if lock else {}
+def _alvo(provedor: str, lock: str | None = None, refatora: bool | None = None) -> dict[str, Any]:
+    meta: dict[str, Any] = {"vendor_lock_in_level": lock} if lock else {}
+    if refatora is not None:
+        meta["requires_refactoring"] = refatora
     return {"provider": provedor, "service_name": f"{provedor}-svc", "metadata": meta}
 
 
@@ -146,6 +148,39 @@ def test_por_destino_bate_com_a_evidencia_do_score() -> None:
         lock = next(f for f in tecnico.factors if f.id == "lock_in")
         for amostra in lock.evidence:
             assert visao[amostra["workload"]].por_destino[cenario.provider] == amostra["lock_in"]
+            comparados += 1
+    assert comparados == 3 * 4
+
+
+def test_adaptacao_e_equivalente_por_destino_sao_os_do_score() -> None:
+    payload = _payload()
+    ec2 = payload["decision_workloads"][3]
+    ec2["source_metadata"]["requires_refactoring"] = False
+    ec2["migration"] = {"classe_migracao": "replatform", "esforco": "medio"}
+    ec2["targets"] = [_alvo("gcp", refatora=False), _alvo("azure", refatora=True), _alvo("oci")]
+    visao = _por_nome(montar_acoplamento_por_servico(payload))
+    vm = visao["AmazonEC2"]
+    # "Não exige" só com os dois lados; um lado que exige basta; sem dado do destino, None.
+    assert vm.refatoracao_por_destino == {"azure": True, "gcp": False, "oci": None}
+    assert vm.equivalente_por_destino == {"azure": "azure-svc", "gcp": "gcp-svc", "oci": "oci-svc"}
+    assert (vm.classe_migracao, vm.esforco) == ("replatform", "medio")
+    # Mapeamento ambíguo (dois no azure) ou ausente (oci): sem equivalente, como no score.
+    assert visao["AmazonRDS"].equivalente_por_destino == {
+        "azure": None,
+        "gcp": "gcp-svc",
+        "oci": None,
+    }
+    decisao = build_decision_support(payload)
+    comparados = 0
+    for cenario in decisao.provider_scores:
+        tecnico = next(a for a in cenario.axes if a.id == "technical")
+        fator = next(f for f in tecnico.factors if f.id == "refactoring")
+        for amostra in fator.evidence:
+            servico = visao[amostra["workload"]]
+            assert (
+                servico.refatoracao_por_destino[cenario.provider]
+                == (amostra["requires_refactoring"])
+            )
             comparados += 1
     assert comparados == 3 * 4
 

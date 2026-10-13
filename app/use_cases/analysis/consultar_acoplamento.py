@@ -25,6 +25,10 @@ class AnaliseNaoConcluidaError(ConflictError):
     """Ainda rodando: repetir depois."""
 
 
+class AnaliseFalhouError(ConflictError):
+    """Terminou com falha: repetir não muda nada, só uma análise nova."""
+
+
 class AnaliseSemServicosError(ConflictError):
     """Payload anterior à lista de serviços: só uma análise nova resolve."""
 
@@ -38,6 +42,8 @@ class ConsultarAcoplamentoUseCase:
         job = await self._jobs.get_by_id(job_id, user_id)
         if job is None:
             raise NotFoundError(f"análise {job_id} não encontrada")
+        if job.status == AnalysisStatus.FAILED:
+            raise AnaliseFalhouError(f"a análise {job_id} terminou com falha")
         if job.status != AnalysisStatus.COMPLETED or not job.llm_input_payload:
             raise AnaliseNaoConcluidaError(
                 f"a análise {job_id} ainda não foi concluída (status {job.status})"

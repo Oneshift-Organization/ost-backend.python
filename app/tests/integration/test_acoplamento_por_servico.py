@@ -69,6 +69,14 @@ def _por_destino_igual_ao_score(payload: dict[str, Any]) -> None:
         for amostra in lock.evidence:
             assert visao[amostra["workload"]].por_destino[cenario.provider] == amostra["lock_in"]
             comparados += 1
+        fator = next(f for f in tecnico.factors if f.id == "refactoring")
+        for amostra in fator.evidence:
+            servico = visao[amostra["workload"]]
+            assert (
+                servico.refatoracao_por_destino[cenario.provider]
+                == (amostra["requires_refactoring"])
+            )
+            comparados += 1
     assert comparados > 0
 
 
