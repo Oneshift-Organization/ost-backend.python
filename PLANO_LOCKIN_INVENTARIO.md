@@ -59,6 +59,16 @@ O resto agregado tem `service_type` conhecido (`relational_database`,
 é o mesmo padrão já usado para serviços sem curadoria. Pool de compute passa a
 `fonte="premissa"`.
 
+**L3b. Pools de compute (as linhas "M7G · global", "C7G · global"…).**
+- Nota vem do perfil de família (`perfil_de_familia`): x86 → baixo
+  (`fonte=premissa`); **ARM (Graviton/Ampere/Axion/Cobalt) → médio** com motivo
+  "exige destino ARM ou recompilação", rebaixado a baixo só se o destino
+  selecionado tiver família ARM equivalente. Hoje todos saem "Baixo" fixo.
+- "global" não é região: é a falta dela no billing agregado. A tela recebe
+  `regiao: null` + rótulo "região não informada"; com inventário, a região vem
+  do recurso correlacionado.
+- Pool listado uma vez (não por destino) — coberto por L2.
+
 Meta do bloco A no relatório do print: "A confirmar" cai de 32 para só os
 serviços de tipo inferido sem classe.
 
