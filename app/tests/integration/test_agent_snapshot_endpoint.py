@@ -765,3 +765,44 @@ async def test_acoplamento_do_envio_segue_a_flag(monkeypatch: pytest.MonkeyPatch
         async with _cliente(app) as c:
             r = await c.get(f"/v1/agent/submissions/{uuid4()}/service-couplings")
         assert (r.status_code, _detalhe(r)["codigo"]) == (404, "SNAPSHOT_DESLIGADO")
+
+
+async def test_acoplamento_com_inventario_traz_as_dependencias(
+    app: FastAPI, oci: UUID, mocks_inventario: Any
+) -> None:
+    """Bloco B: a topologia liga recurso a serviço e a visão mostra o que migra junto."""
+    try:
+        async with _cliente(app) as c:
+            iid = await _inventario(c, mocks_inventario.oci)
+            preparado = await _preparar(c, oci, iid)
+            snapshot_id = preparado["snapshot"]["snapshot_id"]
+            # O agente recebe a topologia compacta: o detalhe por serviço não vai.
+            assert "detalhe" not in preparado["payload"]["topologia"]
+            async with get_sessionmaker()() as s:
+                completo = (
+                    await s.execute(
+                        text("select payload from agent_snapshots where id = :i"),
+                        {"i": snapshot_id},
+                    )
+                ).scalar_one()
+            assert completo["topologia"]["detalhe"]["servicos"]
+            job_id = await _job(oci, completo)
+            r = await c.get(f"/v1/analyses/{job_id}/service-couplings")
+        assert r.status_code == 200, r.text
+        corpo = r.json()
+        assert (corpo["com_inventario"], corpo["eixo_de_dependencia"]) == (True, True)
+        com = [s for s in corpo["servicos"] if s["dependencias"]]
+        assert com, "nenhum serviço ligado ao inventário"
+        for s in com:
+            d = s["dependencias"]
+            assert d["nivel"] in ("low", "medium", "high") and d["motivo"]
+            assert 0 < d["cobertura"] <= 1
+            if d["nivel"] in ("medium", "high"):
+                assert "dependencias" in {x["fonte"] for x in s["sugestoes"]}
+        assert corpo["resumo"]["migram_em_grupo"] == sum(
+            1 for s in com if s["dependencias"]["migra_junto_com"]
+        )
+    finally:
+        await _sql("delete from analysis_jobs where report_id = :r", r=oci)
+        await _apagar_snapshots(oci)
+        await _apagar_inventario(iid)

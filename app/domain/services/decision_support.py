@@ -71,32 +71,39 @@ def _canonical(value: Any) -> Any:
     return value
 
 
+# Categorias sem classificação: fora do score, mas são gasto real (não financeiro).
+UNCLASSIFIED = frozenset({"unclassified", "unknown", "nao_classificado"})
+
+
+def all_workloads(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every service in the snapshot, before the score's filter."""
+    if "decision_workloads" in payload:
+        return list(payload["decision_workloads"])
+    return [
+        {
+            "name": w.get("service_name") or w.get("canonical_service"),
+            "category": w.get("category"),
+            "cost": (w.get("source_usage") or {}).get("billed_cost"),
+            "migration": {},
+            "targets": w.get("equivalents") or [],
+            "evidence_source": "provided_workload_data",
+        }
+        for w in payload.get("workloads") or []
+    ]
+
+
+def is_scored_workload(workload: dict[str, Any]) -> bool:
+    """What the technical axis reads: priced, classified, not a financial line."""
+    return (
+        normalized(workload.get("category")) not in _NON_WORKLOAD
+        and not is_financial_component(str(workload.get("name") or ""))
+        and (number(workload.get("cost")) or _ZERO) > 0
+    )
+
+
 def decision_workloads(payload: dict) -> list[dict]:
     """Accept server snapshots and the existing direct-workload contract."""
-    if "decision_workloads" in payload:
-        raw = payload["decision_workloads"]
-    else:
-        raw = [
-            {
-                "name": w.get("service_name") or w.get("canonical_service"),
-                "category": w.get("category"),
-                "cost": (w.get("source_usage") or {}).get("billed_cost"),
-                "migration": {},
-                "targets": w.get("equivalents") or [],
-                "evidence_source": "provided_workload_data",
-            }
-            for w in payload.get("workloads") or []
-        ]
-    workloads = [
-        w
-        for w in raw
-        if (
-            normalized(w.get("category")) not in _NON_WORKLOAD
-            and not is_financial_component(str(w.get("name") or ""))
-            and (number(w.get("cost")) or _ZERO) > 0
-        )
-    ]
-    return _canonical(workloads)
+    return _canonical([w for w in all_workloads(payload) if is_scored_workload(w)])
 
 
 def unique_targets(workload: dict) -> dict[str, dict]:

@@ -58,7 +58,7 @@ _HASH_POR_VERSAO = {
     # SHA-256 do código das regras, não credencial. Entre parênteses porque o
     # gitleaks lia "authority": "<hex>" na mesma linha como chave de API.
     "agent-authority-v2": (
-        "87ba33349008a051f7ba0943877d0c0662055da8e75bc66394a8334ecf5de4e3"
+        "5a8d8a3a90538ce1491868bdc37a02b4b143e865e37ae50e6cafd0897b0b92ee"
     ),
 }
 

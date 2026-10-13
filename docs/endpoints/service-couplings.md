@@ -55,7 +55,8 @@ Exemplo real, recortado, do bill AWS de referência (Cost Explorer, mar/2026):
   "custo_atual": 92103.48,
   "resumo": {
     "servicos": 24, "low": 6, "medium": 3, "high": 0,
-    "a_confirmar": 15, "a_confirmar_com_sugestao": 0
+    "a_confirmar": 15, "a_confirmar_com_sugestao": 0,
+    "migram_em_grupo": 0, "fora_do_score": 0
   },
   "servicos": [
     {
@@ -89,7 +90,39 @@ Exemplo real, recortado, do bill AWS de referência (Cost Explorer, mar/2026):
   "reconciliacao": {
     "soma_linhas": 82020.40, "fora_do_escopo": 10083.09,
     "custo_atual": 92103.48, "diferenca": -0.01, "status": "fecha"
-  }
+  },
+  "com_inventario": false,
+  "eixo_de_dependencia": false
+}
+```
+
+Com inventário (mock OCI de São Paulo, análise com `inventory_id`), um serviço
+ganha a dimensão de dependência:
+
+```jsonc
+{
+  "nome": "DATABASE", "custo": 999.94, "entra_no_score": false,
+  "nivel": null, "nivel_sugerido": "high",
+  "sugestoes": [{
+    "nivel": "high", "fonte": "dependencias",
+    "motivo": "Banco acessado por outras aplicações: migram juntos, ou exigem janela conjunta ou replicação."
+  }],
+  "dependencias": {
+    "nivel": "high",
+    "motivo": "Banco acessado por outras aplicações: migram juntos, ou exigem janela conjunta ou replicação.",
+    "grupos": ["adb-producao + checkout (dev) + relatorios (dev) e mais 1"],
+    "ondas": [2],
+    "migra_junto_com": [
+      {"servico": "COMPUTE", "custo": 346.99, "natureza": "dados"},
+      {"servico": "BLOCK_STORAGE", "custo": 51.0, "natureza": "dados"}
+    ],
+    "depende_de": [],
+    "dependentes": 2,
+    "banco_compartilhado": true, "grupo_grande": false,
+    "custo_do_grupo": 1397.93, "cobertura": 1.0,
+    "regioes": ["sa-saopaulo-1"]
+  },
+  "alertas": ["Categoria não identificada: fica fora do score até ser classificada."]
 }
 ```
 
@@ -111,16 +144,19 @@ Um serviço só com hipótese (bill GCP de referência):
 
 | campo | significado |
 |---|---|
-| `servicos[]` | um por serviço da fatura, os mesmos que o score técnico lê. Ordenados por custo |
+| `servicos[]` | um por serviço da fatura: os que o score técnico lê e o gasto sem categoria identificada. Ordenados por custo |
+| `entra_no_score` | `false` para gasto sem categoria (`unknown`/`unclassified`): é listado porque é dinheiro real, mas o score não o lê, então `nivel` fica `null` e `por_destino` vazio |
 | `nivel` | acoplamento do lado da origem: o ponto de onde o score parte. `null` = **a confirmar** (sem nota no catálogo, ou tipo inferido) |
 | `fonte` | `catalogo` (metadado curado) ou `informado` (contrato direto, `/analyses/direct`) |
 | `por_destino` | o nível que o eixo técnico do score usa em cada cenário: o pior entre origem e destino. `null` quando o destino não tem mapeamento único (ausente ou ambíguo), e o score trata como desconhecido |
-| `sugestoes[]` | hipóteses que o score **não** usa, cada uma com `fonte` e `motivo`: `classe` (nota herdada do tipo de serviço), `arquitetura` (pool sem família da mesma arquitetura em algum destino); `inventario` e `dependencias` chegam no bloco B |
+| `sugestoes[]` | hipóteses que o score **não** usa, cada uma com `fonte` e `motivo`: `classe` (nota herdada do tipo de serviço), `arquitetura` (pool sem família da mesma arquitetura em algum destino), `dependencias` (o inventário mostra que migra junto: médio; banco compartilhado ou grupo grande: alto). Dependência baixa não vira sugestão |
+| `dependencias` | só com inventário: o que **migra junto** (mesma unidade, ou dependência forte de dados ou encaminhamento), o que precisa ir **antes** (`depende_de`, dependência de ordem), quantos serviços dependem deste, grupo e onda de migração (`ondas` vazio = grupo independente), custo do grupo, `cobertura` (fração do custo do serviço com recurso no inventário) e regiões. `null` sem inventário, ou quando nenhum recurso do serviço foi achado nele (billing sem `resource_id`, como o Cost Explorer agregado) |
 | `nivel_sugerido` | a maior sugestão, só quando subiria o `nivel` ou preencheria o vazio |
 | `pools[]` | os pools de compute, dentro do serviço de máquinas virtuais onde está o custo deles. `regiao: null` quando o billing não informa (antes aparecia como `global`) |
 | `pools_sem_servico[]` | pools sem um serviço curado de máquinas virtuais para ancorar; não se inventa dono |
-| `resumo` | os contadores da tela. `low + medium + high + a_confirmar = servicos` |
-| `reconciliacao` | `soma_linhas + fora_do_escopo` = soma dos serviços do payload; `diferenca` = `custo_atual` menos essa soma. `fora_do_escopo` é imposto, crédito, compromisso e custo zero. `status`: `fecha` (± 1 centavo por serviço), `diferenca_de_escopo` ou `sem_custo_atual` |
+| `resumo` | os contadores da tela. `low + medium + high + a_confirmar = servicos`; `migram_em_grupo` (com `migra_junto_com`) e `fora_do_score` |
+| `com_inventario` / `eixo_de_dependencia` | a análise usou inventário / e ligou recurso a serviço (análise com inventário feita antes desta versão tem o primeiro sem o segundo) |
+| `reconciliacao` | `soma_linhas + fora_do_escopo` = soma dos serviços do payload; `diferenca` = `custo_atual` menos essa soma. `fora_do_escopo` é só o financeiro: imposto, crédito, desconto, compromisso, suporte e custo zero. `status`: `fecha` (± 1 centavo por serviço), `diferenca_de_escopo` ou `sem_custo_atual` |
 
 ### Para o front
 
@@ -131,6 +167,10 @@ Um serviço só com hipótese (bill GCP de referência):
   "A confirmar · provável <nível>" com o `motivo` no detalhe.
 - Pools: expandir dentro da linha de máquinas virtuais; `regiao: null` →
   "região não informada".
+- Com `dependencias`: mostrar "migra junto com …" e o custo do grupo ao lado
+  do nível; `depende_de` como "depois de …".
+- `entra_no_score: false`: badge "A confirmar" com a nota "categoria não
+  identificada".
 
 ## Garantias
 
