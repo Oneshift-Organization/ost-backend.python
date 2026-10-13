@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 import urllib.request
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -28,10 +29,13 @@ _SOURCE = "oci_cetools_api"
 _FAM = re.compile(r"^(?:OCI - )?Compute - Standard - (E\d|A\d|X\d+)\b", re.IGNORECASE)
 _EXCLUDE = ("Ax", "Cloud@Customer", "Micro", "Windows", "Dense", "Bare Metal")
 
-# Grade de configurações geradas: OCPUs x (GB de RAM por OCPU). Duas razões cobrem
-# ~4 e ~8 GB/vCPU (x86), dando ao packer folga para casar pools variados.
+# Grade de configurações geradas: OCPUs x (GB de RAM por OCPU). O flex aceita de
+# 1 a 64 GB por OCPU; três razões cobrem as três classes. No x86 (2 vCPU por
+# OCPU) dão 2, 4 e 8 GB/vCPU (compute, geral, memória); no ARM (1 vCPU por OCPU)
+# dão 4, 8 e 16. Sem a razão 4, um pool ARM de uso geral (Graviton, 4 GB/vCPU)
+# só achava forma com o dobro da memória.
 _OCPU_STEPS = (1, 2, 4, 8, 16, 32)
-_GB_PER_OCPU = (8, 16)
+_GB_PER_OCPU = (4, 8, 16)
 
 
 def _fetch(timeout: float) -> list[dict[str, Any]]:
@@ -68,12 +72,24 @@ def _flex_rates(items: list[dict[str, Any]]) -> dict[str, dict[str, Decimal]]:
     }
 
 
-def fetch_oci_compute_prices(*, timeout: float = 30.0) -> list[CloudPricePoint]:
-    """Configs flex sintéticas com preço por-instância derivado das taxas reais."""
+def fetch_oci_compute_prices(
+    *, regioes: Sequence[str] = ("us-ashburn-1",), timeout: float = 30.0
+) -> list[CloudPricePoint]:
+    """Configs flex sintéticas com preço por-instância derivado das taxas reais.
+
+    O preço de compute da OCI é o mesmo em todas as regiões comerciais (política
+    publicada da Oracle; o `cetools` nem tem região). Uma coleta, gravada em
+    cada região pedida, para a cotação regional achar o preço sem aproximar.
+    """
     rates = _flex_rates(_fetch(timeout))
     now = datetime.now(UTC)
-    out: list[CloudPricePoint] = []
+    return [p for regiao in regioes for p in _configs(rates, regiao, now)]
 
+
+def _configs(
+    rates: dict[str, dict[str, Decimal]], regiao: str, now: datetime
+) -> list[CloudPricePoint]:
+    out: list[CloudPricePoint] = []
     for fam, r in rates.items():
         ocpu_rate, mem_rate = r["ocpu"], r["mem"]
         vcpu_per_ocpu = 1 if fam.startswith("A") else 2  # ARM não tem SMT
@@ -87,7 +103,7 @@ def fetch_oci_compute_prices(*, timeout: float = 30.0) -> list[CloudPricePoint]:
                         sku_key=f"VM.Standard.{fam}.Flex.{ocpu}c{ram_gb}g",
                         service_name="OCI Compute",
                         service_type="virtual_server",
-                        region="us-ashburn-1",
+                        region=regiao,
                         price=price,
                         currency="USD",
                         unit="instance_hour",

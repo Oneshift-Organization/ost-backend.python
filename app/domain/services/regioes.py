@@ -29,9 +29,19 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
-# Provedores com preço único em todas as regiões comerciais. A Oracle publica
-# isso como política; o `cetools` nem tem região.
-PRECO_GLOBAL = frozenset({"oci"})
+# O que tem preço único em todas as regiões comerciais, por provedor. A Oracle
+# publica isso como política para compute e armazenamento; o `cetools` nem tem
+# região para eles. O egress da OCI não entra: depende do continente de origem
+# (US$ 0,0085/GB na América do Norte e na Europa, 0,025 na América do Sul).
+PRECO_GLOBAL: Mapping[str, frozenset[str]] = {
+    "oci": frozenset(
+        {"virtual_server", "storage_ssd", "storage_hdd", "object_storage", "database"}
+    ),
+}
+
+
+def tem_preco_global(provedor: str, service_type: str) -> bool:
+    return service_type in PRECO_GLOBAL.get(provedor.lower(), frozenset())
 
 # Rótulo da região das taxas de referência digitadas (`seed_category_rates`).
 # Não é região de provedor nenhum: é "costa leste dos EUA" de propósito.
@@ -190,9 +200,12 @@ def zona_da_regiao(provedor: str, regiao: str | None) -> str | None:
     return None
 
 
-def regiao_canonica(zona_id: str, provedor: str) -> str:
-    """A região cotada como destino neste provedor para esta zona."""
-    return _POR_ID[zona_id].canonica[provedor.lower()]
+def regiao_canonica(zona_id: str, provedor: str) -> str | None:
+    """A região cotada como destino neste provedor para esta zona.
+
+    None para provedor fora da tabela: quem chama cai na escolha aproximada.
+    """
+    return _POR_ID[zona_id].canonica.get(provedor.lower())
 
 
 # ── Região da linha ──────────────────────────────────────────────────────────
@@ -302,19 +315,35 @@ def regiao_da_linha(provedor: str, regiao: str | None, usage_type: str | None) -
     return None
 
 
-def zona_dominante(custos: Iterable[tuple[str, str | None, Decimal]]) -> str | None:
-    """Zona com mais custo entre linhas `(provedor, região, custo)` com zona.
+def regiao_dominante(
+    custos: Iterable[tuple[str, str | None, Decimal]],
+) -> tuple[str, str] | None:
+    """(zona, região) com mais custo entre linhas `(provedor, região, custo)`.
 
-    Empate resolvido pelo id da zona, para a escolha ser reprodutível.
+    A zona vem primeiro: um bill com 60% em `us-east-1` e 40% em `us-east-2`
+    está na Virgínia e no meio-oeste, e cada uma conta separado. Dentro da
+    zona, a região de mais custo. Empates resolvidos pelo nome, para a escolha
+    ser reprodutível. None quando nenhuma linha tem zona.
     """
-    por_zona: dict[str, Decimal] = {}
+    por_zona: dict[str, dict[str, Decimal]] = {}
     for provedor, regiao, custo in custos:
         z = zona_da_regiao(provedor, regiao)
-        if z is not None and custo > 0:
-            por_zona[z] = por_zona.get(z, Decimal("0")) + custo
+        if z is None or custo <= 0 or regiao is None:
+            continue
+        r = normalizar_regiao(provedor, regiao) or regiao
+        regioes = por_zona.setdefault(z, {})
+        regioes[r] = regioes.get(r, Decimal("0")) + custo
     if not por_zona:
         return None
-    return max(sorted(por_zona), key=lambda z: por_zona[z])
+    zona_ = max(sorted(por_zona), key=lambda z: sum(por_zona[z].values()))
+    regioes = por_zona[zona_]
+    return zona_, max(sorted(regioes), key=lambda r: regioes[r])
+
+
+def zona_dominante(custos: Iterable[tuple[str, str | None, Decimal]]) -> str | None:
+    """Zona com mais custo entre linhas `(provedor, região, custo)` com zona."""
+    dominante = regiao_dominante(custos)
+    return dominante[0] if dominante else None
 
 
 # ── Escolha do preço ─────────────────────────────────────────────────────────
@@ -340,6 +369,8 @@ def escolher_regiao_de_preco(
     provedor: str,
     preferidas: Sequence[str | None],
     disponiveis: Iterable[str],
+    *,
+    service_type: str = "virtual_server",
 ) -> RegiaoDePreco | None:
     """Qual região consultar, entre as que têm preço sincronizado.
 
@@ -355,7 +386,7 @@ def escolher_regiao_de_preco(
         if r and r in regioes:
             return RegiaoDePreco(r, Situacao.EXATA)
     p = provedor.lower()
-    if p in PRECO_GLOBAL:
+    if tem_preco_global(p, service_type):
         return RegiaoDePreco(regioes[0], Situacao.PRECO_GLOBAL)
     padrao = _POR_ID[ZONA_PADRAO].canonica.get(p)
     for r in (padrao, REGIAO_DE_REFERENCIA):

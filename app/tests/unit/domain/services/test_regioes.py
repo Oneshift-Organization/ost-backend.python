@@ -15,6 +15,7 @@ from app.domain.services.regioes import (
     escolher_regiao_de_preco,
     regiao_canonica,
     regiao_da_linha,
+    regiao_dominante,
     zona_da_regiao,
     zona_dominante,
 )
@@ -150,6 +151,19 @@ def test_zona_dominante_pesa_por_custo() -> None:
     assert zona_dominante([("gcp", None, Decimal("1"))]) is None
 
 
+def test_regiao_dominante_devolve_a_regiao_mais_cara_da_zona() -> None:
+    linhas = [
+        ("gcp", "americas", Decimal("800")),
+        ("gcp", "us-central1", Decimal("100")),
+        ("gcp", "southamerica-east1", Decimal("850")),
+    ]
+    assert regiao_dominante(linhas) == ("meio-oeste", "americas")
+
+
+def test_provedor_fora_da_tabela_nao_tem_canonica() -> None:
+    assert regiao_canonica("virginia", "ibm") is None
+
+
 def test_zona_dominante_desempata_pelo_id() -> None:
     linhas = [("aws", "us-east-1", Decimal("1")), ("aws", "sa-east-1", Decimal("1"))]
     assert zona_dominante(linhas) == zona_dominante(list(reversed(linhas)))
@@ -176,6 +190,14 @@ def test_oci_e_preco_global() -> None:
     assert r is not None
     assert (r.regiao, r.situacao) == ("us-ashburn-1", Situacao.PRECO_GLOBAL)
     assert not r.aproximada
+
+
+def test_egress_da_oci_nao_e_global() -> None:
+    r = escolher_regiao_de_preco(
+        "oci", ["sa-saopaulo-1"], ["us-ashburn-1"], service_type="network_egress"
+    )
+    assert r is not None
+    assert (r.regiao, r.situacao) == ("us-ashburn-1", Situacao.APROXIMADA)
 
 
 def test_sem_a_regiao_cai_na_zona_padrao_e_marca_aproximada() -> None:

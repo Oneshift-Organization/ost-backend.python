@@ -44,7 +44,7 @@ class _PriceRepo(ICloudPricePointRepository):
         self._by = by_provider
 
     async def find(self, *, provider, service_type, region=None):
-        return self._by.get(provider, [])
+        return [p for p in self._by.get(provider, []) if region is None or p.region == region]
 
     async def rates_for_category(self, category: str):
         return []
@@ -52,7 +52,13 @@ class _PriceRepo(ICloudPricePointRepository):
     async def providers_with_prices(self, service_type: str) -> list[str]:
         return list(self._by)
 
+    async def regioes_com_preco(self, provider, service_type):
+        return sorted({p.region for p in self._by.get(provider, [])})
+
     async def bulk_upsert(self, points):
+        return len(points), 0
+
+    async def substituir(self, points):
         return len(points), 0
 
 

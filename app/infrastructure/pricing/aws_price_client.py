@@ -43,11 +43,26 @@ _SOURCE = "aws_pricing_calculator"
 _REGIOES = {
     "us-east-1": "US East (N. Virginia)",
     "us-east-2": "US East (Ohio)",
+    "us-west-1": "US West (N. California)",
     "us-west-2": "US West (Oregon)",
+    "ca-central-1": "Canada (Central)",
     "sa-east-1": "South America (Sao Paulo)",
     "eu-west-1": "EU (Ireland)",
+    "eu-west-2": "EU (London)",
     "eu-central-1": "EU (Frankfurt)",
 }
+
+
+def rotulo_da_regiao(region: str) -> str:
+    """`sa-east-1` → `South America (Sao Paulo)`, como as fontes de preço escrevem.
+
+    Região desconhecida levanta `ValueError`: falhar alto é melhor que devolver
+    lista vazia e o sync reportar "0 preços" como se a AWS não tivesse nenhum.
+    """
+    rotulo = _REGIOES.get(region)
+    if rotulo is None:
+        raise ValueError(f"região AWS não mapeada: {region!r}. Conhecidas: {sorted(_REGIOES)}")
+    return rotulo
 
 # Famílias de propósito geral, compute e memória — as workhorses que servem de
 # alvo de migração. Especializadas ficam de fora porque distorcem o packing:
@@ -69,7 +84,7 @@ _FAMILIAS_GERAIS = frozenset({"m", "c", "r", "t"})
 _BURSTABLE = frozenset({"t2", "t3", "t3a", "t4g"})
 
 
-def _get_json(url: str, *, timeout: float) -> dict[str, Any]:
+def get_json(url: str, *, timeout: float) -> dict[str, Any]:
     """GET que lida com a resposta gzipada.
 
     A fonte devolve gzip independentemente do `Accept-Encoding`, e o urllib não
@@ -137,14 +152,9 @@ def fetch_aws_ec2_prices(
     Região desconhecida levanta `ValueError`: falhar alto é melhor que devolver
     lista vazia e o sync reportar "0 preços" como se a AWS não tivesse nenhum.
     """
-    rotulo = _REGIOES.get(region)
-    if rotulo is None:
-        raise ValueError(
-            f"região AWS não mapeada: {region!r}. Conhecidas: {sorted(_REGIOES)}"
-        )
-
+    rotulo = rotulo_da_regiao(region)
     url = _BASE.format(regiao=urllib.parse.quote(rotulo))
-    payload = _get_json(url, timeout=timeout)
+    payload = get_json(url, timeout=timeout)
     agora = datetime.now(UTC).replace(tzinfo=None)
 
     itens = payload.get("regions", {}).get(rotulo, {})

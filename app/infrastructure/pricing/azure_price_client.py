@@ -28,21 +28,38 @@ _HTTP_TOO_MANY_REQUESTS = 429
 _GENERAL_FAMILIES = frozenset({"b", "d", "e", "f"})
 
 
-def _get_json(url: str, *, timeout: float, retries: int = 4) -> dict[str, Any]:
-    """GET com User-Agent e backoff exponencial em 429 (a API rate-limita)."""
+def _espera(tentativa: int, retry_after: str | None) -> float:
+    """Segundos até a próxima tentativa: o `Retry-After` da API, se vier."""
+    try:
+        return min(float(retry_after), 60.0) if retry_after else float(2**tentativa)
+    except ValueError:
+        return float(2**tentativa)
+
+
+def _get_json(url: str, *, timeout: float, retries: int = 6) -> dict[str, Any]:
+    """GET com User-Agent e backoff em 429 e em timeout (a API rate-limita).
+
+    Uma coleta de cinco regiões faz ~40 chamadas seguidas e a API responde 429
+    ou segura a conexão até estourar o tempo. Desistir na primeira derrubava o
+    sync inteiro.
+    """
     req = urllib.request.Request(  # noqa: S310 - host fixo (prices.azure.com)
         url, headers={"User-Agent": "oneshift-pricing/1.0"}
     )
     for attempt in range(retries):
+        ultima = attempt == retries - 1
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - host fixo
                 data: dict[str, Any] = json.loads(resp.read())
                 return data
         except urllib.error.HTTPError as e:
-            if e.code == _HTTP_TOO_MANY_REQUESTS and attempt < retries - 1:
-                time.sleep(2 ** attempt)
-                continue
-            raise
+            if e.code != _HTTP_TOO_MANY_REQUESTS or ultima:
+                raise
+            time.sleep(_espera(attempt, e.headers.get("Retry-After")))
+        except TimeoutError:
+            if ultima:
+                raise
+            time.sleep(_espera(attempt, None))
     return {}
 
 
