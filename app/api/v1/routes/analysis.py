@@ -74,6 +74,7 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextUseCase,
 )
 from app.use_cases.analysis.consultar_acoplamento import (
+    AnaliseFalhouError,
     AnaliseNaoConcluidaError,
     AnaliseSemServicosError,
 )
@@ -965,6 +966,8 @@ async def get_service_couplings(
         raise erro(
             status.HTTP_409_CONFLICT, "ANALISE_NAO_CONCLUIDA", str(e), retryable=True
         ) from e
+    except AnaliseFalhouError as e:
+        raise erro(status.HTTP_409_CONFLICT, "ANALISE_FALHOU", str(e), retryable=False) from e
     except AnaliseSemServicosError as e:
         raise erro(
             status.HTTP_409_CONFLICT, "ANALISE_SEM_SERVICOS", str(e), retryable=False

@@ -27,7 +27,7 @@ Função pura, sem I/O.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 
@@ -99,6 +99,14 @@ class AcoplamentoDeServico:
     dependencias: Mapping[str, Any] | None = None
     # Serviço sem categoria identificada: é gasto real, mas o score não o lê.
     entra_no_score: bool = True
+    # A outra metade da evidência técnica do score, em cada cenário: o serviço
+    # equivalente e se exige refatoração (pior entre origem e destino; None
+    # quando um dos lados não diz, porque "não exige" precisa dos dois).
+    equivalente_por_destino: Mapping[str, str | None] = field(default_factory=dict)
+    refatoracao_por_destino: Mapping[str, bool | None] = field(default_factory=dict)
+    # Do catálogo: classe 7R de partida (rehost, replatform, refactor) e esforço.
+    classe_migracao: str | None = None
+    esforco: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +217,8 @@ def _linha(
     no_score = is_scored_workload(workload)
     nivel: str | None = None
     por_destino: dict[str, str | None] = {}
+    equivalentes: dict[str, str | None] = {}
+    refatoracao: dict[str, bool | None] = {}
     if no_score:
         # Sem destino, `technical_evidence` devolve exatamente o lado da origem:
         # é o ponto de partida do score, e o inferido sai desconhecido como lá.
@@ -217,8 +227,13 @@ def _linha(
         alvos = unique_targets(workload)
         for provedor in cenarios:
             alvo = alvos.get(provedor)
-            lock = technical_evidence(workload, alvo)[1] if alvo else None
+            refatora, lock = technical_evidence(workload, alvo) if alvo else (None, None)
             por_destino[provedor] = lock if lock in _ORDEM else None
+            refatoracao[provedor] = refatora
+            equivalentes[provedor] = (
+                str(alvo["service_name"]) if alvo and alvo.get("service_name") else None
+            )
+    migracao = workload.get("migration") or {}
 
     dependencias = (por_servico or {}).get(nome)
     sugestoes = (*_sugestoes_de_classe(workload), *_sugestoes_de_dependencia(dependencias))
@@ -246,7 +261,15 @@ def _linha(
         alertas=alertas,
         dependencias=dependencias if isinstance(dependencias, Mapping) else None,
         entra_no_score=no_score,
+        equivalente_por_destino=equivalentes,
+        refatoracao_por_destino=refatoracao,
+        classe_migracao=_texto(migracao.get("classe_migracao")) if no_score else None,
+        esforco=_texto(migracao.get("esforco")) if no_score else None,
     )
+
+
+def _texto(valor: object) -> str | None:
+    return str(valor) if valor else None
 
 
 def _sugestoes_de_dependencia(dependencias: Any) -> tuple[Sugestao, ...]:

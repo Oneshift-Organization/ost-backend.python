@@ -743,10 +743,12 @@ async def test_acoplamento_da_analise_e_do_envio_sao_a_mesma_visao(app: FastAPI,
 async def test_acoplamento_recusa_o_que_nao_pode_mostrar(app: FastAPI, oci: UUID) -> None:
     try:
         pendente = await _job(oci, {"decision_workloads": []}, status=AnalysisStatus.PENDING)
+        falhou = await _job(oci, {"decision_workloads": []}, status=AnalysisStatus.FAILED)
         antiga = await _job(oci, {"pools_computacao": []})
         de_outro = await _job(oci, {"decision_workloads": []}, user_id=TEST_USER)
         async with _cliente(app) as c:
             r_pendente = await c.get(f"/v1/analyses/{pendente}/service-couplings")
+            r_falhou = await c.get(f"/v1/analyses/{falhou}/service-couplings")
             r_antiga = await c.get(f"/v1/analyses/{antiga}/service-couplings")
             r_outro = await c.get(f"/v1/analyses/{de_outro}/service-couplings")
             r_sem_job = await c.get(f"/v1/analyses/{uuid4()}/service-couplings")
@@ -756,6 +758,9 @@ async def test_acoplamento_recusa_o_que_nao_pode_mostrar(app: FastAPI, oci: UUID
             "ANALISE_NAO_CONCLUIDA",
             True,
         )
+        # Falha não se resolve repetindo: o front deixa de tentar.
+        assert (r_falhou.status_code, _detalhe(r_falhou)["codigo"]) == (409, "ANALISE_FALHOU")
+        assert _detalhe(r_falhou)["retryable"] is False
         assert _detalhe(r_antiga)["codigo"] == "ANALISE_SEM_SERVICOS"
         assert "decision_workloads" in _detalhe(r_antiga)["mensagem"]
         assert (r_outro.status_code, r_sem_job.status_code) == (404, 404)
