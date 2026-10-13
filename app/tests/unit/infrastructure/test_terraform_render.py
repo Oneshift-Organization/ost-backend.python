@@ -204,9 +204,30 @@ def test_readme_diz_de_quando_sao_os_dados() -> None:
 
 
 def test_readme_nao_declara_economia() -> None:
-    """A cotação usa região de referência, que pode não ser a escolhida —
-    publicar um número seria comparar preços de lugares diferentes."""
+    """O pacote provisiona parte da fatura: um total aqui seria lido como o
+    custo do pacote."""
     assert "não declara economia" in _arquivos()["README.md"]
+
+
+def _readme_com_regioes(regiao_escolhida: str, zonas: dict[str, list[str]]) -> str:
+    payload = _payload()
+    payload["premissas"]["regioes"] = {"pools_por_zona": zonas}
+    return gerar_pacote(payload, _entrada(region=regiao_escolhida)).arquivos["README.md"]
+
+
+def test_readme_diz_onde_a_analise_cotou() -> None:
+    readme = _readme_com_regioes("southamerica-east1", {"sao-paulo": ["E2/southamerica-east1"]})
+    assert "cotou GCP em `southamerica-east1`" in readme
+    assert "outra metrópole" not in readme
+
+
+def test_readme_avisa_regiao_de_outra_metropole() -> None:
+    readme = _readme_com_regioes("us-central1", {"sao-paulo": ["E2/southamerica-east1"]})
+    assert "`us-central1`, fica em outra metrópole" in readme
+
+
+def test_readme_de_analise_antiga_mantem_o_aviso_de_regiao_fixa() -> None:
+    assert "região de referência fixa" in _arquivos()["README.md"]
 
 
 def test_variavel_sem_default_para_o_que_ninguem_sabe() -> None:
