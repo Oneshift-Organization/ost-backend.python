@@ -8,6 +8,7 @@ pay-as-you-go: exclui Windows, Spot e Low Priority. Sem dependência externa
 
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import time
@@ -68,9 +69,11 @@ def _get_json(url: str, *, timeout: float, retries: int = 6) -> dict[str, Any]:
             if e.code != _HTTP_TOO_MANY_REQUESTS or ultima:
                 raise
             time.sleep(_espera(attempt, e.headers.get("Retry-After")))
-        except (TimeoutError, urllib.error.URLError):
-            # URLError cobre o handshake TLS que estoura o tempo, que não chega
-            # como TimeoutError. HTTPError (subclasse) já foi tratado acima.
+        except (TimeoutError, ConnectionError, http.client.HTTPException, urllib.error.URLError):
+            # A API derruba a conexão de três jeitos: handshake TLS que estoura
+            # o tempo (URLError), conexão fechada sem resposta
+            # (RemoteDisconnected) e timeout de leitura. HTTPError, subclasse
+            # de URLError, já foi tratado acima.
             if ultima:
                 raise
             time.sleep(_espera(attempt, None))
