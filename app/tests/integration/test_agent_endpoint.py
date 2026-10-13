@@ -150,8 +150,10 @@ async def test_recebe_corrige_e_devolve(_app_ligado, _db_ready) -> None:
             if selected else decision["selection_reason"]
         )
         assert corpo["recommendation"] == expected_recommendation
-        # contestação processada, com efeito do BACKEND
-        assert corpo["sugestoes"][0]["efeito_backend"] == "confianca_rebaixada"
+        # contestação processada, com efeito do BACKEND. As do backend vêm
+        # antes na lista (câmbio, região); a do agente se acha pela origem.
+        do_agente = [s for s in corpo["sugestoes"] if s["origem"] == "agente"]
+        assert do_agente[0]["efeito_backend"] == "confianca_rebaixada"
         # e o número contestado não mudou
         assert corpo["campos_sobrescritos"] >= 1
 

@@ -192,6 +192,22 @@ def test_oci_e_preco_global() -> None:
     assert not r.aproximada
 
 
+def test_outra_regiao_da_mesma_zona_nao_e_aproximacao() -> None:
+    r = escolher_regiao_de_preco("azure", ["eastus"], ["eastus2", "brazilsouth"])
+    assert r is not None
+    assert (r.regiao, r.situacao) == ("eastus2", Situacao.MESMA_ZONA)
+    assert not r.aproximada
+
+
+def test_taxa_de_referencia_vale_para_a_virginia() -> None:
+    r = escolher_regiao_de_preco(
+        "azure", ["eastus"], [REGIAO_DE_REFERENCIA], service_type="storage_ssd"
+    )
+    assert r is not None
+    assert (r.regiao, r.situacao) == (REGIAO_DE_REFERENCIA, Situacao.MESMA_ZONA)
+    assert zona_da_regiao("gcp", REGIAO_DE_REFERENCIA) == "virginia"
+
+
 def test_egress_da_oci_nao_e_global() -> None:
     r = escolher_regiao_de_preco(
         "oci", ["sa-saopaulo-1"], ["us-ashburn-1"], service_type="network_egress"

@@ -28,6 +28,10 @@ class CategoryRate:
     rate: Decimal
     unit: str            # 'gb_month' | 'gb'
     confidence: str = "reference"
+    # Região da taxa e se ela é de outra região que a pedida (ver
+    # `domain/services/regioes.escolher_regiao_de_preco`).
+    region: str | None = None
+    approximate: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -189,10 +189,16 @@ def normalizar_regiao(provedor: str, regiao: str | None) -> str | None:
 
 
 def zona_da_regiao(provedor: str, regiao: str | None) -> str | None:
-    """Zona a que a região pertence, ou None se fora da tabela."""
+    """Zona a que a região pertence, ou None se fora da tabela.
+
+    O rótulo das taxas de referência (`us-east`) é costa leste dos EUA: está na
+    Virgínia em qualquer provedor.
+    """
     alvo = normalizar_regiao(provedor, regiao)
     if alvo is None:
         return None
+    if alvo == REGIAO_DE_REFERENCIA:
+        return "virginia"
     p = provedor.lower()
     for z in ZONAS:
         if alvo in z.membros.get(p, frozenset()):
@@ -351,6 +357,9 @@ def zona_dominante(custos: Iterable[tuple[str, str | None, Decimal]]) -> str | N
 
 class Situacao(StrEnum):
     EXATA = "exata"
+    # Outra região da mesma metrópole (`eastus2` para `eastus`, a referência
+    # `us-east` para `us-east-1`). Não é aproximação de preço regional.
+    MESMA_ZONA = "mesma_zona"
     PRECO_GLOBAL = "preco_global"
     APROXIMADA = "aproximada"
 
@@ -374,10 +383,11 @@ def escolher_regiao_de_preco(
 ) -> RegiaoDePreco | None:
     """Qual região consultar, entre as que têm preço sincronizado.
 
-    Em ordem: a primeira preferida que tenha preço; para provedor de preço
-    global, qualquer região sincronizada; a região do provedor na zona padrão;
-    a região de referência das taxas digitadas; a primeira em ordem alfabética.
-    None só quando o provedor não tem preço nenhum.
+    Em ordem: a primeira preferida que tenha preço; outra região da mesma zona
+    de uma preferida; para provedor de preço global, qualquer região
+    sincronizada; a região do provedor na zona padrão; a região de referência
+    das taxas digitadas; a primeira em ordem alfabética. None só quando o
+    provedor não tem preço nenhum.
     """
     regioes = sorted(set(disponiveis))
     if not regioes:
@@ -386,6 +396,10 @@ def escolher_regiao_de_preco(
         if r and r in regioes:
             return RegiaoDePreco(r, Situacao.EXATA)
     p = provedor.lower()
+    zonas = {z for r in preferidas if r and (z := zona_da_regiao(p, r))}
+    for r in regioes:
+        if zona_da_regiao(p, r) in zonas:
+            return RegiaoDePreco(r, Situacao.MESMA_ZONA)
     if tem_preco_global(p, service_type):
         return RegiaoDePreco(regioes[0], Situacao.PRECO_GLOBAL)
     padrao = _POR_ID[ZONA_PADRAO].canonica.get(p)

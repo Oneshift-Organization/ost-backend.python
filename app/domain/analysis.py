@@ -48,6 +48,8 @@ class FinancialEstimate:
     # payload, silenciosamente.
     price_source: str | None = None
     price_captured_at: datetime | None = None
+    price_region: str | None = None
+    price_region_approximate: bool = False
 
 
 @dataclass(frozen=True)

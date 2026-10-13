@@ -146,3 +146,60 @@ async def test_empate_prefere_menos_instancias() -> None:
         )
         assert opts[0].instances == 2, "deveria preferir 2x16vCPU a 8x4vCPU"
         assert opts[0].sku_id == "Standard_D16"
+
+
+# ── Cotação por região (PLANO_PRECO_REGIONAL R4) ─────────────────────────────
+
+
+def _vm(provider: str, region: str, price: str) -> CloudPricePoint:
+    return CloudPricePoint(
+        provider=provider, sku_key="vm-4x16", service_name="VM", service_type="virtual_server",
+        region=region, price=Decimal(price), currency="USD", unit="instance_hour",
+        vcpus=Decimal("4"), ram_gib=Decimal("16"), source="api", confidence="official",
+        captured_at=datetime.now(UTC),
+    )
+
+
+async def _cotar(repo: _PriceRepo, provider: str, regioes):
+    matcher = EquivalenceMatcher(_SkuRepo({}), repo)
+    [opt] = await matcher.match_pool(
+        vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("100"),
+        service_type="virtual_server", target_providers=[provider], regioes=regioes,
+    )
+    return opt.financials
+
+
+@pytest.mark.asyncio
+async def test_cota_na_regiao_pedida_e_nao_na_mais_barata() -> None:
+    repo = _PriceRepo({"aws": [_vm("aws", "us-east-1", "0.10"), _vm("aws", "sa-east-1", "0.16")]})
+    fin = await _cotar(repo, "aws", {"aws": ["sa-east-1"]})
+    assert fin.unit_price == Decimal("0.16")
+    assert fin.price_region == "sa-east-1"
+    assert not fin.price_region_approximate
+    assert fin.pricing_confidence == "official"
+
+
+@pytest.mark.asyncio
+async def test_sem_preco_da_regiao_aproxima_e_rebaixa_o_rotulo() -> None:
+    repo = _PriceRepo({"aws": [_vm("aws", "us-east-1", "0.10"), _vm("aws", "us-west-2", "0.11")]})
+    fin = await _cotar(repo, "aws", {"aws": ["sa-east-1"]})
+    assert fin.price_region == "us-east-1", "cai na região da zona padrão"
+    assert fin.price_region_approximate
+    assert fin.pricing_confidence == "reference", "preço oficial de outra região não é oficial aqui"
+
+
+@pytest.mark.asyncio
+async def test_oci_tem_preco_global_de_compute() -> None:
+    repo = _PriceRepo({"oci": [_vm("oci", "us-ashburn-1", "0.05")]})
+    fin = await _cotar(repo, "oci", {"oci": ["sa-saopaulo-1"]})
+    assert fin.price_region == "us-ashburn-1"
+    assert not fin.price_region_approximate
+    assert fin.pricing_confidence == "official"
+
+
+@pytest.mark.asyncio
+async def test_sem_regioes_mantem_o_comportamento_antigo() -> None:
+    repo = _PriceRepo({"aws": [_vm("aws", "us-east-1", "0.10"), _vm("aws", "sa-east-1", "0.16")]})
+    fin = await _cotar(repo, "aws", None)
+    assert fin.unit_price == Decimal("0.10")
+    assert fin.price_region is None
