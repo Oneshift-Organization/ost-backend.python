@@ -123,6 +123,16 @@ por vCPU entre gerações e provedores. Opções, em ordem de custo:
 Até decidir a fonte, o packer continua casando vCPU e RAM sem coeficiente. É
 uma decisão de produto e de custo.
 
+### P3 Ciclo de vida do preço (proposta do usuário, 14/10)
+
+O preço oficial envelhece e o billing recente o renova: estados `VIVO → MADURO →
+EM_DECOMPOSICAO → ADUBO`, score por fonte, idade e corroboração, revitalização
+por billing com quórum entre usuários. Plano completo, com o encaixe no que já
+existe (`cloud_price_points`, `preco_idade_dias`, `pricing_public_on_demand_cost`,
+`pedidos_de_sync` da V3.1): [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](PLANO_CICLO_DE_VIDA_DO_PRECO.md).
+As fases P3.0 a P3.3 não mudam número; a P3.4 (trocar preço por quórum) sobe a
+versão de autoridade.
+
 ## 4. Dependências
 
 - O lote v3 espera os **testes conjuntos com o MCP na v2** (que dependem de a
