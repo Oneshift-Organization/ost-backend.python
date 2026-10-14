@@ -8,7 +8,10 @@ da própria aplicação (a ligação EC2 → RDS que a topologia entre unidades 
 
 from __future__ import annotations
 
+import gzip
+import re
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -23,7 +26,7 @@ from app.core import config
 from app.infrastructure.database.session import get_sessionmaker
 from app.main import create_app
 
-from .conftest import _cleanup, _ingest
+from .conftest import FIXTURES, _cleanup, _ingest
 
 HTTP_USER = UUID(_DEV_USER.sub)
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -173,3 +176,97 @@ async def test_erros_da_superficie(
     finally:
         config.get_settings.cache_clear()
     assert desligado.json()["detail"]["codigo"] == "INVENTARIO_DESLIGADO"
+
+
+def _de_outra_conta(arquivos: list[Path], destino: Path) -> list[Path]:
+    """O mesmo inventário, de outras contas: números de conta, IDs e nomes de bucket trocados."""
+    destino.mkdir(parents=True, exist_ok=True)
+    saida = []
+    for arquivo in arquivos:
+        bruto = gzip.decompress(arquivo.read_bytes()).decode()
+        for de, para in (("222222222222", "999999999999"), ("333333333333", "777777777777")):
+            bruto = bruto.replace(de, para)
+        bruto = bruto.replace("444444444444", "888888888888")
+        bruto = re.sub(
+            r"\b(i|vol|eni|sg|subnet|vpc|igw|nat|eipalloc|rtb|acl|snap)-([0-9a-f]{6,})",
+            lambda m: f"{m.group(1)}-{m.group(2)[::-1]}",
+            bruto,
+        )
+        bruto = re.sub(
+            r"(arn:aws:s3:::)([a-z0-9.-]+)", lambda m: m.group(1) + "outra-" + m.group(2), bruto
+        )
+        bruto = re.sub(
+            r'"(bucketName|name)":\s*"([a-z0-9.-]+)"',
+            lambda m: f'"{m.group(1)}": "outra-{m.group(2)}"',
+            bruto,
+        )
+        alvo = destino / arquivo.name.replace("222222222222", "999999999999")
+        alvo.write_bytes(gzip.compress(bruto.encode()))
+        saida.append(alvo)
+    return saida
+
+
+async def _enviar_inventario(c: AsyncClient, arquivos: list[Path]) -> UUID:
+    r = await c.post(
+        "/v1/inventories",
+        files=[("files", (a.name, a.read_bytes(), "application/octet-stream")) for a in arquivos],
+    )
+    return UUID(r.json()["inventory_id"])
+
+
+async def _apagar(rid: UUID, *inventarios: UUID) -> None:
+    async with get_sessionmaker()() as s:
+        await s.execute(text("delete from analysis_jobs where report_id = :r"), {"r": rid})
+        for iid in inventarios:
+            await s.execute(text("delete from inventories where id = :i"), {"i": iid})
+        await s.commit()
+    await _cleanup(rid)
+
+
+async def test_inventario_de_outra_conta_e_recusado_antes_da_analise(
+    app: FastAPI, _db_ready: None, mocks_billing: Any, mocks_inventario: Any, tmp_path: Path
+) -> None:
+    rid = await _ingest(mocks_billing.cur, user_id=HTTP_USER)
+    iid = None
+    try:
+        async with _cliente(app) as c:
+            iid = await _enviar_inventario(c, _de_outra_conta(mocks_inventario.aws, tmp_path))
+            r = await c.post(f"/v1/analyses/start/{rid}", json={"inventory_id": str(iid)})
+    finally:
+        await _apagar(rid, *([iid] if iid else []))
+    assert r.status_code == 422, r.text
+    detalhe = r.json()["detail"]
+    assert detalhe["codigo"] == "INVENTARIO_NAO_CORRESPONDE"
+    assert detalhe["contas_do_inventario"] == ["888888888888", "999999999999"]
+    assert "222222222222" in detalhe["contas_da_fatura"]
+
+
+async def test_fatura_resumida_com_inventario_avisa_e_so_planeja_por_aplicacao(
+    app: FastAPI, _db_ready: None, mocks_inventario: Any
+) -> None:
+    rid = await _ingest(FIXTURES / "aws_cost_explorer_full.csv", user_id=HTTP_USER)
+    iid = None
+    try:
+        async with _cliente(app) as c:
+            iid = await _enviar_inventario(c, mocks_inventario.aws)
+            inicio = await c.post(f"/v1/analyses/start/{rid}", json={"inventory_id": str(iid)})
+            assert inicio.status_code == 202, inicio.text
+            job = inicio.json()["job_id"]
+            aplicacoes = (await c.get(f"/v1/analyses/{job}/applications")).json()
+            por_servico = await c.post(
+                f"/v1/analyses/{job}/migration-plans", json={"servicos": ["AmazonEC2"]}
+            )
+            por_aplicacao = await c.post(
+                f"/v1/analyses/{job}/migration-plans", json={"aplicacoes": ["checkout"]}
+            )
+    finally:
+        await _apagar(rid, *([iid] if iid else []))
+    assert aplicacoes["correspondencia"]["status"] == "sem_id_de_recurso"
+    assert aplicacoes["correspondencia"]["liga_custo"] is False
+    assert len(aplicacoes["aplicacoes"]) >= 5
+    assert por_servico.status_code == 422
+    assert por_servico.json()["detail"]["codigo"] == "ESCOLHA_INVALIDA"
+    assert por_aplicacao.status_code == 200
+    plano = por_aplicacao.json()
+    assert {"auth", "checkout", "pagamentos"} <= set(plano["aplicacoes"])
+    assert plano["correspondencia"]["status"] == "sem_id_de_recurso"

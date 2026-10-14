@@ -76,6 +76,7 @@ recalculado, sem LLM), grava e devolve. **Grava: não é uma leitura.**
 | 404 | `INVENTARIO_NAO_ENCONTRADO` | não |
 | 409 | `INVENTARIO_NAO_PROCESSADO` | sim |
 | 422 | `INVENTARIO_DE_OUTRA_NUVEM` | não |
+| 422 | `INVENTARIO_NAO_CORRESPONDE` | não |
 
 ## `POST /v1/agent/snapshots/{snapshot_id}/submissions`
 

@@ -23,7 +23,12 @@ from app.domain.entities.topologia import TipoDeRecurso
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.domain.repositories.i_custo_por_recurso import ILeitorDeCustoPorRecurso
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
-from app.domain.services.correlacao_inventario import IndiceDeApelidos
+from app.domain.services.correlacao_inventario import IndiceDeApelidos, correlacionar
+from app.domain.services.correspondencia_inventario import (
+    SEM_CORRESPONDENCIA,
+    Correspondencia,
+    avaliar_correspondencia,
+)
 from app.domain.services.cotacao_do_escopo import (
     CotacaoDoEscopo,
     LinhaDoEscopo,
@@ -37,6 +42,7 @@ from app.domain.services.topologia.dependencias_de_servico import dependencias_d
 from app.domain.services.topologia.escopo import (
     CatalogoDeAplicacoes,
     Escolha,
+    EscolhaInvalidaError,
     PlanoDeMigracao,
     fechar_plano,
     montar_catalogo,
@@ -77,6 +83,14 @@ class TopologiaDivergenteError(ConflictError):
     """O inventário mudou desde a análise: o plano seria de outra coisa."""
 
 
+class InventarioNaoCorrespondeError(ConflictError):
+    """O inventário da análise é de outra conta: nada da fatura está nele."""
+
+    def __init__(self, correspondencia: Correspondencia) -> None:
+        super().__init__(correspondencia.mensagem)
+        self.correspondencia = correspondencia
+
+
 @dataclass(frozen=True, slots=True)
 class ContextoDoEscopo:
     catalogo: CatalogoDeAplicacoes
@@ -88,6 +102,7 @@ class ContextoDoEscopo:
     provedor_recomendado: str | None
     moeda: str
     inventario_id: str
+    correspondencia: Correspondencia
     premissas: tuple[tuple[str, str | None, str], ...] = field(default_factory=tuple)
 
 
@@ -114,6 +129,11 @@ class EscopoDeMigracaoUseCase:
 
     async def plano(self, user_id: UUID, job_id: UUID, escolha: Escolha) -> PlanoCotado:
         ctx = await self._contexto(user_id, job_id)
+        if escolha.servicos and not ctx.correspondencia.liga_custo:
+            raise EscolhaInvalidaError(
+                "a fatura não traz o ID de cada recurso: não dá para ligar serviço a aplicação; "
+                "escolha aplicações"
+            )
         plano = fechar_plano(ctx.catalogo, escolha)
         unidades = set(plano.unidades)
         cotacao = cotar_escopo(
@@ -143,6 +163,9 @@ class EscopoDeMigracaoUseCase:
             )
 
         custos = await self._custos.custos_por_recurso(job.report_id, user_id)
+        correspondencia = avaliar_correspondencia(conteudo, custos, correlacionar(conteudo, custos))
+        if correspondencia.status == SEM_CORRESPONDENCIA:
+            raise InventarioNaoCorrespondeError(correspondencia)
         fx = _fx(payload)
         indice = Indice(conteudo)
         apelidos = IndiceDeApelidos(conteudo)
@@ -211,6 +234,7 @@ class EscopoDeMigracaoUseCase:
             provedor_recomendado=_texto(resumo.get("recomendado")),
             moeda=str(payload.get("moeda") or "USD"),
             inventario_id=str(inventario_id),
+            correspondencia=correspondencia,
             premissas=tuple((p.campo, p.valor, p.base) for p in analise.premissas),
         )
 

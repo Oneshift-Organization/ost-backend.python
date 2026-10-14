@@ -118,6 +118,7 @@ Dinheiro na moeda do billing, sem conversão.
 | 404 | `REPORT_NAO_ENCONTRADO` | Billing não existe para este usuário |
 | 409 | `REPORT_NAO_PRONTO` | Billing ainda processando (retryable) |
 | 422 | `INVENTARIO_DE_OUTRA_NUVEM` | Inventário e billing de provedores diferentes |
+| 422 | `INVENTARIO_NAO_CORRESPONDE` | Inventário de outra conta: nenhum recurso da fatura está nele (AWS e Azure: também nenhuma conta em comum). Vem com `contas_da_fatura` e `contas_do_inventario` |
 
 ## `PUT /v1/inventories/{inventory_id}/declarations`
 
@@ -159,6 +160,7 @@ validado **antes** de criar o job (e antes da idempotência):
 | 404 | `INVENTARIO_NAO_ENCONTRADO` | Inventário não existe para este usuário |
 | 409 | `INVENTARIO_NAO_PROCESSADO` | Inventário ainda processando |
 | 422 | `INVENTARIO_DE_OUTRA_NUVEM` | Provedores diferentes |
+| 422 | `INVENTARIO_NAO_CORRESPONDE` | Inventário de outra conta: nenhum recurso da fatura está nele (AWS e Azure: também nenhuma conta em comum). Vem com `contas_da_fatura` e `contas_do_inventario` |
 
 O payload da análise ganha a chave `topologia` e **nada mais muda** (custo,
 economia e recomendação são os mesmos com e sem inventário). `topologia.resumo`

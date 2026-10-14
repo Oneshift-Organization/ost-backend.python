@@ -45,6 +45,38 @@ def _premissas(ctx: ContextoDoEscopo) -> list[PremissaOut]:
     ]
 
 
+class CorrespondenciaOut(BaseModel):
+    """O inventário casa com a fatura?
+
+    `liga_custo=false`: sem custo por aplicação nem plano por serviço.
+    """
+
+    status: Literal["ok", "parcial", "sem_id_de_recurso"]
+    liga_custo: bool
+    fracao_encontrada: float | None
+    contas_da_fatura: list[str]
+    contas_do_inventario: list[str]
+    contas_sem_inventario: list[str]
+    mensagem: str
+
+    @classmethod
+    def de(cls, ctx: ContextoDoEscopo) -> CorrespondenciaOut:
+        c = ctx.correspondencia
+        return cls.model_validate(
+            {
+                "status": c.status,
+                "liga_custo": c.liga_custo,
+                "fracao_encontrada": (
+                    float(c.fracao_encontrada) if c.fracao_encontrada is not None else None
+                ),
+                "contas_da_fatura": list(c.contas_da_fatura),
+                "contas_do_inventario": list(c.contas_do_inventario),
+                "contas_sem_inventario": list(c.contas_sem_inventario),
+                "mensagem": c.mensagem,
+            }
+        )
+
+
 class CustoPorNome(BaseModel):
     nome: str
     custo: float
@@ -103,6 +135,7 @@ class ApplicationsResponse(BaseModel):
     grupos: list[GrupoOut]
     ferramentas: list[str] = Field(description="acesso (bastion): fora das ondas e do plano")
     sem_aplicacao: float
+    correspondencia: CorrespondenciaOut
     limite_das_dependencias: str = LIMITE_DAS_DEPENDENCIAS
     premissas: list[PremissaOut]
 
@@ -150,6 +183,7 @@ class ApplicationsResponse(BaseModel):
             ],
             ferramentas=list(c.ferramentas),
             sem_aplicacao=_dinheiro(c.sem_aplicacao),
+            correspondencia=CorrespondenciaOut.de(ctx),
             premissas=_premissas(ctx),
         )
 
@@ -261,6 +295,7 @@ class MigrationPlanResponse(BaseModel):
     ligacoes: list[LigacaoOut]
     ordens: list[OrdemOut]
     fora_do_plano: list[CustoPorNome]
+    correspondencia: CorrespondenciaOut
     limite_das_dependencias: str = LIMITE_DAS_DEPENDENCIAS
     premissas: list[PremissaOut]
 
@@ -320,6 +355,7 @@ class MigrationPlanResponse(BaseModel):
             ],
             ordens=[OrdemOut(ordem=o.ordem, grupos=list(o.grupos)) for o in p.ordens],
             fora_do_plano=[CustoPorNome(nome=n, custo=_dinheiro(v)) for n, v in p.fora_do_plano],
+            correspondencia=CorrespondenciaOut.de(ctx),
             premissas=_premissas(ctx),
         )
 
