@@ -10,6 +10,9 @@ import pytest
 from app.domain.services.topologia import analisar_topologia
 from app.domain.services.topologia.dependencias_de_servico import dependencias_de_servico
 from app.domain.services.topologia.escopo import (
+    ANTES,
+    DEPOIS,
+    SEM_LIGACAO,
     CatalogoDeAplicacoes,
     Escolha,
     EscolhaInvalidaError,
@@ -161,3 +164,41 @@ def test_ambiente_sem_nada_escolhido_da_escopo_vazio() -> None:
     plano = fechar_plano(_cenario(), Escolha(aplicacoes=frozenset({"auth"}), ambiente="prod"))
     # Os recursos do cenário não têm tag de ambiente
     assert (plano.unidades, plano.custo) == ((), Decimal(0))
+
+
+def test_grupo_de_fora_diz_com_que_grupos_do_escopo_conversa() -> None:
+    plano = fechar_plano(_cenario(), Escolha(aplicacoes=frozenset({"checkout"})))
+    no_plano = {g for o in plano.ordens for g in o.grupos}
+    for vizinho in (*plano.antes, *plano.para_tras):
+        assert vizinho.ligado_a
+        assert set(vizinho.ligado_a) <= no_plano
+
+
+def test_incluido_que_o_escopo_chama_e_pre_e_o_que_chama_o_escopo_e_pos() -> None:
+    catalogo = _cenario()
+    base = fechar_plano(catalogo, Escolha(aplicacoes=frozenset({"checkout"})))
+    plano = fechar_plano(
+        catalogo,
+        Escolha(
+            aplicacoes=frozenset({"checkout"}),
+            incluir_grupos=frozenset({base.antes[0].grupo, base.para_tras[0].grupo}),
+        ),
+    )
+    lados = {i.nome: i.lado for i in plano.incluidos}
+    assert lados == {"catalogo": ANTES, "monitor": DEPOIS}
+    catalogo_incluido = next(i for i in plano.incluidos if i.nome == "catalogo")
+    assert catalogo_incluido.ligado_a == base.antes[0].ligado_a
+    assert catalogo_incluido.portas == ("tcp/8080",)
+    assert catalogo_incluido.custo == Decimal("100")
+    # Pedir de novo dá o mesmo: o lado vem das ligações, não da ordem dos cliques
+    assert fechar_plano(catalogo, plano.escolha).incluidos == plano.incluidos
+
+
+def test_incluido_sem_nada_que_o_ligue_ao_plano_fica_sem_ligacao() -> None:
+    catalogo = _cenario()
+    monitor = fechar_plano(catalogo, Escolha(aplicacoes=frozenset({"checkout"}))).para_tras[0]
+    plano = fechar_plano(
+        catalogo,
+        Escolha(aplicacoes=frozenset({"catalogo"}), incluir_grupos=frozenset({monitor.grupo})),
+    )
+    assert [(i.nome, i.lado, i.ligado_a) for i in plano.incluidos] == [("monitor", SEM_LIGACAO, ())]

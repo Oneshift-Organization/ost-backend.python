@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from app.domain.services.cotacao_do_escopo import CotacaoDoEscopo
 from app.domain.services.topologia.escopo import (
+    GrupoIncluido,
     GrupoVizinho,
     ServicoLigado,
 )
@@ -231,6 +232,7 @@ class GrupoVizinhoOut(BaseModel):
     portas: list[str]
     custo: float
     nos_dois_sentidos: bool
+    ligado_a: list[str] = Field(description="grupos do escopo com que este conversa")
 
     @classmethod
     def de(cls, v: GrupoVizinho) -> GrupoVizinhoOut:
@@ -242,6 +244,40 @@ class GrupoVizinhoOut(BaseModel):
             portas=list(v.portas),
             custo=_dinheiro(v.custo),
             nos_dois_sentidos=v.nos_dois_sentidos,
+            ligado_a=list(v.ligado_a),
+        )
+
+
+class GrupoIncluidoOut(BaseModel):
+    """Grupo de fora posto no plano à mão, com o lado da migração em que fica."""
+
+    grupo: str
+    nome: str
+    lado: Literal["antes", "depois", "sem_ligacao"] = Field(
+        description="antes: pré-migração (o escopo o chama); depois: pós-migração (ele "
+        "chama o escopo); sem_ligacao: o que o ligava ao plano saiu"
+    )
+    ordem: int | None
+    custo: float
+    aplicacoes: list[str]
+    ligado_a: list[str] = Field(
+        description="pré-migração: grupos do plano que o chamam; pós: grupos do plano que ele chama"
+    )
+    naturezas: list[Natureza]
+    portas: list[str]
+
+    @classmethod
+    def de(cls, i: GrupoIncluido) -> GrupoIncluidoOut:
+        return cls(
+            grupo=i.grupo,
+            nome=i.nome,
+            lado=i.lado,
+            ordem=i.ordem,
+            custo=_dinheiro(i.custo),
+            aplicacoes=list(i.aplicacoes),
+            ligado_a=list(i.ligado_a),
+            naturezas=[n.value for n in i.naturezas],
+            portas=list(i.portas),
         )
 
 
@@ -265,6 +301,10 @@ class ServicoNoEscopoOut(BaseModel):
     )
     metodos: list[str] = Field(
         description="pool | pool_da_familia | media_dos_pools | categoria; vazio = sem cotação"
+    )
+    sem_cotacao: dict[str, str] = Field(
+        default_factory=dict,
+        description="provedor → por que parte do serviço ficou sem cotação, pronto para exibir",
     )
 
 
@@ -292,6 +332,7 @@ class MigrationPlanResponse(BaseModel):
     servicos_que_vem_junto: list[ServicoQueVemJuntoOut]
     antes: list[GrupoVizinhoOut]
     para_tras: list[GrupoVizinhoOut]
+    incluidos: list[GrupoIncluidoOut]
     ligacoes: list[LigacaoOut]
     ordens: list[OrdemOut]
     fora_do_plano: list[CustoPorNome]
@@ -349,6 +390,7 @@ class MigrationPlanResponse(BaseModel):
             ],
             antes=[GrupoVizinhoOut.de(v) for v in p.antes],
             para_tras=[GrupoVizinhoOut.de(v) for v in p.para_tras],
+            incluidos=[GrupoIncluidoOut.de(i) for i in p.incluidos],
             ligacoes=[
                 LigacaoOut(de=x.de, para=x.para, natureza=x.natureza.value, portas=list(x.portas))
                 for x in p.ligacoes
@@ -367,6 +409,7 @@ def _servicos(cotacao: CotacaoDoEscopo) -> list[ServicoNoEscopoOut]:
             custo=_dinheiro(s.custo),
             destino={k: (_dinheiro(v) if v is not None else None) for k, v in s.destino.items()},
             metodos=list(s.metodos),
+            sem_cotacao=dict(s.sem_cotacao),
         )
         for s in cotacao.por_servico
     ]

@@ -4,7 +4,8 @@
   cada serviço com as aplicações que o usam e os serviços de que depende;
 - `POST /v1/analyses/{job_id}/migration-plans`: a escolha fechada pelas regras da
   topologia (o que vai junto, o que vai antes, quem fica para trás), cotada no
-  destino. `?formato=xlsx` devolve o mesmo plano em planilha.
+  destino. `?formato=pdf` devolve o plano em documento para circular entre pessoas;
+  `?formato=xlsx`, em planilha para quem executa (cada recurso, com status).
 
 Só leitura: não grava, não chama LLM, não muda score nem preço. Atrás de
 `INVENTORY_ENABLED`, como as rotas de inventário. Contrato:
@@ -13,6 +14,8 @@ docs/endpoints/migration-plans.md.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
@@ -24,6 +27,8 @@ from app.api.v1.envelope import erro
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.domain.services.topologia.escopo import Escolha, EscolhaInvalidaError
+from app.infrastructure.exports.plano_documento import montar_documento
+from app.infrastructure.exports.plano_pdf import montar_pdf
 from app.infrastructure.exports.plano_xlsx import montar_xlsx
 from app.schemas.migration_scope import (
     ApplicationsResponse,
@@ -44,6 +49,15 @@ from app.use_cases.inventory.consultas import InventarioNaoProcessadoError
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
 _XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_PDF = "application/pdf"
+
+
+def _nome_do_arquivo(titulo: str, quando: datetime, extensao: str) -> str:
+    """plano-de-migracao-auth-20261014-1649.pdf: ASCII, para qualquer sistema abrir."""
+    ascii_ = unicodedata.normalize("NFKD", titulo).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_.lower()).strip("-")[:40].strip("-")
+    partes = ["plano-de-migracao", slug, f"{quando:%Y%m%d-%H%M}"]
+    return "-".join(p for p in partes if p) + f".{extensao}"
 
 
 def _exigir_flag() -> None:
@@ -107,7 +121,9 @@ async def get_applications(
 @router.post(
     "/{job_id}/migration-plans",
     response_model=MigrationPlanResponse,
-    responses={200: {"content": {_XLSX: {}}, "description": "o plano, em JSON ou planilha"}},
+    responses={
+        200: {"content": {_XLSX: {}, _PDF: {}}, "description": "o plano, em JSON, PDF ou planilha"}
+    },
     summary="Plano de migração de aplicações ou serviços, com o que vai junto e o custo no destino",
 )
 async def post_migration_plan(
@@ -115,7 +131,7 @@ async def post_migration_plan(
     corpo: MigrationPlanRequest,
     user: CurrentUser,
     session: DbSession,
-    formato: Literal["json", "xlsx"] = "json",
+    formato: Literal["json", "xlsx", "pdf"] = "json",
 ) -> MigrationPlanResponse | Response:
     """Escolher um serviço leva as aplicações inteiras que o usam; o plano diz quais
     serviços vieram junto e por quê. `422 ESCOLHA_INVALIDA` para escolha vazia ou
@@ -135,12 +151,11 @@ async def post_migration_plan(
     if formato == "json":
         return plano
     agora = datetime.now(UTC)
+    doc = montar_documento(plano, cotado, job_id=str(job_id), gerado_em=agora)
+    conteudo, tipo = (montar_pdf(doc), _PDF) if formato == "pdf" else (montar_xlsx(doc), _XLSX)
+    arquivo = _nome_do_arquivo(doc.titulo, agora, formato)
     return Response(
-        content=montar_xlsx(plano, job_id=str(job_id), gerado_em=agora),
-        media_type=_XLSX,
-        headers={
-            "Content-Disposition": (
-                f'attachment; filename="plano-de-migracao-{agora:%Y%m%d-%H%M}.xlsx"'
-            )
-        },
+        content=conteudo,
+        media_type=tipo,
+        headers={"Content-Disposition": f'attachment; filename="{arquivo}"'},
     )

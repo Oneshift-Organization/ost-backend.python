@@ -92,6 +92,18 @@ class InventarioNaoCorrespondeError(ConflictError):
 
 
 @dataclass(frozen=True, slots=True)
+class RecursoDoEscopo:
+    """Um recurso do inventário, como o plano exportado o lista: o que migrar."""
+
+    chave: str
+    nome: str | None
+    tipo: str
+    tipo_nativo: str
+    regiao: str | None
+    custo: Decimal  # na moeda da análise; 0 quando a fatura não cita o recurso
+
+
+@dataclass(frozen=True, slots=True)
 class ContextoDoEscopo:
     catalogo: CatalogoDeAplicacoes
     linhas: tuple[LinhaDoEscopo, ...]
@@ -104,6 +116,9 @@ class ContextoDoEscopo:
     inventario_id: str
     correspondencia: Correspondencia
     premissas: tuple[tuple[str, str | None, str], ...] = field(default_factory=tuple)
+    recursos: Mapping[str, RecursoDoEscopo] = field(default_factory=dict)
+    periodo: str | None = None
+    gasto_total: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +190,7 @@ class EscopoDeMigracaoUseCase:
         servicos_do_recurso: dict[str, dict[str, Decimal]] = defaultdict(
             lambda: defaultdict(lambda: _ZERO)
         )
+        custo_do_recurso: dict[str, Decimal] = defaultdict(lambda: _ZERO)
         linhas = []
         for linha in custos.por_recurso:
             valor = convert(linha.custo, fx) or _ZERO
@@ -185,6 +201,7 @@ class EscopoDeMigracaoUseCase:
                 continue
             por_unidade[unidade][linha.servico] += valor
             servicos_do_recurso[chave][linha.servico] += valor
+            custo_do_recurso[chave] += valor
             recurso = indice.recursos[chave]
             tipo = indice.tipo(chave)
             linhas.append(
@@ -204,6 +221,7 @@ class EscopoDeMigracaoUseCase:
                         else None
                     ),
                     unidade=unidade,
+                    recurso=chave,
                 )
             )
 
@@ -236,6 +254,21 @@ class EscopoDeMigracaoUseCase:
             inventario_id=str(inventario_id),
             correspondencia=correspondencia,
             premissas=tuple((p.campo, p.valor, p.base) for p in analise.premissas),
+            recursos={
+                chave: RecursoDoEscopo(
+                    chave=chave,
+                    nome=r.nome,
+                    tipo=str(r.tipo),
+                    tipo_nativo=r.tipo_nativo,
+                    regiao=r.regiao,
+                    custo=custo_do_recurso.get(chave, _ZERO),
+                )
+                for u in analise.unidades
+                for chave in u.recursos
+                if (r := indice.recursos.get(chave)) is not None
+            },
+            periodo=_texto_cru(payload.get("periodo_faturamento")),
+            gasto_total=_decimal(payload.get("gasto_total")),
         )
 
     async def _job(self, user_id: UUID, job_id: UUID) -> AnalysisJob:
@@ -253,6 +286,10 @@ class EscopoDeMigracaoUseCase:
 
 def _texto(valor: object) -> str | None:
     return str(valor).lower() if valor else None
+
+
+def _texto_cru(valor: object) -> str | None:
+    return str(valor) if valor else None
 
 
 def _decimal(valor: object) -> Decimal | None:

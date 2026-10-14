@@ -14,7 +14,7 @@
 > | **E4** — pré-requisitos | ✅ em parte: sem tag, cada unidade vira "aplicação"; custo sem recurso fica em `sem_aplicacao`. Falta a mensagem própria para fatura resumida (Cost Explorer) |
 > | **E5** — limite das dependências | ✅ `limite_das_dependencias` nas duas respostas |
 > | **E6** — dependência entre serviços na mesma aplicação | ✅ `topologia/dependencias_de_servico.py`; não muda unidades, grupos, ondas nem Terraform |
-> | **E7** — exportar | ✅ `?formato=xlsx`; persistência do plano ainda a decidir |
+> | **E7** — exportar | ✅ `?formato=pdf` (para circular: passos pré/principal/pós, ordem, pendências) e `?formato=xlsx` (para executar: cada recurso com status); persistência do plano ainda a decidir |
 > | Front | ⬜ tela Dependências na develop do front (ver §4) |
 
 ## 1. O pedido
