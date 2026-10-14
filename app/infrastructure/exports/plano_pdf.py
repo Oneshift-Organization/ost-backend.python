@@ -398,7 +398,7 @@ def _pendencias(doc: Documento) -> list[Any]:
     linhas = [
         [
             f"<b>{_t(x.nome)}</b><br/>" + _tag(etapa(x.ordem), _SUAVE),
-            ("Precisa estar antes" if x.lado == "antes" else "Depende do que sai")
+            ("Precisa estar antes" if x.lado == "antes" else "Pode vir depois")
             + (" · nos dois sentidos" if x.nos_dois_sentidos else ""),
             ("Chamado por " if x.lado == "antes" else "Chama ")
             + _t(", ".join(x.ligado_a))

@@ -105,7 +105,7 @@ def etapa(ordem: int | None) -> str:
 @dataclass(frozen=True, slots=True)
 class Item:
     nome: str
-    papel: str  # "escolhido", "vai junto", "pré-requisito", "depende do escopo", "incluído"
+    papel: str  # "escolhido", "vai junto", "pré-requisito", "usa o plano", "incluído"
     detalhe: str
     custo: float
     ordem: int | None
@@ -338,7 +338,7 @@ def _itens_incluidos(x: _Leitura, chave: str) -> list[Item]:
     return [
         Item(
             nome=i.nome,
-            papel="pré-requisito" if pre else "depende do escopo",
+            papel="pré-requisito" if pre else "usa o plano",
             detalhe=(
                 ("Chamado por " if pre else "Chama ")
                 + ", ".join(i.ligado_a)
