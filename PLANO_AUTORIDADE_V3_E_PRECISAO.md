@@ -81,6 +81,30 @@ Ver `PLANO_LOCKIN_INVENTARIO.md` §5, bloco C: exclusividade do inventário e
 dependências no eixo técnico (`policy_version` nova), tipo do recurso
 confirmando o `service_type` inferido, ondas.
 
+**Refazer o nível de dependência com o inventário (decidido em 14/10).** Hoje o
+nível vem só do catálogo; o inventário acrescenta hipóteses e o indicador
+"Recurso exclusivo", sem mudar o nível nem o score. Medido no mock CUR: AmazonRDS
+fica "Média" com e sem inventário, embora 37% do custo seja Aurora (exclusivo da
+AWS). Com a v3, o nível passa a ser refeito pelas três regras:
+
+1. **Só a exclusividade mexe no nível.** O nível efetivo é o maior entre o do
+   catálogo e o da exclusividade do inventário (`dependencias.exclusividade`),
+   com a origem declarada (`fonte: inventario`).
+2. **"Migra junto" não entra no nível.** Banco compartilhado entre aplicações e
+   grupo grande são dependência entre serviços, não da nuvem: ficam no eixo de
+   dependência (grupos, ordem, esforço), separados. Hoje a hipótese "provável
+   alta" do RDS vem do banco compartilhado e mistura os dois eixos; a sugestão
+   de fonte `dependencias` deixa de alimentar `nivel_sugerido`.
+3. **O inventário sobe o nível; só desce com cobertura alta.** Rebaixar (motor
+   padrão no lugar do proprietário, ex. Postgres e não Aurora) exige
+   `cobertura` do serviço ≥ 0,9; abaixo disso, não achar o recurso exclusivo
+   não prova que ele não existe.
+
+Não precisa de fluxo novo: anexar o inventário já refaz a análise inteira, e a
+análise nova sai com o nível refeito. Muda o score: vai na `policy_version` nova
+e na `agent-authority-v3`, com o antes e depois nos 6 relatórios e nos 2 mocks
+com inventário (a mudança esperada é concentrada em RDS e ElastiCache dos mocks AWS).
+
 ### Entrega do lote
 
 1. Cada item numa branch, com testes e medição de antes e depois nos 6
