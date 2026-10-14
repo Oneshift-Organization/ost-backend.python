@@ -281,6 +281,136 @@ class GrupoIncluidoOut(BaseModel):
         )
 
 
+Bloco = Literal["pre", "principal", "pos"]
+_BLOCO_DO_LADO: dict[str, Bloco] = {"antes": "pre", "depois": "pos", "sem_ligacao": "principal"}
+# Recursos por unidade na resposta: os mais caros; a lista inteira vai na planilha
+RECURSOS_POR_UNIDADE = 10
+
+
+class GrupoNoPlanoOut(BaseModel):
+    """Um grupo de migração do plano e o bloco em que migra."""
+
+    grupo: str
+    nome: str
+    ordem: int | None = Field(description="etapa da conta; null = sem ordem")
+    custo: float
+    bloco: Bloco = Field(
+        description="pre: incluído e o plano o chama; pos: incluído e ele chama o plano; "
+        "principal: o escolhido e o que vai junto"
+    )
+
+
+class ConteudoOut(BaseModel):
+    tipo: str = Field(description="tipo normalizado (instancia, banco, disco…)")
+    tipo_nativo: str = Field(description="tipo na nuvem de origem (AWS::RDS::DBInstance…)")
+    quantidade: int
+
+
+class RecursoDaUnidadeOut(BaseModel):
+    nome: str
+    tipo: str
+    tipo_nativo: str
+    custo: float = Field(description="custo do mês da fatura; 0 quando ela não cita o recurso")
+
+
+class UnidadeNoPlanoOut(BaseModel):
+    """O que é cada unidade do plano: quem é, o papel e o que tem dentro."""
+
+    unidade: str
+    nome: str
+    aplicacao: str | None
+    ambiente: str | None
+    regiao: str | None
+    conta: str | None
+    grupo: str
+    papel: Literal["escolhido", "vai_junto", "incluido"]
+    motivo: str | None = Field(description="por que vai junto (dependência forte)")
+    custo: float
+    conteudo: list[ConteudoOut] = Field(description="quantos recursos de cada tipo, do maior grupo")
+    recursos: list[RecursoDaUnidadeOut] = Field(
+        description=f"os {RECURSOS_POR_UNIDADE} recursos mais caros; a planilha tem todos"
+    )
+    recursos_total: int
+
+
+def _composicao(r: PlanoCotado) -> tuple[list[GrupoNoPlanoOut], list[UnidadeNoPlanoOut], int]:
+    """Grupos e unidades do plano, cada um com o bloco e o papel; e quantas etapas a conta tem."""
+    p, ctx = r.plano, r.contexto
+    analise = ctx.catalogo.analise
+    unidades = {u.id: u for u in analise.unidades}
+    nome_do_grupo = {g.id: g.nome for g in analise.grupos}
+    ordem_do_grupo = {g: o.numero for o in analise.ondas for g in o.grupos}
+    bloco_do_grupo = {i.grupo: _BLOCO_DO_LADO[i.lado] for i in p.incluidos}
+    junto = {v.unidade: v for v in p.vao_junto}
+
+    def custo(u: str) -> Decimal:
+        return sum(ctx.catalogo.custo_por_unidade.get(u, {}).values(), Decimal(0))
+
+    grupos: dict[str, Decimal] = {}
+    saida = []
+    for u in p.unidades:
+        unidade = unidades[u]
+        g = analise.grupo_de.get(u, u)
+        grupos[g] = grupos.get(g, Decimal(0)) + custo(u)
+        v = junto.get(u)
+        papel: Literal["escolhido", "vai_junto", "incluido"] = (
+            "escolhido" if v is None else "incluido" if v.incluida_por_voce else "vai_junto"
+        )
+        recursos = [ctx.recursos[k] for k in unidade.recursos if k in ctx.recursos]
+        contagem: dict[tuple[str, str], int] = {}
+        for x in recursos:
+            contagem[(x.tipo, x.tipo_nativo)] = contagem.get((x.tipo, x.tipo_nativo), 0) + 1
+        saida.append(
+            UnidadeNoPlanoOut(
+                unidade=u,
+                nome=unidade.nome,
+                aplicacao=unidade.aplicacao,
+                ambiente=unidade.ambiente,
+                regiao=unidade.regiao,
+                conta=unidade.conta,
+                grupo=g,
+                papel=papel,
+                motivo=v.motivo if papel == "vai_junto" and v else None,
+                custo=_dinheiro(custo(u)),
+                conteudo=[
+                    ConteudoOut(tipo=tipo, tipo_nativo=nativo, quantidade=n)
+                    for (tipo, nativo), n in sorted(
+                        contagem.items(), key=lambda kv: (-kv[1], kv[0])
+                    )
+                ],
+                recursos=[
+                    RecursoDaUnidadeOut(
+                        nome=x.nome or x.chave.rsplit("/", 1)[-1],
+                        tipo=x.tipo,
+                        tipo_nativo=x.tipo_nativo,
+                        custo=_dinheiro(x.custo),
+                    )
+                    for x in sorted(recursos, key=lambda x: (-x.custo, x.nome or x.chave))[
+                        :RECURSOS_POR_UNIDADE
+                    ]
+                ],
+                recursos_total=len(recursos),
+            )
+        )
+    ordem_do_bloco = {"pre": 0, "principal": 1, "pos": 2}
+    grupos_out = sorted(
+        (
+            GrupoNoPlanoOut(
+                grupo=g,
+                nome=nome_do_grupo.get(g, g),
+                ordem=ordem_do_grupo.get(g),
+                custo=_dinheiro(c),
+                bloco=bloco_do_grupo.get(g, "principal"),
+            )
+            for g, c in grupos.items()
+        ),
+        key=lambda g: (ordem_do_bloco[g.bloco], g.ordem is None, g.ordem or 0, g.nome),
+    )
+    papel_primeiro = {"escolhido": 0, "incluido": 1, "vai_junto": 2}
+    saida.sort(key=lambda u: (u.grupo, papel_primeiro[u.papel], -u.custo, u.nome))
+    return grupos_out, saida, max((o.numero for o in analise.ondas), default=0)
+
+
 class LigacaoOut(BaseModel):
     de: str
     para: str
@@ -333,6 +463,13 @@ class MigrationPlanResponse(BaseModel):
     antes: list[GrupoVizinhoOut]
     para_tras: list[GrupoVizinhoOut]
     incluidos: list[GrupoIncluidoOut]
+    grupos_do_plano: list[GrupoNoPlanoOut] = Field(
+        description="cada grupo do plano com o bloco (pré, principal, pós) e a etapa"
+    )
+    unidades_do_plano: list[UnidadeNoPlanoOut] = Field(
+        description="cada unidade com o papel, o que tem dentro e os recursos mais caros"
+    )
+    etapas_da_conta: int = Field(description="quantas etapas a ordem de migração da conta tem")
     ligacoes: list[LigacaoOut]
     ordens: list[OrdemOut]
     fora_do_plano: list[CustoPorNome]
@@ -343,6 +480,7 @@ class MigrationPlanResponse(BaseModel):
     @classmethod
     def de(cls, r: PlanoCotado) -> MigrationPlanResponse:
         p, ctx = r.plano, r.contexto
+        grupos, unidades, etapas = _composicao(r)
         return cls(
             moeda=ctx.moeda,
             provedor_origem=ctx.provedor_origem,
@@ -391,6 +529,9 @@ class MigrationPlanResponse(BaseModel):
             antes=[GrupoVizinhoOut.de(v) for v in p.antes],
             para_tras=[GrupoVizinhoOut.de(v) for v in p.para_tras],
             incluidos=[GrupoIncluidoOut.de(i) for i in p.incluidos],
+            grupos_do_plano=grupos,
+            unidades_do_plano=unidades,
+            etapas_da_conta=etapas,
             ligacoes=[
                 LigacaoOut(de=x.de, para=x.para, natureza=x.natureza.value, portas=list(x.portas))
                 for x in p.ligacoes
