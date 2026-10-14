@@ -36,6 +36,7 @@ from app.use_cases.analysis.consultar_acoplamento import (
 )
 from app.use_cases.analysis.escopo_de_migracao import (
     InventarioAusenteError,
+    InventarioNaoCorrespondeError,
     TopologiaDivergenteError,
 )
 from app.use_cases.inventory.consultas import InventarioNaoProcessadoError
@@ -63,15 +64,25 @@ _TRADUCAO: dict[type[Exception], tuple[int, str, bool]] = {
     InventarioAusenteError: (status.HTTP_409_CONFLICT, "INVENTARIO_AUSENTE", False),
     InventarioNaoProcessadoError: (status.HTTP_409_CONFLICT, "INVENTARIO_NAO_PROCESSADO", True),
     TopologiaDivergenteError: (status.HTTP_409_CONFLICT, "TOPOLOGIA_DIVERGENTE", False),
+    InventarioNaoCorrespondeError: (status.HTTP_409_CONFLICT, "INVENTARIO_NAO_CORRESPONDE", False),
     EscolhaInvalidaError: (status.HTTP_422_UNPROCESSABLE_ENTITY, "ESCOLHA_INVALIDA", False),
 }
 _ERROS = tuple(_TRADUCAO)
 
 
 def _traduzir(e: Exception) -> HTTPException:
+    # Inventário de outra conta: as contas dos dois lados vão junto, para a tela dizer qual enviar
+    extra = (
+        {
+            "contas_da_fatura": list(e.correspondencia.contas_da_fatura),
+            "contas_do_inventario": list(e.correspondencia.contas_do_inventario),
+        }
+        if isinstance(e, InventarioNaoCorrespondeError)
+        else {}
+    )
     for tipo, (codigo_http, codigo, retryable) in _TRADUCAO.items():
         if isinstance(e, tipo):
-            return erro(codigo_http, codigo, str(e), retryable=retryable)
+            return erro(codigo_http, codigo, str(e), retryable=retryable, **extra)
     raise e
 
 

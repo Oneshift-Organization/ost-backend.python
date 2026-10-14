@@ -9,6 +9,7 @@ from openpyxl import load_workbook  # type: ignore[import-untyped]
 
 from app.infrastructure.exports.plano_xlsx import montar_xlsx
 from app.schemas.migration_scope import (
+    CorrespondenciaOut,
     EscolhaOut,
     GrupoVizinhoOut,
     LigacaoOut,
@@ -75,6 +76,15 @@ def _plano() -> MigrationPlanResponse:
         ligacoes=[LigacaoOut(de="EC2", para="RDS", natureza="dados", portas=["tcp/5432"])],
         ordens=[OrdemOut(ordem=2, grupos=["auth + checkout"]), OrdemOut(ordem=None, grupos=["x"])],
         fora_do_plano=[],
+        correspondencia=CorrespondenciaOut(
+            status="ok",
+            liga_custo=True,
+            fracao_encontrada=0.82,
+            contas_da_fatura=["111"],
+            contas_do_inventario=["111"],
+            contas_sem_inventario=[],
+            mensagem="O inventário cobre 82% do custo com recurso identificado.",
+        ),
         premissas=[],
     )
 

@@ -104,6 +104,22 @@ Cada recurso do escopo é cotado pelo que é, com o preço que a própria análi
 (`Content-Disposition: attachment`), com as abas Resumo, Vão junto, Antes, Para
 trás, Serviços, Ligações e Ordem.
 
+## Fatura e inventário: a correspondência
+
+As duas respostas trazem `correspondencia`, que diz se o inventário casa com a fatura:
+
+| `status` | quando | o que muda |
+|---|---|---|
+| `ok` | o inventário cobre ao menos 80% do custo com ID de recurso | nada |
+| `parcial` | cobre menos; `contas_sem_inventario` diz o que falta | a tela avisa; custo e plano só da parte coberta |
+| `sem_id_de_recurso` | fatura resumida (Cost Explorer, Cost Table): nenhuma linha traz o ID do recurso | `liga_custo=false`: aplicações e o que migra junto vêm só do inventário, sem custo; plano só por aplicação (por serviço dá `422 ESCOLHA_INVALIDA`) |
+
+Inventário de **outra conta** não chega aqui: o `POST /v1/analyses/start` recusa com
+`422 INVENTARIO_NAO_CORRESPONDE` antes de criar o job. Na AWS e na Azure, contas sem
+nenhuma em comum já bastam (nome coincidente de bucket ou banco não é o mesmo recurso);
+no GCP e na OCI a fatura traz outra noção de conta (conta de faturamento, tenant), então
+vale só "nenhum recurso casou".
+
 ## Erros
 
 Envelope `{codigo, mensagem, retryable}`.
@@ -117,6 +133,7 @@ Envelope `{codigo, mensagem, retryable}`.
 | 409 | `INVENTARIO_AUSENTE` | análise sem inventário: a tela mostra o bloqueio e o upload |
 | 409 | `INVENTARIO_NAO_PROCESSADO` | o inventário da análise não está `done` (`retryable=true`) |
 | 409 | `TOPOLOGIA_DIVERGENTE` | o inventário mudou desde a análise |
+| 409 | `INVENTARIO_NAO_CORRESPONDE` | análise feita antes da validação com inventário de outra conta; vem com `contas_da_fatura` e `contas_do_inventario` |
 | 422 | `ESCOLHA_INVALIDA` | escolha vazia, ou com aplicação, serviço ou grupo que a análise não tem |
 
 ## Limites

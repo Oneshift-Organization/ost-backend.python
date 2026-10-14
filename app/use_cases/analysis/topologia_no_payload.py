@@ -46,6 +46,10 @@ from app.domain.services.correlacao_inventario import (
     IndiceDeApelidos,
     correlacionar,
 )
+from app.domain.services.correspondencia_inventario import (
+    Correspondencia,
+    avaliar_correspondencia,
+)
 from app.domain.services.instance_shape import parse_instance_shape
 from app.domain.services.topologia import analisar_topologia
 from app.domain.services.topologia.indice import Indice
@@ -123,6 +127,16 @@ class MontarTopologiaUseCase:
             custos=custos,
         )
 
+    async def correspondencia(
+        self, *, user_id: UUID, inventario_id: UUID, report_id: UUID
+    ) -> Correspondencia:
+        """O inventário é da mesma conta da fatura? Antes de criar o job (RI14)."""
+        inventario = await obter_do_usuario(self._inventarios, inventario_id, user_id)
+        exigir_processado(inventario)
+        conteudo = await self._inventarios.carregar_conteudo(inventario)
+        custos = await self._custos.custos_por_recurso(report_id, user_id)
+        return avaliar_correspondencia(conteudo, custos, correlacionar(conteudo, custos))
+
 
 def montar_topologia(
     *,
@@ -180,9 +194,7 @@ def _servicos(
             "grupos": list(d.grupos),
             "ondas": list(d.ondas),
             "migra_junto_com": [vizinho(v) for v in d.migra_junto_com],
-            "depende_de": [
-                {"servico": v.servico, "natureza": v.natureza} for v in d.depende_de
-            ],
+            "depende_de": [{"servico": v.servico, "natureza": v.natureza} for v in d.depende_de],
             "dependentes": d.dependentes,
             "banco_compartilhado": d.banco_compartilhado,
             "grupo_grande": d.grupo_grande,

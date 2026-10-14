@@ -23,6 +23,7 @@ from app.domain.analysis import MigrationContext
 from app.domain.entities.billing_report import BillingReport, JobStatus
 from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
+from app.domain.services.correspondencia_inventario import SEM_CORRESPONDENCIA
 from app.use_cases.analysis.run_analysis_pipeline import (
     build_pipeline_llm_input_payload,
     conversor_da_analise,
@@ -126,6 +127,18 @@ class MontarPayloadDoAgenteUseCase:
             raise PayloadDoAgenteError(
                 "INVENTARIO_NAO_ENCONTRADO", str(e), categoria=Categoria.NAO_ENCONTRADO
             ) from e
+        # Inventário de outra conta: tudo que cruza fatura e inventário sairia vazio
+        correspondencia = await self._topologia.correspondencia(
+            user_id=user_id, inventario_id=inventario_id, report_id=report_id
+        )
+        if correspondencia.status == SEM_CORRESPONDENCIA:
+            raise PayloadDoAgenteError(
+                "INVENTARIO_NAO_CORRESPONDE",
+                correspondencia.mensagem,
+                categoria=Categoria.INVALIDO,
+                contas_da_fatura=list(correspondencia.contas_da_fatura),
+                contas_do_inventario=list(correspondencia.contas_do_inventario),
+            )
 
     async def exigir_pronto(self, user_id: UUID, report_id: UUID) -> BillingReport:
         """O relatório existe, é do usuário e terminou a ingestão."""
