@@ -280,7 +280,7 @@ def montar_xlsx(doc: Documento) -> bytes:
             [
                 x.nome,
                 etapa(x.ordem),
-                ("Precisa estar antes" if x.lado == "antes" else "Depende do que sai")
+                ("Precisa estar antes" if x.lado == "antes" else "Pode vir depois")
                 + (" (nos dois sentidos)" if x.nos_dois_sentidos else ""),
                 ", ".join(x.ligado_a),
                 x.ligacao,

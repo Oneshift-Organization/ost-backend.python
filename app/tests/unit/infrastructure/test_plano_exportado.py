@@ -128,7 +128,7 @@ def test_documento_separa_pre_principal_e_pos_como_a_tela() -> None:
         (POS, 3, pos.itens[0].ordem),
     ]
     assert principal.itens[1].detalhe.startswith("Compartilha banco com")
-    assert [(i.nome, i.papel) for i in pos.itens] == [("monitor", "depende do escopo")]
+    assert [(i.nome, i.papel) for i in pos.itens] == [("monitor", "usa o plano")]
     assert pos.itens[0].detalhe.startswith("Chama ")
     assert (pre.custo, principal.custo, pos.custo) == (100.0, 700.0, 15.0)
     # Tudo incluído: nada fora do plano

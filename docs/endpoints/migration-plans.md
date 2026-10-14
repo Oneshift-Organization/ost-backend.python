@@ -81,7 +81,7 @@ Resposta (campos principais):
 | `vao_junto[]` | **Vão junto obrigatoriamente**: unidade, aplicação, custo, `motivo` pronto ("Compartilha banco com checkout (prod) (tcp/5432)"), `incluida_por_voce` |
 | `servicos_que_vem_junto[]` | só quando a escolha tem serviço: o que entrou e por quê ("AmazonEC2 acessa dados em AmazonRDS (tcp/5432)") |
 | `antes[]` | **Precisam estar no destino antes**: grupos que o escopo chama, com `naturezas`, `portas`, `ordem`, `custo`, `ligado_a` (os grupos do plano com que conversa); `nos_dois_sentidos` quando também chamam o escopo |
-| `para_tras[]` | **Ficam para trás e dependem do que sai**: grupos que chamam o escopo |
+| `para_tras[]` | **Podem vir depois**: grupos que usam o que vai migrar (chamam o escopo); incluídos, vão para a pós-migração |
 | `incluidos[]` | os grupos de `incluir_grupos`, cada um com `lado`: `antes` = **pré-migração** (o plano o chama), `depois` = **pós-migração** (ele chama o plano), `sem_ligacao` (o que o ligava ao plano saiu). Mais `ordem`, `custo`, `aplicacoes`, `ligado_a` (pré: quem do plano o chama; pós: quem do plano ele chama), `naturezas`, `portas`. O lado sai do sentido das ligações, não de onde o usuário clicou: o mesmo pedido dá o mesmo plano |
 | `ligacoes[]` | como os serviços do escopo se chamam |
 | `ordens[]` | grupos do escopo por ordem de migração |
