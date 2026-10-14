@@ -73,11 +73,17 @@ def avaliar_correspondencia(
 ) -> Correspondencia:
     contas_fatura = tuple(sorted({x.conta for x in custos.por_recurso if x.conta}))
     contas_inventario = tuple(sorted({r.conta for r in inventario.recursos if r.conta}))
-    sem_inventario = tuple(
-        sorted(
-            {lac.conta for lac in correlacao.lacunas_por_escopo if lac.conta}
-            - set(contas_inventario)
+    comparavel = inventario.provedor.lower() in _CONTA_COMPARAVEL
+    # Só onde "conta" é a mesma coisa dos dois lados; no GCP sairia a conta de faturamento
+    sem_inventario = (
+        tuple(
+            sorted(
+                {lac.conta for lac in correlacao.lacunas_por_escopo if lac.conta}
+                - set(contas_inventario)
+            )
         )
+        if comparavel
+        else ()
     )
 
     def com(status: str, mensagem: str) -> Correspondencia:
@@ -105,10 +111,7 @@ def avaliar_correspondencia(
 
     em_comum = set(contas_fatura) & set(contas_inventario)
     contas_distintas = (
-        inventario.provedor.lower() in _CONTA_COMPARAVEL
-        and bool(contas_fatura)
-        and bool(contas_inventario)
-        and not em_comum
+        comparavel and bool(contas_fatura) and bool(contas_inventario) and not em_comum
     )
     # Contas sem nenhuma em comum: o que casou foi coincidência de nome (bucket, banco com o
     # mesmo identificador em contas diferentes), não o mesmo recurso

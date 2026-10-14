@@ -82,3 +82,10 @@ def test_inventario_que_cobre_so_parte_diz_a_conta_que_falta() -> None:
     assert (r.status, r.liga_custo) == (PARCIAL, True)
     assert r.contas_sem_inventario == ("222",)
     assert "222" in r.mensagem
+
+
+def test_no_gcp_a_conta_de_faturamento_nao_vira_conta_que_falta() -> None:
+    inv = replace(inventario([vm("vm-1", conta="projeto-a")]), provedor="gcp")
+    r = _avaliar(inv, _custos(("vm-1", "01ABCD", "30"), ("vm-2", "01ABCD", "70")))
+    assert (r.status, r.contas_sem_inventario) == (PARCIAL, ())
+    assert "01ABCD" not in r.mensagem
