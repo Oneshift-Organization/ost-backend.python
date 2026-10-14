@@ -1,0 +1,1473 @@
+{
+ "unidades": [
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-0510ab87ea750bf2f",
+   "nome": "relatorios (prod) · sa-east-1",
+   "aplicacao": "relatorios",
+   "ambiente": "prod",
+   "regiao": "sa-east-1",
+   "conta": "222222222222",
+   "recursos": 3,
+   "tipos": {
+    "disco": 1,
+    "instancia": 2
+   },
+   "grupo": "arn:aws:ec2:sa-east-1:222222222222:instance/i-0510ab87ea750bf2f",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 64.4
+   },
+   "custo": 64.4
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-649aa70b2716fffc4",
+   "nome": "monitoramento (prod) · sa-east-1",
+   "aplicacao": "monitoramento",
+   "ambiente": "prod",
+   "regiao": "sa-east-1",
+   "conta": "222222222222",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:sa-east-1:222222222222:instance/i-649aa70b2716fffc4",
+   "ferramenta": false,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8970cb6ab9bfcefd4",
+   "nome": "bastion (prod) · sa-east-1",
+   "aplicacao": "bastion",
+   "ambiente": "prod",
+   "regiao": "sa-east-1",
+   "conta": "222222222222",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8970cb6ab9bfcefd4",
+   "ferramenta": true,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8b5371abf21865ad2",
+   "nome": "busca (prod) · sa-east-1",
+   "aplicacao": "busca",
+   "ambiente": "prod",
+   "regiao": "sa-east-1",
+   "conta": "222222222222",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8b5371abf21865ad2",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 11.53
+   },
+   "custo": 11.53
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-bd677a0c6442b0812",
+   "nome": "auth (prod) · sa-east-1",
+   "aplicacao": "auth",
+   "ambiente": "prod",
+   "regiao": "sa-east-1",
+   "conta": "222222222222",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:sa-east-1:222222222222:instance/i-bd677a0c6442b0812",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 11.51
+   },
+   "custo": 11.51
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:444444444444:instance/i-230d4fdeca4f2df42",
+   "nome": "monitoramento (data) · sa-east-1",
+   "aplicacao": "monitoramento",
+   "ambiente": "data",
+   "regiao": "sa-east-1",
+   "conta": "444444444444",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:sa-east-1:444444444444:instance/i-230d4fdeca4f2df42",
+   "ferramenta": false,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:444444444444:instance/i-f0f25d4ba79e4771f",
+   "nome": "bastion (data) · sa-east-1",
+   "aplicacao": "bastion",
+   "ambiente": "data",
+   "regiao": "sa-east-1",
+   "conta": "444444444444",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:sa-east-1:444444444444:instance/i-f0f25d4ba79e4771f",
+   "ferramenta": false,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-05087defded4c23a9",
+   "nome": "relatorios (prod) · us-east-1",
+   "aplicacao": "relatorios",
+   "ambiente": "prod",
+   "regiao": "us-east-1",
+   "conta": "222222222222",
+   "recursos": 59,
+   "tipos": {
+    "balanceador": 2,
+    "banco": 10,
+    "bucket": 2,
+    "cache": 4,
+    "cluster_kubernetes": 1,
+    "disco": 10,
+    "instancia": 30
+   },
+   "grupo": "arn:aws:ec2:us-east-1:222222222222:instance/i-05087defded4c23a9",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 2459.98,
+    "AmazonS3": 418.96,
+    "AmazonRDS": 293.64,
+    "Amazon Elastic Container Service for Kubernetes": 74.4,
+    "AmazonElastiCache": 73.29,
+    "Amazon Elastic Load Balancing": 34.08
+   },
+   "custo": 3354.35
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-077610d8651831985",
+   "nome": "ingestao (prod) · us-east-1",
+   "aplicacao": "ingestao",
+   "ambiente": "prod",
+   "regiao": "us-east-1",
+   "conta": "222222222222",
+   "recursos": 64,
+   "tipos": {
+    "balanceador": 2,
+    "banco": 11,
+    "bucket": 4,
+    "cache": 5,
+    "cluster_kubernetes": 2,
+    "disco": 10,
+    "instancia": 30
+   },
+   "grupo": "arn:aws:ec2:us-east-1:222222222222:instance/i-077610d8651831985",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 2296.45,
+    "AmazonS3": 1087.8,
+    "AmazonRDS": 900.62,
+    "AmazonElastiCache": 190.29,
+    "Amazon Elastic Container Service for Kubernetes": 148.8,
+    "Amazon Elastic Load Balancing": 34.08
+   },
+   "custo": 4658.04
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b",
+   "nome": "busca (prod) · us-east-1",
+   "aplicacao": "busca",
+   "ambiente": "prod",
+   "regiao": "us-east-1",
+   "conta": "222222222222",
+   "recursos": 69,
+   "tipos": {
+    "balanceador": 2,
+    "banco": 8,
+    "bucket": 2,
+    "cache": 10,
+    "disco": 13,
+    "instancia": 33,
+    "outro": 1
+   },
+   "grupo": "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 2918.7,
+    "AmazonRDS": 717.8,
+    "AmazonS3": 649.54,
+    "AmazonElastiCache": 465.65,
+    "Amazon Elastic Load Balancing": 34.08
+   },
+   "custo": 4785.77
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "nome": "checkout (prod)",
+   "aplicacao": "checkout",
+   "ambiente": "prod",
+   "regiao": "us-east-1",
+   "conta": "222222222222",
+   "recursos": 43,
+   "tipos": {
+    "balanceador": 3,
+    "banco": 11,
+    "bucket": 2,
+    "cache": 3,
+    "cluster_kubernetes": 1,
+    "disco": 3,
+    "instancia": 20
+   },
+   "grupo": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 1165.16,
+    "AmazonS3": 669.34,
+    "AmazonRDS": 627.7,
+    "AmazonECR": 187.14,
+    "Amazon Elastic Container Service for Kubernetes": 74.4,
+    "Amazon Elastic Load Balancing": 51.11,
+    "AmazonElastiCache": 25.13
+   },
+   "custo": 2799.98
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-0b06e9e2c9f405868",
+   "nome": "auth (prod) · us-east-1",
+   "aplicacao": "auth",
+   "ambiente": "prod",
+   "regiao": "us-east-1",
+   "conta": "222222222222",
+   "recursos": 48,
+   "tipos": {
+    "balanceador": 1,
+    "banco": 6,
+    "bucket": 4,
+    "cache": 6,
+    "disco": 6,
+    "instancia": 24,
+    "outro": 1
+   },
+   "grupo": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonRDS": 9310.76,
+    "AmazonEC2": 2377.21,
+    "AmazonS3": 1733.22,
+    "AmazonElastiCache": 752.36,
+    "Amazon Elastic Load Balancing": 17.04
+   },
+   "custo": 14190.59
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-0f31bec6be5cc121b",
+   "nome": "pagamentos (prod)",
+   "aplicacao": "pagamentos",
+   "ambiente": "prod",
+   "regiao": "us-east-1",
+   "conta": "222222222222",
+   "recursos": 51,
+   "tipos": {
+    "balanceador": 1,
+    "banco": 10,
+    "bucket": 2,
+    "cache": 7,
+    "disco": 6,
+    "instancia": 24,
+    "outro": 1
+   },
+   "grupo": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonRDS": 7370.27,
+    "AmazonEC2": 3142.65,
+    "AmazonS3": 669.34,
+    "AmazonElastiCache": 323.68,
+    "Amazon Elastic Load Balancing": 17.04
+   },
+   "custo": 11522.98
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7",
+   "nome": "catalogo (prod)",
+   "aplicacao": "catalogo",
+   "ambiente": "prod",
+   "regiao": "us-east-1",
+   "conta": "222222222222",
+   "recursos": 57,
+   "tipos": {
+    "balanceador": 5,
+    "banco": 6,
+    "bucket": 2,
+    "cache": 1,
+    "cluster_kubernetes": 1,
+    "disco": 7,
+    "instancia": 35
+   },
+   "grupo": "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 2570.8,
+    "AmazonRDS": 1033.51,
+    "AmazonS3": 438.26,
+    "Amazon Elastic Load Balancing": 85.19,
+    "Amazon Elastic Container Service for Kubernetes": 74.4,
+    "AmazonElastiCache": 42.69
+   },
+   "custo": 4244.85
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "nome": "monitoramento (prod) · us-east-1",
+   "aplicacao": "monitoramento",
+   "ambiente": "prod",
+   "regiao": "us-east-1",
+   "conta": "222222222222",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "ferramenta": false,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "nome": "bastion (prod) · us-east-1",
+   "aplicacao": "bastion",
+   "ambiente": "prod",
+   "regiao": "us-east-1",
+   "conta": "222222222222",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "ferramenta": true,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "nome": "checkout (data)",
+   "aplicacao": "checkout",
+   "ambiente": "data",
+   "regiao": "us-east-1",
+   "conta": "444444444444",
+   "recursos": 27,
+   "tipos": {
+    "banco": 1,
+    "cache": 2,
+    "disco": 7,
+    "instancia": 17
+   },
+   "grupo": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 2646.74,
+    "AmazonElastiCache": 39.78,
+    "AmazonRDS": 34.67
+   },
+   "custo": 2721.19
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a8cef26738c71d7",
+   "nome": "pagamentos (data)",
+   "aplicacao": "pagamentos",
+   "ambiente": "data",
+   "regiao": "us-east-1",
+   "conta": "444444444444",
+   "recursos": 19,
+   "tipos": {
+    "banco": 4,
+    "cache": 1,
+    "disco": 2,
+    "instancia": 12
+   },
+   "grupo": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 1096.81,
+    "AmazonRDS": 284.8,
+    "AmazonElastiCache": 6.28
+   },
+   "custo": 1387.89
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4",
+   "nome": "catalogo (data)",
+   "aplicacao": "catalogo",
+   "ambiente": "data",
+   "regiao": "us-east-1",
+   "conta": "444444444444",
+   "recursos": 23,
+   "tipos": {
+    "balanceador": 1,
+    "banco": 1,
+    "cache": 4,
+    "disco": 3,
+    "instancia": 14
+   },
+   "grupo": "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 833.63,
+    "AmazonElastiCache": 46.07,
+    "AmazonRDS": 17.34,
+    "Amazon Elastic Load Balancing": 17.04
+   },
+   "custo": 914.08
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3",
+   "nome": "busca (data) · us-east-1",
+   "aplicacao": "busca",
+   "ambiente": "data",
+   "regiao": "us-east-1",
+   "conta": "444444444444",
+   "recursos": 24,
+   "tipos": {
+    "balanceador": 1,
+    "banco": 5,
+    "cache": 3,
+    "disco": 5,
+    "instancia": 10
+   },
+   "grupo": "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 897.35,
+    "AmazonRDS": 267.47,
+    "AmazonElastiCache": 45.72,
+    "Amazon Elastic Load Balancing": 17.04
+   },
+   "custo": 1227.58
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-08b51b2bb7402dec4",
+   "nome": "ingestao (data)",
+   "aplicacao": "ingestao",
+   "ambiente": "data",
+   "regiao": "us-east-1",
+   "conta": "444444444444",
+   "recursos": 14,
+   "tipos": {
+    "banco": 5,
+    "cache": 2,
+    "disco": 1,
+    "instancia": 6
+   },
+   "grupo": "arn:aws:ec2:us-east-1:444444444444:instance/i-08b51b2bb7402dec4",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 442.77,
+    "AmazonRDS": 326.5,
+    "AmazonElastiCache": 88.23
+   },
+   "custo": 857.5
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-163c407bf0708a980",
+   "nome": "auth (data)",
+   "aplicacao": "auth",
+   "ambiente": "data",
+   "regiao": "us-east-1",
+   "conta": "444444444444",
+   "recursos": 23,
+   "tipos": {
+    "banco": 3,
+    "disco": 2,
+    "instancia": 17,
+    "outro": 1
+   },
+   "grupo": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 1523.05,
+    "AmazonRDS": 232.07
+   },
+   "custo": 1755.12
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-20fca78fc92fd978a",
+   "nome": "relatorios (data)",
+   "aplicacao": "relatorios",
+   "ambiente": "data",
+   "regiao": "us-east-1",
+   "conta": "444444444444",
+   "recursos": 21,
+   "tipos": {
+    "banco": 3,
+    "cache": 4,
+    "disco": 3,
+    "instancia": 11
+   },
+   "grupo": "arn:aws:ec2:us-east-1:444444444444:instance/i-20fca78fc92fd978a",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonEC2": 935.06,
+    "AmazonElastiCache": 163.24,
+    "AmazonRDS": 86.68
+   },
+   "custo": 1184.98
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "nome": "monitoramento (data) · us-east-1",
+   "aplicacao": "monitoramento",
+   "ambiente": "data",
+   "regiao": "us-east-1",
+   "conta": "444444444444",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "ferramenta": false,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "nome": "bastion (data) · us-east-1",
+   "aplicacao": "bastion",
+   "ambiente": "data",
+   "regiao": "us-east-1",
+   "conta": "444444444444",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "ferramenta": true,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:ec2:us-west-2:444444444444:instance/i-4738e4c5d32a62b55",
+   "nome": "bastion (data) · us-west-2",
+   "aplicacao": "bastion",
+   "ambiente": "data",
+   "regiao": "us-west-2",
+   "conta": "444444444444",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:us-west-2:444444444444:instance/i-4738e4c5d32a62b55",
+   "ferramenta": false,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:ec2:us-west-2:444444444444:instance/i-dd3feea79aa0c7baf",
+   "nome": "monitoramento (data) · us-west-2",
+   "aplicacao": "monitoramento",
+   "ambiente": "data",
+   "regiao": "us-west-2",
+   "conta": "444444444444",
+   "recursos": 1,
+   "tipos": {
+    "instancia": 1
+   },
+   "grupo": "arn:aws:ec2:us-west-2:444444444444:instance/i-dd3feea79aa0c7baf",
+   "ferramenta": false,
+   "servicos": {},
+   "custo": 0
+  },
+  {
+   "id": "arn:aws:rds:sa-east-1:222222222222:cluster:ingestao-aurora-postgresql",
+   "nome": "ingestao (prod) · sa-east-1",
+   "aplicacao": "ingestao",
+   "ambiente": "prod",
+   "regiao": "sa-east-1",
+   "conta": "222222222222",
+   "recursos": 2,
+   "tipos": {
+    "banco": 1,
+    "outro": 1
+   },
+   "grupo": "arn:aws:ec2:sa-east-1:222222222222:instance/i-649aa70b2716fffc4",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonRDS": 109.69
+   },
+   "custo": 109.69
+  },
+  {
+   "id": "arn:aws:s3:::busca-standard-779a12b7",
+   "nome": "busca (data) · us-west-2",
+   "aplicacao": "busca",
+   "ambiente": "data",
+   "regiao": "us-west-2",
+   "conta": "444444444444",
+   "recursos": 1,
+   "tipos": {
+    "bucket": 1
+   },
+   "grupo": "arn:aws:s3:::busca-standard-779a12b7",
+   "ferramenta": false,
+   "servicos": {
+    "AmazonS3": 0.24,
+    "AmazonCloudWatch": 0.0
+   },
+   "custo": 0.24
+  }
+ ],
+ "grupos": [
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-0510ab87ea750bf2f",
+   "nome": "relatorios (prod) · sa-east-1",
+   "unidades": [
+    "arn:aws:ec2:sa-east-1:222222222222:instance/i-0510ab87ea750bf2f"
+   ],
+   "onda": null,
+   "criticidade": "baixa",
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-649aa70b2716fffc4",
+   "nome": "ingestao (prod) · sa-east-1 + monitoramento (prod) · sa-east-1",
+   "unidades": [
+    "arn:aws:ec2:sa-east-1:222222222222:instance/i-649aa70b2716fffc4",
+    "arn:aws:rds:sa-east-1:222222222222:cluster:ingestao-aurora-postgresql"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8970cb6ab9bfcefd4",
+   "nome": "bastion (prod) · sa-east-1",
+   "unidades": [
+    "arn:aws:ec2:sa-east-1:222222222222:instance/i-8970cb6ab9bfcefd4"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8b5371abf21865ad2",
+   "nome": "busca (prod) · sa-east-1",
+   "unidades": [
+    "arn:aws:ec2:sa-east-1:222222222222:instance/i-8b5371abf21865ad2"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:222222222222:instance/i-bd677a0c6442b0812",
+   "nome": "auth (prod) · sa-east-1",
+   "unidades": [
+    "arn:aws:ec2:sa-east-1:222222222222:instance/i-bd677a0c6442b0812"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:444444444444:instance/i-230d4fdeca4f2df42",
+   "nome": "monitoramento (data) · sa-east-1",
+   "unidades": [
+    "arn:aws:ec2:sa-east-1:444444444444:instance/i-230d4fdeca4f2df42"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:sa-east-1:444444444444:instance/i-f0f25d4ba79e4771f",
+   "nome": "bastion (data) · sa-east-1",
+   "unidades": [
+    "arn:aws:ec2:sa-east-1:444444444444:instance/i-f0f25d4ba79e4771f"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-05087defded4c23a9",
+   "nome": "relatorios (prod) · us-east-1",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-05087defded4c23a9"
+   ],
+   "onda": 2,
+   "criticidade": "baixa",
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-077610d8651831985"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-077610d8651831985",
+   "nome": "ingestao (prod) · us-east-1",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-077610d8651831985"
+   ],
+   "onda": 1,
+   "criticidade": "baixa",
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b",
+   "nome": "busca (prod) · us-east-1",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b"
+   ],
+   "onda": 1,
+   "criticidade": "alta",
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "nome": "auth (prod) · us-east-1 + checkout (prod) + pagamentos (prod)",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-0b06e9e2c9f405868",
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-0f31bec6be5cc121b"
+   ],
+   "onda": 2,
+   "criticidade": "alta",
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7",
+   "nome": "catalogo (prod)",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7"
+   ],
+   "onda": 1,
+   "criticidade": "alta",
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "nome": "monitoramento (prod) · us-east-1",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8"
+   ],
+   "onda": 3,
+   "criticidade": null,
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-05087defded4c23a9",
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-077610d8651831985",
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b",
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "nome": "bastion (prod) · us-east-1",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "nome": "auth (data) + checkout (data) + pagamentos (data)",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-03a8cef26738c71d7",
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-163c407bf0708a980"
+   ],
+   "onda": 2,
+   "criticidade": "alta",
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4",
+   "nome": "catalogo (data)",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4"
+   ],
+   "onda": 1,
+   "criticidade": "alta",
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3",
+   "nome": "busca (data) · us-east-1",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3"
+   ],
+   "onda": 1,
+   "criticidade": "alta",
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-08b51b2bb7402dec4",
+   "nome": "ingestao (data)",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-08b51b2bb7402dec4"
+   ],
+   "onda": 1,
+   "criticidade": "baixa",
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-20fca78fc92fd978a",
+   "nome": "relatorios (data)",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-20fca78fc92fd978a"
+   ],
+   "onda": 2,
+   "criticidade": "baixa",
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-08b51b2bb7402dec4"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "nome": "monitoramento (data) · us-east-1",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0"
+   ],
+   "onda": 3,
+   "criticidade": null,
+   "depende_de": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4",
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3",
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-08b51b2bb7402dec4",
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-20fca78fc92fd978a"
+   ]
+  },
+  {
+   "id": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "nome": "bastion (data) · us-east-1",
+   "unidades": [
+    "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:us-west-2:444444444444:instance/i-4738e4c5d32a62b55",
+   "nome": "bastion (data) · us-west-2",
+   "unidades": [
+    "arn:aws:ec2:us-west-2:444444444444:instance/i-4738e4c5d32a62b55"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:ec2:us-west-2:444444444444:instance/i-dd3feea79aa0c7baf",
+   "nome": "monitoramento (data) · us-west-2",
+   "unidades": [
+    "arn:aws:ec2:us-west-2:444444444444:instance/i-dd3feea79aa0c7baf"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  },
+  {
+   "id": "arn:aws:s3:::busca-standard-779a12b7",
+   "nome": "busca (data) · us-west-2",
+   "unidades": [
+    "arn:aws:s3:::busca-standard-779a12b7"
+   ],
+   "onda": null,
+   "criticidade": null,
+   "depende_de": []
+  }
+ ],
+ "dependencias": [
+  {
+   "de": "arn:aws:ec2:sa-east-1:222222222222:instance/i-649aa70b2716fffc4",
+   "para": "arn:aws:rds:sa-east-1:222222222222:cluster:ingestao-aurora-postgresql",
+   "natureza": "dados",
+   "acoplamento": "forte",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/5432 liberada em ingestao-dados"
+  },
+  {
+   "de": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8970cb6ab9bfcefd4",
+   "para": "arn:aws:ec2:sa-east-1:222222222222:instance/i-0510ab87ea750bf2f",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em relatorios-app"
+  },
+  {
+   "de": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8970cb6ab9bfcefd4",
+   "para": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8b5371abf21865ad2",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em busca-app"
+  },
+  {
+   "de": "arn:aws:ec2:sa-east-1:222222222222:instance/i-8970cb6ab9bfcefd4",
+   "para": "arn:aws:ec2:sa-east-1:222222222222:instance/i-bd677a0c6442b0812",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em auth-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-05087defded4c23a9",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-077610d8651831985",
+   "natureza": "servico",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/8080 liberada em ingestao-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7",
+   "natureza": "servico",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/8080 liberada em catalogo-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0b06e9e2c9f405868",
+   "natureza": "dados",
+   "acoplamento": "forte",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/5432 liberada em auth-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0f31bec6be5cc121b",
+   "natureza": "servico",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/8080 liberada em pagamentos-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7",
+   "natureza": "servico",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/8080 liberada em catalogo-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-0f31bec6be5cc121b",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0b06e9e2c9f405868",
+   "natureza": "dados",
+   "acoplamento": "forte",
+   "portas": [
+    "tcp/5432",
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/8080 liberada em auth-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b",
+   "natureza": "encaminhamento",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": "balanceador_compartilhado",
+   "evidencia": "tcp/8080 liberada em busca-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-05087defded4c23a9",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em relatorios-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-077610d8651831985",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em ingestao-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em busca-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em checkout-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0b06e9e2c9f405868",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em auth-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0f31bec6be5cc121b",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em pagamentos-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-652f2b4a6477881c8",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em catalogo-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-05087defded4c23a9",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em relatorios-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-077610d8651831985",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em ingestao-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0900aa35dd8e6bd9b",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em busca-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-09be857b785dee226",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em checkout-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0b06e9e2c9f405868",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em auth-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-0f31bec6be5cc121b",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em pagamentos-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+   "para": "arn:aws:ec2:us-east-1:222222222222:instance/i-139f285c5b6a565e7",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em catalogo-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a8cef26738c71d7",
+   "natureza": "servico",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/8080 liberada em pagamentos-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4",
+   "natureza": "servico",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/8080 liberada em catalogo-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-163c407bf0708a980",
+   "natureza": "dados",
+   "acoplamento": "forte",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/5432 liberada em auth-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a8cef26738c71d7",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-163c407bf0708a980",
+   "natureza": "dados",
+   "acoplamento": "forte",
+   "portas": [
+    "tcp/5432",
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/5432 liberada em auth-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3",
+   "natureza": "encaminhamento",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": "balanceador_compartilhado",
+   "evidencia": "tcp/8080 liberada em busca-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4",
+   "natureza": "servico",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/8080 liberada em catalogo-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-20fca78fc92fd978a",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-08b51b2bb7402dec4",
+   "natureza": "servico",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/8080"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/8080 liberada em ingestao-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em checkout-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a8cef26738c71d7",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em pagamentos-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em catalogo-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em busca-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-08b51b2bb7402dec4",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em ingestao-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-163c407bf0708a980",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em auth-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-e9b7505c3ec5623a0",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-20fca78fc92fd978a",
+   "natureza": "dados",
+   "acoplamento": "fraco",
+   "portas": [
+    "tcp/5432"
+   ],
+   "rebaixada": "hub_de_dados",
+   "evidencia": "tcp/5432 liberada em relatorios-dados"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a7363787bcf6af0",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em checkout-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-03a8cef26738c71d7",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em pagamentos-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-03b4ecdc242dc2cc4",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em catalogo-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-04d99932b4c7c4fe3",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em busca-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-08b51b2bb7402dec4",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em ingestao-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-163c407bf0708a980",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em auth-app"
+  },
+  {
+   "de": "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c",
+   "para": "arn:aws:ec2:us-east-1:444444444444:instance/i-20fca78fc92fd978a",
+   "natureza": "administrativo",
+   "acoplamento": "nenhum",
+   "portas": [
+    "tcp/22"
+   ],
+   "rebaixada": null,
+   "evidencia": "tcp/22 liberada em relatorios-app"
+  }
+ ],
+ "ferramentas": [
+  "arn:aws:ec2:sa-east-1:222222222222:instance/i-8970cb6ab9bfcefd4",
+  "arn:aws:ec2:us-east-1:222222222222:instance/i-a068266cbbe798032",
+  "arn:aws:ec2:us-east-1:444444444444:instance/i-f8f5054e0c9d9535c"
+ ],
+ "fora_das_unidades": {
+  "AmazonEC2": 7476.3,
+  "AmazonRDS": 4060.05,
+  "Amazon Managed Streaming for Apache Kafka": 1639.18,
+  "AmazonElastiCache": 704.13,
+  "AmazonVPC": 539.12,
+  "AmazonS3": 457.05,
+  "Amazon Elastic Container Service for Kubernetes": 148.8,
+  "Amazon Elastic Load Balancing": 51.11,
+  "AmazonECR": 8.1,
+  "AmazonCloudWatch": 5.91,
+  "AmazonEFS": 0.0,
+  "Amazon Elastic Container Registry Public": 0.0
+ },
+ "custo_da_base": 92103.48,
+ "premissas": [
+  {
+   "campo": "chave_aplicacao",
+   "valor": "app",
+   "base": "Chave de aplicação detectada nas tags: presente em 100% dos recursos. Declare outra se não for esta."
+  },
+  {
+   "campo": "chave_ambiente",
+   "valor": "env",
+   "base": "Chave de ambiente detectada nas tags: presente em 100% dos recursos. Declare outra se não for esta."
+  },
+  {
+   "campo": "dependencias",
+   "valor": null,
+   "base": "Dependências vêm das regras de rede e do que foi declarado: o que a configuração permite, não o tráfego real."
+  }
+ ],
+ "bancos_compartilhados": [
+  {
+   "titulo": "Banco compartilhado entre aplicações",
+   "detalhe": "auth (data) é acessado também por checkout (data), pagamentos (data): migram juntos, ou exigem janela conjunta ou replicação.",
+   "recursos": [
+    "arn:aws:rds:us-east-1:444444444444:db:aurora-postgresql-auth-c74609",
+    "arn:aws:rds:us-east-1:444444444444:db:postgres-auth-8437b2",
+    "arn:aws:rds:us-east-1:444444444444:db:postgres-auth-b13894"
+   ]
+  },
+  {
+   "titulo": "Banco compartilhado entre aplicações",
+   "detalhe": "auth (prod) · us-east-1 é acessado também por checkout (prod), pagamentos (prod): migram juntos, ou exigem janela conjunta ou replicação.",
+   "recursos": [
+    "arn:aws:elasticache:us-east-1:222222222222:cluster:auth-276804-001",
+    "arn:aws:elasticache:us-east-1:222222222222:cluster:auth-4e55f1-001",
+    "arn:aws:elasticache:us-east-1:222222222222:cluster:auth-6761a6-001",
+    "arn:aws:elasticache:us-east-1:222222222222:cluster:auth-6d618b-001",
+    "arn:aws:elasticache:us-east-1:222222222222:cluster:auth-a15fd8-001"
+   ]
+  },
+  {
+   "titulo": "Banco compartilhado entre aplicações",
+   "detalhe": "ingestao (prod) · sa-east-1 é acessado também por monitoramento (prod) · sa-east-1: migram juntos, ou exigem janela conjunta ou replicação.",
+   "recursos": [
+    "arn:aws:rds:sa-east-1:222222222222:db:aurora-postgresql-ingestao-491821"
+   ]
+  }
+ ]
+}

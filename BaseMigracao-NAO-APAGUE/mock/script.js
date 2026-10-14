@@ -1,0 +1,775 @@
+const DATA_COM = /*__DADOS__*/null
+const DATA_SEM = /*__DADOS_SEM__*/null
+const LOGOS = /*__LOGOS__*/null
+let DATA = DATA_SEM
+
+const PROVIDER = { aws: 'AWS', azure: 'Azure', gcp: 'GCP', oci: 'OCI' }
+const LEVEL = {
+  low: { label: 'Baixa', icon: 'lock-open', hint: 'Depende pouco de recursos exclusivos da nuvem atual. Tende a migrar sem grandes mudanças.' },
+  medium: { label: 'Média', icon: 'lock-keyhole', hint: 'Usa alguns recursos próprios da nuvem atual. A migração pede ajustes e validação.' },
+  high: { label: 'Alta', icon: 'lock', hint: 'Depende de recursos exclusivos da nuvem atual. Migrar exige replanejar o serviço.' },
+  unknown: { label: 'A confirmar', icon: 'circle-dashed', hint: 'O catálogo ainda não tem essa informação para este serviço.' },
+}
+const LEVELS = ['low', 'medium', 'high', 'unknown']
+const CATEGORY = {
+  compute: 'Computação', database: 'Banco de dados', storage: 'Armazenamento', networking: 'Rede',
+  analytics: 'Dados e análise', ai_ml: 'IA', security_identity: 'Segurança e identidade',
+  management_tools: 'Gestão', containers: 'Contêineres', application_services: 'Integração',
+  unknown: 'Categoria não identificada',
+}
+const TYPE = {
+  virtual_server: 'Máquinas virtuais', managed_relational_database: 'Banco relacional gerenciado',
+  in_memory_database: 'Cache em memória', relational_database: 'Banco relacional', object_storage: 'Armazenamento de objetos',
+  managed_kubernetes: 'Kubernetes gerenciado', container_registry: 'Registro de contêineres',
+  web_application_firewall: 'Firewall de aplicação', virtual_private_cloud: 'Rede privada', dns: 'DNS',
+  network: 'Balanceamento e rede', monitoring: 'Monitoramento', queueing: 'Filas', translation: 'Tradução',
+  natural_language_processing: 'Processamento de linguagem', managed_airflow: 'Airflow gerenciado',
+  directory_services: 'Diretório', key_management: 'Gestão de chaves', secrets_management: 'Gestão de segredos',
+  security_command_center: 'Central de segurança', cost_management: 'Gestão de custos',
+  policy_enforcement: 'Conformidade', unknown: 'Tipo não identificado',
+}
+const typeOf = s => TYPE[s.tipo] ?? s.tipo.replaceAll('_', ' ')
+const STRATEGY = { rehost: 'Rehost: mover como está', replatform: 'Replatform: ajustes de plataforma', refactor: 'Refactor: reescrever partes' }
+const EFFORT = { baixo: 'baixo', medio: 'médio', alto: 'alto' }
+// Como ler a dependência a partir do escopo: o que ele usa (antes) e quem o usa (para trás)
+const USA = { dados: 'guarda dados que o escopo usa', servico: 'o escopo chama este serviço', encaminhamento: 'encaminha tráfego para o escopo', declarada: 'dependência declarada' }
+const USADO = { dados: 'lê dados do escopo', servico: 'chama um serviço do escopo', encaminhamento: 'recebe tráfego do escopo', declarada: 'dependência declarada' }
+const ENV = { prod: 'Produção', data: 'Dados', dev: 'Desenvolvimento', hml: 'Homologação', stage: 'Homologação' }
+const PAGE = 8
+const CAT_DE_TIPO = { managed_relational_database: 'database', relational_database: 'database', in_memory_database: 'database', object_storage: 'object_storage' }
+
+const usd = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' })
+const money = v => v == null ? '-' : usd.format(v)
+function short(v) {
+  if (v == null) return '-'
+  if (Math.abs(v) >= 1000) return `US$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`
+  return money(v)
+}
+const pct = v => `${Math.round(v * 100)}%`
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const icon = (name, cls = '') => `<i data-lucide="${name}" class="${cls}"></i>`
+const levelOf = s => s.nivel ?? 'unknown'
+const join = (names, max = 2) => names.length > max ? `${names.slice(0, max).join(', ')} e mais ${names.length - max}` : names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names.at(-1)}` : names.join('')
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
+function logo(p) {
+  const dark = document.documentElement.dataset.theme === 'dark' ||
+    (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches)
+  const src = p === 'aws' && !dark ? LOGOS.aws_light : LOGOS[p]
+  return `<img src="${src}" alt="${PROVIDER[p]}">`
+}
+function pill(level) {
+  const l = LEVEL[level]
+  return `<span class="pill ${level}">${icon(l.icon, 'ic-sm')}${l.label}</span>`
+}
+function ondasTxt(list) {
+  const o = [...new Set(list)].filter(x => x != null).sort((a, b) => a - b)
+  if (o.length === 0) return null
+  return o.length === 1 ? `onda ${o[0]}` : `ondas ${o.slice(0, -1).join(', ')} e ${o.at(-1)}`
+}
+const checkbox = on => `<span class="cb ${on ? 'on' : ''}">${on ? icon('check', 'ic-xs') : ''}</span>`
+
+let services = []
+const state = { q: '', levels: [], page: 1, selected: null, view: 'servico', panel: null }
+// O que o usuário escolheu migrar: aplicações e serviços, filtrados por ambiente; grupos incluídos à mão
+const plan = { apps: new Set(), servicos: new Set(), env: 'todos', extra: new Set() }
+const inv = { state: 'none', phase: 0, progress: 0, files: [], fresh: false }
+const notices = []
+let UNIT = new Map(), GROUP = new Map()
+
+function setData(d) {
+  DATA = d
+  services = [...DATA.servicos].sort((a, b) => b.custo - a.custo)
+  UNIT = new Map((DATA.escopo?.unidades ?? []).map(u => [u.id, u]))
+  GROUP = new Map((DATA.escopo?.grupos ?? []).map(g => [g.id, g]))
+}
+setData(DATA_SEM)
+state.selected = services[0].id
+
+const locked = () => !DATA.com_inventario
+const busy = () => inv.state === 'busy'
+const LOCK_ICON = () => busy() ? icon('loader-circle', 'spin') : icon('lock')
+const PHASES = ['Lendo o inventário', 'Refazendo a análise com o inventário']
+const fresh = () => inv.fresh ? 'fresh' : ''
+function veil(text, { row = false } = {}) {
+  const msg = busy() ? `Processando inventário · ${PHASES[inv.phase].toLowerCase()}...` : text
+  const cta = busy() ? 'Você pode continuar usando a tela' : `${icon('upload', 'ic-xs')}Importar inventário`
+  return `<div class="veil ${busy() ? 'busy' : ''} ${row ? 'row' : ''}" ${busy() ? '' : 'data-unlock'} role="${busy() ? 'status' : 'button'}" tabindex="${busy() ? -1 : 0}">
+    <span class="lk">${LOCK_ICON()}</span><div><p>${msg}</p><span class="cta">${cta}</span></div></div>`
+}
+function lockChip() {
+  return `<span class="lock-chip ${busy() ? 'busy' : ''}" ${busy() ? '' : 'data-unlock'}>${busy() ? icon('loader-circle', 'ic-xs spin') : icon('lock', 'ic-xs')}${busy() ? 'Processando' : 'Inventário'}</span>`
+}
+const lockTip = text => `<span class="tip">${icon('lock', 'ic-xs muted')}<span class="bubble">${text}</span></span>`
+
+/* ---------- Aplicações (do inventário) ---------- */
+
+const units = () => DATA.escopo?.unidades ?? []
+// Ferramenta de acesso (bastion) não é aplicação: não entra em grupo nem em onda
+const toolApps = () => new Set(units().filter(u => u.ferramenta).map(u => u.aplicacao))
+function appsList() {
+  const tools = toolApps()
+  const by = new Map()
+  for (const u of units()) {
+    if (!u.aplicacao || tools.has(u.aplicacao)) continue
+    const a = by.get(u.aplicacao) ?? { nome: u.aplicacao, units: [], custo: 0, envs: new Set(), regioes: new Set(), servicos: new Map(), ondas: new Set(), juntos: new Set(), compartilha: false }
+    a.units.push(u); a.custo += u.custo
+    if (u.ambiente) a.envs.add(u.ambiente)
+    if (u.regiao) a.regioes.add(u.regiao)
+    for (const [k, v] of Object.entries(u.servicos)) a.servicos.set(k, (a.servicos.get(k) ?? 0) + v)
+    const g = GROUP.get(u.grupo)
+    if (g) {
+      if (g.onda != null) a.ondas.add(g.onda)
+      for (const id of g.unidades) {
+        const o = UNIT.get(id)
+        if (o && o.aplicacao !== u.aplicacao) { a.juntos.add(o.aplicacao); a.compartilha = true }
+      }
+    }
+    by.set(u.aplicacao, a)
+  }
+  return [...by.values()].sort((a, b) => b.custo - a.custo)
+}
+function appsOfService(nome) {
+  const tools = toolApps()
+  const by = new Map()
+  for (const u of units()) {
+    const c = u.servicos[nome] ?? 0
+    if (c > 0 && !tools.has(u.aplicacao)) by.set(u.aplicacao, (by.get(u.aplicacao) ?? 0) + c)
+  }
+  return [...by.entries()].sort((a, b) => b[1] - a[1])
+}
+
+/* ---------- Escopo: o que escolhi + o que vem junto ---------- */
+
+function seedUnits() {
+  const tools = toolApps()
+  let ids = new Set()
+  for (const a of plan.apps) units().filter(u => u.aplicacao === a).forEach(u => ids.add(u.id))
+  for (const s of plan.servicos) units().filter(u => !tools.has(u.aplicacao) && (u.servicos[s] ?? 0) > 0).forEach(u => ids.add(u.id))
+  if (plan.env !== 'todos') ids = new Set([...ids].filter(id => UNIT.get(id).ambiente === plan.env))
+  return ids
+}
+
+function scope() {
+  const s0 = seedUnits()
+  const tools = toolApps()
+  const groups = new Set([...s0].map(id => UNIT.get(id).grupo).filter(Boolean))
+  plan.extra.forEach(g => groups.add(g))
+  const inScope = new Set(units().filter(u => groups.has(u.grupo) && !tools.has(u.aplicacao)).map(u => u.id))
+  const deps = DATA.escopo.dependencias
+
+  // Vão junto: o grupo de movimentação já é a união pelo que é forte
+  const forced = [...inScope].filter(id => !s0.has(id)).map(id => {
+    const u = UNIT.get(id)
+    const viaExtra = plan.extra.has(u.grupo) && ![...s0].some(x => UNIT.get(x).grupo === u.grupo)
+    const strong = deps.find(d => d.acoplamento === 'forte' && ((d.de === id && inScope.has(d.para)) || (d.para === id && inScope.has(d.de))))
+    let motivo = 'Mesmo grupo de movimentação'
+    if (viaExtra) motivo = 'Você incluiu este grupo'
+    else if (strong) {
+      const outro = UNIT.get(strong.de === id ? strong.para : strong.de)
+      motivo = strong.natureza === 'dados'
+        ? `Compartilha banco com ${outro.nome}${strong.portas.length ? ` (${strong.portas.join(', ')})` : ''}`
+        : `Dependência forte com ${outro.nome}`
+    }
+    return { u, motivo, viaExtra }
+  }).sort((a, b) => b.u.custo - a.u.custo)
+
+  // Antes: o escopo chama · Depois: chamam o escopo. Só as fracas; administrativo não restringe.
+  const before = new Map(), after = new Map()
+  const add = (map, u, d) => {
+    const cur = map.get(u.grupo) ?? { grupo: GROUP.get(u.grupo), portas: new Set(), naturezas: new Set(), custo: 0, units: new Set() }
+    d.portas.forEach(p => cur.portas.add(p)); cur.naturezas.add(d.natureza); cur.units.add(u.id)
+    map.set(u.grupo, cur)
+  }
+  for (const d of deps) {
+    if (d.acoplamento !== 'fraco') continue
+    const de = UNIT.get(d.de), para = UNIT.get(d.para)
+    if (!de || !para || tools.has(de.aplicacao) || tools.has(para.aplicacao)) continue
+    if (inScope.has(d.de) && !inScope.has(d.para)) add(before, para, d)
+    if (inScope.has(d.para) && !inScope.has(d.de)) add(after, de, d)
+  }
+  for (const m of [before, after]) for (const v of m.values()) v.custo = v.grupo.unidades.reduce((s, id) => s + (UNIT.get(id)?.custo ?? 0), 0)
+  // Conversa nos dois sentidos: aparece uma vez só, em "antes"
+  for (const [g, v] of before) if (after.has(g)) { v.ambos = after.get(g); after.delete(g) }
+
+  const svc = new Map()
+  for (const id of inScope) for (const [k, v] of Object.entries(UNIT.get(id).servicos)) svc.set(k, (svc.get(k) ?? 0) + v)
+  const rec = DATA.recomendado
+  const servicosList = [...svc.entries()].sort((a, b) => b[1] - a[1]).map(([nome, custo]) => {
+    const s = services.find(x => x.nome === nome)
+    // Compute: a cotação do serviço. Banco e objeto: a razão de preço da categoria. O resto não tem cotação.
+    const cot = s && s.custo > 0 && s.estimativa?.[rec] != null ? s.estimativa[rec] / s.custo : null
+    const cat = s && CAT_DE_TIPO[s.tipo] ? DATA.razao_categoria?.[rec]?.[CAT_DE_TIPO[s.tipo]] : null
+    const r = cot ?? cat ?? null
+    return { nome, custo, destino: r != null ? custo * r : null, metodo: cot != null ? 'cotação' : cat != null ? 'categoria' : null }
+  })
+  const custo = servicosList.reduce((a, s) => a + s.custo, 0)
+  const cotado = servicosList.filter(s => s.destino != null)
+  const ondas = new Map()
+  for (const g of groups) {
+    const gg = GROUP.get(g); if (!gg) continue
+    const k = gg.onda ?? 0
+    ondas.set(k, [...(ondas.get(k) ?? []), gg])
+  }
+  return {
+    s0, inScope, forced,
+    before: [...before.values()].sort((a, b) => (a.grupo.onda ?? 9) - (b.grupo.onda ?? 9)),
+    after: [...after.values()].sort((a, b) => (a.grupo.onda ?? 9) - (b.grupo.onda ?? 9)),
+    servicos: servicosList, custo,
+    destino: cotado.reduce((a, s) => a + s.destino, 0),
+    custoCotado: cotado.reduce((a, s) => a + s.custo, 0),
+    apps: new Set([...inScope].map(id => UNIT.get(id).aplicacao)),
+    recursos: [...inScope].reduce((a, id) => a + UNIT.get(id).recursos, 0),
+    ondas: [...ondas.entries()].sort((a, b) => (a[0] || 99) - (b[0] || 99)),
+    foraSel: [...plan.servicos].map(s => ({ nome: s, custo: DATA.escopo.fora_das_unidades[s] ?? 0 })).filter(x => x.custo > 0),
+  }
+}
+const planSize = () => plan.apps.size + plan.servicos.size
+
+/* ---------- Topo ---------- */
+
+function renderTop() {
+  const src = PROVIDER[DATA.origem]
+  document.getElementById('file').textContent = DATA.arquivo
+  document.getElementById('status').innerHTML = busy()
+    ? `<span class="status run">${icon('loader-circle', 'ic-xs spin')}Processando inventário</span>`
+    : `<span class="status ok">${icon('check', 'ic-xs')}Concluída</span>`
+  document.getElementById('lead').textContent = state.view === 'servico'
+    ? `Do que cada serviço depende para sair da ${src}, e quais aplicações usam cada um. Marque o que quer migrar para ver o que precisa ir junto.`
+    : `As aplicações da conta e o que cada uma usa. Marque o que quer migrar para ver o que precisa ir junto, o que precisa ir antes e quanto custa.`
+  document.getElementById('inv-banner').innerHTML = busy() ? `
+    <div class="card inv-banner" role="status">
+      <span class="gi">${icon('loader-circle', 'spin')}</span>
+      <div style="flex:1;min-width:0">
+        <p class="t">Processando inventário</p>
+        <p class="d">${esc(inv.files.map(f => f.name).join(', '))}. Você pode continuar usando a tela; o que depende do inventário aparece quando terminar, com aviso aqui e no sino.</p>
+        <div class="steps2">${PHASES.map((ph, i) => `<span class="${i < inv.phase ? 'ok' : i === inv.phase ? 'on' : ''}">${i < inv.phase ? icon('check', 'ic-xs') : i === inv.phase ? icon('loader-circle', 'ic-xs spin') : icon('circle', 'ic-xs')}${ph}</span>`).join('')}</div>
+        <div class="progress"><span style="width:${Math.round(inv.progress * 100)}%"></span></div>
+      </div>
+    </div>` : ''
+
+  const total = DATA.custo_atual
+  const kpis = document.getElementById('kpis')
+  if (state.view === 'servico') {
+    kpis.innerHTML = LEVELS.map(key => {
+      const items = services.filter(s => levelOf(s) === key)
+      const cost = items.reduce((sum, s) => sum + s.custo, 0)
+      const hinted = key === 'unknown' ? items.filter(s => s.nivel_sugerido).length : 0
+      const sub = key === 'unknown' && hinted ? `${hinted} com hipótese` : `${short(cost)} · ${pct(cost / total)}`
+      return `<button class="kpi" data-level="${key}" aria-pressed="${state.levels.includes(key)}">
+        <span class="lbl">${icon(LEVEL[key].icon, 'ic-sm')}${LEVEL[key].label}</span>
+        <span class="val num">${items.length}</span><span class="sub num">${sub}</span></button>`
+    }).join('')
+  } else {
+    const apps = appsList()
+    const grupos = (DATA.escopo?.grupos ?? []).filter(g => !g.unidades.every(id => toolApps().has(UNIT.get(id)?.aplicacao)))
+    const ondas = new Set(grupos.map(g => g.onda).filter(x => x != null))
+    const fora = Object.values(DATA.escopo.fora_das_unidades).reduce((a, b) => a + b, 0)
+    const cell = (ic, lbl, val, sub) => `<div class="kpi static"><span class="lbl">${icon(ic, 'ic-sm')}${lbl}</span><span class="val num">${val}</span><span class="sub">${sub}</span></div>`
+    kpis.innerHTML =
+      cell('boxes', 'Aplicações', apps.length, `${short(apps.reduce((a, x) => a + x.custo, 0))} · ${pct(apps.reduce((a, x) => a + x.custo, 0) / total)}`) +
+      cell('layers', 'Grupos de migração', grupos.length, `${grupos.filter(g => new Set(g.unidades.map(id => UNIT.get(id)?.aplicacao)).size > 1).length} com mais de uma aplicação`) +
+      cell('list-ordered', 'Ondas', ondas.size, `${grupos.filter(g => g.onda == null).length} grupos sem ordem`) +
+      cell('circle-help', 'Sem aplicação', short(fora), `${pct(fora / total)} do gasto: recurso sem tag ou fora do inventário`)
+  }
+
+  const g = document.getElementById('group')
+  if (locked()) {
+    g.innerHTML = `<span class="gi">${icon('layers')}</span>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px"><span class="sk" style="width:55%;height:11px"></span><span class="sk" style="width:92%"></span><span class="sk" style="width:70%"></span></div>
+      <span class="sk-chip" style="width:90px;height:32px;border-radius:8px"></span>
+      ${veil('Para ver as aplicações da conta, o que migra junto e planejar a migração por aplicação ou serviço, importe o inventário da conta.', { row: true })}`
+    return
+  }
+  const apps = appsList()
+  const shared = apps.filter(a => a.compartilha)
+  const clusters = new Map()
+  for (const a of shared) { const k = [a.nome, ...a.juntos].sort().join('|'); clusters.set(k, [a.nome, ...a.juntos].sort()) }
+  const grupos = (DATA.escopo?.grupos ?? []).filter(gr => !gr.unidades.every(id => toolApps().has(UNIT.get(id)?.aplicacao)))
+  const ondas = new Set(grupos.map(x => x.onda).filter(x => x != null))
+  g.innerHTML = `<span class="gi ${fresh()}">${icon('layers')}</span>
+    <div style="flex:1;min-width:0">
+      <p class="t">${apps.length} aplicações em ${grupos.length} grupos de migração e ${ondas.size} ondas</p>
+      <p class="d">${clusters.size ? [...clusters.values()].map(c => `${esc(join(c, 4))} migram juntas.`).join(' ') : 'Nenhuma aplicação precisa migrar junto com outra.'} Marque uma aplicação ou um serviço para ver o plano.</p>
+    </div>
+    <button class="btn" data-view="${state.view === 'servico' ? 'aplicacao' : 'servico'}">${state.view === 'servico' ? 'Ver por aplicação' : 'Ver por serviço'}</button>`
+}
+
+/* ---------- Barra de ferramentas e tabela ---------- */
+
+function renderToolbar() {
+  document.getElementById('view-seg').innerHTML =
+    `<button data-view="servico" class="${state.view === 'servico' ? 'on' : ''}">${icon('server', 'ic-sm')}Serviços</button>` +
+    `<button data-view="aplicacao" class="${state.view === 'aplicacao' ? 'on' : ''}" ${locked() && !busy() ? 'data-unlock' : ''} ${busy() ? 'disabled' : ''}>${locked() ? (busy() ? icon('loader-circle', 'ic-sm spin') : icon('lock', 'ic-sm')) : icon('boxes', 'ic-sm')}Aplicações</button>`
+  const pb = document.getElementById('plan-btn')
+  const n = planSize()
+  pb.innerHTML = locked() ? `${busy() ? icon('loader-circle', 'ic-sm spin') : icon('lock', 'ic-sm')}Planejar migração`
+    : `${icon('route', 'ic-sm')}Planejar migração${n ? ` <span class="count-badge">${n}</span>` : ''}`
+  pb.toggleAttribute('data-unlock', locked() && !busy())
+  pb.disabled = busy()
+  pb.classList.toggle('on', state.panel === 'escopo')
+  document.getElementById('q').placeholder = state.view === 'servico' ? 'Buscar serviço' : 'Buscar aplicação'
+}
+
+function filtered() {
+  const t = state.q.trim().toLowerCase()
+  if (state.view === 'aplicacao') return appsList().filter(a => a.nome.toLowerCase().includes(t))
+  return services.filter(s => s.nome.toLowerCase().includes(t) && (state.levels.length === 0 || state.levels.includes(levelOf(s))))
+}
+
+function renderRows() {
+  const list = filtered()
+  const pages = Math.max(1, Math.ceil(list.length / PAGE))
+  state.page = Math.min(state.page, pages)
+  const visible = list.slice((state.page - 1) * PAGE, state.page * PAGE)
+  const total = DATA.custo_atual
+  const share = c => `<div class="share"><div class="bar"><span style="width:${(c / total) * 100}%"></span></div><span class="p num">${Math.round((c / total) * 100)}%</span></div>`
+  const head = document.getElementById('thead')
+  const body = document.getElementById('rows')
+  const cbHead = locked() ? '' : '<th class="cbcol"></th>'
+  const cols = state.view === 'servico' ? 5 : 6
+
+  if (state.view === 'servico') {
+    head.innerHTML = `<tr>${cbHead}<th>Serviço</th>
+      <th style="width:10.5rem"><span class="tip">Dependência ${icon('info', 'ic-sm muted')}<span class="bubble">O quanto o serviço depende de recursos exclusivos da nuvem atual. Quanto maior, mais difícil migrar.</span></span></th>
+      <th class="col-together" style="width:9.5rem"><span class="tip">Aplicações ${locked() ? icon('lock', 'ic-xs muted') : icon('info', 'ic-sm muted')}<span class="bubble">${locked() ? 'Vem do inventário da conta. Clique em uma etiqueta para importar.' : 'Quantas aplicações da conta usam o serviço.'}</span></span></th>
+      <th class="r" style="width:8.5rem">Custo</th><th class="r col-share" style="width:7.5rem">Do total</th></tr>`
+    body.innerHTML = visible.map(s => {
+      const lvl = levelOf(s)
+      const hint = !s.nivel && s.nivel_sugerido ? `<span class="hint">provável ${LEVEL[s.nivel_sugerido].label.toLowerCase()}</span>` : ''
+      const apps = locked() ? null : appsOfService(s.nome)
+      const appsCell = locked() ? lockChip()
+        : apps.length ? `<span class="together ${fresh()}">${icon('boxes', 'ic-sm muted')}${plural(apps.length, 'aplicação', 'aplicações')}</span>`
+        : '<span class="muted" title="Sem recurso no inventário">-</span>'
+      const sel = plan.servicos.has(s.nome)
+      return `<tr data-id="${esc(s.id)}" class="${(s.id === state.selected && state.panel === 'detalhe') || sel ? 'sel' : ''}">
+        ${locked() ? '' : `<td class="cbcol" data-toggle-svc="${esc(s.nome)}">${checkbox(sel)}</td>`}
+        <td><div class="name truncate">${esc(s.nome)}</div><div class="sub truncate">${esc([typeOf(s), s.pools.length ? `${s.pools.length} instance types` : null].filter(Boolean).join(' · '))}</div></td>
+        <td>${pill(lvl)}${hint}</td>
+        <td class="col-together">${appsCell}</td>
+        <td class="r num">${money(s.custo)}</td>
+        <td class="col-share">${share(s.custo)}</td></tr>`
+    }).join('')
+  } else {
+    head.innerHTML = `<tr>${cbHead}<th>Aplicação</th><th style="width:9rem">Ambientes</th><th style="width:6rem">Onda</th>
+      <th style="width:6.5rem">Serviços</th><th class="r" style="width:8.5rem">Custo</th><th class="r col-share" style="width:7.5rem">Do total</th></tr>`
+    body.innerHTML = visible.map(a => {
+      const sel = plan.apps.has(a.nome)
+      const sub = a.compartilha ? `${icon('link', 'ic-xs')}Junto com ${esc(join([...a.juntos]))}` : `${icon('unlink', 'ic-xs')}Independente`
+      return `<tr data-app="${esc(a.nome)}" class="${sel ? 'sel' : ''}">
+        <td class="cbcol">${checkbox(sel)}</td>
+        <td><div class="name truncate">${esc(a.nome)}</div><div class="sub truncate">${sub}${a.regioes.size ? ` · ${esc([...a.regioes].join(', '))}` : ''}</div></td>
+        <td><div class="envs">${[...a.envs].sort().map(e => `<span class="tag">${esc(e)}</span>`).join('')}</div></td>
+        <td>${ondasTxt([...a.ondas])?.replace('ondas ', '').replace('onda ', '') ?? '<span class="muted" title="Sem dependência de ordem">livre</span>'}</td>
+        <td class="num">${a.servicos.size}</td>
+        <td class="r num">${money(a.custo)}</td>
+        <td class="col-share">${share(a.custo)}</td></tr>`
+    }).join('')
+  }
+  if (visible.length === 0) body.innerHTML = `<tr><td colspan="${cols + (locked() ? 0 : 1)}"><div class="empty">${icon('search-x')}<p style="margin:12px 0 4px;font-weight:500">Nada encontrado</p><p class="muted" style="margin:0">Ajuste a busca ou o filtro.</p></div></td></tr>`
+
+  const r = DATA.reconciliacao
+  document.getElementById('recon').textContent = state.view === 'servico'
+    ? (r.fora_do_escopo > 0 ? `Os serviços somam ${money(r.soma_linhas)} de ${money(r.custo_atual)}. O restante (${money(r.fora_do_escopo)}) é imposto, crédito, desconto, compromisso ou suporte.` : '')
+    : `O custo de cada aplicação vem dos recursos do inventário casados com a fatura detalhada. bastion é ferramenta de acesso e fica fora do plano.`
+  const pager = document.getElementById('pager')
+  pager.innerHTML = pages <= 1 ? '' :
+    `<button data-page="${state.page - 1}" ${state.page === 1 ? 'disabled' : ''} aria-label="Anterior">${icon('chevron-left', 'ic-sm')}</button>` +
+    Array.from({ length: pages }, (_, i) => `<button data-page="${i + 1}" class="${i + 1 === state.page ? 'on' : ''}">${i + 1}</button>`).join('') +
+    `<button data-page="${state.page + 1}" ${state.page === pages ? 'disabled' : ''} aria-label="Próximo">${icon('chevron-right', 'ic-sm')}</button>`
+  document.getElementById('clear').hidden = !(state.q || state.levels.length)
+}
+
+/* ---------- Painel: detalhe do serviço ---------- */
+
+function summaryOf(s) {
+  const src = PROVIDER[DATA.origem]
+  const d = s.dependencias
+  const parts = []
+  if (s.nivel) parts.push(`Dependência ${LEVEL[s.nivel].label.toLowerCase()} da ${src}: ${LEVEL[s.nivel].hint.charAt(0).toLowerCase()}${LEVEL[s.nivel].hint.slice(1)}`)
+  else if (s.nivel_sugerido) parts.push(`O catálogo ainda não tem o nível deste serviço; pelas evidências, a dependência provável é ${LEVEL[s.nivel_sugerido].label.toLowerCase()}.`)
+  else parts.push('O catálogo ainda não tem o nível de dependência deste serviço.')
+  const apps = locked() ? [] : appsOfService(s.nome)
+  if (apps.length) parts.push(`Usado por ${plural(apps.length, 'aplicação', 'aplicações')}: ${join(apps.map(a => a[0]), 3)}.`)
+  else if (locked()) parts.push('Sem inventário, não dá para dizer quais aplicações usam este serviço.')
+  const signals = []
+  if (d?.banco_compartilhado) signals.push(d.motivo)
+  if (d?.exclusividade) signals.push(`${pct(d.exclusividade.fracao)} do custo em recurso exclusivo: ${d.exclusividade.motivo}`)
+  for (const sg of s.sugestoes) if (!signals.includes(sg.motivo) && sg.fonte !== 'dependencias') signals.push(sg.motivo)
+  return { text: parts.join(' '), signals }
+}
+function actionOf(s) {
+  const bits = []
+  if (s.classe) bits.push(`${STRATEGY[s.classe] ?? s.classe}${s.esforco ? `, esforço ${EFFORT[s.esforco] ?? s.esforco}` : ''}.`)
+  else bits.push('Estratégia a confirmar: o catálogo não tem a classe de migração deste serviço.')
+  const o = ondasTxt(s.dependencias?.ondas ?? [])
+  if (o) bits.push(`Aparece nas ${o.replace('onda ', 'onda ')}.`)
+  if (s.dependencias?.banco_compartilhado) bits.push('Planejar janela conjunta ou replicação do banco.')
+  const rec = DATA.recomendado
+  if (s.equivalente?.[rec]) bits.push(`Destino na ${PROVIDER[rec]}: ${s.equivalente[rec]}.`)
+  return bits.join(' ')
+}
+function adaptationOf(s) {
+  const values = Object.values(s.refatoracao ?? {})
+  if (values.includes(false)) return 'Não necessária'
+  if (values.includes(true)) return 'Necessária'
+  return 'A confirmar'
+}
+
+let poolTarget = null
+function renderDetail() {
+  const s = services.find(x => x.id === state.selected)
+  if (!s) return
+  document.getElementById('ptitle').textContent = 'Detalhe do serviço'
+  const d = s.dependencias
+  const lvl = levelOf(s)
+  const total = DATA.custo_atual
+  const { text, signals } = summaryOf(s)
+  const rec = DATA.recomendado
+  poolTarget = poolTarget ?? rec
+  const apps = locked() ? [] : appsOfService(s.nome)
+  const maxA = Math.max(1, ...apps.map(a => a[1]))
+  const fora = DATA.escopo?.fora_das_unidades?.[s.nome] ?? 0
+  const tags = [s.pools.length && `${s.pools.length} instance types`, d?.banco_compartilhado && 'Banco compartilhado',
+    s.pools.some(p => p.arm) && 'ARM', s.pools.some(p => p.burstable) && 'Burstable', s.tipo_inferido && 'Tipo inferido', !s.entra_no_score && 'Fora do score'].filter(Boolean)
+  const dests = Object.keys(s.por_destino ?? {}).sort((a, b) => (a === rec ? -1 : b === rec ? 1 : 0))
+  const pools = s.pools, poolsShown = pools.slice(0, 8)
+  const sel = plan.servicos.has(s.nome)
+
+  document.getElementById('pbody').innerHTML = `
+    <div class="hero">
+      <div class="row"><div style="min-width:0"><p class="title truncate">${esc(s.nome)}</p><p class="kind">${esc(CATEGORY[s.categoria] ?? s.categoria)} · ${esc(typeOf(s))}</p></div>${pill(lvl)}</div>
+      ${tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+    </div>
+    <div class="facts">
+      <div class="fact"><div class="k">Custo por mês</div><div class="v num">${money(s.custo)}</div></div>
+      <div class="fact"><div class="k">Do total</div><div class="v num">${pct(s.custo / total)}</div></div>
+      <div class="fact"><div class="k">Aplicações</div><div class="v num ${fresh()}">${locked() ? lockChip() : apps.length || '-'}</div></div>
+    </div>
+    <section class="sec"><h3>Resumo</h3><p>${esc(text)}</p>
+      ${signals.length ? `<p style="margin-top:8px">Sinais encontrados:</p><ul class="signals">${signals.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</section>
+    <div class="action"><div class="lbl">${icon('route', 'ic-sm')}Como migrar</div><p>${esc(actionOf(s))}</p></div>
+
+    <section class="sec">
+      <div class="sec-head"><h3>Aplicações que usam</h3>${!locked() && apps.length ? `<button class="btn sm ${sel ? 'on' : ''}" data-toggle-svc="${esc(s.nome)}">${sel ? `${icon('check', 'ic-sm')}No plano` : `${icon('route', 'ic-sm')}Planejar migração`}</button>` : ''}</div>
+      ${locked() ? `<div class="locked" style="border-radius:12px"><ul class="list" aria-hidden="true">${[78, 64, 52, 40].map(w => `<li class="nb"><span class="sk" style="width:${w}%"></span><span class="sk" style="width:56px;height:4px"></span><span class="sk" style="width:70px;margin-left:auto"></span></li>`).join('')}</ul>
+        ${veil('Para ver quais aplicações usam este serviço e planejar a migração dele com tudo que vai junto, importe o inventário da conta.')}</div>`
+      : apps.length ? `<ul class="list ${fresh()}">${apps.map(([nome, c]) => `<li class="nb"><button class="truncate" data-goto-app="${esc(nome)}">${esc(nome)}</button><div class="bar" style="width:56px"><span style="width:${(c / maxA) * 100}%"></span></div><span class="c num">${money(c)}</span></li>`).join('')}</ul>
+        ${fora > 0 ? `<p class="muted" style="font-size:12px;margin-top:10px">${money(fora)} deste serviço não casam com nenhuma aplicação (recurso sem tag ou fora do inventário).</p>` : ''}`
+      : '<p>Nenhum recurso deste serviço apareceu no inventário.</p>'}
+    </section>
+
+    ${dests.length ? `<section class="sec"><h3>Em cada destino</h3><ul class="list" style="gap:12px">${dests.map(p => {
+      const lv = s.por_destino[p], rf = s.refatoracao?.[p]
+      return `<li class="dest ${p === rec ? 'rec' : ''}"><span class="logo-box">${logo(p)}</span>
+        <div class="main"><div class="t truncate">${s.equivalente?.[p] ? esc(s.equivalente[p]) : '<span class="muted">Equivalente não mapeado</span>'}${p === rec ? ' <span class="pill primary" style="padding:0 7px;font-size:11px;margin-left:4px">Recomendada</span>' : ''}</div>
+        <div class="s">${[PROVIDER[p], rf === true ? 'Exige refatoração' : rf === false ? 'Sem refatoração' : 'Adaptação a confirmar', s.estimativa?.[p] != null ? `${money(s.estimativa[p])} por mês` : null].filter(Boolean).join(' · ')}</div></div>
+        ${lv ? pill(lv) : '<span class="muted" style="font-size:12px">A confirmar</span>'}</li>`
+    }).join('')}</ul></section>` : ''}
+
+    ${pools.length ? `<section class="sec"><div class="sec-head"><h3>Instance types</h3><div class="seg" id="pool-seg">${['azure', 'gcp', 'oci'].map(p => `<button data-target="${p}" class="${p === poolTarget ? 'on' : ''}">${PROVIDER[p]}</button>`).join('')}</div></div>
+      <table class="it"><thead><tr><th>Na ${PROVIDER[DATA.origem]}</th><th style="text-align:right">Hoje</th><th>Na ${PROVIDER[poolTarget]}</th><th style="text-align:right">Estimado</th></tr></thead>
+      <tbody>${poolsShown.map(p => {
+        const t = p.alvos[poolTarget]
+        const delta = t?.custo != null && p.custo > 0 ? (t.custo - p.custo) / p.custo : null
+        return `<tr><td><div class="fam">${esc(p.familia)}</div><div class="reg">${esc([p.regiao ?? 'região não informada', p.arm ? 'ARM' : null, p.burstable ? 'burstable' : null].filter(Boolean).join(' · '))}</div></td>
+          <td class="num" style="text-align:right">${money(p.custo)}</td><td class="sku">${esc(t?.sku ?? 'Sem cotação')}</td>
+          <td class="num" style="text-align:right">${t?.custo != null ? money(t.custo) : '-'}${delta != null ? `<div class="reg delta ${delta > 0 ? 'up' : 'down'}">${delta > 0 ? '+' : ''}${Math.round(delta * 100)}%</div>` : ''}</td></tr>`
+      }).join('')}</tbody></table>
+      ${pools.length > poolsShown.length ? `<p class="more">+ ${pools.length - poolsShown.length} instance types (${money(pools.slice(poolsShown.length).reduce((a, p) => a + p.custo, 0))})</p>` : ''}</section>` : ''}
+
+    ${s.alertas.length ? `<section class="sec"><h3>Atenção</h3><ul class="alerts">${s.alertas.map(a => `<li>${icon('triangle-alert', 'ic-sm')}<span>${esc(a)}</span></li>`).join('')}</ul></section>` : ''}`
+
+  const list = filtered()
+  const i = list.findIndex(x => x.id === s.id)
+  document.getElementById('pfoot').innerHTML = `
+    <button class="btn" id="prev" ${i <= 0 ? 'disabled' : ''}>${icon('chevron-up', 'ic-sm')}Anterior</button>
+    <button class="btn" id="next" ${i < 0 || i >= list.length - 1 ? 'disabled' : ''}>${icon('chevron-down', 'ic-sm')}Próximo</button>
+    <span class="count">${i >= 0 ? `${i + 1} de ${list.length}` : ''}</span>`
+}
+
+/* ---------- Painel: plano de migração ---------- */
+
+function renderPlan() {
+  document.getElementById('ptitle').textContent = 'Plano de migração'
+  const rec = DATA.recomendado
+  const body = document.getElementById('pbody')
+  if (planSize() === 0) {
+    body.innerHTML = `<div class="empty-plan">${icon('route')}<p class="t">Escolha o que migrar</p>
+      <p class="d">Marque aplicações ou serviços na lista. O plano mostra o que precisa ir junto, o que precisa estar no destino antes, quem fica para trás dependendo do que saiu, e quanto custa.</p>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:14px"><button class="btn" data-view="aplicacao">${icon('boxes', 'ic-sm')}Escolher aplicações</button><button class="btn" data-view="servico">${icon('server', 'ic-sm')}Escolher serviços</button></div></div>`
+    document.getElementById('pfoot').innerHTML = ''
+    return
+  }
+  const sc = scope()
+  const envs = [...new Set(units().map(u => u.ambiente).filter(Boolean))].sort()
+  const delta = sc.custoCotado > 0 ? (sc.destino - sc.custoCotado) / sc.custoCotado : null
+  const chips = [...[...plan.apps].map(a => ['app', a]), ...[...plan.servicos].map(s => ['svc', s])]
+
+  body.innerHTML = `
+    <section class="sec">
+      <div class="sec-head"><h3>Você escolheu</h3><button class="link" id="plan-clear">Limpar</button></div>
+      <div class="chips">${chips.map(([k, n]) => `<span class="chip">${icon(k === 'app' ? 'box' : 'server', 'ic-xs muted')}${esc(n)}<button data-rm-${k}="${esc(n)}" aria-label="Remover ${esc(n)}">${icon('x', 'ic-xs')}</button></span>`).join('')}</div>
+      <div class="env-row"><span class="muted">Ambiente</span><div class="seg" id="env-seg">${['todos', ...envs].map(e => `<button data-env="${e}" class="${plan.env === e ? 'on' : ''}">${e === 'todos' ? 'Todos' : esc(e)}</button>`).join('')}</div></div>
+    </section>
+
+    ${sc.inScope.size === 0 ? `<p class="muted">Nada do que você escolheu existe no ambiente ${esc(plan.env)}.</p>` : `
+    <div class="sum-grid">
+      <div><span class="k">Custo hoje</span><span class="v num">${money(sc.custo)}</span><span class="s">por mês, na ${PROVIDER[DATA.origem]}</span></div>
+      <div><span class="k">Estimado na ${PROVIDER[rec]}</span><span class="v num">${money(sc.destino)}</span><span class="s ${delta != null ? (delta > 0 ? 'up' : 'down') : ''}">${delta != null ? `${delta > 0 ? '+' : ''}${Math.round(delta * 100)}% sobre o que tem cotação` : 'sem cotação'}</span></div>
+      <div><span class="k">Aplicações</span><span class="v num">${sc.apps.size}</span><span class="s truncate">${esc(join([...sc.apps], 3))}</span></div>
+      <div><span class="k">Serviços</span><span class="v num">${sc.servicos.length}</span><span class="s">${plural(sc.recursos, 'recurso', 'recursos')} no inventário</span></div>
+    </div>
+
+    ${sc.forced.length ? `<section class="sec">
+      <h3>${icon('link', 'ic-sm')} Vão junto obrigatoriamente <span class="count-badge">${sc.forced.length}</span></h3>
+      <p class="hint2">Dependência forte com o que você escolheu: sem eles, o que você escolheu não funciona no destino.</p>
+      <ul class="rows">${sc.forced.map(f => `<li><span class="ri">${icon(f.viaExtra ? 'plus' : 'lock', 'ic-sm')}</span>
+        <div class="m"><div class="t">${esc(f.u.nome)}</div><div class="s">${esc(f.motivo)}</div></div>
+        <span class="c num">${money(f.u.custo)}</span>${f.viaExtra ? `<button class="icon-btn" style="width:26px;height:26px" data-unextra="${esc(f.u.grupo)}" aria-label="Tirar">${icon('x', 'ic-sm')}</button>` : ''}</li>`).join('')}</ul>
+    </section>` : ''}
+
+    ${sc.before.length ? `<section class="sec">
+      <h3>${icon('arrow-up-from-dot', 'ic-sm')} Precisam estar no destino antes <span class="count-badge">${sc.before.length}</span></h3>
+      <p class="hint2">O que você escolheu chama estes grupos. Migre antes, ou mantenha o acesso entre nuvens durante a transição.</p>
+      <ul class="rows">${sc.before.map(b => `<li><span class="ri">${icon('corner-down-right', 'ic-sm')}</span>
+        <div class="m"><div class="t">${esc(b.grupo.nome)}</div><div class="s">${esc([...b.naturezas].map(n => USA[n] ?? n).join('; '))}${b.ambos ? `; também ${esc([...b.ambos.naturezas].map(n => USADO[n] ?? n).join('; '))}` : ''}${b.portas.size ? ` · ${esc([...new Set([...b.portas, ...(b.ambos?.portas ?? [])])].join(', '))}` : ''}${b.grupo.onda ? ` · onda ${b.grupo.onda}` : ''}</div></div>
+        <span class="c num">${money(b.custo)}</span><button class="btn sm" data-extra="${esc(b.grupo.id)}">${icon('plus', 'ic-xs')}Incluir</button></li>`).join('')}</ul>
+    </section>` : ''}
+
+    ${sc.after.length ? `<section class="sec">
+      <h3>${icon('triangle-alert', 'ic-sm')} Ficam para trás e dependem do que sai <span class="count-badge">${sc.after.length}</span></h3>
+      <p class="hint2">Depois da migração, estes grupos vão chamar o escopo entre nuvens: latência e tráfego de saída. Inclua no plano ou planeje a conexão.</p>
+      <ul class="rows">${sc.after.map(b => `<li><span class="ri warn">${icon('corner-up-left', 'ic-sm')}</span>
+        <div class="m"><div class="t">${esc(b.grupo.nome)}</div><div class="s">${esc([...b.naturezas].map(n => USADO[n] ?? n).join('; '))}${b.portas.size ? ` · ${esc([...b.portas].join(', '))}` : ''}</div></div>
+        <span class="c num">${money(b.custo)}</span><button class="btn sm" data-extra="${esc(b.grupo.id)}">${icon('plus', 'ic-xs')}Incluir</button></li>`).join('')}</ul>
+    </section>` : ''}
+
+    ${!sc.forced.length && !sc.before.length && !sc.after.length ? `<div class="action"><div class="lbl">${icon('circle-check', 'ic-sm')}Pode migrar sozinho</div><p>Nenhuma dependência com o que fica: o escopo sai sem arrastar outro grupo nem deixar ninguém para trás.</p></div>` : ''}
+
+    <section class="sec">
+      <h3>Serviços no escopo</h3>
+      <table class="it"><thead><tr><th>Serviço</th><th style="text-align:right">Hoje</th><th style="text-align:right">Na ${PROVIDER[rec]}</th></tr></thead>
+      <tbody>${sc.servicos.map(s => `<tr><td class="truncate" style="max-width:220px">${esc(s.nome)}</td><td class="num" style="text-align:right">${money(s.custo)}</td><td class="num" style="text-align:right">${s.destino != null ? `${money(s.destino)}${s.metodo === 'categoria' ? '<sup class="muted">*</sup>' : ''}` : '<span class="muted">sem cotação</span>'}</td></tr>`).join('')}</tbody></table>
+      <p class="muted" style="font-size:12px;margin-top:8px">No destino: a cotação de cada serviço aplicada à parte dele no escopo. * Pela razão de preço da categoria (banco, objeto). ${sc.custo - sc.custoCotado > 0 ? `${money(sc.custo - sc.custoCotado)} sem cotação ficam fora da comparação.` : ''}</p>
+    </section>
+
+    <section class="sec">
+      <h3>Ordem</h3>
+      <ol class="waves">${sc.ondas.map(([n, gs]) => `<li><span class="wn">${n ? n : '–'}</span><div><div class="t">${n ? `Onda ${n}` : 'Sem restrição de ordem'}</div><div class="s">${esc(gs.map(g => g.nome).join(' · '))}</div></div></li>`).join('')}</ol>
+    </section>
+
+    ${sc.foraSel.length ? `<p class="muted" style="font-size:12px">${sc.foraSel.map(f => `${money(f.custo)} de ${esc(f.nome)}`).join(', ')} não casam com nenhuma aplicação e ficam fora do plano.</p>` : ''}
+    <p class="muted" style="font-size:12px">Dependências vêm das regras de rede e do que foi declarado: o que a configuração permite, não o tráfego real.</p>`}`
+
+  document.getElementById('pfoot').innerHTML = `
+    <button class="btn" id="plan-export">${icon('download', 'ic-sm')}Exportar</button>
+    <button class="btn primary" id="plan-tf" style="margin-left:auto">${icon('file-code', 'ic-sm')}Gerar Terraform do escopo</button>`
+}
+
+/* ---------- Render ---------- */
+
+function renderBell() {
+  document.getElementById('bell-dot').hidden = !notices.some(n => !n.read)
+  const menu = document.getElementById('menu')
+  if (menu.hidden) return
+  menu.innerHTML = `<div class="lbl">Notificações</div><hr>` + (notices.length === 0
+    ? '<p class="empty-n">Nenhuma notificação por enquanto.</p>'
+    : notices.map(n => `<div class="item"><span style="color:var(--success)">${icon('check', 'ic-sm')}</span>
+        <div style="flex:1;min-width:0"><div class="t">${esc(n.title)}</div><div class="d truncate">${esc(n.description ?? '')}</div></div>
+        ${n.read ? '' : '<span class="dot" style="background:var(--primary);margin-top:6px"></span>'}</div>`).join('') +
+      '<hr><button class="clear" id="clear-notices">Limpar notificações</button>')
+}
+
+function render() {
+  document.body.classList.toggle('open', !!state.panel)
+  renderTop(); renderToolbar(); renderRows()
+  if (state.panel === 'detalhe') renderDetail()
+  if (state.panel === 'escopo') renderPlan()
+  renderBell()
+  lucide.createIcons()
+}
+
+function openDetail(id) {
+  state.selected = id; state.panel = 'detalhe'; poolTarget = null
+  const i = filtered().findIndex(s => s.id === id)
+  if (i >= 0) state.page = Math.floor(i / PAGE) + 1
+  render(); document.getElementById('pbody').scrollTop = 0
+}
+function openPlan() { state.panel = 'escopo'; render(); document.getElementById('pbody').scrollTop = 0 }
+function toggleApp(nome) { plan.apps.has(nome) ? plan.apps.delete(nome) : plan.apps.add(nome); plan.extra.clear(); openPlan() }
+function toggleSvc(nome) { plan.servicos.has(nome) ? plan.servicos.delete(nome) : plan.servicos.add(nome); plan.extra.clear(); openPlan() }
+function closePanel() { state.panel = null; render() }
+function step(delta) {
+  const list = filtered()
+  const i = list.findIndex(s => s.id === state.selected)
+  if (list[i + delta]) openDetail(list[i + delta].id)
+}
+
+/* ---------- Upload e processamento (simulados) ---------- */
+
+const EXPORTS = {
+  aws: { cmd: 'aws configservice deliver-config-snapshot --delivery-channel-name <canal>', hint: 'Envie os arquivos .json.gz gerados no bucket.' },
+  gcp: { cmd: 'gcloud asset export --project=<projeto> --content-type=resource --output-path=gs://<bucket>/inventario.json', hint: 'Envie o arquivo inventario.json gerado no bucket.' },
+  azure: { cmd: 'az graph query -q "Resources | project id, name, type, location, resourceGroup, subscriptionId, tags, properties, sku, kind, zones, managedBy" --first 1000', hint: 'Salve a saída em um arquivo .json e envie.' },
+  oci: { cmd: null, hint: 'A OCI não tem um comando único de exportação. Envie o arquivo no formato oneshift-inventory-v1.' },
+}
+const ALLOWED = ['.json', '.ndjson', '.jsonl', '.gz', '.zip']
+const modal = { files: [], error: null, sending: false, copied: false }
+const SPEED = new URLSearchParams(location.search).get('rapido') ? 0.25 : 1
+const fileSize = b => b < 1048576 ? `${Math.max(1, Math.round(b / 1024)).toLocaleString('pt-BR')} KB` : `${(b / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`
+
+function renderModal() {
+  const src = DATA.origem
+  const g = EXPORTS[src]
+  document.getElementById('m-body').innerHTML = `
+    <div class="mstep"><div class="n"><b>1</b><i class="line"></i></div><div class="c">
+      <div class="t">Nuvem do inventário</div><div class="d">Precisa ser a mesma da fatura desta análise (${PROVIDER[src]}).</div>
+      <div class="x2"><div class="clouds">${['aws', 'gcp', 'azure', 'oci'].map(p => `<button class="${p === src ? 'on' : ''}" ${p === src ? '' : 'disabled title="Outra nuvem: não serve para esta análise"'}>${logo(p)}${PROVIDER[p]}</button>`).join('')}</div></div></div></div>
+    <div class="mstep"><div class="n"><b>2</b><i class="line"></i></div><div class="c">
+      <div class="t">Exporte o inventário</div><div class="d">${g.cmd ? 'Peça para quem cuida da nuvem rodar o comando abaixo.' : g.hint}</div>
+      ${g.cmd ? `<div class="x2"><div class="term"><div class="bar2"><span>Terminal</span><button class="btn" style="height:28px;border:0" id="m-copy">${modal.copied ? icon('check', 'ic-sm') + 'Copiado' : icon('copy', 'ic-sm') + 'Copiar'}</button></div><code>${esc(g.cmd)}</code></div><span class="d" style="font-size:12px">${g.hint}</span></div>` : ''}</div></div>
+    <div class="mstep"><div class="n"><b>3</b></div><div class="c">
+      <div class="t">Envie os arquivos</div><div class="d">Até 20 arquivos de 50 MB cada, em ${ALLOWED.join(', ')}.</div>
+      <div class="x2">
+        <div class="drop" id="m-drop" role="button" tabindex="0">${icon('cloud-upload')}<div><div class="t">Arraste os arquivos para cá</div><div class="d">ou escolha no seu computador</div></div><span class="pick">Escolher arquivos</span></div>
+        ${modal.files.length ? `<ul class="files">${modal.files.map((f, i) => `<li>${icon('file-text', 'ic-sm muted')}<span class="truncate" style="flex:1">${esc(f.name)}</span><span class="muted num" style="font-size:12px">${fileSize(f.size)}</span><button class="icon-btn" style="width:26px;height:26px" data-rm="${i}" aria-label="Remover">${icon('x', 'ic-sm')}</button></li>`).join('')}</ul>` : ''}
+        ${modal.error ? `<p class="err">${icon('circle-alert', 'ic-sm')}${esc(modal.error)}</p>` : ''}
+        <button class="link" id="m-sample" style="align-self:flex-start">Usar um arquivo de exemplo (mock)</button>
+      </div></div></div>`
+  const send = document.getElementById('m-send')
+  send.disabled = modal.files.length === 0 || modal.sending
+  send.innerHTML = modal.sending ? `${icon('loader-circle', 'ic-sm spin')}Enviando...` : 'Enviar inventário'
+  lucide.createIcons()
+}
+function openModal() { modal.files = []; modal.error = null; modal.sending = false; document.getElementById('modal-bg').classList.add('on'); renderModal() }
+function closeModal() { if (!modal.sending) document.getElementById('modal-bg').classList.remove('on') }
+function addFiles(list) {
+  const next = [...modal.files, ...list]
+  const bad = next.find(f => !ALLOWED.some(x => f.name.toLowerCase().endsWith(x)))
+  modal.error = next.length > 20 ? 'Envie no máximo 20 arquivos.' : bad ? `${bad.name}: formato não aceito. Envie ${ALLOWED.join(', ')}.` : null
+  if (!modal.error) modal.files = next
+  renderModal()
+}
+function toast({ kind = 'info', title, description, action, id }) {
+  if (id) document.getElementById(id)?.remove()
+  const el = document.createElement('div')
+  el.className = 'toast'
+  if (id) el.id = id
+  const ic = { done: ['circle-check', 'var(--success)'], info: ['info', 'var(--info)'], run: ['loader-circle', 'var(--primary)'] }[kind]
+  el.innerHTML = `<span style="color:${ic[1]}">${icon(ic[0], kind === 'run' ? 'spin' : '')}</span>
+    <div style="flex:1;min-width:0"><div class="t">${esc(title)}</div>${description ? `<div class="d">${esc(description)}</div>` : ''}
+    ${action ? `<div class="acts"><button class="btn" style="height:30px">${esc(action.label)}</button></div>` : ''}</div>
+    <button class="x" aria-label="Fechar">${icon('x', 'ic-sm')}</button>`
+  el.querySelector('.x').onclick = () => el.remove()
+  if (action) el.querySelector('.acts button').onclick = () => { el.remove(); action.onClick() }
+  document.getElementById('toasts').prepend(el)
+  lucide.createIcons()
+  if (kind !== 'run') setTimeout(() => el.remove(), 6000)
+}
+function notify(n) { notices.unshift({ ...n, read: false }); renderBell(); lucide.createIcons() }
+const sleep = ms => new Promise(r => setTimeout(r, ms * SPEED))
+async function sendInventory() {
+  modal.sending = true; renderModal()
+  await sleep(1200)
+  inv.files = modal.files; modal.sending = false
+  closeModal()
+  inv.state = 'busy'; inv.phase = 0; inv.progress = 0.04; render()
+  toast({ id: 'toast-inv', kind: 'run', title: 'Inventário enviado', description: 'O processamento continua em segundo plano. Você pode seguir usando a plataforma; o aviso chega aqui e no sino.' })
+  for (const p of [0.15, 0.28, 0.4, 0.5]) { await sleep(900); inv.progress = p; render() }
+  notify({ title: 'Inventário processado', description: inv.files.map(f => f.name).join(', ') })
+  inv.phase = 1; render()
+  for (const p of [0.62, 0.74, 0.86, 0.96]) { await sleep(1000); inv.progress = p; render() }
+  await sleep(600)
+  const sel = state.selected
+  setData(DATA_COM); state.selected = sel
+  document.getElementById('toast-inv')?.remove()
+  inv.state = 'done'; inv.fresh = true; render()
+  setTimeout(() => { inv.fresh = false }, 800)
+  notify({ title: 'Análise atualizada com o inventário', description: DATA.arquivo })
+  toast({ kind: 'done', title: 'Aplicações liberadas', description: `${appsList().length} aplicações em ${DATA.escopo.grupos.filter(g => !g.unidades.every(id => toolApps().has(UNIT.get(id)?.aplicacao))).length} grupos de migração. Já dá para planejar por aplicação.`, action: { label: 'Ver aplicações', onClick: () => { state.view = 'aplicacao'; state.page = 1; render() } } })
+}
+
+/* ---------- Eventos ---------- */
+
+document.addEventListener('click', e => {
+  const t = e.target
+  if (t.closest('[data-unlock]')) { e.stopPropagation(); return openModal() }
+  if (t.closest('[data-modal-close]') || t.id === 'modal-bg') return closeModal()
+  if (t.closest('#m-send')) return sendInventory()
+  if (t.closest('#m-drop')) return document.getElementById('m-input').click()
+  if (t.closest('#m-sample')) return addFiles([{ name: 'config-snapshot-222222222222-us-east-1.json.gz', size: 2516582 }, { name: 'config-snapshot-222222222222-sa-east-1.json.gz', size: 884736 }])
+  const rm = t.closest('[data-rm]')
+  if (rm) { modal.files.splice(+rm.dataset.rm, 1); modal.error = null; return renderModal() }
+  if (t.closest('#m-copy')) { modal.copied = true; renderModal(); setTimeout(() => { modal.copied = false; renderModal() }, 2000); return }
+  if (t.closest('#bell')) {
+    const menu = document.getElementById('menu')
+    menu.hidden = !menu.hidden
+    if (menu.hidden) notices.forEach(n => n.read = true)
+    document.getElementById('toasts').innerHTML = ''
+    renderBell(); lucide.createIcons(); return
+  }
+  if (t.closest('#clear-notices')) { notices.length = 0; renderBell(); return }
+  if (!t.closest('#menu') && !document.getElementById('menu').hidden) { document.getElementById('menu').hidden = true; notices.forEach(n => n.read = true); renderBell() }
+
+  const ts = t.closest('[data-toggle-svc]')
+  if (ts) { e.stopPropagation(); return toggleSvc(ts.dataset.toggleSvc) }
+  const appRow = t.closest('tr[data-app]')
+  if (appRow) return toggleApp(appRow.dataset.app)
+  const row = t.closest('tbody#rows tr[data-id]')
+  if (row) return openDetail(row.dataset.id)
+  const v = t.closest('[data-view]')
+  if (v && !v.disabled) { state.view = v.dataset.view; state.page = 1; state.q = ''; document.getElementById('q').value = ''; return render() }
+  if (t.closest('#plan-btn')) return state.panel === 'escopo' ? closePanel() : openPlan()
+  const kpi = t.closest('.kpi[data-level]')
+  if (kpi) { const k = kpi.dataset.level; state.levels = state.levels.includes(k) ? state.levels.filter(x => x !== k) : [...state.levels, k]; state.page = 1; return render() }
+  const pg = t.closest('#pager button[data-page]')
+  if (pg && !pg.disabled) { state.page = +pg.dataset.page; return render() }
+  if (t.closest('#clear')) { state.q = ''; state.levels = []; document.getElementById('q').value = ''; state.page = 1; return render() }
+  const ga = t.closest('[data-goto-app]')
+  if (ga) { plan.apps = new Set([ga.dataset.gotoApp]); plan.servicos.clear(); plan.extra.clear(); state.view = 'aplicacao'; return openPlan() }
+  const ra = t.closest('[data-rm-app]'); if (ra) { plan.apps.delete(ra.dataset.rmApp); plan.extra.clear(); return render() }
+  const rs = t.closest('[data-rm-svc]'); if (rs) { plan.servicos.delete(rs.dataset.rmSvc); plan.extra.clear(); return render() }
+  const ex = t.closest('[data-extra]'); if (ex) { plan.extra.add(ex.dataset.extra); return render() }
+  const ux = t.closest('[data-unextra]'); if (ux) { plan.extra.delete(ux.dataset.unextra); return render() }
+  const en = t.closest('[data-env]'); if (en) { plan.env = en.dataset.env; plan.extra.clear(); return render() }
+  if (t.closest('#plan-clear')) { plan.apps.clear(); plan.servicos.clear(); plan.extra.clear(); plan.env = 'todos'; return render() }
+  if (t.closest('#plan-tf')) return toast({ kind: 'info', title: 'Terraform do escopo', description: 'No produto, gera o pacote só com o que está no plano, na ordem das ondas. Ainda não existe no backend.' })
+  if (t.closest('#plan-export')) return toast({ kind: 'info', title: 'Exportar plano', description: 'No produto, baixa o plano em PDF ou planilha.' })
+  const seg = t.closest('#pool-seg button')
+  if (seg) { poolTarget = seg.dataset.target; return render() }
+  if (t.closest('#close') || t.closest('#scrim')) return closePanel()
+  if (t.closest('#prev')) return step(-1)
+  if (t.closest('#next')) return step(1)
+  if (t.closest('#theme')) {
+    const root = document.documentElement
+    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+    root.dataset.theme = dark ? 'light' : 'dark'
+    try { localStorage.setItem('mock-theme', root.dataset.theme) } catch {}
+    return render()
+  }
+})
+document.getElementById('m-input').addEventListener('change', e => { addFiles([...e.target.files]); e.target.value = '' })
+document.addEventListener('dragover', e => { const d = e.target.closest?.('#m-drop'); if (d) { e.preventDefault(); d.classList.add('drag') } })
+document.addEventListener('dragleave', e => { e.target.closest?.('#m-drop')?.classList.remove('drag') })
+document.addEventListener('drop', e => { const d = e.target.closest?.('#m-drop'); if (d) { e.preventDefault(); d.classList.remove('drag'); addFiles([...e.dataTransfer.files]) } })
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('modal-bg').classList.contains('on')) { e.stopImmediatePropagation(); closeModal() } }, true)
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[data-unlock]')) { e.preventDefault(); openModal() } })
+document.getElementById('q').addEventListener('input', e => { state.q = e.target.value; state.page = 1; render() })
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input')) return
+  if (e.key === 'Escape' && state.panel) closePanel()
+  if (state.panel !== 'detalhe') return
+  if (e.key === 'ArrowDown') { e.preventDefault(); step(1) }
+  if (e.key === 'ArrowUp') { e.preventDefault(); step(-1) }
+})
+
+try { const t = localStorage.getItem('mock-theme'); if (t) document.documentElement.dataset.theme = t } catch {}
+const params = new URLSearchParams(location.search)
+if (params.get('theme')) document.documentElement.dataset.theme = params.get('theme')
+if (params.get('inventario') === '1') { setData(DATA_COM); inv.state = 'done' }
+if (params.get('visao')) state.view = params.get('visao')
+for (const a of (params.get('apps') ?? '').split(',').filter(Boolean)) plan.apps.add(a)
+for (const s of (params.get('servicos') ?? '').split(',').filter(Boolean)) plan.servicos.add(s)
+if (planSize()) state.panel = 'escopo'
+else if (params.get('painel') !== '0') { state.panel = 'detalhe'; state.selected = (services.find(s => s.nome === params.get('servico')) ?? services[0]).id }
+render()
