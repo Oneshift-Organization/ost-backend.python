@@ -101,12 +101,20 @@ def reconcile_pricing(rows: list, payload: dict) -> list[dict]:
     current = number(summary.get("custo_mensal_atual"))
     if current is None:
         return []
+    # Compromisso que paga máquina virtual e saiu da origem junto com os pools
+    # (premissas.compromisso_de_compute). Não é linha da tabela: sem ele aqui, o
+    # total não fecharia. Payload sem a premissa reconcilia como antes.
+    compromisso = (
+        ((payload.get("premissas") or {}).get("compromisso_de_compute") or {}).get("por_provedor")
+        or {}
+    )
     result = []
     for scenario in summary.get("por_provedor", []):
         provider = _provider(scenario)
         selected = [r for r in rows if r.target_provider.lower() == provider
                     and r.included_in_estimate]
         covered = sum((number(r.source_monthly_cost) or Decimal(0) for r in selected), Decimal(0))
+        covered += number(compromisso.get(provider)) or Decimal(0)
         priced = sum((number(r.estimated_monthly_cost) or Decimal(0) for r in selected), Decimal(0))
         expected = number(scenario.get("custo_estimado_total"))
         residual = current - covered

@@ -38,6 +38,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Preço por região / zonas / fontes oficiais / família (arquitetura, burstable) / payback | [`PLANO_PRECO_REGIONAL.md`](PLANO_PRECO_REGIONAL.md) · [`docs/precision-engine.md`](docs/precision-engine.md) |
 | Caminho do agente (MCP): snapshot de leitura, envio idempotente, versões | [`docs/endpoints/agent-snapshots.md`](docs/endpoints/agent-snapshots.md) · [`PLANO_SNAPSHOT_AGENTE.md`](PLANO_SNAPSHOT_AGENTE.md) |
 | `decision_support` compacto para o agente (`agent-snapshot-v2`, rota de detalhe) | [`PLANO_DECISION_SUPPORT_COMPACTO.md`](PLANO_DECISION_SUPPORT_COMPACTO.md) |
+| Cotação de compute pela capacidade-hora / Savings Plan e reserva de compute na comparação / antes e depois nos seis relatórios | [`PLANO_EMPACOTAMENTO.md`](PLANO_EMPACOTAMENTO.md) |
 | Lote da autoridade v3 (contestação verificável, classificação, bloco C) e fila de precisão (custos por zona, `perf_coef`) | [`PLANO_AUTORIDADE_V3_E_PRECISAO.md`](PLANO_AUTORIDADE_V3_E_PRECISAO.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
@@ -165,7 +166,9 @@ existe").
   mesma) e **cotação por região** (cada pool na zona dele, preços oficiais dos
   4 provedores, arquitetura e burstable no packer, payback do agente derivado
   da premissa — [`PLANO_PRECO_REGIONAL.md`](PLANO_PRECO_REGIONAL.md)).
-  Pendente: `perf_coef`, custos auxiliares por zona, payback na tela.
+  Compute cotado pela capacidade-hora medida, com o compromisso de compute
+  saindo da origem junto com os pools ([`PLANO_EMPACOTAMENTO.md`](PLANO_EMPACOTAMENTO.md)).
+  Pendente: `perf_coef`, custos auxiliares por zona, burstable na origem, payback na tela.
 - **O backend manda no número; a IA narra.** `use_cases/analysis/backend_authority.py`
   sobrescreve custo, economia e provedor recomendado da resposta do LLM com o
   cálculo determinístico de `resumo_executivo`. O qualitativo do modelo é

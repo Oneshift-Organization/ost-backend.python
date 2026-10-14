@@ -93,6 +93,11 @@ class AuxiliaryCosts:
     # Segregá-lo é o que impede o preço/vCPU do pool de explodir (invariante:
     # custo só entra no pool se a capacidade correspondente entrou).
     commitment: Decimal = Decimal("0")
+    # A parte do compromisso que paga horas de máquina virtual (Savings Plan de
+    # compute, reserva de EC2, CUD de vCPU/RAM). Está contida em `commitment`.
+    # A consolidação a tira da origem junto com os pools, porque o destino é
+    # cotado sem compromisso (domain/services/compromisso_de_compute.py).
+    commitment_compute: Decimal = Decimal("0")
     orphan: Decimal = Decimal("0")
     orphan_skus: tuple[str, ...] = ()
 

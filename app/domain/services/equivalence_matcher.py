@@ -26,6 +26,9 @@ _MIN_INSTANCE_ALLOWANCE = 12
 _FRAGMENTATION_FACTOR = 3
 # Quantos SKUs por provider o packer avalia (ordenados por preço no repo).
 _CANDIDATE_LIMIT = 60
+# Folga ao arredondar instâncias: 2,04 GiB medidos num SKU de 2 GiB é a mesma
+# máquina (GiB x GB, horas parciais), não duas.
+_FOLGA_DE_ARREDONDAMENTO = Decimal("0.02")
 
 
 @dataclass(frozen=True)
@@ -284,10 +287,11 @@ class EquivalenceMatcher:
         and would otherwise produce a currency-mixed ``cost_delta``.
 
         Selection is a small bin-packing: every candidate SKU is scored by the
-        **total monthly cost of the mix that covers the pool**, penalised for
-        over-provisioning. Picking the cheapest SKU per unit (the previous
-        behaviour) produced absurd mixes like 14x1vCPU/15GB for a 13vCPU/52GiB
-        pool — technically covering, financially cheap, architecturally wrong.
+        **monthly cost of the capacity-hours the pool used** (see
+        ``_best_packing``), penalised for over-provisioning. Picking the
+        cheapest SKU per unit (the previous behaviour) produced absurd mixes
+        like 14x1vCPU/15GB for a 13vCPU/52GiB pool — technically covering,
+        financially cheap, architecturally wrong.
         """
         options: list[EquivalentOption] = []
 
@@ -367,7 +371,7 @@ def _pricepoint_to_sku(p: CloudPricePoint) -> CloudSku:
     """Adapta um price point real ao candidato que o packer entende.
 
     O preço é por instância-hora (mesma semântica dos candidatos do catálogo),
-    então ``_best_packing`` multiplica por 730h sem ajuste."""
+    então ``_best_packing`` multiplica por 730h e pela fração ocupada."""
     return CloudSku(
         sku_id=p.sku_key,
         provider=p.provider,
@@ -383,13 +387,27 @@ def _pricepoint_to_sku(p: CloudPricePoint) -> CloudSku:
 
 
 def _instances_needed(vcpus: Decimal, ram_gib: Decimal, cand: CloudSku) -> int:
-    """How many candidate instances are needed to cover pool capacity."""
-    ratios: list[float] = []
+    """Instâncias a provisionar: a fração ocupada, arredondada para cima.
+
+    É o dimensionamento (o que o Terraform cria), não a base do preço.
+    """
+    fracao = _fracao_de_instancia(vcpus, ram_gib, cand)
+    return max(1, math.ceil(fracao - _FOLGA_DE_ARREDONDAMENTO))
+
+
+def _fracao_de_instancia(vcpus: Decimal, ram_gib: Decimal, cand: CloudSku) -> Decimal:
+    """Quantas instâncias do candidato a capacidade medida ocupa, sem arredondar.
+
+    A capacidade do pool é média do mês (vCPU-hora ÷ 730): 0,13 vCPU é uma
+    máquina pequena ligada parte do tempo, ou de núcleo compartilhado. A
+    dimensão que mais pesa decide (vCPU ou RAM).
+    """
+    ratios: list[Decimal] = []
     if cand.vcpus and cand.vcpus > 0 and vcpus > 0:
-        ratios.append(float(vcpus / cand.vcpus))
+        ratios.append(vcpus / cand.vcpus)
     if cand.ram_gb and cand.ram_gb > 0 and ram_gib > 0:
-        ratios.append(float(ram_gib / cand.ram_gb))
-    return max(1, math.ceil(max(ratios))) if ratios else 1
+        ratios.append(ram_gib / cand.ram_gb)
+    return max(ratios) if ratios else Decimal("1")
 
 
 def _waste_ratio(offered: Decimal, needed: Decimal) -> Decimal:
@@ -407,9 +425,16 @@ def _best_packing(
 ) -> tuple[CloudSku, int, Decimal] | None:
     """Escolhe (SKU, instâncias, custo_mensal) de menor custo total ajustado.
 
+    O custo é o da **capacidade-hora medida**: preço x 730 h x a fração de
+    instância que o pool ocupa. A origem é cobrada pelas horas que rodou; cotar
+    o destino como máquinas inteiras ligadas o mês todo punha um pool de 0,13
+    vCPU (US$ 7) num c6a.large de US$ 86. ``instancias`` continua sendo o
+    dimensionamento, arredondado para cima.
+
     Score = custo_mensal x (1 + λ x desperdício). O desperdício soma o excesso
-    relativo de vCPU e de RAM, então um mix que entrega 4x a RAM necessária é
-    penalizado mesmo sendo barato. Retorna None se nenhum candidato cobre a
+    relativo de vCPU e de RAM das instâncias provisionadas, então um mix que
+    entrega 4x a RAM necessária, ou uma máquina grande para um pool pequeno, é
+    penalizado mesmo saindo barato. Retorna None se nenhum candidato cobre a
     demanda dentro do teto de instâncias.
     """
     priced: list[tuple[CloudSku, int]] = []
@@ -436,7 +461,8 @@ def _best_packing(
         if instances > cap:
             continue
 
-        monthly = (cand.price_per_unit or Decimal("0")) * _HOURS_PER_MONTH * instances
+        fracao = _fracao_de_instancia(vcpus, ram_gib, cand)
+        monthly = (cand.price_per_unit or Decimal("0")) * _HOURS_PER_MONTH * fracao
         waste = _waste_ratio((cand.vcpus or Decimal("0")) * instances, vcpus) + _waste_ratio(
             (cand.ram_gb or Decimal("0")) * instances, ram_gib
         )

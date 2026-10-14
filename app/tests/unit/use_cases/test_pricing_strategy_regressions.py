@@ -247,3 +247,26 @@ def test_aliases_resolve_against_actual_shipped_catalog(name, kind):
     matches = [e for e in entries if e["provider"] == "aws"
                and service_key("aws", e["service_name"]) == service_key("aws", name)]
     assert any(e["service_type"] == kind for e in matches)
+
+
+def test_compute_commitment_leaves_the_source_with_the_pools(priced_payload):
+    # O destino pagou on-demand as horas que o Savings Plan cobria: o plano sai da
+    # origem junto, em vez de ficar no saldo mantido ao custo atual.
+    priced_payload["resumo_executivo"]["custo_mensal_atual"] = 170
+    priced_payload["premissas"] = {"compromisso_de_compute": {"por_provedor": {"oci": 20}}}
+    ledger = reconcile_pricing(project_equivalences(priced_payload), priced_payload)[0]
+    assert (ledger["status"], ledger["source_covered"], ledger["unchanged_source_balance"]) == (
+        "reconciled",
+        120,
+        50,
+    )
+
+
+def test_payload_without_commitment_premise_reconciles_as_before(priced_payload):
+    # Snapshot preparado antes da premissa existir: a mesma reconciliação de
+    # sempre. É o que permite trocar o hash sem subir AUTHORITY_VERSION.
+    rows = project_equivalences(priced_payload)
+    sem = reconcile_pricing(rows, priced_payload)
+    priced_payload["premissas"] = {"fx": {}}
+    assert reconcile_pricing(rows, priced_payload) == sem
+    assert sem[0]["source_covered"] == 100
