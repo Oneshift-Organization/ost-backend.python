@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from app.domain.entities.topologia import TipoDeRecurso
@@ -34,6 +34,20 @@ CATEGORIA = "categoria"
 
 # Disco magnético nos quatro provedores; o resto conta como SSD
 _HDD = ("st1", "sc1", "standard", "pd-standard", "standard_lrs", "hdd")
+
+# O que a análise não cota, dito para quem lê o plano
+_NAO_COTADO: Mapping[TipoDeRecurso, str] = {
+    TipoDeRecurso.BALANCEADOR: "a análise ainda não cota balanceador de carga",
+    TipoDeRecurso.CLUSTER_KUBERNETES: (
+        "a análise ainda não cota o plano de controle do Kubernetes gerenciado"
+    ),
+}
+_NOME_DA_CATEGORIA = {
+    "banco": "banco de dados",
+    "ssd": "disco SSD",
+    "hdd": "disco HDD",
+    "objetos": "armazenamento de objetos",
+}
 
 CATEGORIA_DO_TIPO: Mapping[TipoDeRecurso, str] = {
     TipoDeRecurso.BANCO: "banco",
@@ -53,6 +67,7 @@ class LinhaDoEscopo:
     regiao: str | None = None
     tipo_disco: str | None = None
     unidade: str | None = None  # para recortar as linhas de um escopo
+    recurso: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +84,8 @@ class ServicoCotado:
     custo: Decimal
     destino: Mapping[str, Decimal | None]  # None: sem cotação nesse provedor
     metodos: tuple[str, ...]
+    # Provedor → por que parte do serviço ficou sem cotação (texto para exibir)
+    sem_cotacao: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +142,13 @@ def taxas_dos_pools(
     return exata, familia, geral
 
 
+def _categoria(linha: LinhaDoEscopo) -> str | None:
+    if linha.tipo is TipoDeRecurso.DISCO:
+        tipo_disco = (linha.tipo_disco or "").lower()
+        return "hdd" if tipo_disco in _HDD or "hdd" in tipo_disco else "ssd"
+    return CATEGORIA_DO_TIPO.get(linha.tipo) if linha.tipo else None
+
+
 def cotar_escopo(
     linhas: Iterable[LinhaDoEscopo],
     pools: Iterable[PoolCotado],
@@ -135,42 +159,44 @@ def cotar_escopo(
     provedores = tuple(provedores)
     exata, familia, geral = taxas_dos_pools(pools, provedores)
 
-    def taxa(linha: LinhaDoEscopo, prov: str) -> tuple[Decimal | None, str | None]:
+    def taxa_de_instancia(linha: LinhaDoEscopo, prov: str) -> tuple[Decimal | None, str]:
+        if linha.familia:
+            if (t := exata.get((linha.familia, linha.regiao), {}).get(prov)) is not None:
+                return t, POOL
+            if (t := familia.get(linha.familia, {}).get(prov)) is not None:
+                return t, POOL_DA_FAMILIA
+        if (t := geral.get(prov)) is not None:
+            return t, MEDIA_DOS_POOLS
+        return None, f"a análise não tem computação cotada em {prov.upper()}"
+
+    def taxa(linha: LinhaDoEscopo, prov: str) -> tuple[Decimal | None, str]:
+        """A taxa e o método; sem taxa, o motivo no lugar do método."""
         if linha.tipo is TipoDeRecurso.INSTANCIA:
-            if linha.familia:
-                if (t := exata.get((linha.familia, linha.regiao), {}).get(prov)) is not None:
-                    return t, POOL
-                if (t := familia.get(linha.familia, {}).get(prov)) is not None:
-                    return t, POOL_DA_FAMILIA
-            if (t := geral.get(prov)) is not None:
-                return t, MEDIA_DOS_POOLS
-            return None, None
-        categoria: str | None
-        if linha.tipo is TipoDeRecurso.DISCO:
-            hdd = (
-                any(h == (linha.tipo_disco or "").lower() for h in _HDD)
-                or "hdd" in (linha.tipo_disco or "").lower()
-            )
-            categoria = "hdd" if hdd else "ssd"
-        else:
-            categoria = CATEGORIA_DO_TIPO.get(linha.tipo) if linha.tipo else None
-        if categoria and (t := taxas_de_categoria.get(prov, {}).get(categoria)) is not None:
+            return taxa_de_instancia(linha, prov)
+        categoria = _categoria(linha)
+        if not categoria:
+            motivo = _NAO_COTADO.get(linha.tipo) if linha.tipo else None
+            return None, motivo or "a análise ainda não cota este tipo de recurso"
+        if (t := taxas_de_categoria.get(prov, {}).get(categoria)) is not None:
             return t, CATEGORIA
-        return None, None
+        nome = _NOME_DA_CATEGORIA.get(categoria, categoria)
+        return None, f"a análise não tem preço de {nome} em {prov.upper()}"
 
     custo: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     destino: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: _ZERO))
     cotado: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: _ZERO))
     metodos: dict[str, set[str]] = defaultdict(set)
+    motivos: dict[str, dict[str, str]] = defaultdict(dict)
     for linha in linhas:
         custo[linha.servico] += linha.custo
         for prov in provedores:
             t, metodo = taxa(linha, prov)
             if t is None:
+                motivos[linha.servico].setdefault(prov, metodo)
                 continue
             destino[linha.servico][prov] += linha.custo * t
             cotado[linha.servico][prov] += linha.custo
-            metodos[linha.servico].add(metodo)  # type: ignore[arg-type]
+            metodos[linha.servico].add(metodo)
 
     por_servico = tuple(
         ServicoCotado(
@@ -180,6 +206,7 @@ def cotar_escopo(
                 prov: (destino[s][prov] if cotado[s][prov] > 0 else None) for prov in provedores
             },
             metodos=tuple(sorted(metodos[s])),
+            sem_cotacao=dict(motivos[s]),
         )
         for s, c in sorted(custo.items(), key=lambda kv: (-kv[1], kv[0]))
     )

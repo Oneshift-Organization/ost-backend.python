@@ -77,11 +77,12 @@ Resposta (campos principais):
 |---|---|
 | `aplicacoes`, `recursos`, `custo` | resumo do escopo (custo hoje, moeda da análise) |
 | `destino[]` | por provedor: `custo_estimado`, `custo_origem_cotado` (a parte com cotação), `sem_cotacao`, `variacao` |
-| `servicos[]` | serviço, custo hoje, `destino` por provedor (`null` = sem cotação) e `metodos` |
+| `servicos[]` | serviço, custo hoje, `destino` por provedor (`null` = sem cotação), `metodos` e `sem_cotacao` (provedor → motivo pronto para exibir, ex. "a análise ainda não cota balanceador de carga") |
 | `vao_junto[]` | **Vão junto obrigatoriamente**: unidade, aplicação, custo, `motivo` pronto ("Compartilha banco com checkout (prod) (tcp/5432)"), `incluida_por_voce` |
 | `servicos_que_vem_junto[]` | só quando a escolha tem serviço: o que entrou e por quê ("AmazonEC2 acessa dados em AmazonRDS (tcp/5432)") |
-| `antes[]` | **Precisam estar no destino antes**: grupos que o escopo chama, com `naturezas`, `portas`, `ordem`, `custo`; `nos_dois_sentidos` quando também chamam o escopo |
+| `antes[]` | **Precisam estar no destino antes**: grupos que o escopo chama, com `naturezas`, `portas`, `ordem`, `custo`, `ligado_a` (os grupos do plano com que conversa); `nos_dois_sentidos` quando também chamam o escopo |
 | `para_tras[]` | **Ficam para trás e dependem do que sai**: grupos que chamam o escopo |
+| `incluidos[]` | os grupos de `incluir_grupos`, cada um com `lado`: `antes` = **pré-migração** (o plano o chama), `depois` = **pós-migração** (ele chama o plano), `sem_ligacao` (o que o ligava ao plano saiu). Mais `ordem`, `custo`, `aplicacoes`, `ligado_a` (pré: quem do plano o chama; pós: quem do plano ele chama), `naturezas`, `portas`. O lado sai do sentido das ligações, não de onde o usuário clicou: o mesmo pedido dá o mesmo plano |
 | `ligacoes[]` | como os serviços do escopo se chamam |
 | `ordens[]` | grupos do escopo por ordem de migração |
 | `fora_do_plano[]` | custo dos serviços escolhidos que não casa com aplicação |
@@ -100,9 +101,23 @@ Cada recurso do escopo é cotado pelo que é, com o preço que a própria análi
 
 ### Exportar
 
-`POST …/migration-plans?formato=xlsx` devolve o mesmo plano em planilha
-(`Content-Disposition: attachment`), com as abas Resumo, Vão junto, Antes, Para
-trás, Serviços, Ligações e Ordem.
+Dois arquivos, para dois públicos, montados da mesma leitura
+(`app/infrastructure/exports/plano_documento.py`) e na ordem em que a tela mostra:
+
+- `?formato=pdf`: **para circular entre pessoas.** Resumo (custo hoje, estimado no
+  destino recomendado, destinos), o plano em **passos** numerados do começo ao fim
+  (pré-migração, principal e pós-migração; dentro de cada bloco, um passo por
+  etapa da conta), a ordem de migração da conta com o que ficou de fora em cada
+  etapa (e por que o plano começa depois da 1ª, quando começa), o que está fora
+  do plano e o que fazer, custo por serviço com o motivo de cada "sem cotação",
+  ligações entre serviços e, no anexo, o que migra por unidade e as premissas.
+- `?formato=xlsx`: **para quem executa.** Abas Resumo, Plano (passo, bloco,
+  etapa, papel, por quê), Recursos (cada recurso a migrar, com identificador e
+  as colunas Status, Responsável e Observações para a equipe preencher), Fora do
+  plano (com a coluna Decisão), Ordem, Serviços e Ligações.
+
+Os dois vêm com `Content-Disposition: attachment` e nome
+`plano-de-migracao-<escolha>-<AAAAMMDD-HHMM>.<pdf|xlsx>`.
 
 ## Fatura e inventário: a correspondência
 

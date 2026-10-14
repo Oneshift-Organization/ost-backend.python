@@ -144,6 +144,9 @@ async def test_plano_de_um_servico_diz_o_que_veio_junto(
         planilha = await c.post(
             f"/v1/analyses/{com}/migration-plans?formato=xlsx", json={"servicos": ["AmazonEC2"]}
         )
+        pdf = await c.post(
+            f"/v1/analyses/{com}/migration-plans?formato=pdf", json={"servicos": ["AmazonEC2"]}
+        )
     assert r.status_code == 200, r.text
     vem = {v["servico"]: v["motivo"] for v in r.json()["servicos_que_vem_junto"]}
     assert vem["AmazonRDS"] == "AmazonEC2 acessa dados em AmazonRDS (tcp/5432)"
@@ -151,6 +154,13 @@ async def test_plano_de_um_servico_diz_o_que_veio_junto(
     assert planilha.status_code == 200
     assert planilha.headers["content-type"] == _XLSX
     assert planilha.content[:2] == b"PK"
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content[:4] == b"%PDF"
+    assert 'filename="plano-de-migracao-amazonec2-' in pdf.headers["content-disposition"]
+    # Sem cotação vem com o motivo, pronto para exibir
+    elb = next(s for s in r.json()["servicos"] if s["nome"] == "Amazon Elastic Load Balancing")
+    assert elb["sem_cotacao"]["oci"] == "a análise ainda não cota balanceador de carga"
 
 
 async def test_erros_da_superficie(

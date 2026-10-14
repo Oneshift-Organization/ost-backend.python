@@ -138,6 +138,35 @@ class GrupoVizinho:
     custo: Decimal
     # Em "antes": o grupo também chama o escopo (conversa nos dois sentidos)
     nos_dois_sentidos: bool = False
+    # Os grupos do escopo com que ele conversa (o que o liga ao plano)
+    ligado_a: tuple[str, ...] = ()
+
+
+ANTES = "antes"
+DEPOIS = "depois"
+SEM_LIGACAO = "sem_ligacao"
+
+
+@dataclass(frozen=True, slots=True)
+class GrupoIncluido:
+    """Grupo de fora que o usuário pôs no plano, e de que lado da migração ele fica.
+
+    ``antes``: o escopo chama o grupo, ele precisa estar no destino primeiro
+    (pré-migração). ``depois``: o grupo chama o escopo e vai depois dele
+    (pós-migração). Conversa nos dois sentidos conta como ``antes``, como em
+    ``GrupoVizinho``. ``sem_ligacao``: nada mais no plano conversa com ele (o
+    grupo que o trouxe saiu).
+    """
+
+    grupo: str
+    nome: str
+    lado: str
+    ordem: int | None
+    custo: Decimal
+    aplicacoes: tuple[str, ...]
+    ligado_a: tuple[str, ...]
+    naturezas: tuple[Natureza, ...]
+    portas: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +199,8 @@ class PlanoDeMigracao:
     ordens: tuple[OrdemDoEscopo, ...]
     # Custo dos serviços escolhidos que não casa com nenhuma aplicação
     fora_do_plano: tuple[tuple[str, Decimal], ...]
+    # Os grupos postos à mão, cada um com o lado (pré ou pós-migração)
+    incluidos: tuple[GrupoIncluido, ...] = ()
 
 
 # ── catálogo ────────────────────────────────────────────────────────────
@@ -345,6 +376,9 @@ def fechar_plano(catalogo: CatalogoDeAplicacoes, escolha: Escolha) -> PlanoDeMig
     )
 
     antes, para_tras = _vizinhos(catalogo, no_escopo, ferramentas)
+    incluidos = _incluidos(
+        catalogo, escolha.incluir_grupos - grupos_da_semente, no_escopo, ferramentas
+    )
 
     servicos_escopo: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     for x in no_escopo:
@@ -411,6 +445,7 @@ def fechar_plano(catalogo: CatalogoDeAplicacoes, escolha: Escolha) -> PlanoDeMig
         ligacoes=ligacoes,
         ordens=ordens,
         fora_do_plano=tuple((s, sem[s]) for s in sorted(escolha.servicos) if sem.get(s, _ZERO) > 0),
+        incluidos=incluidos,
     )
 
 
@@ -465,35 +500,107 @@ class _Ligacoes:
 
     naturezas: set[Natureza] = field(default_factory=set)
     portas: set[str] = field(default_factory=set)
+    grupos: set[str] = field(default_factory=set)  # do escopo
+
+
+def _fracas_de_fora(
+    analise: AnaliseDeTopologia, ferramentas: set[str]
+) -> Iterable[tuple[str, str, Natureza, tuple[str, ...]]]:
+    """Dependências fracas entre unidades que entram em plano (sem ferramenta de acesso)."""
+    unidades = {u.id: u for u in analise.unidades}
+    for d in analise.dependencias:
+        if d.acoplamento is not Acoplamento.FRACO:
+            continue
+        if {_aplicacao_de(unidades[d.de]), _aplicacao_de(unidades[d.para])} & ferramentas:
+            continue
+        yield d.de, d.para, d.natureza, d.portas
+
+
+def _custo_do_grupo(catalogo: CatalogoDeAplicacoes, membros: Iterable[str]) -> Decimal:
+    return sum((sum(catalogo.custo_por_unidade.get(x, {}).values(), _ZERO) for x in membros), _ZERO)
+
+
+def _incluidos(
+    catalogo: CatalogoDeAplicacoes,
+    grupos: Iterable[str],
+    no_escopo: set[str],
+    ferramentas: set[str],
+) -> tuple[GrupoIncluido, ...]:
+    """De que lado da migração fica cada grupo incluído à mão.
+
+    O lado sai do sentido das ligações com o resto do plano, não de onde o
+    usuário clicou: o mesmo plano pedido de novo dá o mesmo resultado.
+    """
+    analise = catalogo.analise
+    unidades = {u.id: u for u in analise.unidades}
+    onda_do_grupo = {g: o.numero for o in analise.ondas for g in o.grupos}
+    por_id = {g.id: g for g in analise.grupos}
+    nome_do_grupo = {g.id: g.nome for g in analise.grupos}
+    saida = []
+    for g in grupos:
+        membros = set(por_id[g].unidades)
+        resto = no_escopo - membros
+        chamado, chama = _Ligacoes(), _Ligacoes()
+        for de, para, natureza, portas in _fracas_de_fora(analise, ferramentas):
+            if de in resto and para in membros:
+                alvo, outro = chamado, de
+            elif de in membros and para in resto:
+                alvo, outro = chama, para
+            else:
+                continue
+            alvo.naturezas.add(natureza)
+            alvo.portas.update(portas)
+            alvo.grupos.add(analise.grupo_de.get(outro, outro))
+        lado = ANTES if chamado.grupos else DEPOIS if chama.grupos else SEM_LIGACAO
+        saida.append(
+            GrupoIncluido(
+                grupo=g,
+                nome=nome_do_grupo.get(g, g),
+                lado=lado,
+                ordem=onda_do_grupo.get(g),
+                custo=_custo_do_grupo(catalogo, membros),
+                aplicacoes=tuple(sorted({_aplicacao_de(unidades[x]) for x in membros})),
+                # Pré: quem do plano o chama; pós: quem do plano ele chama
+                ligado_a=tuple(
+                    sorted(
+                        nome_do_grupo.get(x, x)
+                        for x in (chamado.grupos if lado == ANTES else chama.grupos)
+                    )
+                ),
+                naturezas=tuple(sorted(chamado.naturezas | chama.naturezas)),
+                portas=tuple(sorted(chamado.portas | chama.portas)),
+            )
+        )
+    return tuple(sorted(saida, key=lambda i: (i.ordem is None, i.ordem or 0, i.nome)))
 
 
 def _vizinhos(
     catalogo: CatalogoDeAplicacoes, no_escopo: set[str], ferramentas: set[str]
 ) -> tuple[tuple[GrupoVizinho, ...], tuple[GrupoVizinho, ...]]:
     analise = catalogo.analise
-    unidades = {u.id: u for u in analise.unidades}
     onda_do_grupo = {g: o.numero for o in analise.ondas for g in o.grupos}
     nome_do_grupo = {g.id: g.nome for g in analise.grupos}
     membros = {g.id: g.unidades for g in analise.grupos}
 
     def acumular(
-        alvo: dict[str, _Ligacoes], grupo: str, natureza: Natureza, portas: Iterable[str]
+        alvo: dict[str, _Ligacoes],
+        grupo: str,
+        natureza: Natureza,
+        portas: Iterable[str],
+        do_escopo: str,
     ) -> None:
         cur = alvo.setdefault(grupo, _Ligacoes())
         cur.naturezas.add(natureza)
         cur.portas.update(portas)
+        cur.grupos.add(analise.grupo_de.get(do_escopo, do_escopo))
 
     antes: dict[str, _Ligacoes] = {}
     depois: dict[str, _Ligacoes] = {}
-    for d in analise.dependencias:
-        if d.acoplamento is not Acoplamento.FRACO:
-            continue
-        if {_aplicacao_de(unidades[d.de]), _aplicacao_de(unidades[d.para])} & ferramentas:
-            continue
-        if d.de in no_escopo and d.para not in no_escopo and d.para in analise.grupo_de:
-            acumular(antes, analise.grupo_de[d.para], d.natureza, d.portas)
-        elif d.para in no_escopo and d.de not in no_escopo and d.de in analise.grupo_de:
-            acumular(depois, analise.grupo_de[d.de], d.natureza, d.portas)
+    for de, para, natureza, portas in _fracas_de_fora(analise, ferramentas):
+        if de in no_escopo and para not in no_escopo and para in analise.grupo_de:
+            acumular(antes, analise.grupo_de[para], natureza, portas, de)
+        elif para in no_escopo and de not in no_escopo and de in analise.grupo_de:
+            acumular(depois, analise.grupo_de[de], natureza, portas, para)
 
     def vizinho(g: str, info: _Ligacoes, dois_sentidos: bool = False) -> GrupoVizinho:
         return GrupoVizinho(
@@ -502,11 +609,9 @@ def _vizinhos(
             ordem=onda_do_grupo.get(g),
             naturezas=tuple(sorted(info.naturezas)),
             portas=tuple(sorted(info.portas)),
-            custo=sum(
-                (sum(catalogo.custo_por_unidade.get(x, {}).values(), _ZERO) for x in membros[g]),
-                _ZERO,
-            ),
+            custo=_custo_do_grupo(catalogo, membros[g]),
             nos_dois_sentidos=dois_sentidos,
+            ligado_a=tuple(sorted(nome_do_grupo.get(x, x) for x in info.grupos)),
         )
 
     def ordenar(vs: Iterable[GrupoVizinho]) -> tuple[GrupoVizinho, ...]:
@@ -517,6 +622,7 @@ def _vizinhos(
         if g in depois:
             info.naturezas |= depois[g].naturezas
             info.portas |= depois[g].portas
+            info.grupos |= depois[g].grupos
     return (
         ordenar(vizinho(g, info, g in depois) for g, info in antes.items()),
         ordenar(vizinho(g, info) for g, info in depois.items() if g not in antes),

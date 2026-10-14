@@ -91,3 +91,23 @@ def test_o_que_nao_tem_cotacao_fica_fora_da_comparacao_e_declarado() -> None:
     assert (gcp.custo_estimado, gcp.sem_cotacao) == (D(0), D("140"))
     elb = next(s for s in r.por_servico if s.servico == "ELB")
     assert (elb.destino, elb.metodos) == ({"oci": None, "gcp": None}, ())
+
+
+def test_sem_cotacao_diz_por_que_em_cada_provedor() -> None:
+    r = cotar_escopo(
+        [
+            _linha("ELB", "10", TipoDeRecurso.BALANCEADOR),
+            _linha("EKS", "70", TipoDeRecurso.CLUSTER_KUBERNETES),
+            # Categoria que a análise cota, mas sem preço na Azure
+            _linha("S3", "30", TipoDeRecurso.BUCKET),
+        ],
+        _POOLS,
+        _CATEGORIAS,
+        ("oci", "azure"),
+    )
+    motivos = {s.servico: dict(s.sem_cotacao) for s in r.por_servico}
+    assert motivos["ELB"]["oci"] == "a análise ainda não cota balanceador de carga"
+    assert "plano de controle do Kubernetes" in motivos["EKS"]["oci"]
+    assert motivos["S3"] == {
+        "azure": "a análise não tem preço de armazenamento de objetos em AZURE"
+    }
