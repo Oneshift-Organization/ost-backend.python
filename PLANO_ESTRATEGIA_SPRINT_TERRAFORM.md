@@ -55,7 +55,7 @@ Com a recomendação; nenhuma bloqueia o início da sprint, exceto a 2.1 para o 
 | 3.3 | `decision_support` compacto (crítico): a parte pura (K1) está pronta e não exposta; falta o aceite do contrato `agent-snapshot-v2` opcional ([`PLANO_DECISION_SUPPORT_COMPACTO`](PLANO_DECISION_SUPPORT_COMPACTO.md)) | MCP aceita → nós expomos a rota | aguarda MCP |
 | 3.4 | Cliente do agente enviar `X-OST-User-Token` | quem hospeda o agente | aberta |
 | 3.5 | Novo 422 `INVENTARIO_NAO_CORRESPONDE` na preparação de snapshot com inventário de outra conta | MCP trata o código | nota 12 |
-| 3.6 | Lote da autoridade v3 (contestação verificável, classificação, bloco C) | nós | espera 3.2 |
+| 3.6 | Lote da autoridade v3 (contestação verificável, classificação, bloco C com o nível refeito pelo inventário) | nós | espera 3.2 |
 
 ## 4. Sprint de Terraform
 
