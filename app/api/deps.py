@@ -55,6 +55,7 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextUseCase,
 )
 from app.use_cases.analysis.consultar_acoplamento import ConsultarAcoplamentoUseCase
+from app.use_cases.analysis.escopo_de_migracao import EscopoDeMigracaoUseCase
 from app.use_cases.analysis.payload_do_agente import (
     ConstrutorDeContexto,
     MontarPayloadDoAgenteUseCase,
@@ -250,4 +251,12 @@ def consultar_envios_uc(session: AsyncSession) -> ConsultarEnviosUseCase:
 def consultar_acoplamento_uc(session: AsyncSession) -> ConsultarAcoplamentoUseCase:
     return ConsultarAcoplamentoUseCase(
         jobs=PgAnalysisJobRepository(session), envios=consultar_envios_uc(session)
+    )
+
+
+def escopo_de_migracao_uc(session: AsyncSession) -> EscopoDeMigracaoUseCase:
+    return EscopoDeMigracaoUseCase(
+        jobs=PgAnalysisJobRepository(session),
+        inventarios=PgInventoryRepository(session),
+        custos=PgBillingItemRepository(session),
     )
