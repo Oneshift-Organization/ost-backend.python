@@ -222,7 +222,8 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["X-Request-ID"],
+        # Content-Disposition: o front lê o nome do arquivo baixado (plano em .xlsx, ZIP)
+        expose_headers=["X-Request-ID", "Content-Disposition"],
     )
 
     app.include_router(api_router)
