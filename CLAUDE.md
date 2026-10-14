@@ -40,6 +40,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | `decision_support` compacto para o agente (`agent-snapshot-v2`, rota de detalhe) | [`PLANO_DECISION_SUPPORT_COMPACTO.md`](PLANO_DECISION_SUPPORT_COMPACTO.md) |
 | Cotação de compute pela capacidade-hora / Savings Plan e reserva de compute na comparação / antes e depois nos seis relatórios | [`PLANO_EMPACOTAMENTO.md`](PLANO_EMPACOTAMENTO.md) |
 | Lote da autoridade v3 (contestação verificável, classificação, bloco C) e fila de precisão (custos por zona, `perf_coef`) | [`PLANO_AUTORIDADE_V3_E_PRECISAO.md`](PLANO_AUTORIDADE_V3_E_PRECISAO.md) |
+| Migrar uma aplicação ou um serviço com tudo que vai junto / rotas `applications` e `migration-plans` / custo do escopo / exportação / Terraform do escopo | [`PLANO_ESCOPO_DE_MIGRACAO.md`](PLANO_ESCOPO_DE_MIGRACAO.md) · [`docs/endpoints/migration-plans.md`](docs/endpoints/migration-plans.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
 
