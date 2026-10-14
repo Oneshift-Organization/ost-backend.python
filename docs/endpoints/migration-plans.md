@@ -83,6 +83,9 @@ Resposta (campos principais):
 | `antes[]` | **Precisam estar no destino antes**: grupos que o escopo chama, com `naturezas`, `portas`, `ordem`, `custo`, `ligado_a` (os grupos do plano com que conversa); `nos_dois_sentidos` quando também chamam o escopo |
 | `para_tras[]` | **Podem vir depois**: grupos que usam o que vai migrar (chamam o escopo); incluídos, vão para a pós-migração |
 | `incluidos[]` | os grupos de `incluir_grupos`, cada um com `lado`: `antes` = **pré-migração** (o plano o chama), `depois` = **pós-migração** (ele chama o plano), `sem_ligacao` (o que o ligava ao plano saiu). Mais `ordem`, `custo`, `aplicacoes`, `ligado_a` (pré: quem do plano o chama; pós: quem do plano ele chama), `naturezas`, `portas`. O lado sai do sentido das ligações, não de onde o usuário clicou: o mesmo pedido dá o mesmo plano |
+| `grupos_do_plano[]` | cada grupo do plano com `bloco` (`pre`, `principal`, `pos`), `ordem` (etapa da conta) e `custo`: a tela monta os **passos** (um por bloco e etapa) daqui |
+| `unidades_do_plano[]` | o que é cada unidade: `nome`, `aplicacao`, `ambiente`, `regiao`, `conta`, `grupo`, `papel` (`escolhido`, `vai_junto`, `incluido`), `motivo` (por que vai junto), `custo`, `conteudo` (quantos recursos de cada tipo), os 10 `recursos` mais caros e `recursos_total` (a planilha tem todos) |
+| `etapas_da_conta` | quantas etapas a ordem de migração da conta tem: a tela mostra onde o plano cai e o que ficou de fora em cada uma |
 | `ligacoes[]` | como os serviços do escopo se chamam |
 | `ordens[]` | grupos do escopo por ordem de migração |
 | `fora_do_plano[]` | custo dos serviços escolhidos que não casa com aplicação |

@@ -203,3 +203,24 @@ def test_contagem_por_tipo() -> None:
     assert contagem("Instância", 14) == "14 instâncias"
     assert contagem("IP público", 1) == "1 IP público"
     assert contagem("Banco de dados", 3) == "3 bancos de dados"
+
+
+def test_resposta_diz_o_bloco_de_cada_grupo_e_o_que_cada_unidade_tem() -> None:
+    plano = _documento(incluir_antes=True, incluir_depois=True).plano
+    blocos = {g.nome: g.bloco for g in plano.grupos_do_plano}
+    assert blocos["catalogo"] == "pre"
+    assert blocos["monitor"] == "pos"
+    # Pré primeiro, pós por último: a ordem da tela
+    assert (plano.grupos_do_plano[0].bloco, plano.grupos_do_plano[-1].bloco) == ("pre", "pos")
+    papeis = {u.nome: (u.papel, u.motivo is not None) for u in plano.unidades_do_plano}
+    assert papeis["checkout"] == ("escolhido", False)
+    assert papeis["auth"] == ("vai_junto", True)
+    assert papeis["catalogo"] == ("incluido", False)
+    auth = next(u for u in plano.unidades_do_plano if u.nome == "auth")
+    assert {(c.tipo, c.quantidade) for c in auth.conteudo} == {("instancia", 1), ("banco", 1)}
+    # Os recursos vêm do mais caro para o mais barato
+    assert [r.custo for r in auth.recursos] == sorted(
+        (r.custo for r in auth.recursos), reverse=True
+    )
+    assert auth.recursos_total == len(auth.recursos)
+    assert plano.etapas_da_conta >= 2
