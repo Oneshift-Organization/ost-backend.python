@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import StrEnum
 
 
@@ -34,6 +35,33 @@ class Arquitetura(StrEnum):
 class Perfil:
     arquitetura: Arquitetura
     burstable: bool = False
+    # Fração da vCPU nominal que o burstable entrega sem crédito (linha de base).
+    # Em destino sem burstable, a carga é dimensionada por ela, não pela nominal
+    # (P1b, PLANO_AUTORIDADE_V3_E_PRECISAO §3). None: não sabemos, não reduz.
+    base_cpu: Decimal | None = None
+
+
+# Linha de base por vCPU das famílias T da AWS (t3, t3a, t4g; documentação de
+# instâncias burstable). Sem o tamanho (pool da família), a maior das usuais:
+# reduzir menos do que devia é o erro seguro.
+_BASE_AWS_T = {
+    "nano": Decimal("0.05"),
+    "micro": Decimal("0.10"),
+    "small": Decimal("0.20"),
+    "medium": Decimal("0.20"),
+    "large": Decimal("0.30"),
+    "xlarge": Decimal("0.40"),
+    "2xlarge": Decimal("0.40"),
+}
+_BASE_AWS_PADRAO = Decimal("0.40")
+# Núcleo compartilhado do GCP: a fração da vCPU que a máquina tem garantida
+_BASE_GCP = {
+    "e2-micro": Decimal("0.125"),
+    "e2-small": Decimal("0.25"),
+    "e2-medium": Decimal("0.50"),
+    "f1-micro": Decimal("0.20"),
+    "g1-small": Decimal("0.50"),
+}
 
 
 # `m7g.2xlarge`, `M7G`, `t3a.micro`, `is4gen.xlarge`, `m7i-flex.large`
@@ -55,7 +83,10 @@ def _aws(nome: str) -> Perfil | None:
     # A letra de série define a classe; `g` no sufixo é Graviton (m7g, c7gn,
     # r7gd, is4gen, im4gn). `t` é burstable (t2, t3, t3a, t4g).
     arm = "g" in sufixo
-    return Perfil(Arquitetura.ARM if arm else Arquitetura.X86, burstable=serie == "t")
+    burstable = serie == "t"
+    tamanho = nome.split(".", 1)[1] if "." in nome else None
+    base = (_BASE_AWS_T.get(tamanho or "", _BASE_AWS_PADRAO)) if burstable else None
+    return Perfil(Arquitetura.ARM if arm else Arquitetura.X86, burstable=burstable, base_cpu=base)
 
 
 def _gcp(nome: str) -> Perfil | None:
@@ -63,7 +94,11 @@ def _gcp(nome: str) -> Perfil | None:
     if not familia:
         return None
     arm = bool(_GCP_ARM.match(familia))
-    return Perfil(Arquitetura.ARM if arm else Arquitetura.X86, burstable=nome in _GCP_SHARED_CORE)
+    return Perfil(
+        Arquitetura.ARM if arm else Arquitetura.X86,
+        burstable=nome in _GCP_SHARED_CORE,
+        base_cpu=_BASE_GCP.get(nome),
+    )
 
 
 def _azure(nome: str) -> Perfil | None:

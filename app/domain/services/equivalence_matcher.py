@@ -359,12 +359,37 @@ def _packing_por_perfil(
         return _best_packing(vcpus, ram_gib, candidates), False
     aceitos = [c for c in candidates if aceita(origem, perfil(c.provider, c.sku_id))]
     mesma = [c for c in aceitos if mesma_arquitetura(origem, perfil(c.provider, c.sku_id))]
-    best = _best_packing(vcpus, ram_gib, mesma)
+    best = _packing_pela_base(vcpus, ram_gib, mesma, origem)
     if best is not None:
         return best, False
     outra = [c for c in aceitos if c not in mesma]
-    best = _best_packing(vcpus, ram_gib, outra)
+    best = _packing_pela_base(vcpus, ram_gib, outra, origem)
     return best, best is not None
+
+
+def _packing_pela_base(
+    vcpus: Decimal,
+    ram_gib: Decimal,
+    candidates: list[CloudSku],
+    origem: Perfil,
+) -> tuple[CloudSku, int, Decimal] | None:
+    """Origem burstable: o destino sem burstable recebe a linha de base, não a vCPU
+    nominal (uma t4g.xlarge entrega 40% de 4 vCPU sem crédito); o destino burstable
+    recebe a nominal, porque também tem crédito. Vence o mais barato dos dois. A
+    memória não muda: ela não é burstable."""
+    if not origem.burstable or origem.base_cpu is None:
+        return _best_packing(vcpus, ram_gib, candidates)
+    com_credito = [c for c in candidates if (p := perfil(c.provider, c.sku_id)) and p.burstable]
+    sem_credito = [c for c in candidates if c not in com_credito]
+    opcoes = [
+        x
+        for x in (
+            _best_packing(vcpus, ram_gib, com_credito),
+            _best_packing(vcpus * origem.base_cpu, ram_gib, sem_credito),
+        )
+        if x is not None
+    ]
+    return min(opcoes, key=lambda x: x[2]) if opcoes else None
 
 
 def _pricepoint_to_sku(p: CloudPricePoint) -> CloudSku:

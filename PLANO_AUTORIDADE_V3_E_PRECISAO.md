@@ -148,6 +148,18 @@ que pesam (20% ou mais), para uma fatia pequena não rebaixar a categoria.
 T3A, T4G e T2 do bill AWS saem 3–6x no GCP: a vCPU burstable tem base de
 20–40% e é cotada como vCPU cheia (`PLANO_EMPACOTAMENTO` §5.2).
 
+**Feito (16/10):** `Perfil.base_cpu` (família T da AWS por tamanho, 40% sem
+tamanho; núcleo compartilhado do GCP; série B da Azure fica sem base porque varia
+por SKU). No packer, origem burstable: destino sem crédito recebe vCPU × base,
+destino burstable recebe a nominal, vence o mais barato; a memória não muda.
+Premissa `burstable_pela_base` lista os pools.
+
+| relatório | decisão | confiança | economia antes → depois (US$/mês) |
+|---|---|---|---|
+| AWS Cost Explorer (real) | OCI = OCI | medium = medium | OCI 40.419,93 → 41.192,50 · Azure −8.628,91 → −8.006,72 · GCP −16.886,13 → −15.307,92 |
+| AWS CUR (mock) | OCI = OCI | medium = medium | OCI 37.352,99 → 38.357,15 · Azure −10.168,77 → −8.957,11 · GCP −20.230,12 → −17.575,37 |
+| GCP Cost Table, GCP BigQuery, Azure, OCI (mocks e real) | iguais | iguais | iguais (sem família burstable na origem) |
+
 ### P2 `perf_coef` (desempenho por vCPU entre gerações)
 
 Bloqueado por **fonte de dados**: não há base pública e estável de desempenho

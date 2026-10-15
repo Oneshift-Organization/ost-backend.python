@@ -3,9 +3,11 @@
 Invariante: quando há price point oficial para um provedor, o candidato e a
 confiança vêm dele; senão, cai no catálogo seed com confiança 'low'.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
@@ -69,33 +71,51 @@ class _PriceRepo(ICloudPricePointRepository):
 
 def _sku(price: str) -> CloudSku:
     return CloudSku(
-        sku_id="seed-vm", provider="azure", service_name="Azure VM", currency="USD",
-        service_type="virtual_server", category="compute",
-        price_per_unit=Decimal(price), vcpus=Decimal("4"), ram_gb=Decimal("16"),
+        sku_id="seed-vm",
+        provider="azure",
+        service_name="Azure VM",
+        currency="USD",
+        service_type="virtual_server",
+        category="compute",
+        price_per_unit=Decimal(price),
+        vcpus=Decimal("4"),
+        ram_gb=Decimal("16"),
     )
 
 
 def _point(price: str) -> CloudPricePoint:
     return CloudPricePoint(
-        provider="azure", sku_key="Standard_D4s_v5", service_name="Azure Virtual Machines",
-        service_type="virtual_server", region="eastus", price=Decimal(price), currency="USD",
-        unit="instance_hour", vcpus=Decimal("4"), ram_gib=Decimal("16"),
-        source="azure_retail_api", confidence="official", captured_at=datetime.now(UTC),
+        provider="azure",
+        sku_key="Standard_D4s_v5",
+        service_name="Azure Virtual Machines",
+        service_type="virtual_server",
+        region="eastus",
+        price=Decimal(price),
+        currency="USD",
+        unit="instance_hour",
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        source="azure_retail_api",
+        confidence="official",
+        captured_at=datetime.now(UTC),
     )
 
 
 @pytest.mark.asyncio
 async def test_prefers_price_point_over_seed() -> None:
     matcher = EquivalenceMatcher(
-        _SkuRepo({"azure": [_sku("9.99")]}),   # seed caro/errado
+        _SkuRepo({"azure": [_sku("9.99")]}),  # seed caro/errado
         _PriceRepo({"azure": [_point("0.20")]}),  # preço real
     )
     opts = await matcher.match_pool(
-        vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("200"),
-        service_type="virtual_server", target_providers=["azure"],
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        monthly_cost=Decimal("200"),
+        service_type="virtual_server",
+        target_providers=["azure"],
     )
     assert len(opts) == 1
-    assert opts[0].sku_id == "Standard_D4s_v5"          # veio do price point
+    assert opts[0].sku_id == "Standard_D4s_v5"  # veio do price point
     assert opts[0].financials.pricing_confidence == "official"
     # 0.20/h * 730h = 146 (não o seed de 9.99)
     assert opts[0].financials.estimated_monthly_cost == Decimal("146.00")
@@ -108,8 +128,11 @@ async def test_falls_back_to_seed_when_no_price_point() -> None:
         _PriceRepo({}),  # sem preço real para gcp
     )
     opts = await matcher.match_pool(
-        vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("200"),
-        service_type="virtual_server", target_providers=["gcp"],
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        monthly_cost=Decimal("200"),
+        service_type="virtual_server",
+        target_providers=["gcp"],
     )
     assert len(opts) == 1
     assert opts[0].financials.pricing_confidence == "low"
@@ -120,8 +143,11 @@ async def test_works_without_price_repo() -> None:
     """Sem price_repo (None), comporta-se como antes: só catálogo, confiança low."""
     matcher = EquivalenceMatcher(_SkuRepo({"oci": [_sku("0.30")]}))
     opts = await matcher.match_pool(
-        vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("200"),
-        service_type="virtual_server", target_providers=["oci"],
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        monthly_cost=Decimal("200"),
+        service_type="virtual_server",
+        target_providers=["oci"],
     )
     assert len(opts) == 1
     assert opts[0].financials.pricing_confidence == "low"
@@ -133,21 +159,38 @@ async def test_empate_prefere_menos_instancias() -> None:
     4vCPU x8. O score empata; o desempate tem que ser por menos máquinas —
     sem isso o vencedor era quem viesse primeiro do banco (não-reproduzível)."""
     grande = CloudPricePoint(
-        provider="azure", sku_key="Standard_D16", service_name="Azure VM",
-        service_type="virtual_server", region="eastus", price=Decimal("0.40"),
-        currency="USD", unit="instance_hour", vcpus=Decimal("16"), ram_gib=Decimal("64"),
+        provider="azure",
+        sku_key="Standard_D16",
+        service_name="Azure VM",
+        service_type="virtual_server",
+        region="eastus",
+        price=Decimal("0.40"),
+        currency="USD",
+        unit="instance_hour",
+        vcpus=Decimal("16"),
+        ram_gib=Decimal("64"),
     )
     pequeno = CloudPricePoint(
-        provider="azure", sku_key="Standard_D4", service_name="Azure VM",
-        service_type="virtual_server", region="eastus", price=Decimal("0.10"),
-        currency="USD", unit="instance_hour", vcpus=Decimal("4"), ram_gib=Decimal("16"),
+        provider="azure",
+        sku_key="Standard_D4",
+        service_name="Azure VM",
+        service_type="virtual_server",
+        region="eastus",
+        price=Decimal("0.10"),
+        currency="USD",
+        unit="instance_hour",
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
     )
     # Nas duas ordens de entrada o resultado tem que ser o mesmo.
     for candidatos in ([grande, pequeno], [pequeno, grande]):
         matcher = EquivalenceMatcher(_SkuRepo({}), _PriceRepo({"azure": candidatos}))
         opts = await matcher.match_pool(
-            vcpus=Decimal("32"), ram_gib=Decimal("128"), monthly_cost=Decimal("1000"),
-            service_type="virtual_server", target_providers=["azure"],
+            vcpus=Decimal("32"),
+            ram_gib=Decimal("128"),
+            monthly_cost=Decimal("1000"),
+            service_type="virtual_server",
+            target_providers=["azure"],
         )
         assert opts[0].instances == 2, "deveria preferir 2x16vCPU a 8x4vCPU"
         assert opts[0].sku_id == "Standard_D16"
@@ -158,9 +201,18 @@ async def test_empate_prefere_menos_instancias() -> None:
 
 def _vm(provider: str, region: str, price: str) -> CloudPricePoint:
     return CloudPricePoint(
-        provider=provider, sku_key="vm-4x16", service_name="VM", service_type="virtual_server",
-        region=region, price=Decimal(price), currency="USD", unit="instance_hour",
-        vcpus=Decimal("4"), ram_gib=Decimal("16"), source="api", confidence="official",
+        provider=provider,
+        sku_key="vm-4x16",
+        service_name="VM",
+        service_type="virtual_server",
+        region=region,
+        price=Decimal(price),
+        currency="USD",
+        unit="instance_hour",
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        source="api",
+        confidence="official",
         captured_at=datetime.now(UTC),
     )
 
@@ -170,8 +222,12 @@ async def _cotar(
 ) -> FinancialEstimate:
     matcher = EquivalenceMatcher(_SkuRepo({}), repo)
     [opt] = await matcher.match_pool(
-        vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("100"),
-        service_type="virtual_server", target_providers=[provider], regioes=regioes,
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        monthly_cost=Decimal("100"),
+        service_type="virtual_server",
+        target_providers=[provider],
+        regioes=regioes,
     )
     assert opt.financials is not None
     return opt.financials
@@ -218,9 +274,18 @@ async def test_sem_regioes_mantem_o_comportamento_antigo() -> None:
 
 def _aws(sku: str, price: str) -> CloudPricePoint:
     return CloudPricePoint(
-        provider="aws", sku_key=sku, service_name="Amazon EC2", service_type="virtual_server",
-        region="us-east-1", price=Decimal(price), currency="USD", unit="instance_hour",
-        vcpus=Decimal("4"), ram_gib=Decimal("16"), source="api", confidence="official",
+        provider="aws",
+        sku_key=sku,
+        service_name="Amazon EC2",
+        service_type="virtual_server",
+        region="us-east-1",
+        price=Decimal(price),
+        currency="USD",
+        unit="instance_hour",
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        source="api",
+        confidence="official",
         captured_at=datetime.now(UTC),
     )
 
@@ -228,8 +293,11 @@ def _aws(sku: str, price: str) -> CloudPricePoint:
 async def _cotar_perfil(pontos: list[CloudPricePoint], familia: str) -> EquivalentOption:
     matcher = EquivalenceMatcher(_SkuRepo({}), _PriceRepo({"aws": pontos}))
     [opt] = await matcher.match_pool(
-        vcpus=Decimal("4"), ram_gib=Decimal("16"), monthly_cost=Decimal("100"),
-        service_type="virtual_server", target_providers=["aws"],
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        monthly_cost=Decimal("100"),
+        service_type="virtual_server",
+        target_providers=["aws"],
         perfil_origem=perfil("gcp", familia),
     )
     return opt
@@ -259,3 +327,33 @@ async def test_sem_a_mesma_arquitetura_usa_a_outra_e_marca() -> None:
 async def test_arm_cotado_em_arm() -> None:
     opt = await _cotar_perfil([_aws("m7g.xlarge", "0.20"), _aws("m7a.xlarge", "0.15")], "C4A")
     assert opt.sku_id == "m7g.xlarge"
+
+
+@pytest.mark.asyncio
+async def test_burstable_na_origem_e_dimensionado_pela_base_em_destino_sem_credito() -> None:
+    """t4g.xlarge (4 vCPU, base 40%): sem crédito no destino, 1,6 vCPU e os 16 GiB.
+
+    Pela vCPU nominal, a máquina de 2 vCPU não cobria e a de 4 vencia; pela base, a de
+    2 vCPU e 16 GiB cobre e sai mais barata (P1b)."""
+    grande = _aws("m7g.xlarge", "0.16")
+    pequena = replace(_aws("r7g.large", "0.11"), vcpus=Decimal("2"))
+    matcher = EquivalenceMatcher(_SkuRepo({}), _PriceRepo({"aws": [grande, pequena]}))
+    [opt] = await matcher.match_pool(
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        monthly_cost=Decimal("100"),
+        service_type="virtual_server",
+        target_providers=["aws"],
+        perfil_origem=perfil("aws", "t4g.xlarge"),
+    )
+    assert (opt.sku_id, opt.instances) == ("r7g.large", 1)
+    # Origem sustentada: a mesma conta não deixa a pequena cobrir
+    [sustentada] = await matcher.match_pool(
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        monthly_cost=Decimal("100"),
+        service_type="virtual_server",
+        target_providers=["aws"],
+        perfil_origem=perfil("aws", "m7g.xlarge"),
+    )
+    assert sustentada.sku_id == "m7g.xlarge"

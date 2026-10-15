@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 from app.domain.services.perfil_de_familia import (
@@ -55,7 +57,26 @@ X86 = Arquitetura.X86
     ],
 )
 def test_perfil(provedor: str, nome: str, arquitetura: Arquitetura, burstable: bool) -> None:
-    assert perfil(provedor, nome) == Perfil(arquitetura, burstable)
+    p = perfil(provedor, nome)
+    assert p is not None
+    assert (p.arquitetura, p.burstable) == (arquitetura, burstable)
+
+
+@pytest.mark.parametrize(
+    ("provedor", "nome", "base"),
+    [
+        ("aws", "t4g.xlarge", "0.40"),
+        ("aws", "t3.micro", "0.10"),
+        ("aws", "T3A", "0.40"),  # família sem tamanho: a maior base usual
+        ("gcp", "e2-medium", "0.50"),
+        ("aws", "m7g.large", None),
+        ("azure", "Standard_B2s", None),  # base da série B varia por SKU: não reduz
+    ],
+)
+def test_base_de_cpu_do_burstable(provedor: str, nome: str, base: str | None) -> None:
+    p = perfil(provedor, nome)
+    assert p is not None
+    assert p.base_cpu == (Decimal(base) if base else None)
 
 
 @pytest.mark.parametrize(
