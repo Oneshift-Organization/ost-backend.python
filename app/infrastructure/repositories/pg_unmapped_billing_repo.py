@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
+from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +30,15 @@ class PgUnmappedBillingRepository:
             total += result.rowcount or len(chunk)  # type: ignore[attr-defined]
         await self._session.flush()
         return total
+
+    async def delete_by_report(self, report_id: UUID, user_id: UUID) -> int:
+        stmt = delete(UnmappedBillingLineModel).where(
+            UnmappedBillingLineModel.report_id == report_id,
+            UnmappedBillingLineModel.user_id == user_id,
+        )
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return result.rowcount or 0  # type: ignore[attr-defined]
 
     @staticmethod
     def _to_row(item: UnmappedBillingLine) -> dict[str, Any]:
