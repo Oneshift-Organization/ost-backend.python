@@ -223,3 +223,18 @@ A Cost Table e o export padrão do BigQuery não trazem o recurso; a descrição
 | Cloud Storage | bucket | só com um |
 
 "Americas", "multi-region" e afins são grupo de preço, não região: não restringem.
+
+## 9. Proposta: aplicações de dentro do Kubernetes (aguarda decisão)
+
+Na conta kitconta, as ~18 aplicações (`ghnetsoft-erp-*`) rodam como pods no EKS. O AWS Config
+vê o cluster, os nós, o balanceador do Kong e os discos dos volumes; não vê Deployment, Service
+nem Ingress. Para a análise, o cluster é **uma** unidade.
+
+| Opção | O que o cliente envia | O que muda | Esforço |
+|---|---|---|---|
+| **A. Indícios do inventário** | nada além do AWS Config | lista informativa "prováveis aplicações no cluster" a partir dos nomes de repositório de imagens, segredos, Cloud Map e tags do balanceador (`service.k8s.aws/stack=kong/kong-kong-proxy`). Não vira unidade nem divide custo | pequeno |
+| **B. Export do cluster** | `kubectl get deploy,sts,ds,svc,ing,pvc -A -o json` como arquivo extra do inventário | cada carga (Deployment/StatefulSet) vira aplicação, agrupada por `app.kubernetes.io/name` ou namespace; o cluster vira **plataforma**, pré-requisito delas; o custo do cluster divide pelos requests de CPU e memória; Ingress e Service dão dependências | grande: normalizador novo, papel novo na topologia, plano e Terraform |
+
+**Recomendação:** A agora (sem pedir nada ao cliente), B quando houver um segundo cliente com
+Kubernetes. B muda o que "migrar a aplicação" significa no plano: as cargas mudam de cluster,
+não de máquina.
