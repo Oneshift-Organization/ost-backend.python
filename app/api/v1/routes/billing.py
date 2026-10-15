@@ -25,7 +25,6 @@ from app.api.v1.routes.billing_checks import verificar_arquivo
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
-from app.domain.services.diagnostico_de_entrada import COST_EXPLORER
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.repositories.pg_billing_enriched_repo import (
     PgBillingEnrichedRepository,
@@ -127,10 +126,11 @@ async def upload_billing_file(
         tmp.write(contents)
         tmp_name = tmp.name
 
-    # Cost Explorer por serviço: sem tipo de uso não há o que analisar. Recusa já,
-    # com o caminho certo, em vez de uma análise quase vazia (PLANO_CENARIOS_DE_ENTRADA)
+    # O que a verificação recusa (Cost Explorer por serviço, relatório de uso da OCI,
+    # arquivo que não é fatura) não vira análise: recusa já, com o caminho certo, em
+    # vez de falhar depois em segundo plano (PLANO_CENARIOS_DE_ENTRADA)
     verificacao = _verificar_sem_falhar(Path(tmp_name))
-    if verificacao is not None and verificacao.formato == COST_EXPLORER:
+    if verificacao is not None and not verificacao.aceita:
         Path(tmp_name).unlink(missing_ok=True)  # noqa: ASYNC240 - arquivo temporário pequeno
         problema = verificacao.problemas[0]
         raise HTTPException(

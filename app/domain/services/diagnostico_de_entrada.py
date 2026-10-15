@@ -29,6 +29,8 @@ INFORMATIVO = "informativo"
 _ORDEM = {CRITICO: 0, ALERTA: 1, INFORMATIVO: 2}
 
 COST_EXPLORER = "AWS_CE_DAILY_BY_SERVICE"
+# Não é fatura: o relatório de uso da OCI tem as quantidades, sem o custo
+OCI_RELATORIO_DE_USO = "OCI_USAGE_REPORT"
 _CLASSIFICACAO_MINIMA = 0.95
 _CLASSIFICACAO_CRITICA = 0.5
 _COBERTURA_MINIMA = 0.8
@@ -50,6 +52,7 @@ PERFIS: Mapping[str, PerfilDaFatura] = {
         "fatura detalhada da AWS (formato legado, por tipo de uso)", "aws", True, False
     ),
     COST_EXPLORER: PerfilDaFatura("Cost Explorer da AWS (total por serviço)", "aws", False, False),
+    OCI_RELATORIO_DE_USO: PerfilDaFatura("relatório de uso da OCI (sem custo)", "oci", False, True),
     "GCP_BILLING_DETAILED": PerfilDaFatura("export detalhado do BigQuery", "gcp", True, True),
     "GCP_BILLING_STD": PerfilDaFatura("export padrão do BigQuery", "gcp", True, False),
     "GCP_COST_TABLE": PerfilDaFatura("Cost Table do GCP", "gcp", True, False),
@@ -110,6 +113,18 @@ def problemas_do_arquivo(formato: str | None, *, com_id: bool | None = None) -> 
     perfil = PERFIS.get(formato or "")
     if perfil is None:
         return []
+    if formato == OCI_RELATORIO_DE_USO:
+        return [
+            Problema(
+                CRITICO,
+                "oci_relatorio_de_uso",
+                "Esse é o relatório de uso da OCI, não o de custos",
+                "O arquivo `reports_usage` traz quanto cada recurso consumiu, mas não quanto "
+                "custou, e sem o custo não há o que comparar. Na mesma tela da OCI há o relatório "
+                "de custos, com o nome `reports_cost`: é ele que a análise lê. "
+                + _como_exportar(perfil.provedor),
+            )
+        ]
     if not perfil.aceita:
         return [
             Problema(

@@ -54,7 +54,7 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
 | 401 | Token ausente ou inválido |
 | 413 | Arquivo > 50 MB |
 | 415 | Extensão não suportada |
-| 422 | `FORMATO_NAO_SUPORTADO`: Cost Explorer por serviço (`AWS_CE_DAILY_BY_SERVICE`). Sem o tipo de uso de cada linha não há o que analisar; `mensagem` explica e diz o export certo |
+| 422 | `FORMATO_NAO_SUPORTADO`: o que a verificação (`POST /v1/billing-file-checks`) recusa — Cost Explorer por serviço (`AWS_CE_DAILY_BY_SERVICE`, sem tipo de uso), relatório de uso da OCI (`reports_usage`, sem custo) ou arquivo que não é fatura conhecida. `mensagem` explica e diz o export certo |
 
 ---
 

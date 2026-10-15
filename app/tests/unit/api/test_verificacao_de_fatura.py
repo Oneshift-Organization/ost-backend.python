@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 from pathlib import Path
 
 from app.api.v1.routes.billing_checks import verificar_arquivo
@@ -29,3 +30,18 @@ def test_arquivo_que_nao_e_fatura_e_recusado(tmp_path: Path) -> None:
     r = verificar_arquivo(arq)
     assert r.aceita is False
     assert r.problemas[0].codigo == "formato_nao_reconhecido"
+
+
+def test_relatorio_de_uso_da_oci_e_reconhecido_e_aponta_o_de_custos(tmp_path: Path) -> None:
+    arq = tmp_path / "reports_usage-csv_0001.csv.gz"
+    with gzip.open(arq, "wt") as f:
+        f.write(
+            "lineItem/referenceNo,lineItem/tenantId,lineItem/intervalUsageStart,product/service,"
+            "product/resourceId,usage/consumedQuantity,usage/billedQuantity\n"
+            "V2.x,ocid1.tenancy.oc1..a,2026-10-14T17:00Z,OBJECTSTORE,ocid1.bucket.x,1.5,1.5\n"
+        )
+    r = verificar_arquivo(arq)
+    assert (r.aceita, r.formato, r.provedor) == (False, "OCI_USAGE_REPORT", "oci")
+    [p] = r.problemas
+    assert p.codigo == "oci_relatorio_de_uso"
+    assert "reports_cost" in p.texto

@@ -116,6 +116,25 @@ _FORMATO_DO_PARSER = {
 }
 
 
+# Arquivos que parecem fatura e não são: reconhecidos para dizer o que enviar no lugar
+_NAO_E_FATURA = (
+    # Relatório de uso da OCI: mesmas colunas `lineItem/` do de custos, sem nenhuma `cost/`
+    ("OCI_USAGE_REPORT", (b"lineItem/referenceNo", b"usage/consumedQuantity"), b"cost/"),
+)
+
+
+def formato_que_nao_e_fatura(file_path: Path) -> str | None:
+    """O formato conhecido que o detector recusa com razão, ou None."""
+    try:
+        amostra = _read_sample(file_path)
+    except UnsupportedFormatError:
+        return None
+    for formato, exige, proibe in _NAO_E_FATURA:
+        if all(t in amostra for t in exige) and proibe not in amostra:
+            return formato
+    return None
+
+
 def inspecionar_formato(file_path: Path) -> tuple[str, bool | None]:
     """(formato, traz ID de recurso?) pela amostra do arquivo, sem ler tudo.
 
