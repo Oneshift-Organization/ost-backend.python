@@ -1,6 +1,6 @@
 # Plano: cenários de entrada (fatura × inventário)
 
-> Estado: em execução (15/10/2026). Origem: análise `1146f830` em develop, conta real
+> Estado: entregue na develop (15/10/2026) — back `1bb39ea`, front `779af46`. Origem: análise `1146f830` em develop, conta real
 > AWS 538358956561 (kitconta), com `inventario-aws.json` (AWS Config,
 > `select-resource-config`) e `fatura-aws-2026-09.csv` (formato detalhado legado, sem
 > ID de recurso). Massas em `../MASSAS REAIS/`.
@@ -130,4 +130,58 @@ Unitários por bloco; no fim, um ensaio local com as massas reais e LLM `mock`
 
 ## 6. Resultado
 
-_preenchido ao fim da execução_
+### O que entrou (develop)
+
+| Bloco | Back | Front |
+|---|---|---|
+| 3.1 + 3.2 leitura do AWS Config e topologia | `73151c2` | — |
+| 3.3 custo pelo tipo, status `estimado`, plano por serviço sem ID | `48c8268` | `dac1014` |
+| 3.4 diagnóstico de entrada, verificação do arquivo, recusa no upload | `d04797a`, `71d2523`, `1bb39ea` | `dac1014` |
+
+Suítes: unitária 1504, integração 185 (Postgres local), sem falha.
+
+### Ensaio com as massas reais (local, LLM `mock`)
+
+| Arquivo | Antes | Agora |
+|---|---|---|
+| `inventario-aws.json` | 241 recursos, 35 com tag, nenhuma aplicação, VPN no grupo da aplicação, "todas as portas abertas" ×2, "banco compartilhado" | 150 recursos (91 padrões da AWS fora), 68 com tag; aplicação **kitconta (prd)** com cluster, nós, balanceador do Kong, banco e bucket do front; VPN como ferramenta; só o risco real (porta 22 aberta na VPN) |
+| `fatura-aws-2026-09.csv` (sem ID) | "Fatura sem ID de recurso", custo por aplicação vazio, plano por serviço bloqueado | status `estimado`: 88% do gasto ligado pelo tipo; kitconta US$ 269,29/mês; plano por AmazonRDS, AmazonEKS e AmazonS3 funciona |
+| `reports_usage-csv_…csv.gz` (OCI) | falharia em segundo plano com "File format not recognized" | recusado na hora: "Esse é o relatório de uso da OCI, não o de custos", apontando o `reports_cost` |
+| Cost Explorer (fixture) | aceito, análise quase vazia | recusado no modal e no upload, com explicação e o caminho do CUR 2.0 |
+
+### Como validar na tela (develop)
+
+O inventário fica guardado já normalizado: **o inventário antigo não muda**.
+Reenvie `inventario-aws.json` e refaça a análise com a mesma fatura.
+
+1. **Análises** (`/dashboard/analises`): análise com problema mostra `!` ao lado do nome
+   (amarelo = alerta, vermelho = crítico), na tabela e nos cards. Passar o mouse lista os
+   problemas. A da kitconta: "Custo por aplicação estimado" e "Parte do gasto não foi
+   reconhecida". As análises sem inventário: "Análise sem inventário". As antigas de Cost
+   Explorer: vermelho.
+2. **Nova análise → Importar fatura**: ao escolher o arquivo aparece "conferindo o arquivo…".
+   - Cost Explorer ou `reports_usage` da OCI: caixa vermelha com a explicação, link "Ver como
+     exportar a fatura certa da …" e **Importar desabilitado**.
+   - Fatura detalhada legada da AWS: aviso informativo "Fatura sem o ID de cada recurso";
+     importa normalmente.
+   - CUR 2.0 com IDs: nenhuma crítica, mostra "CUR 2.0 da AWS".
+   - Guia da AWS (chip "AWS"): 4 passos do CUR 2.0 com "Include resource IDs".
+3. **Análise aberta**: linha no topo com o pior problema ("… e mais 1 problema nos arquivos
+   enviados"); o `!` abre a lista.
+4. **Dependências**: aviso "Custo estimado pelo tipo"; aba Aplicações com **kitconta** e o
+   custo marcado "· estimado"; srv-openvpn-prd fora das aplicações (ferramenta).
+5. **Plano de migração**: "Adicionar → Serviços" lista os serviços também sem ID; escolher
+   AmazonRDS traz kitconta inteira; "Custo hoje" diz "estimado pelo tipo".
+
+### Deploy
+
+Sem migration. Só código. O ambiente de develop precisa do deploy das imagens novas
+(back e front) e, para ver a conta real corrigida, do reenvio do inventário.
+
+### Pendente (fora deste lote, §4)
+
+- Tipos próprios para CloudFront, Lambda, DynamoDB, ECR, Secrets Manager e grupos de autoscaling.
+- Aplicações de dentro do Kubernetes (export do `kubectl`).
+- Atribuição pelo tipo para GCP, Azure e OCI (hoje só AWS; os detalhados dessas nuvens trazem ID).
+- Teste do front `tests/additional-information.test.mjs` falha na develop por módulo não
+  resolvido pelo runner do Node (anterior a este lote).
