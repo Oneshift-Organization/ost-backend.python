@@ -136,7 +136,10 @@ As duas respostas trazem `correspondencia`, que diz se o inventário casa com a 
 **Custo pelo tipo** (`app/domain/services/atribuicao_por_tipo.py`): cada linha sem ID
 vai para os recursos do inventário do mesmo tipo — máquina pelo tipo
 (`BoxUsage:t4g.xlarge`), banco pela classe, cluster, NAT, balanceador, disco pelo tipo
-e pelo tamanho, bucket quando é um só —, na mesma conta e região. Vários candidatos
+e pelo tamanho, bucket quando é um só —, na mesma conta e região. No GCP (Cost Table, export
+padrão do BigQuery) a descrição do SKU decide: `N2 Instance Core`/`Ram` vai às máquinas da
+família `n2-`, dividido pelos vCPUs e pela memória de cada uma; `Balanced PD Capacity` aos
+discos `pd-balanced` pelo tamanho; `Cloud SQL for PostgreSQL` ao banco Postgres. Vários candidatos
 iguais dividem igual; candidatos diferentes sem medida (vários buckets) não recebem.
 A mesma regra cobre a máquina ou o disco com ID que não está no inventário (nó trocado
 pelo autoscaling): conta como coberto pelo tipo, e a mensagem do `ok`/`parcial` diz

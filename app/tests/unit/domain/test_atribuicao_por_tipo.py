@@ -232,7 +232,7 @@ def test_servico_que_cada_tipo_gera() -> None:
         "AWSELB",
         "AmazonS3",
     }
-    assert servicos_do_recurso("gcp", inv.recursos) == set()
+    assert servicos_do_recurso("azure", inv.recursos) == set()
 
 
 def test_duas_funcoes_da_mesma_aplicacao_dividem_o_custo_do_servico() -> None:
@@ -255,3 +255,89 @@ def test_duas_funcoes_da_mesma_aplicacao_dividem_o_custo_do_servico() -> None:
 def test_servico_do_componente_vem_do_tipo_nativo() -> None:
     fn = replace(_r("fn", T.OUTRO, componente="funcao"), tipo_nativo="AWS::Lambda::Function")
     assert servicos_do_recurso("aws", [fn]) == {"AWSLambda"}
+
+
+# ── GCP: Cost Table e export padrão do BigQuery (sem ID, por SKU) ──────────────
+
+
+def _gcp(*linhas: LinhaSemRecurso):
+    return CustosDoBilling(
+        periodo="2026-09",
+        moeda="USD",
+        custo_da_base=sum((x.custo for x in linhas), Decimal(0)),
+        por_recurso=(),
+        sem_recurso=linhas,
+        provedor="gcp",
+    )
+
+
+def _linha_gcp(servico: str, sku: str, custo: str) -> LinhaSemRecurso:
+    return LinhaSemRecurso(conta=None, regiao=None, servico=servico, uso=sku, custo=Decimal(custo))
+
+
+def _projeto_gcp():
+    return replace(
+        inventario(
+            [
+                vm("vm-api", conta="p1", regiao="us-central1", tipo_maquina="n2-standard-4"),
+                vm("vm-worker", conta="p1", regiao="us-central1", tipo_maquina="n2-standard-8"),
+                vm("vm-cron", conta="p1", regiao="us-central1", tipo_maquina="e2-medium"),
+                recurso(
+                    "disk-a",
+                    T.DISCO,
+                    conta="p1",
+                    regiao="us-central1",
+                    tipo_disco="pd-balanced",
+                    tamanho_gb=10,
+                ),
+                recurso(
+                    "disk-b",
+                    T.DISCO,
+                    conta="p1",
+                    regiao="us-central1",
+                    tipo_disco="pd-balanced",
+                    tamanho_gb=30,
+                ),
+                banco(
+                    "sql-loja",
+                    conta="p1",
+                    regiao="us-central1",
+                    motor="postgres",
+                    classe="db-custom-2-7680",
+                ),
+            ]
+        ),
+        provedor="gcp",
+    )
+
+
+def test_gcp_core_e_ram_da_familia_dividem_pelo_tamanho_da_maquina() -> None:
+    custos = atribuir_por_tipo(
+        _projeto_gcp(),
+        _gcp(
+            _linha_gcp("Compute Engine", "N2 Instance Core running in Americas", "120"),
+            _linha_gcp("Compute Engine", "N2 Instance Ram running in Americas", "60"),
+            _linha_gcp("Compute Engine", "E2 Instance Core running in Americas", "9"),
+        ),
+    )
+    custo = _por_recurso(custos)
+    # n2-standard-4 e n2-standard-8: 4 de 12 vCPUs e 16 de 48 GiB
+    assert custo["vm-api"] == Decimal("40") + Decimal("20")
+    assert custo["vm-worker"] == Decimal("80") + Decimal("40")
+    assert custo["vm-cron"] == Decimal("9")
+
+
+def test_gcp_disco_pelo_tipo_e_tamanho_e_cloud_sql_pelo_motor() -> None:
+    custos = atribuir_por_tipo(
+        _projeto_gcp(),
+        _gcp(
+            _linha_gcp("Compute Engine", "Balanced PD Capacity in Americas", "8"),
+            _linha_gcp("Cloud SQL", "Cloud SQL for PostgreSQL: Zonal - vCPU in Americas", "30"),
+            _linha_gcp("Cloud SQL", "Cloud SQL for MySQL: Zonal - vCPU in Americas", "5"),
+        ),
+    )
+    custo = _por_recurso(custos)
+    assert (custo["disk-a"], custo["disk-b"]) == (Decimal("2"), Decimal("6"))
+    assert custo["sql-loja"] == Decimal("30")
+    # Nenhum banco MySQL no inventário: a linha continua sem recurso
+    assert [x.uso for x in custos.sem_recurso] == ["Cloud SQL for MySQL: Zonal - vCPU in Americas"]
