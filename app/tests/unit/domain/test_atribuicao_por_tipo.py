@@ -132,7 +132,7 @@ def test_correspondencia_diz_que_o_custo_e_estimado() -> None:
     assert (r.status, r.liga_custo) == (ESTIMADO, True)
     assert r.fracao_encontrada is None  # não há custo com ID para medir
     assert r.fracao_estimada is not None and r.fracao_estimada > Decimal("0.9")
-    assert "estimado pelo tipo" in r.mensagem
+    assert "calculado pelo tipo" in r.mensagem
     assert "CUR 2.0" in r.mensagem
     assert "Cost Explorer" not in r.mensagem
 

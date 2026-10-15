@@ -5,14 +5,17 @@ não dá nada; fatura sem ID dá aplicações com custo estimado; CUR com ID e
 inventário dá custo medido por recurso. Tratar todas como se fossem a mesma fez a
 tela afirmar coisas que os arquivos não sustentavam.
 
-O diagnóstico diz, em linguagem de quem enviou o arquivo, o que ficou de fora e
-como resolver. Três níveis:
+O diagnóstico diz, em linguagem de quem enviou o arquivo, o que **ele pode
+resolver mandando outro arquivo**. O que só nós resolvemos (gasto que a
+classificação não reconheceu) não entra: aviso sem ação para o usuário só tira
+confiança da análise (feedback de 16/10). Três níveis:
 
-- ``critico``: a análise não se sustenta (formato sem o detalhe necessário, inventário de
-  outra nuvem, quase nada classificado);
-- ``alerta``: a análise sai, mas falta uma parte (sem inventário, inventário que
-  cobre só parte da fatura, custo por aplicação estimado);
-- ``informativo``: limite conhecido do formato, sem prejuízo do que foi pedido.
+- ``critico``: o arquivo não serve para o que foi pedido (Cost Explorer, inventário
+  de outra nuvem);
+- ``alerta``: falta uma parte que outro arquivo traz (contas fora do inventário,
+  inventário de outro momento);
+- ``informativo``: limite conhecido e aceitável (análise sem inventário, custo por
+  aplicação calculado pelo tipo). Não acende o aviso da lista.
 
 Função pura, sem I/O: lê o formato da fatura e o que a análise já congelou.
 """
@@ -31,8 +34,6 @@ _ORDEM = {CRITICO: 0, ALERTA: 1, INFORMATIVO: 2}
 COST_EXPLORER = "AWS_CE_DAILY_BY_SERVICE"
 # Não é fatura: o relatório de uso da OCI tem as quantidades, sem o custo
 OCI_RELATORIO_DE_USO = "OCI_USAGE_REPORT"
-_CLASSIFICACAO_MINIMA = 0.95
-_CLASSIFICACAO_CRITICA = 0.5
 _COBERTURA_MINIMA = 0.8
 
 
@@ -77,8 +78,8 @@ COMO_EXPORTAR: Mapping[str, str] = {
         "envie o CSV."
     ),
     "oci": (
-        "Na OCI, em Billing & Cost Management, na tela Cost and Usage Reports, baixe o relatório de "
-        "custos do mês."
+        "Na OCI, em Billing & Cost Management, na tela Cost and Usage Reports, baixe o "
+        "relatório de custos do mês."
     ),
 }
 
@@ -166,16 +167,13 @@ def diagnosticar_arquivo(formato: str | None) -> Diagnostico:
 def diagnosticar_payload(
     *, formato: str | None, provedor_da_fatura: str | None, payload: Mapping[str, Any] | None
 ) -> Diagnostico:
-    """A análise concluída: lê do payload congelado a topologia e a classificação."""
+    """A análise concluída: lê do payload congelado a topologia."""
     if not payload:
         return diagnosticar_arquivo(formato)
-    premissas = payload.get("premissas") or {}
-    cobertura = premissas.get("cobertura_classificacao")
     return diagnosticar_analise(
         formato=formato,
         provedor_da_fatura=provedor_da_fatura,
         topologia=payload.get("topologia") or None,
-        cobertura_classificacao=float(cobertura) if isinstance(cobertura, int | float) else None,
     )
 
 
@@ -184,10 +182,9 @@ def diagnosticar_analise(
     formato: str | None,
     provedor_da_fatura: str | None,
     topologia: Mapping[str, Any] | None,
-    cobertura_classificacao: float | None,
 ) -> Diagnostico:
-    """A partir do que a análise já guardou: o formato da fatura, o bloco de topologia
-    do payload (ausente = sem inventário) e a fração do gasto classificada."""
+    """A partir do que a análise já guardou: o formato da fatura e o bloco de topologia
+    do payload (ausente = sem inventário)."""
     perfil = PERFIS.get(formato or "")
     cobertura = (topologia or {}).get("resumo", {}).get("cobertura") or {}
     com_id: bool | None = None
@@ -199,12 +196,11 @@ def diagnosticar_analise(
         if topologia is None:
             problemas.append(
                 Problema(
-                    ALERTA,
+                    INFORMATIVO,
                     "sem_inventario",
-                    "Análise sem inventário",
-                    "Sem o inventário da conta, a análise não mostra aplicações, dependências nem "
-                    "o plano de migração: só o gasto e a recomendação. Envie o inventário (na AWS, "
-                    "a saída do AWS Config) e refaça a análise.",
+                    "Análise feita com a fatura",
+                    "Com o inventário da conta (na AWS, a saída do AWS Config), a análise também "
+                    "mostra aplicações, dependências e o plano de migração.",
                 )
             )
         else:
@@ -213,28 +209,6 @@ def diagnosticar_analise(
                 # Com inventário, "sem ID" vira o alerta do custo estimado: o mesmo assunto
                 problemas = [p for p in problemas if p.codigo != "fatura_sem_id"]
 
-    if cobertura_classificacao is not None and perfil is not None and perfil.aceita:
-        if cobertura_classificacao < _CLASSIFICACAO_CRITICA:
-            problemas.append(
-                Problema(
-                    CRITICO,
-                    "classificacao_baixa",
-                    "A maior parte do gasto não foi reconhecida",
-                    f"Só {cobertura_classificacao:.0%} do gasto foi ligado a um serviço "
-                    "conhecido. A comparação entre nuvens fica com o resto de fora. Confira se o "
-                    "arquivo é o export completo do mês.",
-                )
-            )
-        elif cobertura_classificacao < _CLASSIFICACAO_MINIMA:
-            problemas.append(
-                Problema(
-                    ALERTA,
-                    "classificacao_parcial",
-                    "Parte do gasto não foi reconhecida",
-                    f"{1 - cobertura_classificacao:.0%} do gasto não foi ligado a um serviço "
-                    "conhecido e ficou fora da comparação entre nuvens.",
-                )
-            )
     return _diagnostico(problemas)
 
 
@@ -267,21 +241,23 @@ def _problemas_do_inventario(
             Problema(
                 ALERTA,
                 "inventario_parcial",
-                "O inventário cobre só parte da fatura",
-                f"{fracao:.0%} do custo com recurso identificado está no inventário. Aplicações e "
-                "plano mostram só essa parte"
-                + (f"; faltam as contas {', '.join(contas)}." if contas else "."),
+                "Faltam contas no inventário" if contas else "Inventário cobre parte da fatura",
+                f"Aplicações e plano cobrem {fracao:.0%} do custo com recurso identificado. "
+                + (
+                    f"Para incluir o restante, envie o inventário das contas {', '.join(contas)}."
+                    if contas
+                    else "Para incluir o restante, envie o inventário completo da conta."
+                ),
             )
         )
     if not com_recurso and perfil is not None:
         problemas.append(
             Problema(
-                ALERTA,
+                INFORMATIVO,
                 "custo_estimado",
-                "Custo por aplicação estimado",
-                "A fatura não traz o ID de cada recurso: o custo de cada aplicação foi estimado "
-                "pelo tipo (a máquina pelo tipo, o banco pela classe). As aplicações e o que migra "
-                "junto vêm do inventário e estão completos. Para o custo medido: "
+                "Custo por aplicação calculado pelo tipo",
+                "O custo de cada aplicação vem do tipo de cada recurso (a máquina pelo tipo, o "
+                "banco pela classe). Para medir recurso a recurso: "
                 + _como_exportar(perfil.provedor, depois_de_dois_pontos=True),
             )
         )
@@ -290,9 +266,10 @@ def _problemas_do_inventario(
             Problema(
                 ALERTA,
                 "inventario_desalinhado",
-                "Inventário e fatura de momentos diferentes",
-                "O inventário foi tirado longe do mês da fatura: recursos criados ou removidos "
-                "no meio aparecem como lacuna. Exporte o inventário perto do fim do mês da fatura.",
+                "Inventário de outro momento",
+                "O inventário é de uma data distante do mês da fatura, então recursos criados ou "
+                "removidos no meio ficam de fora das aplicações. Para alinhar, exporte o "
+                "inventário perto do fim do mês da fatura.",
             )
         )
     return problemas

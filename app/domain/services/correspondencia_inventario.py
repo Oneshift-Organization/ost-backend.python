@@ -124,19 +124,16 @@ def avaliar_correspondencia(
             return com(
                 ESTIMADO,
                 (
-                    "A fatura não traz o ID de cada recurso. O custo de cada aplicação foi "
-                    "estimado pelo tipo do recurso: a máquina pelo tipo, o banco pela classe, o "
-                    f"cluster, o NAT e o balanceador{parte}. Para o custo medido de cada recurso, "
-                    f"envie {_FATURA_DETALHADA}."
+                    "O custo de cada aplicação foi calculado pelo tipo de cada recurso: a máquina "
+                    f"pelo tipo, o banco pela classe, o cluster, o NAT e o balanceador{parte}. "
+                    f"Com {_FATURA_DETALHADA}, o valor passa a ser medido recurso a recurso."
                 ),
             )
         return com(
             SEM_ID_DE_RECURSO,
             (
-                "A fatura não traz o ID de cada recurso, e nenhuma linha dela pôde ser ligada a um "
-                "recurso do inventário pelo tipo. As aplicações e o que migra junto vêm do "
-                "inventário, sem o custo de cada uma. Para o custo por aplicação, envie "
-                f"{_FATURA_DETALHADA}."
+                "Aplicações e o que migra junto vêm do inventário. Esta fatura não liga o custo "
+                f"a recursos; com {_FATURA_DETALHADA}, o custo de cada aplicação aparece."
             ),
         )
 
@@ -163,19 +160,24 @@ def avaliar_correspondencia(
     fracao = correlacao.fracao_encontrada or Decimal(0)
     # Máquina trocada pelo autoscaling: o ID não está no inventário, o tipo dela está
     pelo_tipo = (
-        f" {correlacao.custo_estimado_com_id / correlacao.custo_com_recurso:.0%} dele pelo tipo da "
-        "máquina ou do disco, de recursos que já não existem no inventário (trocados pelo "
-        "autoscaling)."
+        f" Desse custo, {correlacao.custo_estimado_com_id / correlacao.custo_com_recurso:.0%} é "
+        "de máquinas e discos que o autoscaling trocou, contados pelo tipo."
         if correlacao.custo_estimado_com_id > 0
         else ""
     )
     if fracao < COBERTURA_MINIMA:
-        faltam = f" Faltam as contas {_lista(sem_inventario)}." if sem_inventario else ""
+        resto = (
+            f" O restante é das contas {_lista(sem_inventario)}, que não estão no inventário."
+            if sem_inventario
+            else " O restante é de recursos que não estão no inventário."
+        )
         return com(
             PARCIAL,
             (
-                f"O inventário cobre {fracao:.0%} do custo com recurso identificado: as aplicações "
-                f"e o plano mostram só essa parte.{faltam}{pelo_tipo}"
+                f"Aplicações e plano cobrem {fracao:.0%} do custo com recurso identificado."
+                f"{resto}{pelo_tipo}"
             ),
         )
-    return com(OK, f"O inventário cobre {fracao:.0%} do custo com recurso identificado.{pelo_tipo}")
+    return com(
+        OK, f"Aplicações e plano cobrem {fracao:.0%} do custo com recurso identificado.{pelo_tipo}"
+    )
