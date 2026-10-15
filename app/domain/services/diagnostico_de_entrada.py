@@ -8,7 +8,7 @@ tela afirmar coisas que os arquivos não sustentavam.
 O diagnóstico diz, em linguagem de quem enviou o arquivo, o que ficou de fora e
 como resolver. Três níveis:
 
-- ``critico``: a análise não se sustenta (formato que não serve, inventário de
+- ``critico``: a análise não se sustenta (formato sem o detalhe necessário, inventário de
   outra nuvem, quase nada classificado);
 - ``alerta``: a análise sai, mas falta uma parte (sem inventário, inventário que
   cobre só parte da fatura, custo por aplicação estimado);
@@ -119,11 +119,10 @@ def problemas_do_arquivo(formato: str | None, *, com_id: bool | None = None) -> 
             Problema(
                 CRITICO,
                 "oci_relatorio_de_uso",
-                "Esse é o relatório de uso da OCI, não o de custos",
-                "O arquivo `reports_usage` traz quanto cada recurso consumiu, mas não quanto "
-                "custou, e sem o custo não há o que comparar. Na mesma tela da OCI há o relatório "
-                "de custos, com o nome `reports_cost`: é ele que a análise lê. "
-                + _como_exportar(perfil.provedor),
+                "Esse é o relatório de uso da OCI",
+                "Ele mostra quanto cada recurso consumiu, mas não o valor cobrado, que é o que a "
+                "comparação entre nuvens usa. Na mesma tela da OCI fica o relatório de custos, "
+                "com o nome `reports_cost`. " + _como_exportar(perfil.provedor),
             )
         ]
     if not perfil.aceita:
@@ -131,11 +130,10 @@ def problemas_do_arquivo(formato: str | None, *, com_id: bool | None = None) -> 
             Problema(
                 CRITICO,
                 "cost_explorer",
-                "O Cost Explorer não serve para a análise",
-                "Esse arquivo é o resumo do Cost Explorer: o gasto de cada serviço por dia, sem "
-                "dizer que máquina, que banco ou que disco gerou cada valor. Sem isso não dá para "
-                "saber o que você usa nem cotar o equivalente em outra nuvem, e a análise sairia "
-                "quase vazia. Não é erro seu: é o primeiro export que o console oferece. "
+                "Esse arquivo é um resumo do Cost Explorer",
+                "Ele mostra o total de cada serviço por dia, mas não o que gerou cada valor (qual "
+                "máquina, banco ou disco). Para comparar com outras nuvens, a análise precisa "
+                "desse detalhe, que vem em outro export da mesma conta. "
                 + _como_exportar(perfil.provedor),
             )
         ]
