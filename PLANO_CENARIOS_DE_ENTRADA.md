@@ -138,7 +138,7 @@ Unitários por bloco; no fim, um ensaio local com as massas reais e LLM `mock`
 | 3.3 custo pelo tipo, status `estimado`, plano por serviço sem ID | `48c8268` | `dac1014` |
 | 3.4 diagnóstico de entrada, verificação do arquivo, recusa no upload | `d04797a`, `71d2523`, `1bb39ea` | `dac1014` |
 
-Suítes: unitária 1504, integração 185 (Postgres local), sem falha.
+Suítes: 1697 testes (unitários e de integração, com o Postgres local), nenhuma falha; 24 pulados (Terraform sem binário).
 
 ### Ensaio com as massas reais (local, LLM `mock`)
 
