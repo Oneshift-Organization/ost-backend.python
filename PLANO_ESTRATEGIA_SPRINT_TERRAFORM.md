@@ -19,6 +19,44 @@ Pacote de teste para o dev: `~/Downloads/oneshift-testes-inventario-2026-10-14/`
 (fatura + inventário certo, de outra conta e parcial, por nuvem; resultado
 esperado no `LEIA-ME.md`, validado contra a API local).
 
+## Antes do Terraform — checklist (16/10)
+
+O que falta para começar o T0, por dono. ✅ feito · ⏳ em aberto.
+
+**Ambiente de develop (infra / usuário)**
+
+| # | item | estado |
+|---|---|---|
+| A1 | Migrations, regras, preços, FX no dev (1.1) | ✅ 15/10: alembic no head, 147 regras, preços AWS/OCI/Azure, 8 taxas |
+| A2 | Preços GCP no dev: falta `GCP_BILLING_API_KEY` no cluster (hoje 28 preços) | ⏳ |
+| A3 | Refazer o sync `categories-live` (falhou com 429) | ⏳ |
+| A4 | Flag `AGENT_SNAPSHOT_ENABLED=true` no dev (1.2); `INVENTORY_ENABLED` já está ligado | ⏳ confirmar |
+| A5 | Deploy das imagens da develop (back `60f309d`, front `5099761`) | ⏳ |
+
+**Validação (usuário)**
+
+| # | item | estado |
+|---|---|---|
+| V1 | Cenários de entrada na tela: reenviar `inventario-aws.json` da kitconta, refazer a análise e seguir o roteiro do PLANO_CENARIOS_DE_ENTRADA §6 | ⏳ |
+| V2 | Teste do pacote de 14 pares no dev (1.3) | ⏳ |
+| V3 | Encaminhar ao MCP as notas `MCP.PLAN/10`, `/11` e `/12` (1.5) | ⏳ confirmar |
+
+**Decisões (usuário)** — detalhe e recomendação em §2
+
+| # | decisão | bloqueia |
+|---|---|---|
+| D1 | 2.1 plano de migração salvo | T5 |
+| D2 | 2.2 envio do agente gera Terraform? | T7 |
+| D3 | 2.9 revogar a chave GCP das branches órfãs e trocar tokens | — (segurança, fazer já) |
+| D4 | 2.3–2.8 e 2.10 | não bloqueiam o T0 |
+| D5 | Aplicações de dentro do Kubernetes: opção A ou B (PLANO_CENARIOS_DE_ENTRADA §9) | — |
+
+**MCP** — §3: 3.1 idempotência, 3.2 testes conjuntos (depende de A4), 3.3 contrato
+`agent-snapshot-v2`, 3.4 `X-OST-User-Token`, 3.5 tratar `INVENTARIO_NAO_CORRESPONDE`.
+
+**Nós (back/front)** — nada em aberto que bloqueie o T0. O lote da autoridade v3
+(3.6) espera 3.2.
+
 ## 1. Fechar hoje
 
 | # | o quê | de quem | como saber que fechou |
