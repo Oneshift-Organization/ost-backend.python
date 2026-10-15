@@ -143,6 +143,7 @@ _COMPONENTE = {
     "AWS::SecretsManager::Secret": "segredo",
     "AWS::SQS::Queue": "fila",
     "AWS::SNS::Topic": "fila",
+    "AWS::ServiceDiscovery::Service": "descoberta_de_servico",
 }
 _SSD = frozenset({"gp2", "gp3", "io1", "io2"})
 

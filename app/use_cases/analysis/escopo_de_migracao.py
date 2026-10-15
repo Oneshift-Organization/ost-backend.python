@@ -44,6 +44,7 @@ from app.domain.services.cotacao_do_escopo import (
 from app.domain.services.currency import FxRate, convert, identity_rate
 from app.domain.services.sku_matcher import extract_family
 from app.domain.services.topologia import analisar_topologia
+from app.domain.services.topologia.cargas_no_cluster import CargasDoCluster, cargas_no_cluster
 from app.domain.services.topologia.dependencias_de_servico import dependencias_de_servico
 from app.domain.services.topologia.escopo import (
     CatalogoDeAplicacoes,
@@ -124,6 +125,8 @@ class ContextoDoEscopo:
     recursos: Mapping[str, RecursoDoEscopo] = field(default_factory=dict)
     periodo: str | None = None
     gasto_total: Decimal | None = None
+    # Unidade com cluster → prováveis aplicações dentro dele (indício, não unidade)
+    cargas_no_cluster: Mapping[str, CargasDoCluster] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +294,7 @@ class EscopoDeMigracaoUseCase:
                 if (r := indice.recursos.get(chave)) is not None
             },
             periodo=_texto_cru(payload.get("periodo_faturamento")),
+            cargas_no_cluster=cargas_no_cluster(conteudo, analise),
             gasto_total=_decimal(payload.get("gasto_total")),
         )
 

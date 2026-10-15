@@ -98,6 +98,20 @@ class ServicoLigadoOut(BaseModel):
         return cls(servico=s.servico, natureza=s.natureza.value, portas=list(s.portas))
 
 
+class CargaNoClusterOut(BaseModel):
+    nome: str
+    fontes: list[str] = Field(description="imagem, segredo, service discovery, balanceador")
+
+
+class ClusterDaAplicacaoOut(BaseModel):
+    """Indício do que roda dentro do cluster: nomes de imagens, segredos e serviços.
+    O inventário da nuvem não vê o Kubernetes por dentro; não vira unidade nem custo."""
+
+    cluster: str
+    cargas: list[CargaNoClusterOut]
+    namespaces: list[str]
+
+
 class AplicacaoOut(BaseModel):
     nome: str
     ambientes: list[str]
@@ -109,6 +123,9 @@ class AplicacaoOut(BaseModel):
         description="outras aplicações no mesmo grupo de migração (dependência forte)"
     )
     servicos: list[CustoPorNome]
+    clusters: list[ClusterDaAplicacaoOut] = Field(
+        default_factory=list, description="prováveis aplicações dentro dos clusters dela"
+    )
 
 
 class UsoDoServicoOut(BaseModel):
@@ -164,6 +181,18 @@ class ApplicationsResponse(BaseModel):
                     ordens=list(a.ordens),
                     migra_junto_com=list(a.migra_junto_com),
                     servicos=[CustoPorNome(nome=n, custo=_dinheiro(v)) for n, v in a.servicos],
+                    clusters=[
+                        ClusterDaAplicacaoOut(
+                            cluster=k.cluster,
+                            cargas=[
+                                CargaNoClusterOut(nome=x.nome, fontes=list(x.fontes))
+                                for x in k.cargas
+                            ],
+                            namespaces=list(k.namespaces),
+                        )
+                        for u in a.unidades
+                        if (k := ctx.cargas_no_cluster.get(u)) is not None
+                    ],
                 )
                 for a in c.aplicacoes
             ],
