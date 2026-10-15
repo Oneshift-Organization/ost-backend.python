@@ -399,7 +399,11 @@ def _estimar(
                 pesos, mesma_unidade = [(r, Decimal(1)) for r in candidatos], True
         if not pesos:
             return []
-        return _dividir(linha, regra, valor, pesos, mesma_unidade=mesma_unidade)
+        dividido = len(pesos) > 1 and not mesma_unidade
+        if dividido and unidade_de is not None:
+            unidades = {unidade_de(r.chave) for r, _ in pesos}
+            dividido = len(unidades) > 1 or None in unidades
+        return _dividir(linha, regra, valor, pesos, mesma_unidade=mesma_unidade, dividido=dividido)
     return []
 
 
@@ -493,6 +497,7 @@ def _dividir(
     pesos: list[tuple[Recurso, Decimal]],
     *,
     mesma_unidade: bool = False,
+    dividido: bool = False,
 ) -> list[CustoDeRecurso]:
     total = sum((p for _, p in pesos), _ZERO)
     nome = regra.nativo or regra.tipo.value
@@ -533,6 +538,7 @@ def _dividir(
                 estimado=True,
                 origem=linha.origem,
                 base=base,
+                dividido=dividido,
             )
         )
     return saida

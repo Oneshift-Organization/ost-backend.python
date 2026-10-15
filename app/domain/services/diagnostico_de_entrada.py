@@ -17,6 +17,11 @@ confiança da análise (feedback de 16/10). Três níveis:
 - ``informativo``: limite conhecido e aceitável (análise sem inventário, custo por
   aplicação calculado pelo tipo). Não acende o aviso da lista.
 
+A fatura sem ID só vira alerta quando o CUR mudaria o número de forma relevante:
+custo dividido entre recursos iguais de aplicações diferentes, pouco do gasto
+ligado às aplicações, ou capacidade coberta por compromisso que a fatura não
+detalha. Uma conta com um recurso de cada tipo não acende nada.
+
 Função pura, sem I/O: lê o formato da fatura e o que a análise já congelou.
 """
 
@@ -35,6 +40,9 @@ COST_EXPLORER = "AWS_CE_DAILY_BY_SERVICE"
 # Não é fatura: o relatório de uso da OCI tem as quantidades, sem o custo
 OCI_RELATORIO_DE_USO = "OCI_USAGE_REPORT"
 _COBERTURA_MINIMA = 0.8
+# Fatura sem ID: a partir daqui o CUR muda o custo das aplicações de forma relevante
+_DIVIDIDO_RELEVANTE = 0.3  # do custo estimado, dividido entre aplicações diferentes
+_LIGADO_MINIMO = 0.6  # do gasto, ligado a alguma aplicação
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +182,7 @@ def diagnosticar_payload(
         formato=formato,
         provedor_da_fatura=provedor_da_fatura,
         topologia=payload.get("topologia") or None,
+        compromisso=(payload.get("premissas") or {}).get("cobertura_por_compromisso"),
     )
 
 
@@ -182,9 +191,11 @@ def diagnosticar_analise(
     formato: str | None,
     provedor_da_fatura: str | None,
     topologia: Mapping[str, Any] | None,
+    compromisso: Mapping[str, Any] | None = None,
 ) -> Diagnostico:
-    """A partir do que a análise já guardou: o formato da fatura e o bloco de topologia
-    do payload (ausente = sem inventário)."""
+    """A partir do que a análise já guardou: o formato da fatura, o bloco de topologia
+    do payload (ausente = sem inventário) e a capacidade coberta por compromisso sem
+    custo próprio (``premissas.cobertura_por_compromisso``)."""
     perfil = PERFIS.get(formato or "")
     cobertura = (topologia or {}).get("resumo", {}).get("cobertura") or {}
     com_id: bool | None = None
@@ -209,6 +220,20 @@ def diagnosticar_analise(
                 # Com inventário, "sem ID" vira o alerta do custo estimado: o mesmo assunto
                 problemas = [p for p in problemas if p.codigo != "fatura_sem_id"]
 
+    if compromisso and (perfil is None or perfil.aceita):
+        fracao = compromisso.get("fracao_da_capacidade")
+        parte = f"{fracao:.0%} da capacidade de computação" if fracao else "Parte da computação"
+        provedor = perfil.provedor if perfil else provedor_da_fatura
+        problemas.append(
+            Problema(
+                ALERTA,
+                "compromisso_sem_custo",
+                "Savings Plan ou reserva sem o custo de cada máquina",
+                f"{parte} aparece sem custo próprio, coberta por compromisso, e a economia "
+                "desses pools fica acima da real. A fatura detalhada traz o custo efetivo de "
+                "cada hora coberta: " + _como_exportar(provedor, depois_de_dois_pontos=True),
+            )
+        )
     return _diagnostico(problemas)
 
 
@@ -251,6 +276,7 @@ def _problemas_do_inventario(
             )
         )
     if not com_recurso and perfil is not None:
+        problemas.extend(_estimativa_fraca(perfil, cobertura))
         problemas.append(
             Problema(
                 INFORMATIVO,
@@ -270,6 +296,39 @@ def _problemas_do_inventario(
                 "O inventário é de uma data distante do mês da fatura, então recursos criados ou "
                 "removidos no meio ficam de fora das aplicações. Para alinhar, exporte o "
                 "inventário perto do fim do mês da fatura.",
+            )
+        )
+    return problemas
+
+
+def _estimativa_fraca(perfil: PerfilDaFatura, cobertura: Mapping[str, Any]) -> list[Problema]:
+    """Custo calculado pelo tipo que o CUR mudaria: dividido entre aplicações, ou pouco ligado."""
+    estimado = float(cobertura.get("custo_estimado") or 0)
+    dividido = float(cobertura.get("custo_estimado_dividido") or 0)
+    base = float(cobertura.get("custo_da_base") or 0)
+    problemas = []
+    if estimado > 0 and dividido / estimado >= _DIVIDIDO_RELEVANTE:
+        problemas.append(
+            Problema(
+                ALERTA,
+                "custo_dividido",
+                "Custo dividido entre recursos iguais",
+                f"{dividido / estimado:.0%} do custo por aplicação foi dividido entre máquinas ou "
+                "discos do mesmo tipo em aplicações diferentes, em partes iguais ou pelo tamanho. "
+                "Com o ID de cada recurso, cada aplicação recebe o que de fato gastou: "
+                + _como_exportar(perfil.provedor, depois_de_dois_pontos=True),
+            )
+        )
+    if base > 0 and estimado / base < _LIGADO_MINIMO:
+        problemas.append(
+            Problema(
+                ALERTA,
+                "pouco_ligado",
+                "Boa parte do gasto sem aplicação",
+                f"{estimado / base:.0%} do gasto chegou às aplicações pelo tipo de recurso; o "
+                "restante a fatura não diz de qual recurso é. Com o ID de cada recurso, ele vai "
+                "para a aplicação certa: "
+                + _como_exportar(perfil.provedor, depois_de_dois_pontos=True),
             )
         )
     return problemas

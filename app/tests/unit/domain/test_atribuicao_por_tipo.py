@@ -341,3 +341,18 @@ def test_gcp_disco_pelo_tipo_e_tamanho_e_cloud_sql_pelo_motor() -> None:
     assert custo["sql-loja"] == Decimal("30")
     # Nenhum banco MySQL no inventário: a linha continua sem recurso
     assert [x.uso for x in custos.sem_recurso] == ["Cloud SQL for MySQL: Zonal - vCPU in Americas"]
+
+
+def test_divisao_entre_aplicacoes_diferentes_fica_marcada() -> None:
+    inv = inventario(
+        [vm(n, conta=_CONTA, regiao=_REGIAO, tipo_maquina="m5.large") for n in ("a", "b")]
+    )
+    fatura = _fatura(_sem_id("AmazonEC2", "BoxUsage:m5.large", "10"))
+    separadas = atribuir_por_tipo(inv, fatura, unidade_de=lambda chave: chave)
+    assert all(x.dividido for x in separadas.por_recurso)
+    juntas = atribuir_por_tipo(inv, fatura, unidade_de=lambda chave: "app")
+    assert not any(x.dividido for x in juntas.por_recurso)
+    unica = atribuir_por_tipo(
+        inventario([vm("a", conta=_CONTA, regiao=_REGIAO, tipo_maquina="m5.large")]), fatura
+    )
+    assert not any(x.dividido for x in unica.por_recurso)

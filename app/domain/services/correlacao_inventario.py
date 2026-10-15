@@ -62,6 +62,9 @@ class CustoDeRecurso:
     # O ID que a fatura trazia, quando a linha estimada tinha um
     origem: str | None = None
     base: str | None = None  # como a estimativa foi feita
+    # Dividido entre recursos de aplicações diferentes: aí a divisão muda o custo de cada
+    # aplicação, e a estimativa é fraca (o CUR diria quanto cada um custou)
+    dividido: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +137,7 @@ class Correlacao:
     # Ligado pelo tipo (estimado): todo, e a parte que vinha de linha com ID
     custo_estimado: Decimal = _ZERO
     custo_estimado_com_id: Decimal = _ZERO
+    custo_estimado_dividido: Decimal = _ZERO
 
 
 def _prioridade(tipo: TipoDeRecurso) -> int:
@@ -273,6 +277,9 @@ def correlacionar(
         riscos=tuple(riscos),
         custo_estimado=estimado,
         custo_estimado_com_id=estimado_com_id,
+        custo_estimado_dividido=sum(
+            (x.custo for x in custos.por_recurso if x.estimado and x.dividido), _ZERO
+        ),
     )
 
 

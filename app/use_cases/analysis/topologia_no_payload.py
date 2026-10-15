@@ -527,6 +527,10 @@ def _resumo(
             "custo_encontrado": converter(correlacao.custo_encontrado),
             # Ligado pelo tipo (fatura sem ID ou máquina trocada): estimado, não medido
             "custo_estimado": converter(correlacao.custo_estimado),
+            # Para o diagnóstico: quanto do estimado foi dividido entre aplicações diferentes,
+            # e a base da fatura (a fração ligada às aplicações)
+            "custo_estimado_dividido": converter(correlacao.custo_estimado_dividido),
+            "custo_da_base": converter(correlacao.custo_da_base),
             "lacunas": [
                 {"conta": x.conta, "regiao": x.regiao, "custo": converter(x.custo)}
                 for x in correlacao.lacunas_por_escopo[:5]

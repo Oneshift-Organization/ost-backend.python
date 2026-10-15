@@ -118,3 +118,47 @@ def test_payload_ainda_vazio_diz_so_o_que_o_formato_diz() -> None:
 
 def test_formato_desconhecido_nao_inventa_problema() -> None:
     assert diagnosticar_arquivo("FORMATO_NOVO").problemas == ()
+
+
+# ── quando o CUR muda o número: só aí a fatura sem ID acende o aviso ────────────
+
+
+def _sem_id(**cobertura: object):
+    base = {"custo_com_recurso": 0, "fracao_encontrada": None}
+    return diagnosticar_analise(
+        formato="AWS_DETAILED_BILLING",
+        provedor_da_fatura="aws",
+        topologia=_topologia(**{**base, **cobertura}),
+    )
+
+
+def test_um_recurso_de_cada_tipo_nao_acende_nada() -> None:
+    """A conta kitconta: 88% ligado, nada dividido entre aplicações."""
+    d = _sem_id(custo_estimado=331, custo_estimado_dividido=0, custo_da_base=377)
+    assert d.nivel is None
+
+
+def test_custo_dividido_entre_aplicacoes_acende_o_aviso() -> None:
+    d = _sem_id(custo_estimado=1000, custo_estimado_dividido=450, custo_da_base=1100)
+    assert d.nivel == ALERTA
+    assert (ALERTA, "custo_dividido") in _codigos(d)
+    assert "CUR 2.0" in next(p.texto for p in d.problemas if p.codigo == "custo_dividido")
+
+
+def test_pouco_do_gasto_ligado_acende_o_aviso() -> None:
+    d = _sem_id(custo_estimado=300, custo_estimado_dividido=0, custo_da_base=1000)
+    assert (ALERTA, "pouco_ligado") in _codigos(d)
+
+
+def test_compromisso_sem_custo_por_maquina_acende_o_aviso() -> None:
+    d = diagnosticar_payload(
+        formato="AWS_CUR2.0",
+        provedor_da_fatura="aws",
+        payload={
+            "premissas": {"cobertura_por_compromisso": {"fracao_da_capacidade": 0.4}},
+            "topologia": _topologia(custo_com_recurso=900, fracao_encontrada=0.97),
+        },
+    )
+    [p] = d.problemas
+    assert (p.nivel, p.codigo) == (ALERTA, "compromisso_sem_custo")
+    assert "40% da capacidade" in p.texto

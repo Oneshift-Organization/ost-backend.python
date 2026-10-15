@@ -239,3 +239,16 @@ nem Ingress. Para a análise, o cluster é **uma** unidade.
 **Recomendação:** A agora (sem pedir nada ao cliente), B quando houver um segundo cliente com
 Kubernetes. B muda o que "migrar a aplicação" significa no plano: as cargas mudam de cluster,
 não de máquina.
+
+## 10. Quando a fatura sem ID acende o `!` (16/10/2026)
+
+Só quando o CUR mudaria o número de forma relevante (alerta amarelo, com o caminho do CUR):
+
+| Código | Quando | Base |
+|---|---|---|
+| `custo_dividido` | 30% ou mais do custo estimado foi dividido entre recursos iguais de **aplicações diferentes** | `cobertura.custo_estimado_dividido` (divisão dentro da mesma aplicação não conta) |
+| `pouco_ligado` | menos de 60% do gasto chegou às aplicações pelo tipo | `cobertura.custo_estimado / custo_da_base` |
+| `compromisso_sem_custo` | parte da capacidade aparece sem custo, coberta por Savings Plan ou reserva | `premissas.cobertura_por_compromisso` (vale para qualquer formato) |
+
+A conta kitconta (um recurso de cada tipo, 88% ligado, sem compromisso) não acende nada. Os
+números novos entram no payload só em análise nova; análise antiga fica sem esses avisos.
