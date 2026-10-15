@@ -65,7 +65,7 @@ PERFIS: Mapping[str, PerfilDaFatura] = {
 # O export certo, em uma frase, por nuvem. O passo a passo fica no guia da tela.
 COMO_EXPORTAR: Mapping[str, str] = {
     "aws": (
-        "Na AWS, crie uma exportação CUR 2.0 em Billing and Cost Management → Data Exports, "
+        "Na AWS, crie uma exportação CUR 2.0 em Billing and Cost Management, na tela Data Exports, "
         'marque "Include resource IDs" e envie o .csv.gz do mês.'
     ),
     "gcp": (
@@ -73,11 +73,11 @@ COMO_EXPORTAR: Mapping[str, str] = {
         "da consulta do mês (CSV ou JSON)."
     ),
     "azure": (
-        'Na Azure, em Cost Management → Exports, exporte "Cost and usage details" do mês e '
+        'Na Azure, em Cost Management, na tela Exports, exporte "Cost and usage details" do mês e '
         "envie o CSV."
     ),
     "oci": (
-        "Na OCI, em Billing & Cost Management → Cost and Usage Reports, baixe o relatório de "
+        "Na OCI, em Billing & Cost Management, na tela Cost and Usage Reports, baixe o relatório de "
         "custos do mês."
     ),
 }
@@ -103,8 +103,9 @@ def _diagnostico(problemas: list[Problema]) -> Diagnostico:
     return Diagnostico(nivel=pior, problemas=tuple(problemas))
 
 
-def _como_exportar(provedor: str | None) -> str:
-    return COMO_EXPORTAR.get((provedor or "").lower(), "")
+def _como_exportar(provedor: str | None, *, depois_de_dois_pontos: bool = False) -> str:
+    texto = COMO_EXPORTAR.get((provedor or "").lower(), "")
+    return texto[:1].lower() + texto[1:] if depois_de_dois_pontos else texto
 
 
 def problemas_do_arquivo(formato: str | None, *, com_id: bool | None = None) -> list[Problema]:
@@ -153,7 +154,7 @@ def problemas_do_arquivo(formato: str | None, *, com_id: bool | None = None) -> 
                 )
                 + "A análise e a recomendação saem completas; com o inventário, o custo de cada "
                 "aplicação sai estimado pelo tipo do recurso. Para o custo medido: "
-                + _como_exportar(perfil.provedor),
+                + _como_exportar(perfil.provedor, depois_de_dois_pontos=True),
             )
         ]
     return []
@@ -283,7 +284,7 @@ def _problemas_do_inventario(
                 "A fatura não traz o ID de cada recurso: o custo de cada aplicação foi estimado "
                 "pelo tipo (a máquina pelo tipo, o banco pela classe). As aplicações e o que migra "
                 "junto vêm do inventário e estão completos. Para o custo medido: "
-                + _como_exportar(perfil.provedor),
+                + _como_exportar(perfil.provedor, depois_de_dois_pontos=True),
             )
         )
     if any(r.get("regra") == "inventario_desalinhado" for r in resumo.get("riscos") or []):
