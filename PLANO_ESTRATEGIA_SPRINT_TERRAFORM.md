@@ -135,7 +135,8 @@ Só se 2.2 mudar.
 - Lote da autoridade v3, depois dos testes conjuntos (3.2).
 - Pendências da tela Dependências: mensagem própria para fatura sem ID de recurso
   já entrou; falta "migrar só o serviço" (modo parcial, E6) se o usuário quiser.
-- **Fatura AWS no formato certo** (achado em 15/10 numa análise do develop com
+- ✅ **Fatura AWS no formato certo** — feito em 15–16/10: guia do CUR 2.0 e recusa no
+  upload (PLANO_CENARIOS_DE_ENTRADA §3.4), órfãs sem duplicar no re-enrich. (Achado em 15/10 numa análise do develop com
   1,2% do custo classificado). O guia de exportação da AWS no front
   (`lib/billing-export-steps.ts`) manda baixar o CSV do Cost Explorer "custo por
   serviço": sem tipo de uso, a análise sai vazia (sem pools, sem recomendação).

@@ -76,6 +76,11 @@ class _Orfaos:
     def __init__(self) -> None:
         self.gravados = []
 
+    async def delete_by_report(self, report_id, user_id):
+        apagados = len(self.gravados)
+        self.gravados = []
+        return apagados
+
     async def bulk_insert(self, itens):
         self.gravados.extend(itens)
         return len(itens)
@@ -221,3 +226,17 @@ async def test_enriquecimento_le_alem_da_primeira_pagina(monkeypatch) -> None:
     itens = [_item(usage_type=f"BoxUsage:m7g.large{i}", charge_kind="usage") for i in range(5)]
     gravados, _ = await _enriquecer(itens)
     assert len(gravados) == 5
+
+
+async def test_enriquecer_de_novo_nao_duplica_os_orfaos() -> None:
+    """Re-enrich (seed novo) substitui as linhas sem classificação, não soma."""
+    itens = [_item(usage_type="Uso-que-nenhuma-regra-conhece")]
+    report = BillingReport(user_id=_USER, source_filename="cur.csv.gz")
+    report.mark_processing()
+    orfaos = _Orfaos()
+    for _ in range(2):
+        uc = BuildBillingEnrichedUseCase(
+            _Relatorios(report), _Itens(itens), _Enriquecidos(), _Catalogo(), _Regras(), orfaos
+        )
+        await uc.execute(BuildBillingEnrichedInput(user_id=_USER, report_id=report.id))
+    assert len(orfaos.gravados) == 1

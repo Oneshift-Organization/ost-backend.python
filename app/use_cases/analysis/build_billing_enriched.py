@@ -104,9 +104,7 @@ class BuildBillingEnrichedUseCase:
         unmapped_items: list[UnmappedBillingLine] = []
 
         for item in items:
-            raw_payload = (
-                item.tags.get("raw_payload", {}) if isinstance(item.tags, dict) else {}
-            )
+            raw_payload = item.tags.get("raw_payload", {}) if isinstance(item.tags, dict) else {}
             if not isinstance(raw_payload, dict):
                 raw_payload = {}
 
@@ -192,7 +190,10 @@ class BuildBillingEnrichedUseCase:
                 )
             )
 
+        # Idempotente: enriquecer de novo (seed novo, re-enrich) substitui, não soma.
+        # Sem apagar os órfãos, cada re-enrich duplicava `unmapped_billing_lines`.
         await self._enriched.delete_by_report(payload.report_id, payload.user_id)
+        await self._unmapped.delete_by_report(payload.report_id, payload.user_id)
         inserted = await self._enriched.bulk_insert(enriched_items)
         await self._unmapped.bulk_insert(unmapped_items)
         return inserted
