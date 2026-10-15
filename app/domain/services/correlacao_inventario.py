@@ -11,6 +11,11 @@ Responde três perguntas, cada uma com o seu número:
 - **O inventário é do mesmo momento do billing?** Captura muito antes ou muito
   depois do período faz recurso criado ou removido aparecer como lacuna.
 
+Linha que chega já ligada pelo tipo (``atribuicao_por_tipo``) entra como custo do
+recurso, separada do medido: ``custo_estimado``. A que tinha ID conta na fração
+coberta (o nó trocado pelo autoscaling é coberto pelo tipo dele); a que não tinha
+fica fora da fração, que é sobre o custo com ID.
+
 Módulo puro, sem I/O.
 """
 
@@ -50,6 +55,25 @@ class CustoDeRecurso:
     regiao: str | None
     servico: str
     custo: Decimal
+    uso: str | None = None  # tipo de uso (`BoxUsage:t4g.xlarge`)
+    quantidade: Decimal | None = None
+    # Ligada ao recurso pelo tipo, não pelo ID (atribuicao_por_tipo)
+    estimado: bool = False
+    # O ID que a fatura trazia, quando a linha estimada tinha um
+    origem: str | None = None
+    base: str | None = None  # como a estimativa foi feita
+
+
+@dataclass(frozen=True, slots=True)
+class LinhaSemRecurso:
+    """Custo de base que a fatura não liga a recurso nenhum, por tipo de uso."""
+
+    conta: str | None
+    regiao: str | None
+    servico: str
+    uso: str | None
+    custo: Decimal
+    quantidade: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +82,8 @@ class CustosDoBilling:
     moeda: str
     custo_da_base: Decimal  # com e sem resource_id
     por_recurso: tuple[CustoDeRecurso, ...]
+    sem_recurso: tuple[LinhaSemRecurso, ...] = ()
+    provedor: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +131,9 @@ class Correlacao:
     ociosos: tuple[CustoOcioso, ...]
     alinhamento: Alinhamento
     riscos: tuple[Risco, ...]
+    # Ligado pelo tipo (estimado): todo, e a parte que vinha de linha com ID
+    custo_estimado: Decimal = _ZERO
+    custo_estimado_com_id: Decimal = _ZERO
 
 
 def _prioridade(tipo: TipoDeRecurso) -> int:
@@ -160,12 +189,16 @@ def correlacionar(
 ) -> Correlacao:
     apelidos = IndiceDeApelidos(inventario)
     por_id: dict[str, list[CustoDeRecurso]] = defaultdict(list)
+    custo_por_chave: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     for linha in custos.por_recurso:
+        if linha.estimado and not linha.origem:
+            # Linha sem ID que o tipo ligou: custo do recurso, mas não "recurso da fatura"
+            custo_por_chave[linha.resource_id] += linha.custo
+            continue
         rid = linha.resource_id.strip().lower()
         if rid:
             por_id[rid].append(linha)
 
-    custo_por_chave: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     faltando: list[CustoDeRecurso] = []
     encontrados = ambiguos = 0
     for rid, linhas in sorted(por_id.items()):
@@ -177,8 +210,13 @@ def correlacionar(
         ambiguos += len(set(candidatos)) > 1
         custo_por_chave[candidatos[0]] += sum((x.custo for x in linhas), _ZERO)
 
-    custo_com_recurso = sum((x.custo for x in custos.por_recurso), _ZERO)
-    encontrado = sum(custo_por_chave.values(), _ZERO)
+    estimado = sum((x.custo for x in custos.por_recurso if x.estimado), _ZERO)
+    estimado_com_id = sum((x.custo for x in custos.por_recurso if x.estimado and x.origem), _ZERO)
+    # A fração é sobre o custo que a fatura ligou a um ID; o estimado sem ID fica de fora
+    custo_com_recurso = (
+        sum((x.custo for x in custos.por_recurso if not x.estimado), _ZERO) + estimado_com_id
+    )
+    encontrado = sum(custo_por_chave.values(), _ZERO) - (estimado - estimado_com_id)
     fracao = (encontrado / custo_com_recurso) if custo_com_recurso > 0 else None
 
     sem_cobranca: dict[str, int] = defaultdict(int)
@@ -233,6 +271,8 @@ def correlacionar(
         ociosos=_custo_dos_ociosos(inventario, custo_por_chave),
         alinhamento=alinhamento,
         riscos=tuple(riscos),
+        custo_estimado=estimado,
+        custo_estimado_com_id=estimado_com_id,
     )
 
 

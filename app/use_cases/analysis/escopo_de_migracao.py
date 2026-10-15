@@ -23,6 +23,12 @@ from app.domain.entities.topologia import TipoDeRecurso
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.domain.repositories.i_custo_por_recurso import ILeitorDeCustoPorRecurso
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
+from app.domain.services.atribuicao_por_tipo import (
+    atribuir_por_tipo,
+)
+from app.domain.services.atribuicao_por_tipo import (
+    servicos_do_recurso as servicos_pelo_tipo,
+)
 from app.domain.services.correlacao_inventario import IndiceDeApelidos, correlacionar
 from app.domain.services.correspondencia_inventario import (
     SEM_CORRESPONDENCIA,
@@ -42,7 +48,6 @@ from app.domain.services.topologia.dependencias_de_servico import dependencias_d
 from app.domain.services.topologia.escopo import (
     CatalogoDeAplicacoes,
     Escolha,
-    EscolhaInvalidaError,
     PlanoDeMigracao,
     fechar_plano,
     montar_catalogo,
@@ -144,11 +149,8 @@ class EscopoDeMigracaoUseCase:
 
     async def plano(self, user_id: UUID, job_id: UUID, escolha: Escolha) -> PlanoCotado:
         ctx = await self._contexto(user_id, job_id)
-        if escolha.servicos and not ctx.correspondencia.liga_custo:
-            raise EscolhaInvalidaError(
-                "a fatura não traz o ID de cada recurso: não dá para ligar serviço a aplicação; "
-                "escolha aplicações"
-            )
+        # Sem ID de recurso o serviço ainda chega à unidade: pelo custo atribuído pelo
+        # tipo, ou pelo tipo do recurso no inventário (servicos_presentes)
         plano = fechar_plano(ctx.catalogo, escolha)
         unidades = set(plano.unidades)
         cotacao = cotar_escopo(
@@ -177,7 +179,9 @@ class EscopoDeMigracaoUseCase:
                 "o inventário mudou desde a análise; refaça a análise com ele"
             )
 
-        custos = await self._custos.custos_por_recurso(job.report_id, user_id)
+        custos = atribuir_por_tipo(
+            conteudo, await self._custos.custos_por_recurso(job.report_id, user_id)
+        )
         correspondencia = avaliar_correspondencia(conteudo, custos, correlacionar(conteudo, custos))
         if correspondencia.status == SEM_CORRESPONDENCIA:
             raise InventarioNaoCorrespondeError(correspondencia)
@@ -235,7 +239,24 @@ class EscopoDeMigracaoUseCase:
         chave_aplicacao = next(
             (p.valor for p in analise.premissas if p.campo == "chave_aplicacao"), None
         )
-        catalogo = montar_catalogo(analise, por_unidade, sem_unidade, deps, chave_aplicacao)
+        # Linha que a fatura não liga a recurso e que o tipo não resolveu: custo do
+        # serviço sem aplicação, para o catálogo mostrar a fatura inteira
+        for resto in custos.sem_recurso:
+            sem_unidade[resto.servico] += convert(resto.custo, fx) or _ZERO
+        servicos_da_fatura = set(sem_unidade) | {s for c in por_unidade.values() for s in c}
+        presentes = {
+            u.id: servicos & servicos_da_fatura
+            for u in analise.unidades
+            if (
+                servicos := servicos_pelo_tipo(
+                    conteudo.provedor,
+                    (indice.recursos[c] for c in u.recursos if c in indice.recursos),
+                )
+            )
+        }
+        catalogo = montar_catalogo(
+            analise, por_unidade, sem_unidade, deps, chave_aplicacao, servicos_presentes=presentes
+        )
 
         pools = tuple(_pools(payload))
         provedores = tuple(

@@ -100,6 +100,9 @@ class CatalogoDeAplicacoes:
     custo_por_unidade: Mapping[str, Mapping[str, Decimal]]
     recursos_por_unidade: Mapping[str, int]
     deps_de_servico: tuple[DependenciaDeServico, ...]
+    # Unidade → serviços da fatura que o tipo dos recursos dela gera (o bucket gera
+    # S3). Liga serviço a unidade quando o custo não pôde ser dividido.
+    servicos_presentes: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,9 +219,13 @@ def montar_catalogo(
     sem_unidade: Mapping[str, Decimal],
     deps_de_servico: Iterable[DependenciaDeServico],
     chave_aplicacao: str | None,
+    *,
+    servicos_presentes: Mapping[str, Iterable[str]] | None = None,
 ) -> CatalogoDeAplicacoes:
     """``custo_por_unidade``: unidade → serviço → custo. ``sem_unidade``: serviço → custo
-    das linhas da fatura que não casaram com nenhuma unidade."""
+    das linhas da fatura que não casaram com nenhuma unidade. ``servicos_presentes``:
+    unidade → serviços que o tipo dos recursos dela gera, com ou sem custo ligado."""
+    presentes = {u: frozenset(s) for u, s in (servicos_presentes or {}).items()}
     deps = tuple(deps_de_servico)
     unidades = {u.id: u for u in analise.unidades}
     ferramentas = _aplicacoes_ferramenta(analise)
@@ -266,6 +273,8 @@ def montar_catalogo(
         for s, c in custo_por_unidade.get(u.id, {}).items():
             if c > 0:
                 por_servico[s][app] += c
+        for s in presentes.get(u.id, ()):
+            por_servico[s][app] += _ZERO
     pares = agrupar_por_par(deps)
     nomes = set(por_servico) | set(sem_unidade)
     servicos_uso = tuple(
@@ -307,6 +316,7 @@ def montar_catalogo(
         custo_por_unidade=custo_por_unidade,
         recursos_por_unidade=recursos,
         deps_de_servico=deps,
+        servicos_presentes=presentes,
     )
 
 
@@ -342,7 +352,11 @@ def fechar_plano(catalogo: CatalogoDeAplicacoes, escolha: Escolha) -> PlanoDeMig
     semente |= {
         u.id
         for u in fora_das_ferramentas
-        if any(custo.get(u.id, {}).get(s, _ZERO) > 0 for s in escolha.servicos)
+        if any(
+            custo.get(u.id, {}).get(s, _ZERO) > 0
+            or s in catalogo.servicos_presentes.get(u.id, frozenset())
+            for s in escolha.servicos
+        )
     }
     if escolha.ambiente:
         semente = {x for x in semente if unidades[x].ambiente == escolha.ambiente}
