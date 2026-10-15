@@ -70,11 +70,11 @@ def _nao_reconhecido() -> BillingFileCheckResponse:
                 Problema(
                     CRITICO,
                     "formato_nao_reconhecido",
-                    "Arquivo não reconhecido como fatura",
-                    "O conteúdo não bate com nenhum export de fatura conhecido (CUR 2.0 da "
+                    "Não reconhecemos esse arquivo",
+                    "Ele não se parece com os exports de fatura que a análise lê (CUR 2.0 da "
                     "AWS, BigQuery do GCP, Cost Details da Azure, relatório de custos da "
-                    "OCI). Confira se é o arquivo do export, sem edição, e veja o guia de "
-                    "cada nuvem.",
+                    "OCI). Se for um deles, envie o arquivo como saiu do console, sem "
+                    "edição; o guia de cada nuvem mostra o caminho.",
                 )
             )
         ],

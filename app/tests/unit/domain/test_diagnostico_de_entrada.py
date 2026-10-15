@@ -27,7 +27,8 @@ def test_cost_explorer_e_critico_e_explica_o_caminho_certo() -> None:
     [p] = d.problemas
     assert p.codigo == "cost_explorer"
     assert "Include resource IDs" in p.texto
-    assert "Não é erro seu" in p.texto
+    # Tom de orientação, não de erro (feedback de 16/10)
+    assert "não serve" not in p.titulo + p.texto
 
 
 def test_cost_explorer_nao_soma_alertas_de_inventario() -> None:

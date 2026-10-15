@@ -73,7 +73,7 @@ Request igual ao upload (`multipart/form-data`, campo `file`). Response 200:
   "provedor": "aws",
   "com_id_de_recurso": false,
   "problemas": [
-    {"nivel": "critico", "codigo": "cost_explorer", "titulo": "O Cost Explorer não serve para a análise", "texto": "…"}
+    {"nivel": "critico", "codigo": "cost_explorer", "titulo": "Esse arquivo é um resumo do Cost Explorer", "texto": "…"}
   ],
   "como_exportar": "Na AWS, crie uma exportação CUR 2.0 …"
 }
