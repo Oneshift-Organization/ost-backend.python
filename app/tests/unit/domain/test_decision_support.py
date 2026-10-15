@@ -339,6 +339,8 @@ async def test_primary_and_fallback_models_share_deterministic_result(
     assert a.viability_score == b.viability_score == 970
     assert "decision_instructions" in fallback.prompt
     assert "decision_workloads" not in fallback.prompt
+    # O modelo não devolve o decision_support: o backend impõe (saída cortada em fatura real)
+    assert "decision_support inteiro" in fallback.prompt
 
 
 def test_legacy_results_remain_readable():

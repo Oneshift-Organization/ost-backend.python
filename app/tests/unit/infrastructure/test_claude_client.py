@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 from pydantic import BaseModel
 
 from app.infrastructure.llm.claude_client import ClaudeLLMClient
@@ -75,9 +76,7 @@ Retorne apenas JSON.
         {
             "role": "user",
             "content": (
-                "Dados do Cliente (JSON):\n"
-                '{"source_provider":"aws"}\n\n'
-                "Retorne apenas JSON."
+                'Dados do Cliente (JSON):\n{"source_provider":"aws"}\n\nRetorne apenas JSON.'
             ),
         }
     ]
@@ -91,3 +90,17 @@ Retorne apenas JSON.
             },
         }
     ]
+
+
+async def test_resposta_cortada_pelo_limite_diz_que_foi_cortada() -> None:
+    class Cortada(FakeMessages):
+        async def create(self, **parameters: Any) -> Any:
+            resposta = await super().create(**parameters)
+            resposta.stop_reason = "max_tokens"
+            resposta.content[0].text = '{"status": "CLAUDE'
+            return resposta
+
+    client = ClaudeLLMClient(api_key="sk-ant-test", model="claude-sonnet-4-6")
+    cast(Any, client)._client = SimpleNamespace(messages=Cortada())
+    with pytest.raises(ValueError, match="truncated by the token limit"):
+        await client.generate("Dados do Cliente (JSON):\n{}", ClaudeResponse)
