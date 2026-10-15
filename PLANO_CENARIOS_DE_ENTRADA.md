@@ -154,11 +154,11 @@ Suítes: 1697 testes (unitários e de integração, com o Postgres local), nenhu
 O inventário fica guardado já normalizado: **o inventário antigo não muda**.
 Reenvie `inventario-aws.json` e refaça a análise com a mesma fatura.
 
-1. **Análises** (`/dashboard/analises`): análise com problema mostra `!` ao lado do nome
-   (amarelo = alerta, vermelho = crítico), na tabela e nos cards. Passar o mouse lista os
-   problemas. A da kitconta: "Custo por aplicação estimado" e "Parte do gasto não foi
-   reconhecida". As análises sem inventário: "Análise sem inventário". As antigas de Cost
-   Explorer: vermelho.
+1. **Análises** (`/dashboard/analises`): o `!` aparece só quando **outro arquivo resolve**:
+   vermelho para Cost Explorer ou inventário de outra nuvem; amarelo para contas fora do
+   inventário ou inventário de outro momento. O hover diz o que enviar. Análise sem inventário,
+   custo calculado pelo tipo e gasto não classificado **não** acendem o aviso (ajuste de 16/10:
+   aviso sem ação do usuário tirava confiança da análise). A da kitconta fica sem `!`.
 2. **Nova análise → Importar fatura**: ao escolher o arquivo aparece "conferindo o arquivo…".
    - Cost Explorer ou `reports_usage` da OCI: caixa vermelha com a explicação, link "Ver como
      exportar a fatura certa da …" e **Importar desabilitado**.
@@ -166,10 +166,11 @@ Reenvie `inventario-aws.json` e refaça a análise com a mesma fatura.
      importa normalmente.
    - CUR 2.0 com IDs: nenhuma crítica, mostra "CUR 2.0 da AWS".
    - Guia da AWS (chip "AWS"): 4 passos do CUR 2.0 com "Include resource IDs".
-3. **Análise aberta**: linha no topo com o pior problema ("… e mais 1 problema nos arquivos
-   enviados"); o `!` abre a lista.
-4. **Dependências**: aviso "Custo estimado pelo tipo"; aba Aplicações com **kitconta** e o
-   custo marcado "· estimado"; srv-openvpn-prd fora das aplicações (ferramenta).
+3. **Análise aberta**: sem aviso no topo (ajuste de 16/10).
+4. **Dependências**: nota discreta abaixo do resumo, "Custo por aplicação calculado pelo tipo de
+   cada recurso (88% do gasto)", com o detalhe no hover; inventário parcial vira "Aplicações e plano
+   cobrem X% do custo com recurso identificado" com o link para adicionar as contas. Aba
+   Aplicações com **kitconta** e o custo marcado "· estimado"; srv-openvpn-prd fora das aplicações.
 5. **Plano de migração**: "Adicionar → Serviços" lista os serviços também sem ID; escolher
    AmazonRDS traz kitconta inteira; "Custo hoje" diz "estimado pelo tipo".
 
