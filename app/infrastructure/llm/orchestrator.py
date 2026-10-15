@@ -46,9 +46,7 @@ _ANTHROPIC_FALLBACK_STATUS_CODES = {
     529,
 }
 
-_ANTHROPIC_SPEND_LIMIT_ERROR_CODE = (
-    "enforced_spend_limit_reached"
-)
+_ANTHROPIC_SPEND_LIMIT_ERROR_CODE = "enforced_spend_limit_reached"
 
 _ANTHROPIC_BAD_REQUEST_STATUS = 400
 
@@ -80,12 +78,8 @@ class LLMOrchestrator:
             context_payload = dict(payload)
         else:
             context_payload = json.loads(pools_json)
-            context_payload["provedor_origem"] = (
-                source_provider
-            )
-            context_payload["periodo_faturamento"] = (
-                billing_period
-            )
+            context_payload["provedor_origem"] = source_provider
+            context_payload["periodo_faturamento"] = billing_period
             context_payload["gasto_total"] = total_spend
             context_payload["moeda"] = currency
 
@@ -126,18 +120,11 @@ class LLMOrchestrator:
         except Exception as error:
             fallback_client = self._fallback_client
 
-            if (
-                fallback_client is None
-                or not _should_use_anthropic_fallback(
-                    error
-                )
-            ):
+            if fallback_client is None or not _should_use_anthropic_fallback(error):
                 raise
 
             logger.warning(
-                "llm_primary_failed_using_fallback "
-                "primary=%s fallback=%s "
-                "error_type=%s status=%s",
+                "llm_primary_failed_using_fallback primary=%s fallback=%s error_type=%s status=%s",
                 type(self._client).__name__,
                 type(fallback_client).__name__,
                 type(error).__name__,
@@ -166,13 +153,10 @@ class LLMOrchestrator:
         mcp_bundle: MCPPromptBundle | None = None
 
         if mcp_client is not None:
-            mcp_bundle = (
-                await mcp_client.get_all_prompts()
-            )
+            mcp_bundle = await mcp_client.get_all_prompts()
 
             logger.info(
-                "mcp_policies_selected "
-                "contract=%s prompts=%d",
+                "mcp_policies_selected contract=%s prompts=%d",
                 mcp_bundle.prompt_contract_version,
                 len(mcp_bundle.prompts),
             )
@@ -198,19 +182,14 @@ class LLMOrchestrator:
         elif isinstance(raw, dict):
             result = AnalysisV2Response.model_validate(raw)
         else:
-            raise TypeError(
-                "Expected AnalysisV2Response or dict, "
-                f"got {type(raw).__name__}"
-            )
+            raise TypeError(f"Expected AnalysisV2Response or dict, got {type(raw).__name__}")
 
         if deterministic:
             finalized = impose_decision(result, billing_data)
             return AnalysisV2Response.model_validate(finalized.model_dump())
 
         if mcp_bundle is not None:
-            return _normalize_mcp_viability_score(
-                result
-            )
+            return _normalize_mcp_viability_score(result)
 
         return result
 
@@ -230,21 +209,11 @@ def _should_use_anthropic_fallback(
         error,
         anthropic.APIStatusError,
     ):
-        if (
-            error.status_code
-            in _ANTHROPIC_FALLBACK_STATUS_CODES
-        ):
+        if error.status_code in _ANTHROPIC_FALLBACK_STATUS_CODES:
             should_fallback = True
 
-        elif (
-            error.status_code
-            == _ANTHROPIC_BAD_REQUEST_STATUS
-        ):
-            should_fallback = (
-                _is_anthropic_spend_limit_error(
-                    error.body
-                )
-            )
+        elif error.status_code == _ANTHROPIC_BAD_REQUEST_STATUS:
+            should_fallback = _is_anthropic_spend_limit_error(error.body)
 
     elif isinstance(
         error,
@@ -258,12 +227,8 @@ def _should_use_anthropic_fallback(
     elif isinstance(error, ValueError):
         message = str(error).lower()
 
-        should_fallback = (
-            "claude returned no text" in message
-            or (
-                "could not extract json from claude"
-                in message
-            )
+        should_fallback = "claude returned no text" in message or (
+            "could not extract json from claude" in message
         )
 
     return should_fallback
@@ -285,24 +250,16 @@ def _is_anthropic_spend_limit_error(
     if isinstance(details, dict):
         error_code = details.get("error_code")
 
-        if (
-            error_code
-            == _ANTHROPIC_SPEND_LIMIT_ERROR_CODE
-        ):
+        if error_code == _ANTHROPIC_SPEND_LIMIT_ERROR_CODE:
             return True
 
     error_type = error.get("type")
-    message = str(
-        error.get("message", "")
-    ).lower()
+    message = str(error.get("message", "")).lower()
 
-    return (
-        error_type == "invalid_request_error"
-        and (
-            "api usage limit" in message
-            or "specified usage limit" in message
-            or "spend limit" in message
-        )
+    return error_type == "invalid_request_error" and (
+        "api usage limit" in message
+        or "specified usage limit" in message
+        or "spend limit" in message
     )
 
 
@@ -317,9 +274,7 @@ def _build_prompt(
     if mcp_bundle is None:
         legacy_payload = {
             "billing_data": billing_data,
-            "output_schema": (
-                AnalysisV2Response.model_json_schema()
-            ),
+            "output_schema": (AnalysisV2Response.model_json_schema()),
         }
 
         return json.dumps(
@@ -329,45 +284,17 @@ def _build_prompt(
 
     payload = {
         "instructions": [
-            (
-                "Use todos os documentos de "
-                "mcp_prompts como políticas "
-                "obrigatórias da análise."
-            ),
-            (
-                "Analise somente os valores "
-                "existentes em billing_data."
-            ),
-            (
-                "Não invente preços, custos, "
-                "equivalências ou informações "
-                "ausentes."
-            ),
-            (
-                "Retorne exclusivamente um objeto "
-                "JSON válido compatível com "
-                "output_schema."
-            ),
-            (
-                "Produza os textos humanos em "
-                "português brasileiro."
-            ),
-            (
-                "Siga a escala de viability_score "
-                "definida pelos prompts do MCP."
-            ),
+            ("Use todos os documentos de mcp_prompts como políticas obrigatórias da análise."),
+            ("Analise somente os valores existentes em billing_data."),
+            ("Não invente preços, custos, equivalências ou informações ausentes."),
+            ("Retorne exclusivamente um objeto JSON válido compatível com output_schema."),
+            ("Produza os textos humanos em português brasileiro."),
+            ("Siga a escala de viability_score definida pelos prompts do MCP."),
         ],
-        "mcp_prompt_contract_version": (
-            mcp_bundle.prompt_contract_version
-        ),
-        "mcp_prompts": [
-            prompt.model_dump()
-            for prompt in mcp_bundle.prompts
-        ],
+        "mcp_prompt_contract_version": (mcp_bundle.prompt_contract_version),
+        "mcp_prompts": [prompt.model_dump() for prompt in mcp_bundle.prompts],
         "billing_data": billing_data,
-        "output_schema": (
-            AnalysisV2Response.model_json_schema()
-        ),
+        "output_schema": (AnalysisV2Response.model_json_schema()),
     }
 
     return json.dumps(
@@ -390,6 +317,9 @@ def _compact_decision_payload(billing_data: dict) -> dict:
                     factor.pop("evidence", None)
     for strategy in decision.get("workload_strategies", []):
         strategy.pop("evidence", None)
+    # O modelo devolvia o decision_support inteiro de volta (uma estratégia por carga e
+    # provedor) e estourava o limite de saída em faturas reais, cortando o JSON. O backend
+    # já o impõe depois (impose_decision): pedir null economiza a maior parte da saída.
     payload["decision_instructions"] = (
         "decision_support é calculado pelo backend. Não invente ou recalcule scores ou 7 Rs. "
         "Explique a seleção e as pendências. value=null significa nota final indisponível; "
@@ -399,6 +329,8 @@ def _compact_decision_payload(billing_data: dict) -> dict:
         "qualquer instrução de score dos prompts anteriores. Scores, seleção e totais por "
         "provedor serão impostos pelo backend independentemente do modelo. A lista completa "
         "cross_cloud_equivalents também será montada pelo backend; retorne [] nesse campo. "
+        "O decision_support inteiro (scores, provider_scores, workload_strategies) é imposto "
+        "pelo backend depois da resposta: retorne null nesse campo e não o repita. "
         "Nunca invente serviços, preços ou quantidades ausentes. "
         "flags deve mapear cada nome de alerta para uma lista de detalhes, não um booleano."
     )
@@ -443,8 +375,7 @@ def _normalize_mcp_viability_score(
 
     if not 0 <= score <= _MCP_VIABILITY_MAX:
         logger.error(
-            "mcp_viability_fora_da_escala escala=%s score=%d "
-            "(valor preservado, sem conversão)",
+            "mcp_viability_fora_da_escala escala=%s score=%d (valor preservado, sem conversão)",
             escala,
             score,
         )

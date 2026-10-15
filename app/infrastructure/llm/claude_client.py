@@ -87,8 +87,7 @@ class ClaudeLLMClient:
         message = await self._client.messages.create(**create_kwargs)
 
         logger.info(
-            "claude_usage model=%s input=%d output=%d "
-            "cache_read=%d cache_write=%d stop_reason=%s",
+            "claude_usage model=%s input=%d output=%d cache_read=%d cache_write=%d stop_reason=%s",
             self._model,
             message.usage.input_tokens,
             message.usage.output_tokens,
@@ -104,6 +103,15 @@ class ClaudeLLMClient:
             ),
             message.stop_reason,
         )
+
+        if message.stop_reason == "max_tokens":
+            # O JSON veio cortado no meio: dizer isso, e não "texto ilegível", para quem
+            # lê o log saber que é tamanho de saída, não formato
+            msg = (
+                f"Claude response was truncated by the token limit ({_MAX_OUTPUT_TOKENS} output "
+                "tokens)"
+            )
+            raise ValueError(msg)
 
         text = _extract_text(message)
         raw = _extract_json(text)
@@ -189,8 +197,5 @@ def _extract_json(text: str) -> dict[str, object]:
         text,
     )
 
-    msg = (
-        "Could not extract JSON from Claude response:\n"
-        f"{text[:500]}"
-    )
+    msg = f"Could not extract JSON from Claude response:\n{text[:500]}"
     raise ValueError(msg)
