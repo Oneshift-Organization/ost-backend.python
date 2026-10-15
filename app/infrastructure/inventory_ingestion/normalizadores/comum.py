@@ -53,14 +53,23 @@ def portas_da_aws(protocolo: str, de: object, ate: object) -> tuple[int | None, 
     """AWS usa `-1` (ou nada) para "todas"; ICMP guarda tipo/código ali."""
     if protocolo not in {"tcp", "udp"}:
         return None, None
-    try:
-        a = int(str(de)) if de is not None else -1
-        b = int(str(ate)) if ate is not None else -1
-    except (TypeError, ValueError):
-        return None, None
-    if a < 0 or b < 0:
+    # `select-resource-config` devolve a porta como decimal (`5432.0`): ler só como
+    # inteiro transformava toda regra em "todas as portas".
+    a = _porta(de)
+    b = _porta(ate)
+    if a is None or b is None or a < 0 or b < 0:
         return None, None
     return (min(a, b), max(a, b))
+
+
+def _porta(valor: object) -> int | None:
+    if valor is None:
+        return -1
+    try:
+        numero = float(str(valor).strip())
+    except ValueError:
+        return None
+    return int(numero) if numero.is_integer() else None
 
 
 def seletor_de_endereco(texto: object) -> Seletor:
@@ -169,6 +178,24 @@ def tags_de_pares(pares: Iterable[object]) -> dict[str, str]:
         if chave is not None:
             tags[str(chave)] = "" if valor is None else str(valor)
     return tags
+
+
+def tags_de(valor: object) -> dict[str, str]:
+    """Tags em qualquer das formas: objeto ``{chave: valor}`` ou lista de pares.
+    ``select-resource-config`` traz lista de ``{key, value, tag}``; o snapshot, objeto."""
+    if isinstance(valor, Mapping):
+        return tags_de_objeto(valor)
+    if isinstance(valor, list):
+        return tags_de_pares(valor)
+    return {}
+
+
+def simples(valor: object) -> object:
+    """``{"value": x}`` → ``x``. ``select-resource-config`` embrulha assim alguns campos
+    (estado do disco, grupos do balanceador); o snapshot traz o valor direto."""
+    if isinstance(valor, Mapping) and set(valor) == {"value"}:
+        return valor["value"]
+    return valor
 
 
 def tags_de_objeto(valor: object) -> dict[str, str]:

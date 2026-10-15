@@ -79,6 +79,10 @@ PARES_VALIDOS: Mapping[TipoDeRelacao, frozenset[tuple[TipoDeRecurso, TipoDeRecur
             (_T.BANCO, _T.OUTRO),
             (_T.CACHE, _T.OUTRO),
             (_T.INSTANCIA, _T.CLUSTER_KUBERNETES),
+            # O balanceador de um Service e o disco de um volume persistente: o
+            # cluster os cria e os recria no destino
+            (_T.BALANCEADOR, _T.CLUSTER_KUBERNETES),
+            (_T.DISCO, _T.CLUSTER_KUBERNETES),
             (_T.INSTANCIA, _T.OUTRO),
         }
     ),

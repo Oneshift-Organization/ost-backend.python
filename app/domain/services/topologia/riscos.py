@@ -92,6 +92,10 @@ def regra_de_risco_alto(regra: RegraDeRede) -> bool:
     )
 
 
+def _ordem_da_porta(p: str) -> tuple[int, str]:
+    return (int(p), p) if p.isdigit() else (-1, p)
+
+
 def riscos_de_exposicao(indice: Indice) -> list[Risco]:
     """Entrada liberada para a internet: administração, banco, tudo aberto."""
     portas: dict[tuple[str, str], set[str]] = defaultdict(set)
@@ -114,16 +118,25 @@ def riscos_de_exposicao(indice: Indice) -> list[Risco]:
         "exposicao_administrativa": "Porta de administração aberta para a internet",
         "banco_exposto": "Porta de banco aberta para a internet",
     }
+    # Um risco por regra, com os grupos dentro: dois grupos com a mesma exposição
+    # apareciam como dois itens de título igual, parecendo duplicados.
+    por_regra: dict[str, list[tuple[str, set[str]]]] = defaultdict(list)
     for (id_regra, grupo), ps in sorted(portas.items()):
-        g = indice.recursos.get(grupo)
-        nome = (g.nome if g else None) or grupo
-        membros = indice.membros(grupo) or {grupo}
+        por_regra[id_regra].append((grupo, ps))
+    for id_regra, grupos in sorted(por_regra.items()):
+        trechos: list[str] = []
+        membros: set[str] = set()
+        for grupo, ps in grupos:
+            g = indice.recursos.get(grupo)
+            nome = (g.nome if g else None) or grupo
+            trechos.append(f"{nome}: {', '.join(sorted(ps, key=_ordem_da_porta))}")
+            membros |= indice.membros(grupo) or {grupo}
         riscos.append(
             _risco(
                 id_regra,
                 Severidade.ALTA,
                 titulos[id_regra],
-                f"{nome}: {', '.join(sorted(ps))} liberada(s) de qualquer origem. "
+                f"{'; '.join(trechos)} liberada(s) de qualquer origem. "
                 "O Terraform não replica esta regra.",
                 membros,
             )

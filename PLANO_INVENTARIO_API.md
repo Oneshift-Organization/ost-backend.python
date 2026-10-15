@@ -467,8 +467,12 @@ só, com o acoplamento mais forte e até cinco evidências.
    - vem das declarações (`chave_aplicacao`; `""` desliga o agrupamento);
    - ou é detectada entre `app`, `application`, `aplicacao`, `service`,
      `servico`, `workload`, `system`, `sistema` (sem diferenciar maiúsculas):
-     a que aparece em mais recursos de unidade, desde que em pelo menos 50%
-     deles. Empate: a ordem da lista.
+     a que aparece em mais unidades, desde que em pelo menos 50% delas. Empate:
+     a ordem da lista. Sem nenhuma, a segunda camada: `project`, `projeto`,
+     `product`, `produto` (premissa `detectada_projeto`; cada projeto conta como
+     uma aplicação). A cobertura conta cada conjunto de anexos uma vez (o cluster
+     com os nós, a VM com os discos): nós sem tag de um cluster marcado não pesam
+     contra (PLANO_CENARIOS_DE_ENTRADA §3.2).
    - O ambiente segue a mesma regra, com `env`, `environment`, `ambiente`,
      `stage`.
    - A escolha e a cobertura saem na resposta, como premissa.
@@ -483,7 +487,9 @@ porque sem eles qualquer ferramenta compartilhada colapsa o ambiente num grupo
 só:
 
 1. **Ferramenta de administração:** unidade com acesso `administrativo` a 2 ou
-   mais outras unidades (o bastion), ou declarada em `declaracoes.ferramentas`
+   mais outras unidades (o bastion), máquina que aceita porta de VPN da internet
+   (OpenVPN 1194, WireGuard 51820, IPsec 500/4500, L2TP 1701, PPTP 1723), ou
+   declarada em `declaracoes.ferramentas`
    (o monitoramento, o ETL que a porta não denuncia). **Todas** as dependências
    dela saem do acoplamento, das ondas e da propagação de criticidade. Ela sai
    numa lista à parte: precisa alcançar as duas nuvens durante a migração e
