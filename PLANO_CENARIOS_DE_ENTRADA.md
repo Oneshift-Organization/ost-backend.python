@@ -183,7 +183,8 @@ Sem migration. Só código. O ambiente de develop precisa do deploy das imagens 
 - ~~Tipos próprios para CloudFront, Lambda, DynamoDB, ECR, Secrets Manager~~: resolvido como
   componente da aplicação (§7). Grupos de autoscaling seguem como "outro".
 - Aplicações de dentro do Kubernetes (export do `kubectl`).
-- Atribuição pelo tipo para GCP, Azure e OCI (hoje só AWS; os detalhados dessas nuvens trazem ID).
+- ~~Atribuição pelo tipo fora da AWS~~: GCP feito (§8). Azure (Cost Details) e OCI (relatório de
+  custos) trazem o ID; não há export sem ID delas que o upload aceite.
 - ~~Teste do front `tests/additional-information.test.mjs`~~: corrigido (front `19e14bd`).
 
 ## 7. Componentes da aplicação (16/10/2026)
@@ -207,3 +208,18 @@ a kitconta sumiria de novo.
 **Impacto:** só inventário enviado depois do deploy (o atributo é gravado na normalização).
 Na conta real: CloudFront, 2 Lambdas, 1 repositório e 1 segredo entram em kitconta; 35
 componentes sem tag ficam de fora.
+
+## 8. Custo pelo tipo no GCP (16/10/2026)
+
+A Cost Table e o export padrão do BigQuery não trazem o recurso; a descrição do SKU diz o tipo:
+
+| SKU | Vai para | Divisão |
+|---|---|---|
+| `N2 Instance Core running in …` | máquinas `n2-*` | pelos vCPUs (`n2-standard-4` = 4) |
+| `N2 Instance Ram running in …` | máquinas `n2-*` | pela memória (standard 4 GiB/vCPU, highmem 8, highcpu 1; `e2-medium` 4 GiB) |
+| `Balanced`/`SSD backed`/`Storage`/`Extreme PD Capacity` | discos `pd-balanced`/`pd-ssd`/`pd-standard`/`pd-extreme` | pelo tamanho |
+| `Cloud SQL for PostgreSQL|MySQL|SQL Server: …` | banco do mesmo motor | só com um (ou todos na mesma aplicação) |
+| `… Kubernetes Clusters` | cluster GKE | igual |
+| Cloud Storage | bucket | só com um |
+
+"Americas", "multi-region" e afins são grupo de preço, não região: não restringem.

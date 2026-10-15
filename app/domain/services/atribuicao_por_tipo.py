@@ -30,8 +30,10 @@ noite cria máquinas novas todo dia) cobra pelo tipo dele, que o inventário tem
 Toda linha atribuída sai marcada ``estimado`` com a base da estimativa: o custo
 medido e o estimado nunca se misturam sem dizer.
 
-A tabela de regras é por provedor e é dado, não ``if`` por nuvem. Só a AWS tem
-regras hoje: GCP, Azure e OCI detalhados trazem o ID.
+A tabela de regras é por provedor e é dado, não ``if`` por nuvem. AWS (formato
+detalhado legado, CUR sem IDs) e GCP (Cost Table, export padrão do BigQuery): os
+dois exports sem ID que existem. Azure (Cost Details) e OCI (relatório de custos)
+trazem o ID.
 
 Módulo puro, sem I/O.
 """
@@ -52,6 +54,7 @@ from app.domain.services.correlacao_inventario import (
     IndiceDeApelidos,
     LinhaSemRecurso,
 )
+from app.domain.services.instance_shape import parse_instance_shape
 from app.domain.services.regioes import regiao_da_linha
 
 _T = TipoDeRecurso
@@ -59,6 +62,9 @@ _ZERO = Decimal(0)
 _CENTAVO = Decimal("0.000001")
 
 Divisao = Literal["igual", "tamanho", "unico"]
+# Como o valor que o tipo de uso cita se compara ao atributo do recurso: igual
+# (`t4g.xlarge`), prefixo da família (`N2` → `n2-standard-4`) ou contido (`postgres`)
+Comparacao = Literal["igual", "prefixo", "contem"]
 
 _PREFIXO = r"^(?:[A-Z]{2,4}\d-)?"
 
@@ -77,6 +83,9 @@ class RegraDeTipo:
     medida: str | None = None
     # Restrição pelo tipo nativo (o NAT é um dos gateways)
     nativo: str | None = None
+    comparacao: Comparacao = "igual"
+    # O nome que o tipo de uso dá → o valor do atributo (`Balanced` → `pd-balanced`)
+    traducao: Mapping[str, str] | None = None
     # A linha com ID que não está no inventário cai nesta regra (máquina e disco trocam de ID)
     substitui_id: bool = False
 
@@ -88,6 +97,13 @@ def _r(texto: str) -> re.Pattern[str]:
 _EC2 = frozenset({"AmazonEC2"})
 # Serviço inteiro de um tipo de recurso; o CloudFront cobra por edge (`US-`, `EU-`)
 _QUALQUER_USO = re.compile(r"^.+$")
+_GCE = frozenset({"Compute Engine"})
+
+
+def _sku(texto: str) -> re.Pattern[str]:
+    return re.compile(texto, re.IGNORECASE)
+
+
 REGRAS: Mapping[str, tuple[RegraDeTipo, ...]] = {
     "aws": (
         RegraDeTipo(
@@ -171,6 +187,60 @@ REGRAS: Mapping[str, tuple[RegraDeTipo, ...]] = {
             )
         ),
     ),
+    # Descrição do SKU: "N2 Instance Core running in Americas", "Balanced PD Capacity"
+    "gcp": (
+        RegraDeTipo(
+            _GCE,
+            _sku(r"^(\w+) (?:Predefined |Custom |Memory-optimized )?Instance Core running in .+$"),
+            _T.INSTANCIA,
+            "tamanho",
+            atributo="tipo_maquina",
+            comparacao="prefixo",
+            medida="vcpus",
+        ),
+        RegraDeTipo(
+            _GCE,
+            _sku(r"^(\w+) (?:Predefined |Custom |Memory-optimized )?Instance Ram running in .+$"),
+            _T.INSTANCIA,
+            "tamanho",
+            atributo="tipo_maquina",
+            comparacao="prefixo",
+            medida="memoria_gib",
+        ),
+        RegraDeTipo(
+            _GCE,
+            _sku(r"^(Balanced|SSD backed|Storage|Extreme) PD Capacity.*$"),
+            _T.DISCO,
+            "tamanho",
+            atributo="tipo_disco",
+            traducao={
+                "balanced": "pd-balanced",
+                "ssd backed": "pd-ssd",
+                "storage": "pd-standard",
+                "extreme": "pd-extreme",
+            },
+            medida="tamanho_gb",
+        ),
+        RegraDeTipo(
+            frozenset({"Cloud SQL"}),
+            _sku(r"^Cloud SQL for (PostgreSQL|MySQL|SQL Server): .+$"),
+            _T.BANCO,
+            "unico",
+            atributo="motor",
+            comparacao="contem",
+            traducao={"postgresql": "postgres", "mysql": "mysql", "sql server": "sqlserver"},
+        ),
+        RegraDeTipo(
+            frozenset({"Kubernetes Engine"}),
+            _sku(r"^.*Kubernetes Clusters?.*$"),
+            _T.CLUSTER_KUBERNETES,
+            "igual",
+        ),
+        RegraDeTipo(frozenset({"Cloud Storage"}), _QUALQUER_USO, _T.BUCKET, "unico"),
+        RegraDeTipo(
+            frozenset({"Cloud Memorystore for Redis"}), _sku(r"^Redis .+$"), _T.CACHE, "unico"
+        ),
+    ),
 }
 
 # O serviço da fatura que cada tipo de recurso gera. Liga serviço a unidade
@@ -184,6 +254,14 @@ SERVICO_DO_TIPO: Mapping[str, Mapping[TipoDeRecurso, str]] = {
         _T.BALANCEADOR: "AWSELB",
         _T.BUCKET: "AmazonS3",
         _T.CLUSTER_KUBERNETES: "AmazonEKS",
+    },
+    "gcp": {
+        _T.INSTANCIA: "Compute Engine",
+        _T.DISCO: "Compute Engine",
+        _T.BANCO: "Cloud SQL",
+        _T.CACHE: "Cloud Memorystore for Redis",
+        _T.BUCKET: "Cloud Storage",
+        _T.CLUSTER_KUBERNETES: "Kubernetes Engine",
     },
 }
 # Componente: o tipo canônico é "outro", o nativo diz o serviço
@@ -245,7 +323,7 @@ def atribuir_por_tipo(
         estimadas = _estimar(
             _Linha(
                 conta=linha.conta,
-                regiao=regiao_da_linha(provedor, linha.regiao, linha.uso),
+                regiao=_regiao(provedor, linha.regiao, linha.uso),
                 servico=linha.servico,
                 uso=linha.uso,
                 custo=linha.custo,
@@ -265,7 +343,7 @@ def atribuir_por_tipo(
             _estimar(
                 _Linha(
                     conta=s.conta,
-                    regiao=regiao_da_linha(provedor, s.regiao, s.uso),
+                    regiao=_regiao(provedor, s.regiao, s.uso),
                     servico=s.servico,
                     uso=s.uso,
                     custo=s.custo,
@@ -304,15 +382,14 @@ def _estimar(
         if m is None:
             continue
         valor = (m.group(1) if m.groups() else None) or regra.padrao_do_atributo
+        if valor and regra.traducao:
+            valor = regra.traducao.get(valor.lower(), valor)
         candidatos = [
             r
             for r in por_tipo.get(regra.tipo, ())
             if _mesmo_lugar(r, linha)
             and (regra.nativo is None or r.tipo_nativo.endswith(regra.nativo))
-            and (
-                regra.atributo is None
-                or str(r.atributos.get(regra.atributo) or "").lower() == (valor or "").lower()
-            )
+            and (regra.atributo is None or _casa(regra, r.atributos.get(regra.atributo), valor))
         ]
         pesos = _pesos(regra, candidatos)
         mesma_unidade = False
@@ -324,6 +401,62 @@ def _estimar(
             return []
         return _dividir(linha, regra, valor, pesos, mesma_unidade=mesma_unidade)
     return []
+
+
+def _casa(regra: RegraDeTipo, atributo: object, valor: str | None) -> bool:
+    if not valor or atributo is None:
+        return False
+    a, v = str(atributo).lower(), valor.lower()
+    if regra.comparacao == "prefixo":
+        return a.startswith(f"{v}-")
+    if regra.comparacao == "contem":
+        return v in a
+    return a == v
+
+
+def _regiao(provedor: str, regiao: str | None, uso: str | None) -> str | None:
+    """Só região de verdade restringe: "Americas" ou "multi-region" é grupo de preço."""
+    r = regiao_da_linha(provedor, regiao, uso)
+    return r if r and any(c.isdigit() for c in r) else None
+
+
+# Forma da máquina do GCP pelo nome: `n2-standard-4` = 4 vCPU e 16 GiB. Memória por
+# vCPU de cada sufixo; aproximada, serve para dividir entre máquinas, não para cotar.
+_FORMA_GCP = re.compile(r"^[a-z0-9]+-(standard|highmem|highcpu|ultramem|megamem)-(\d+)$")
+_CUSTOM_GCP = re.compile(r"^(?:[a-z0-9]+-)?custom-(\d+)-(\d+)(?:-ext)?$")
+_GIB_POR_VCPU = {"standard": 4, "highmem": 8, "highcpu": 1, "ultramem": 24, "megamem": 14}
+_COMPARTILHADA_GCP = {
+    "e2-micro": (Decimal("0.25"), 1),
+    "e2-small": (Decimal("0.5"), 2),
+    "e2-medium": (Decimal(1), 4),
+    "f1-micro": (Decimal("0.2"), Decimal("0.6")),
+    "g1-small": (Decimal("0.5"), Decimal("1.7")),
+}
+
+
+def _forma(tipo_maquina: object) -> tuple[Decimal, Decimal] | None:
+    tipo = str(tipo_maquina or "").lower()
+    if tipo in _COMPARTILHADA_GCP:
+        vcpus, gib = _COMPARTILHADA_GCP[tipo]
+        return Decimal(vcpus), Decimal(gib)
+    if m := _FORMA_GCP.match(tipo):
+        vcpus = Decimal(m.group(2))
+        return vcpus, vcpus * _GIB_POR_VCPU[m.group(1)]
+    if m := _CUSTOM_GCP.match(tipo):
+        return Decimal(m.group(1)), Decimal(m.group(2)) / 1024
+    forma = parse_instance_shape(tipo)
+    return (forma.vcpus, forma.ram_gib) if forma else None
+
+
+def _medida(r: Recurso, nome: str) -> Decimal:
+    """O atributo, ou o que o tipo da máquina diz dele (vCPU e memória)."""
+    direto = _numero(r.atributos.get(nome))
+    if direto > 0 or nome not in {"vcpus", "memoria_gib"}:
+        return direto
+    forma = _forma(r.atributos.get("tipo_maquina"))
+    if forma is None:
+        return _ZERO
+    return forma[0] if nome == "vcpus" else forma[1]
 
 
 def _mesmo_lugar(r: Recurso, linha: _Linha) -> bool:
@@ -340,7 +473,7 @@ def _pesos(regra: RegraDeTipo, candidatos: list[Recurso]) -> list[tuple[Recurso,
     if regra.divisao == "igual":
         return [(r, Decimal(1)) for r in candidatos]
     if regra.divisao == "tamanho" and regra.medida:
-        pesos = [(r, _numero(r.atributos.get(regra.medida))) for r in candidatos]
+        pesos = [(r, _medida(r, regra.medida)) for r in candidatos]
         if all(p > 0 for _, p in pesos):
             return pesos
     return []
