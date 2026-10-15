@@ -21,9 +21,11 @@ from app.api.deps import (
     ListBillingReportsUC,
     UploadBillingFileUC,
 )
+from app.api.v1.routes.billing_checks import verificar_arquivo
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
+from app.domain.services.diagnostico_de_entrada import COST_EXPLORER
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.repositories.pg_billing_enriched_repo import (
     PgBillingEnrichedRepository,
@@ -46,6 +48,7 @@ from app.schemas.billing import (
     BillingJobStatusResponse,
     BillingReportSummary,
 )
+from app.schemas.diagnostico_de_entrada import BillingFileCheckResponse
 from app.use_cases.analysis.build_billing_enriched import BuildBillingEnrichedUseCase
 from app.use_cases.billing.get_billing_job_status import GetBillingJobStatusInput
 from app.use_cases.billing.ingest_billing_file import (
@@ -57,13 +60,33 @@ from app.use_cases.billing.list_billing_reports import ListBillingReportsInput
 from app.use_cases.billing.upload_billing_file import UploadBillingFileInput
 
 router = APIRouter(prefix="/billing-files")
+
+
+def _verificar_sem_falhar(caminho: Path) -> BillingFileCheckResponse | None:
+    """O formato não reconhecido segue o caminho de sempre (falha na leitura, com o motivo)."""
+    try:
+        return verificar_arquivo(caminho)
+    except Exception:
+        _log.warning("verificacao_do_arquivo_falhou", arquivo=caminho.name)
+        return None
+
+
 _log = get_logger(__name__)
 
 # `.parquet`: um dos três formatos oficiais do CUR 2.0. `.jsonl`: NDJSON com
 # a outra extensão usual (o `bq extract` e ferramentas de ETL usam as duas).
 _ALLOWED_EXT = {
-    ".csv", ".tsv", ".txt", ".gz", ".zip", ".json", ".ndjson", ".jsonl",
-    ".xlsx", ".xlsm", ".parquet",
+    ".csv",
+    ".tsv",
+    ".txt",
+    ".gz",
+    ".zip",
+    ".json",
+    ".ndjson",
+    ".jsonl",
+    ".xlsx",
+    ".xlsm",
+    ".parquet",
 }
 
 _MAX_REPORTS_PER_PAGE = 500
@@ -103,6 +126,22 @@ async def upload_billing_file(
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(contents)
         tmp_name = tmp.name
+
+    # Cost Explorer por serviço: sem tipo de uso não há o que analisar. Recusa já,
+    # com o caminho certo, em vez de uma análise quase vazia (PLANO_CENARIOS_DE_ENTRADA)
+    verificacao = _verificar_sem_falhar(Path(tmp_name))
+    if verificacao is not None and verificacao.formato == COST_EXPLORER:
+        Path(tmp_name).unlink(missing_ok=True)  # noqa: ASYNC240 - arquivo temporário pequeno
+        problema = verificacao.problemas[0]
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            {
+                "codigo": "FORMATO_NAO_SUPORTADO",
+                "mensagem": f"{problema.titulo}. {problema.texto}",
+                "formato": verificacao.formato,
+                "retryable": False,
+            },
+        )
 
     try:
         user_uuid = UUID(user.sub)

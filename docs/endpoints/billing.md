@@ -54,6 +54,40 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
 | 401 | Token ausente ou inválido |
 | 413 | Arquivo > 50 MB |
 | 415 | Extensão não suportada |
+| 422 | `FORMATO_NAO_SUPORTADO`: Cost Explorer por serviço (`AWS_CE_DAILY_BY_SERVICE`). Sem o tipo de uso de cada linha não há o que analisar; `mensagem` explica e diz o export certo |
+
+---
+
+## `POST /v1/billing-file-checks`
+
+Crítica do arquivo **antes** do upload: lê só a amostra, não grava nada. A tela de
+importação usa para avisar antes de enviar (PLANO_CENARIOS_DE_ENTRADA §3.4).
+
+Request igual ao upload (`multipart/form-data`, campo `file`). Response 200:
+
+```json
+{
+  "aceita": false,
+  "formato": "AWS_CE_DAILY_BY_SERVICE",
+  "nome_do_formato": "Cost Explorer da AWS (total por serviço)",
+  "provedor": "aws",
+  "com_id_de_recurso": false,
+  "problemas": [
+    {"nivel": "critico", "codigo": "cost_explorer", "titulo": "O Cost Explorer não serve para a análise", "texto": "…"}
+  ],
+  "como_exportar": "Na AWS, crie uma exportação CUR 2.0 …"
+}
+```
+
+`aceita=false` quando o upload recusaria (Cost Explorer) ou o conteúdo não é fatura
+conhecida (`formato_nao_reconhecido`). `nivel`: `critico` (não serve), `alerta` (falta
+uma parte), `informativo` (limite do formato: fatura sem ID de recurso, que dá custo
+por aplicação **estimado** quando há inventário).
+
+O mesmo diagnóstico, com o que depende da análise (inventário ausente, de outra
+nuvem ou parcial, custo estimado, gasto não classificado), vem em
+`diagnostico_de_entrada` no `GET /v1/analyses` e no `GET /v1/analyses/{id}/result`:
+`{ "nivel": "critico" | "alerta" | null, "problemas": [...] }`, ou `null` sem nada a dizer.
 
 ### O que acontece em background
 
@@ -63,7 +97,7 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
 4. `delete_by_report(report_id, user_id)` + `bulk_insert` em chunks de 1000.
 5. Atualiza status para `done` ou `failed` (com `error_message` se falhar).
 
-Detecção suporta: **AWS CUR 2.0 / CUR Legacy / Cost Explorer pivotado · Azure
+Detecção suporta: **AWS CUR 2.0 / CUR Legacy / fatura detalhada legada · Azure
 PAYG / EA · GCP NDJSON / CSV / XLSX · OCI Cost Report**. Detalhes por provider
 em [`parsers.md`](../parsers.md).
 

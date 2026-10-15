@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.analysis_v2 import AnalysisV2Response
+from app.schemas.diagnostico_de_entrada import DiagnosticoDeEntradaOut
 
 
 class TechnicalMatchItem(BaseModel):
@@ -86,6 +87,8 @@ class AnalysisJobResponse(BaseModel):
     result: AnalysisV2Response | None = None
     llm_input_payload: dict | None = None
     created_at: datetime
+    # O que os arquivos enviados permitem; null quando não há problema a dizer
+    diagnostico_de_entrada: DiagnosticoDeEntradaOut | None = None
 
 
 class DispStatusIn(BaseModel):
@@ -128,3 +131,5 @@ class AnalysisJobSummary(BaseModel):
     disp_status: int = 1
     error: str | None = None
     created_at: datetime
+    # O que os arquivos enviados permitem: `nivel` dá a cor do aviso na lista
+    diagnostico_de_entrada: DiagnosticoDeEntradaOut | None = None
