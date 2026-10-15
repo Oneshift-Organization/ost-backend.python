@@ -135,6 +135,19 @@ Só se 2.2 mudar.
 - Lote da autoridade v3, depois dos testes conjuntos (3.2).
 - Pendências da tela Dependências: mensagem própria para fatura sem ID de recurso
   já entrou; falta "migrar só o serviço" (modo parcial, E6) se o usuário quiser.
+- **Fatura AWS no formato certo** (achado em 15/10 numa análise do develop com
+  1,2% do custo classificado). O guia de exportação da AWS no front
+  (`lib/billing-export-steps.ts`) manda baixar o CSV do Cost Explorer "custo por
+  serviço": sem tipo de uso, a análise sai vazia (sem pools, sem recomendação).
+  Decidido **não** classificar esse formato (pareceria completo sem ser):
+  1. trocar o passo a passo da AWS para CUR 2.0 (Data Exports), com o script do
+     CloudShell (Cost Explorer API por serviço + tipo de uso, no formato
+     detalhado que o parser já lê) como alternativa imediata;
+  2. recusar no upload o "custo por serviço" (`AWS_CE_DAILY_BY_SERVICE`) com
+     mensagem que diz o porquê e como exportar, antes de gastar a análise;
+  3. de carona: reenriquecer duplica `unmapped_billing_lines` (o caso de uso
+     apaga `billing_enriched` e não as órfãs). Sem efeito hoje (ninguém lê a
+     tabela), mas corrigir junto.
 
 ## 6. Riscos
 
