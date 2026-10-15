@@ -115,7 +115,9 @@ class MontarTopologiaUseCase:
         conteudo = await self._inventarios.carregar_conteudo(inventario)
         analise = analisar_topologia(conteudo, para_dominio(inventario.declaracoes))
         custos = atribuir_por_tipo(
-            conteudo, await self._custos.custos_por_recurso(report_id, user_id)
+            conteudo,
+            await self._custos.custos_por_recurso(report_id, user_id),
+            unidade_de=analise.unidade_de.get,
         )
         correlacao = correlacionar(
             conteudo, custos, captura_estimada=inventario.capturado_em_estimado

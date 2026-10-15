@@ -130,6 +130,20 @@ _TAGS_DO_CLUSTER = (
     "ebs.csi.aws.com/cluster-name",
 )
 _DO_CLUSTER = frozenset({_T.INSTANCIA, _T.BALANCEADOR, _T.DISCO})
+
+# Serviço gerenciado que é parte de uma aplicação mas não a define: vai com a
+# aplicação que a tag dele disser (PLANO_CENARIOS_DE_ENTRADA §7). Sem tag, fica
+# fora das unidades, como antes.
+_COMPONENTE = {
+    "AWS::Lambda::Function": "funcao",
+    "AWS::StepFunctions::StateMachine": "funcao",
+    "AWS::CloudFront::Distribution": "cdn",
+    "AWS::DynamoDB::Table": "tabela_nosql",
+    "AWS::ECR::Repository": "registro_de_imagens",
+    "AWS::SecretsManager::Secret": "segredo",
+    "AWS::SQS::Queue": "fila",
+    "AWS::SNS::Topic": "fila",
+}
 _SSD = frozenset({"gp2", "gp3", "io1", "io2"})
 
 # Par de tipos canônicos → (relação, tipo que fica do lado "de"). Para a lista
@@ -261,6 +275,8 @@ class NormalizadorAwsConfig:
         if estado is None:
             self._c.contar("removido")
             return
+        if componente := _COMPONENTE.get(tipo_nativo):
+            atributos = {**atributos, "componente": componente}
 
         self._c.adicionar(
             Recurso(

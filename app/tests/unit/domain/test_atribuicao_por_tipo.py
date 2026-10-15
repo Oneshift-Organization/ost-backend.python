@@ -233,3 +233,25 @@ def test_servico_que_cada_tipo_gera() -> None:
         "AmazonS3",
     }
     assert servicos_do_recurso("gcp", inv.recursos) == set()
+
+
+def test_duas_funcoes_da_mesma_aplicacao_dividem_o_custo_do_servico() -> None:
+    funcoes = [
+        replace(_r(nome, T.OUTRO, componente="funcao"), tipo_nativo="AWS::Lambda::Function")
+        for nome in ("fn-start", "fn-stop")
+    ]
+    inv = inventario(funcoes)
+    fatura = _fatura(_sem_id("AWSLambda", "Lambda-GB-Second", "4"))
+    # Sem saber das unidades, duas funções e uma linha: não dá para separar
+    assert not atribuir_por_tipo(inv, fatura).por_recurso
+    custos = atribuir_por_tipo(inv, fatura, unidade_de=lambda chave: "app-loja")
+    assert [x.custo for x in custos.por_recurso] == [Decimal("2"), Decimal("2")]
+    assert "mesma aplicação" in (custos.por_recurso[0].base or "")
+    # Em aplicações diferentes, continua sem custo
+    separadas = atribuir_por_tipo(inv, fatura, unidade_de=lambda chave: chave)
+    assert not separadas.por_recurso
+
+
+def test_servico_do_componente_vem_do_tipo_nativo() -> None:
+    fn = replace(_r("fn", T.OUTRO, componente="funcao"), tipo_nativo="AWS::Lambda::Function")
+    assert servicos_do_recurso("aws", [fn]) == {"AWSLambda"}

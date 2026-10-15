@@ -180,7 +180,9 @@ class EscopoDeMigracaoUseCase:
             )
 
         custos = atribuir_por_tipo(
-            conteudo, await self._custos.custos_por_recurso(job.report_id, user_id)
+            conteudo,
+            await self._custos.custos_por_recurso(job.report_id, user_id),
+            unidade_de=analise.unidade_de.get,
         )
         correspondencia = avaliar_correspondencia(conteudo, custos, correlacionar(conteudo, custos))
         if correspondencia.status == SEM_CORRESPONDENCIA:
