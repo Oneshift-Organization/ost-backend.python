@@ -23,7 +23,10 @@ from app.domain.services.diagnostico_de_entrada import (
     Problema,
     problemas_do_arquivo,
 )
-from app.infrastructure.file_ingestion.detector import inspecionar_formato
+from app.infrastructure.file_ingestion.detector import (
+    formato_que_nao_e_fatura,
+    inspecionar_formato,
+)
 from app.schemas.diagnostico_de_entrada import BillingFileCheckResponse, ProblemaDeEntradaOut
 
 router = APIRouter(prefix="/billing-file-checks", tags=["billing"])
@@ -38,27 +41,10 @@ def verificar_arquivo(caminho: Path) -> BillingFileCheckResponse:
     try:
         formato, com_id = inspecionar_formato(caminho)
     except (ProviderDetectionError, UnsupportedFormatError):
-        return BillingFileCheckResponse(
-            aceita=False,
-            formato=None,
-            nome_do_formato=None,
-            provedor=None,
-            com_id_de_recurso=None,
-            problemas=[
-                ProblemaDeEntradaOut.de(
-                    Problema(
-                        CRITICO,
-                        "formato_nao_reconhecido",
-                        "Arquivo não reconhecido como fatura",
-                        "O conteúdo não bate com nenhum export de fatura conhecido (CUR 2.0 da "
-                        "AWS, BigQuery do GCP, Cost Details da Azure, relatório de custos da "
-                        "OCI). Confira se é o arquivo do export, sem edição, e veja o guia de "
-                        "cada nuvem.",
-                    )
-                )
-            ],
-            como_exportar=None,
-        )
+        if errado := formato_que_nao_e_fatura(caminho):
+            formato, com_id = errado, None
+        else:
+            return _nao_reconhecido()
     perfil = PERFIS.get(formato)
     problemas = problemas_do_arquivo(formato, com_id=com_id)
     return BillingFileCheckResponse(
@@ -69,6 +55,30 @@ def verificar_arquivo(caminho: Path) -> BillingFileCheckResponse:
         com_id_de_recurso=perfil.com_id if perfil and perfil.com_id is not None else com_id,
         problemas=[ProblemaDeEntradaOut.de(p) for p in problemas],
         como_exportar=COMO_EXPORTAR.get(perfil.provedor) if perfil else None,
+    )
+
+
+def _nao_reconhecido() -> BillingFileCheckResponse:
+    return BillingFileCheckResponse(
+        aceita=False,
+        formato=None,
+        nome_do_formato=None,
+        provedor=None,
+        com_id_de_recurso=None,
+        problemas=[
+            ProblemaDeEntradaOut.de(
+                Problema(
+                    CRITICO,
+                    "formato_nao_reconhecido",
+                    "Arquivo não reconhecido como fatura",
+                    "O conteúdo não bate com nenhum export de fatura conhecido (CUR 2.0 da "
+                    "AWS, BigQuery do GCP, Cost Details da Azure, relatório de custos da "
+                    "OCI). Confira se é o arquivo do export, sem edição, e veja o guia de "
+                    "cada nuvem.",
+                )
+            )
+        ],
+        como_exportar=None,
     )
 
 

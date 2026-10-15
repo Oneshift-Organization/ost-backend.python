@@ -37,3 +37,12 @@ async def test_upload_de_cost_explorer_e_recusado_com_a_explicacao(app, _db_read
     detalhe = upload.json()["detail"]
     assert detalhe["codigo"] == "FORMATO_NAO_SUPORTADO"
     assert "CUR 2.0" in detalhe["mensagem"]
+
+
+async def test_upload_de_arquivo_que_nao_e_fatura_e_recusado_na_hora(app, _db_ready) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        upload = await c.post(
+            "/v1/billing-files", files={"file": ("notas.csv", b"nome,idade\nana,30\n", "text/csv")}
+        )
+    assert upload.status_code == 422, upload.text
+    assert upload.json()["detail"]["codigo"] == "FORMATO_NAO_SUPORTADO"
