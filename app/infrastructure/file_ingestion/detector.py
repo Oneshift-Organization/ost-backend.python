@@ -3,7 +3,7 @@ from __future__ import annotations
 import gzip
 import zipfile
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pandas as pd
 
@@ -103,3 +103,32 @@ def _read_sample(file_path: Path, size: int = 8192) -> bytes:
             with z.open(names[0]) as f:
                 return f.read(size)
     return file_path.read_bytes()[:size]
+
+
+# Formato que cada parser grava em `schema_version`. O AWS e o GCP decidem na
+# leitura (CUR 2.0 ou legado; BigQuery padrão ou detalhado); aqui a amostra decide.
+_FORMATO_DO_PARSER = {
+    "AWSCostExplorerParser": "AWS_CE_DAILY_BY_SERVICE",
+    "AwsDetailedBillingParser": "AWS_DETAILED_BILLING",
+    "GcpCostTableParser": "GCP_COST_TABLE",
+    "AzureParser": "AZURE_PAYG",
+    "OCIParser": "OCI_COST_REPORT",
+}
+
+
+def inspecionar_formato(file_path: Path) -> tuple[str, bool | None]:
+    """(formato, traz ID de recurso?) pela amostra do arquivo, sem ler tudo.
+
+    ``None`` no ID quando a amostra não basta para dizer. Levanta as mesmas
+    exceções de ``detect_parser`` quando o formato não é reconhecido.
+    """
+    parser = detect_parser(file_path, uuid4(), uuid4())
+    amostra = _read_sample(file_path)
+    nome = type(parser).__name__
+    if nome == "AWSParser":
+        formato = "AWS_CUR2.0" if b"line_item_" in amostra else "AWS_CUR_LEGACY"
+        return formato, b"line_item_resource_id" in amostra or b"lineItem/ResourceId" in amostra
+    if nome == "GCPParser":
+        detalhado = b'"resource"' in amostra or b"resource.name" in amostra
+        return ("GCP_BILLING_DETAILED" if detalhado else "GCP_BILLING_STD"), detalhado or None
+    return _FORMATO_DO_PARSER.get(nome, nome), None

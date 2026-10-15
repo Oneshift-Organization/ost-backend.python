@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.domain.analysis import MigrationContext
 from app.domain.entities.analysis_job import AnalysisJob, DispStatus, agora_utc
+from app.domain.services.diagnostico_de_entrada import diagnosticar_payload
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
 from app.infrastructure.database.models.billing_reports import BillingReportModel
 from app.infrastructure.database.session import get_sessionmaker
@@ -68,6 +69,7 @@ from app.schemas.analysis import (
 )
 from app.schemas.analysis_v2 import AnalysisV2Response, LegacyAnalysisRequest
 from app.schemas.decision_support import AnalysisStartOptions
+from app.schemas.diagnostico_de_entrada import DiagnosticoDeEntradaOut
 from app.schemas.service_couplings import ServiceCouplingsResponse
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
@@ -218,13 +220,17 @@ async def definir_disp_status(
     """
     user_uuid = UUID(user.sub)
     job = (
-        await session.execute(
-            select(AnalysisJobModel).where(
-                AnalysisJobModel.job_id == job_id,
-                AnalysisJobModel.user_id == user_uuid,
+        (
+            await session.execute(
+                select(AnalysisJobModel).where(
+                    AnalysisJobModel.job_id == job_id,
+                    AnalysisJobModel.user_id == user_uuid,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
 
     # 404 e não 403: dizer "existe mas não é sua" já entrega a existência.
     if job is None:
@@ -241,9 +247,7 @@ async def definir_disp_status(
     job.disp_status_updated_at = agora_utc()
     await session.commit()
 
-    logger.info(
-        "disp_status_alterado job_id=%s valor=%s", job_id, corpo.disp_status
-    )
+    logger.info("disp_status_alterado job_id=%s valor=%s", job_id, corpo.disp_status)
     return DispStatusOut(
         job_id=job.job_id,
         disp_status=job.disp_status,
@@ -276,11 +280,7 @@ async def list_analysis_jobs(
         .where(
             AnalysisJobModel.user_id == user_uuid,
             BillingReportModel.user_id == user_uuid,
-            *(
-                ()
-                if incluir_depreciadas
-                else (AnalysisJobModel.disp_status == DispStatus.ATIVA,)
-            ),
+            *(() if incluir_depreciadas else (AnalysisJobModel.disp_status == DispStatus.ATIVA,)),
         )
         .order_by(AnalysisJobModel.created_at.desc())
         .limit(limit)
@@ -289,11 +289,7 @@ async def list_analysis_jobs(
 
     summaries: list[AnalysisJobSummary] = []
     for job, report in result.all():
-        structured = (
-            job.ai_structured_output
-            if isinstance(job.ai_structured_output, dict)
-            else {}
-        )
+        structured = job.ai_structured_output if isinstance(job.ai_structured_output, dict) else {}
         decision = structured.get("decision_support") or {}
         decision_score = decision.get("score") or {}
         try:
@@ -306,14 +302,10 @@ async def list_analysis_jobs(
                     provider=report.provider,
                     source_filename=report.source_filename,
                     row_count=report.row_count or 0,
-                    recommended_provider=_texto(
-                        structured.get("recommended_provider")
-                    ),
+                    recommended_provider=_texto(structured.get("recommended_provider")),
                     recommendation=_texto(structured.get("recommendation")),
                     viability_score=_inteiro(structured.get("viability_score")),
-                    analysis_confidence=_texto(
-                        structured.get("analysis_confidence")
-                    ),
+                    analysis_confidence=_texto(structured.get("analysis_confidence")),
                     decision_score_status=(
                         decision_score.get("status", "not_scored") if decision else None
                     ),
@@ -321,6 +313,9 @@ async def list_analysis_jobs(
                     decision_score_upper_bound=decision_score.get("upper_bound"),
                     error=job.error,
                     created_at=job.created_at,
+                    diagnostico_de_entrada=_diagnostico_de_entrada(
+                        report.schema_version, report.provider, job.llm_input_payload
+                    ),
                 )
             )
         except ValidationError:
@@ -334,10 +329,7 @@ async def list_analysis_jobs(
                     report_id=job.report_id,
                     status=str(job.status),
                     created_at=job.created_at,
-                    error=(
-                        "resumo indisponível: dados da análise "
-                        "em formato inesperado"
-                    ),
+                    error=("resumo indisponível: dados da análise em formato inesperado"),
                 )
             )
 
@@ -420,6 +412,23 @@ async def get_agents_payload(
             detail=str(e),
         ) from e
     return _build_response(ctx)
+
+
+def _diagnostico_de_entrada(
+    formato: str | None, provedor: str | None, payload: object
+) -> DiagnosticoDeEntradaOut | None:
+    """O que os arquivos permitem, lido do formato da fatura e do payload congelado.
+    Nunca derruba a rota: um payload antigo em forma inesperada só fica sem aviso."""
+    try:
+        d = diagnosticar_payload(
+            formato=formato,
+            provedor_da_fatura=provedor,
+            payload=payload if isinstance(payload, dict) else None,
+        )
+    except Exception:
+        logger.exception("diagnostico_de_entrada_falhou formato=%s", formato)
+        return None
+    return DiagnosticoDeEntradaOut.de(d) if d.problemas else None
 
 
 def _erro(
@@ -692,7 +701,8 @@ async def start_analysis(
         job.job_id,
         sm,
         options.decision_context.model_dump(exclude_none=True)
-        if options and options.decision_context else None,
+        if options and options.decision_context
+        else None,
         inventory_id=inventory_id,
     )
 
@@ -747,11 +757,7 @@ async def get_analysis_by_external_id(
 
 
 def _make_llm_client() -> (
-    MockLLMClient
-    | GeminiLLMClient
-    | OpenRouterLLMClient
-    | ClaudeLLMClient
-    | NvidiaLLMClient
+    MockLLMClient | GeminiLLMClient | OpenRouterLLMClient | ClaudeLLMClient | NvidiaLLMClient
 ):
     settings = get_settings()
 
@@ -797,43 +803,21 @@ def _make_orchestrator() -> LLMOrchestrator:
 
     primary_client = _make_llm_client()
 
-    primary_uses_mcp = (
-        settings.llm_provider == "nvidia"
-        and settings.mcp_prompts_enabled
-    )
-    primary_mcp_client = (
-        get_mcp_prompt_client()
-        if primary_uses_mcp
-        else None
-    )
+    primary_uses_mcp = settings.llm_provider == "nvidia" and settings.mcp_prompts_enabled
+    primary_mcp_client = get_mcp_prompt_client() if primary_uses_mcp else None
 
     fallback_enabled = (
-        settings.llm_provider == "anthropic"
-        and settings.llm_fallback_provider == "nvidia"
+        settings.llm_provider == "anthropic" and settings.llm_fallback_provider == "nvidia"
     )
-    fallback_client = (
-        _make_nvidia_client()
-        if fallback_enabled
-        else None
-    )
+    fallback_client = _make_nvidia_client() if fallback_enabled else None
 
-    fallback_uses_mcp = (
-        fallback_enabled
-        and settings.mcp_prompts_enabled
-    )
-    fallback_mcp_client = (
-        get_mcp_prompt_client()
-        if fallback_uses_mcp
-        else None
-    )
+    fallback_uses_mcp = fallback_enabled and settings.mcp_prompts_enabled
+    fallback_mcp_client = get_mcp_prompt_client() if fallback_uses_mcp else None
 
     logger.info(
-        "llm_runtime_selected primary=%s fallback=%s "
-        "primary_mcp=%s fallback_mcp=%s",
+        "llm_runtime_selected primary=%s fallback=%s primary_mcp=%s fallback_mcp=%s",
         settings.llm_provider,
-        settings.llm_fallback_provider
-        if fallback_enabled
-        else "none",
+        settings.llm_fallback_provider if fallback_enabled else "none",
         primary_uses_mcp,
         fallback_uses_mcp,
     )
@@ -861,15 +845,8 @@ async def direct_analysis(
         "billing_period": body.billing_period,
         "currency": body.currency,
         "total_spend": body.total_spend,
-        "company_context": (
-            body.company_context.model_dump()
-            if body.company_context
-            else None
-        ),
-        "workloads": [
-            workload.model_dump()
-            for workload in body.workloads
-        ],
+        "company_context": (body.company_context.model_dump() if body.company_context else None),
+        "workloads": [workload.model_dump() for workload in body.workloads],
     }
     if body.decision_context:
         billing_data["decision_context"] = body.decision_context.model_dump(exclude_none=True)
@@ -918,6 +895,7 @@ async def get_analysis_result(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="analysis job not found",
         )
+    report = await PgBillingReportRepository(session).get_by_id(job.report_id, UUID(user.sub))
 
     return AnalysisJobResponse(
         job_id=job.job_id,
@@ -935,6 +913,15 @@ async def get_analysis_result(
         ),
         llm_input_payload=job.llm_input_payload,
         created_at=job.created_at,
+        diagnostico_de_entrada=(
+            _diagnostico_de_entrada(
+                report.schema_version,
+                report.provider.value if report.provider else None,
+                job.llm_input_payload,
+            )
+            if report is not None
+            else None
+        ),
     )
 
 
@@ -963,15 +950,11 @@ async def get_service_couplings(
             status.HTTP_404_NOT_FOUND, "ANALISE_NAO_ENCONTRADA", str(e), retryable=False
         ) from e
     except AnaliseNaoConcluidaError as e:
-        raise erro(
-            status.HTTP_409_CONFLICT, "ANALISE_NAO_CONCLUIDA", str(e), retryable=True
-        ) from e
+        raise erro(status.HTTP_409_CONFLICT, "ANALISE_NAO_CONCLUIDA", str(e), retryable=True) from e
     except AnaliseFalhouError as e:
         raise erro(status.HTTP_409_CONFLICT, "ANALISE_FALHOU", str(e), retryable=False) from e
     except AnaliseSemServicosError as e:
-        raise erro(
-            status.HTTP_409_CONFLICT, "ANALISE_SEM_SERVICOS", str(e), retryable=False
-        ) from e
+        raise erro(status.HTTP_409_CONFLICT, "ANALISE_SEM_SERVICOS", str(e), retryable=False) from e
     return ServiceCouplingsResponse.de(visao)
 
 
@@ -1014,11 +997,7 @@ async def _run_legacy_analysis_pipeline(
             )
 
             if not isinstance(v2_result, AnalysisV2Response):
-                raw_result = (
-                    v2_result.model_dump()
-                    if hasattr(v2_result, "model_dump")
-                    else {}
-                )
+                raw_result = v2_result.model_dump() if hasattr(v2_result, "model_dump") else {}
                 v2_result = AnalysisV2Response.resilient_parse(
                     raw_result,
                 )
@@ -1121,10 +1100,7 @@ async def legacy_start_analysis(
 
 @router.get(
     "/legacy/{job_id}/agents-payload",
-    summary=(
-        "Return the legacy workload JSON "
-        "sent to the LLM (inspection endpoint)"
-    ),
+    summary=("Return the legacy workload JSON sent to the LLM (inspection endpoint)"),
 )
 async def get_legacy_agents_payload(
     job_id: UUID,
