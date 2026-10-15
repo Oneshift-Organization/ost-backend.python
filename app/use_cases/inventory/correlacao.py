@@ -10,6 +10,7 @@ from app.domain.entities.billing_report import JobStatus
 from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
 from app.domain.repositories.i_custo_por_recurso import ILeitorDeCustoPorRecurso
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
+from app.domain.services.atribuicao_por_tipo import atribuir_por_tipo
 from app.domain.services.correlacao_inventario import Correlacao, correlacionar
 from app.use_cases.inventory.consultas import exigir_processado, obter_do_usuario
 
@@ -52,7 +53,9 @@ class CorrelacionarInventarioUseCase:
                 f"inventário de {inventario.provedor}, billing de {provedor_billing}"
             )
         conteudo = await self._inventarios.carregar_conteudo(inventario)
-        custos = await self._custos.custos_por_recurso(report_id, user_id)
+        custos = atribuir_por_tipo(
+            conteudo, await self._custos.custos_por_recurso(report_id, user_id)
+        )
         return correlacionar(conteudo, custos, captura_estimada=inventario.capturado_em_estimado)
 
 
@@ -77,6 +80,7 @@ def serializar_correlacao(c: Correlacao) -> dict[str, Any]:
         "custo_da_base": _dinheiro(c.custo_da_base),
         "custo_com_recurso": _dinheiro(c.custo_com_recurso),
         "custo_encontrado": _dinheiro(c.custo_encontrado),
+        "custo_estimado": _dinheiro(c.custo_estimado),
         "fracao_encontrada": (
             float(round(c.fracao_encontrada, 4)) if c.fracao_encontrada is not None else None
         ),

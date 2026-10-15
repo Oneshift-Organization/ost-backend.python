@@ -22,7 +22,7 @@ from app.domain.services.topologia.escopo import (
 from app.domain.services.topologia.indice import Indice
 from app.domain.services.topologia.modelo import Natureza
 
-from .construtores import camadas_app_banco, inventario, regra
+from .construtores import T, camadas_app_banco, inventario, recurso, regra
 
 # Recurso → (serviço, custo)
 _CUSTOS = {
@@ -202,3 +202,19 @@ def test_incluido_sem_nada_que_o_ligue_ao_plano_fica_sem_ligacao() -> None:
         Escolha(aplicacoes=frozenset({"catalogo"}), incluir_grupos=frozenset({monitor.grupo})),
     )
     assert [(i.nome, i.lado, i.ligado_a) for i in plano.incluidos] == [("monitor", SEM_LIGACAO, ())]
+
+
+def test_servico_sem_custo_ligado_chega_a_unidade_pelo_tipo_do_recurso() -> None:
+    """Fatura sem ID: o S3 não pôde ser dividido entre os buckets, mas o inventário diz
+    quais unidades têm bucket. Escolher o serviço traz essas unidades."""
+    inv = inventario([recurso("front", T.BUCKET, tags={"app": "loja"}), recurso("logs", T.BUCKET)])
+    analise = analisar_topologia(inv)
+    presentes = {u.id: frozenset({"AmazonS3"}) for u in analise.unidades}
+    catalogo = montar_catalogo(
+        analise, {}, {"AmazonS3": Decimal("3.82")}, (), "app", servicos_presentes=presentes
+    )
+    [s3] = [s for s in catalogo.servicos if s.nome == "AmazonS3"]
+    assert {a for a, _ in s3.aplicacoes} == {"loja", "logs"}
+    plano = fechar_plano(catalogo, Escolha(servicos=frozenset({"AmazonS3"})))
+    assert len(plano.unidades) == 2
+    assert plano.fora_do_plano == (("AmazonS3", Decimal("3.82")),)

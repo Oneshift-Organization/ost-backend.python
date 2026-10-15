@@ -40,6 +40,7 @@ from app.domain.entities.topologia import (
 )
 from app.domain.repositories.i_custo_por_recurso import ILeitorDeCustoPorRecurso
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
+from app.domain.services.atribuicao_por_tipo import atribuir_por_tipo
 from app.domain.services.correlacao_inventario import (
     Correlacao,
     CustosDoBilling,
@@ -113,7 +114,9 @@ class MontarTopologiaUseCase:
         exigir_processado(inventario)
         conteudo = await self._inventarios.carregar_conteudo(inventario)
         analise = analisar_topologia(conteudo, para_dominio(inventario.declaracoes))
-        custos = await self._custos.custos_por_recurso(report_id, user_id)
+        custos = atribuir_por_tipo(
+            conteudo, await self._custos.custos_por_recurso(report_id, user_id)
+        )
         correlacao = correlacionar(
             conteudo, custos, captura_estimada=inventario.capturado_em_estimado
         )
@@ -134,7 +137,9 @@ class MontarTopologiaUseCase:
         inventario = await obter_do_usuario(self._inventarios, inventario_id, user_id)
         exigir_processado(inventario)
         conteudo = await self._inventarios.carregar_conteudo(inventario)
-        custos = await self._custos.custos_por_recurso(report_id, user_id)
+        custos = atribuir_por_tipo(
+            conteudo, await self._custos.custos_por_recurso(report_id, user_id)
+        )
         return avaliar_correspondencia(conteudo, custos, correlacionar(conteudo, custos))
 
 
@@ -518,6 +523,8 @@ def _resumo(
             ),
             "custo_com_recurso": converter(correlacao.custo_com_recurso),
             "custo_encontrado": converter(correlacao.custo_encontrado),
+            # Ligado pelo tipo (fatura sem ID ou máquina trocada): estimado, não medido
+            "custo_estimado": converter(correlacao.custo_estimado),
             "lacunas": [
                 {"conta": x.conta, "regiao": x.regiao, "custo": converter(x.custo)}
                 for x in correlacao.lacunas_por_escopo[:5]

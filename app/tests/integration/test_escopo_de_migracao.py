@@ -251,7 +251,7 @@ async def test_inventario_de_outra_conta_e_recusado_antes_da_analise(
     assert "222222222222" in detalhe["contas_da_fatura"]
 
 
-async def test_fatura_resumida_com_inventario_avisa_e_so_planeja_por_aplicacao(
+async def test_fatura_sem_id_com_inventario_estima_pelo_tipo_e_planeja_por_servico(
     app: FastAPI, _db_ready: None, mocks_inventario: Any
 ) -> None:
     rid = await _ingest(FIXTURES / "aws_cost_explorer_full.csv", user_id=HTTP_USER)
@@ -271,12 +271,17 @@ async def test_fatura_resumida_com_inventario_avisa_e_so_planeja_por_aplicacao(
             )
     finally:
         await _apagar(rid, *([iid] if iid else []))
-    assert aplicacoes["correspondencia"]["status"] == "sem_id_de_recurso"
-    assert aplicacoes["correspondencia"]["liga_custo"] is False
+    # Formato detalhado legado da AWS: sem ID, mas com o tipo de uso. O custo chega às
+    # máquinas do inventário pelo tipo, marcado como estimado (PLANO_CENARIOS_DE_ENTRADA)
+    correspondencia = aplicacoes["correspondencia"]
+    assert correspondencia["status"] == "estimado"
+    assert correspondencia["liga_custo"] is True
+    assert correspondencia["fracao_estimada"] > 0
+    assert "Cost Explorer" not in correspondencia["mensagem"]
     assert len(aplicacoes["aplicacoes"]) >= 5
-    assert por_servico.status_code == 422
-    assert por_servico.json()["detail"]["codigo"] == "ESCOLHA_INVALIDA"
+    assert por_servico.status_code == 200, por_servico.text
+    assert por_servico.json()["unidades_do_plano"]
     assert por_aplicacao.status_code == 200
     plano = por_aplicacao.json()
     assert {"auth", "checkout", "pagamentos"} <= set(plano["aplicacoes"])
-    assert plano["correspondencia"]["status"] == "sem_id_de_recurso"
+    assert plano["correspondencia"]["status"] == "estimado"

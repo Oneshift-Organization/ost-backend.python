@@ -130,7 +130,21 @@ As duas respostas trazem `correspondencia`, que diz se o inventário casa com a 
 |---|---|---|
 | `ok` | o inventário cobre ao menos 80% do custo com ID de recurso | nada |
 | `parcial` | cobre menos; `contas_sem_inventario` diz o que falta | a tela avisa; custo e plano só da parte coberta |
-| `sem_id_de_recurso` | fatura resumida (Cost Explorer, Cost Table): nenhuma linha traz o ID do recurso | `liga_custo=false`: aplicações e o que migra junto vêm só do inventário, sem custo; plano só por aplicação (por serviço dá `422 ESCOLHA_INVALIDA`) |
+| `estimado` | a fatura não traz o ID (formato detalhado legado da AWS, Cost Table do GCP, CUR sem IDs), mas traz o tipo de uso, e o custo foi ligado aos recursos do inventário pelo tipo | `liga_custo=true`; `fracao_estimada` diz quanto do gasto foi ligado. A tela marca o custo como estimado |
+| `sem_id_de_recurso` | a fatura não traz o ID e nada dela pôde ser ligado pelo tipo | `liga_custo=false`: aplicações e o que migra junto vêm só do inventário, sem custo |
+
+**Custo pelo tipo** (`app/domain/services/atribuicao_por_tipo.py`): cada linha sem ID
+vai para os recursos do inventário do mesmo tipo — máquina pelo tipo
+(`BoxUsage:t4g.xlarge`), banco pela classe, cluster, NAT, balanceador, disco pelo tipo
+e pelo tamanho, bucket quando é um só —, na mesma conta e região. Vários candidatos
+iguais dividem igual; candidatos diferentes sem medida (vários buckets) não recebem.
+A mesma regra cobre a máquina ou o disco com ID que não está no inventário (nó trocado
+pelo autoscaling): conta como coberto pelo tipo, e a mensagem do `ok`/`parcial` diz
+quanto. Tudo que entra assim sai como estimado; o medido não muda.
+
+**Plano por serviço sem ID:** escolher um serviço traz as unidades que têm custo dele
+ou que têm recurso do tipo que o gera (bucket → `AmazonS3`, banco → `AmazonRDS`),
+mesmo quando o custo não pôde ser dividido. Não há mais `422` por fatura sem ID.
 
 Inventário de **outra conta** não chega aqui: o `POST /v1/analyses/start` recusa com
 `422 INVENTARIO_NAO_CORRESPONDE` antes de criar o job. Na AWS e na Azure, contas sem

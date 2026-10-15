@@ -153,6 +153,8 @@ class CorrelationResponse(_Aberto):
     custo_com_recurso: float
     custo_encontrado: float
     fracao_encontrada: float | None
+    # Ligado ao recurso pelo tipo de uso, não pelo ID (fatura sem ID, máquina trocada)
+    custo_estimado: float = 0.0
     recursos_do_billing: int
     recursos_encontrados: int
     ambiguos: int

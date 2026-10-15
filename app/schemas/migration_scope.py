@@ -49,12 +49,14 @@ def _premissas(ctx: ContextoDoEscopo) -> list[PremissaOut]:
 class CorrespondenciaOut(BaseModel):
     """O inventário casa com a fatura?
 
-    `liga_custo=false`: sem custo por aplicação nem plano por serviço.
+    `liga_custo=false`: sem custo por aplicação. `estimado`: a fatura não traz o ID de
+    cada recurso e o custo foi ligado pelo tipo (`fracao_estimada` do gasto).
     """
 
-    status: Literal["ok", "parcial", "sem_id_de_recurso"]
+    status: Literal["ok", "parcial", "estimado", "sem_id_de_recurso"]
     liga_custo: bool
     fracao_encontrada: float | None
+    fracao_estimada: float | None = None
     contas_da_fatura: list[str]
     contas_do_inventario: list[str]
     contas_sem_inventario: list[str]
@@ -69,6 +71,9 @@ class CorrespondenciaOut(BaseModel):
                 "liga_custo": c.liga_custo,
                 "fracao_encontrada": (
                     float(c.fracao_encontrada) if c.fracao_encontrada is not None else None
+                ),
+                "fracao_estimada": (
+                    float(round(c.fracao_estimada, 4)) if c.fracao_estimada is not None else None
                 ),
                 "contas_da_fatura": list(c.contas_da_fatura),
                 "contas_do_inventario": list(c.contas_do_inventario),
