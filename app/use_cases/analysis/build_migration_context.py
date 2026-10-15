@@ -628,12 +628,23 @@ class BuildMigrationContextUseCase:
             zona_por_pool[fpool.pool_key.as_str()] = zona
         cotacoes_aproximadas: list[dict[str, str]] = []
 
+        # P1b: pool burstable cotado em destino sem crédito pela linha de base da CPU
+        burstable_pela_base: list[dict[str, Any]] = []
         if self._matcher is not None and target_providers:
             curated_compute = await _get_equivalents("compute", "virtual_server")
 
             for fpool in family_pools:
                 monthly_cost_analysis = convert(fpool.monthly_cost, fx) or Decimal("0")
                 zona = zona_por_pool[fpool.pool_key.as_str()]
+                perfil_do_pool = perfil(source_provider, fpool.pool_key.machine_family)
+                if perfil_do_pool and perfil_do_pool.burstable and perfil_do_pool.base_cpu:
+                    burstable_pela_base.append(
+                        {
+                            "pool": fpool.pool_key.as_str(),
+                            "base_cpu": float(perfil_do_pool.base_cpu),
+                            "vcpus_nominais": round(float(fpool.capacity.vcpus), 2),
+                        }
+                    )
                 pedidas = {p: regiao_canonica(zona, p) for p in target_providers}
                 l2_options = await self._matcher.match_pool(
                     vcpus=fpool.capacity.vcpus,
@@ -642,7 +653,7 @@ class BuildMigrationContextUseCase:
                     service_type="virtual_server",
                     target_providers=target_providers,
                     regioes={p: [r] for p, r in pedidas.items()},
-                    perfil_origem=perfil(source_provider, fpool.pool_key.machine_family),
+                    perfil_origem=perfil_do_pool,
                 )
                 providers_with_l2: set[str] = set()
                 equivs = []
@@ -1015,6 +1026,21 @@ class BuildMigrationContextUseCase:
                 else {}
             ),
             "fator_utilizacao": 1.0,
+            **(
+                {
+                    "burstable_pela_base": {
+                        "pools": burstable_pela_base,
+                        "explicacao": (
+                            "Máquina burstable (CPU com crédito) entrega sem crédito só a linha "
+                            "de base da vCPU. Em destino sem burstable, estes pools foram "
+                            "dimensionados pela base, não pela vCPU nominal; em destino com "
+                            "burstable, pela nominal. Vence o mais barato. A memória não muda."
+                        ),
+                    }
+                }
+                if burstable_pela_base
+                else {}
+            ),
             # Como o compute foi cotado: pela capacidade-hora medida, não por
             # máquina inteira ligada o mês todo (PLANO_EMPACOTAMENTO).
             "cotacao_compute": {
