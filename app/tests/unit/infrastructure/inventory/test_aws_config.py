@@ -496,3 +496,120 @@ def test_relacao_com_tipo_em_caixa_diferente_resolve(tmp_path) -> None:
         r.de == chave_vm and r.para == subrede and r.tipo is TipoDeRelacao.CONTIDO_EM
         for r in inv.relacoes
     )
+
+
+# ── forma real do `select-resource-config` (conta de cliente, 10/2026) ──────────
+
+
+def _par(chave: str, valor: str) -> dict:
+    return {"tag": f"{chave}={valor}", "key": chave, "value": valor}
+
+
+def _select(tmp_path: Path, itens: list[dict]) -> Path:
+    arq = tmp_path / "select.json"
+    arq.write_text(json.dumps({"Results": [json.dumps(i) for i in itens], "QueryInfo": {}}))
+    return arq
+
+
+def test_select_tags_em_lista_e_taglist_do_rds(tmp_path) -> None:
+    rds = _ci(
+        "AWS::RDS::DBInstance",
+        "db-X",
+        {
+            "dBInstanceIdentifier": "rds-app-prd",
+            "dBInstanceClass": "db.t3.medium",
+            "tagList": [{"key": "project", "value": "app"}],
+        },
+        tags=[_par("env", "prd")],
+    )
+    bucket = _ci(
+        "AWS::S3::Bucket", "app-front", {"name": "app-front"}, tags=[_par("project", "app")]
+    )
+    inv = _normalizar(_select(tmp_path, [rds, bucket])).inventario
+    assert _por_id(inv, "rds-app-prd").tags == {"project": "app", "env": "prd"}
+    assert _por_id(inv, "app-front").tags == {"project": "app"}
+
+
+def test_select_portas_decimais_nao_viram_todas(tmp_path) -> None:
+    sg = copy.deepcopy(_SG_WEB)
+    sg["configuration"]["ipPermissions"] = [
+        {
+            "ipProtocol": "tcp",
+            "fromPort": 5432.0,
+            "toPort": 5432.0,
+            "userIdGroupPairs": [{"groupId": "sg-alb", "userId": _CONTA}],
+        }
+    ]
+    inv = _normalizar(_select(tmp_path, [sg, _SG_ALB])).inventario
+    [regra] = [
+        r for r in inv.regras if r.direcao is Direcao.ENTRADA and r.grupo.endswith("sg-892adfec")
+    ]
+    assert (regra.porta_inicio, regra.porta_fim) == (5432, 5432)
+    assert not regra.todas_as_portas
+
+
+def test_select_campos_embrulhados_em_value(tmp_path) -> None:
+    disco = _ci(
+        "AWS::EC2::Volume",
+        "vol-1",
+        {"size": 20.0, "volumeType": "gp3", "state": {"value": "available"}},
+    )
+    nlb = _ci(
+        "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/net/k8s/1",
+        {"scheme": "internet-facing", "type": "network", "securityGroups": [{"value": "sg-alb"}]},
+        arn="arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/net/k8s/1",
+    )
+    inv = _normalizar(_select(tmp_path, [disco, nlb, _SG_ALB])).inventario
+    assert _por_id(inv, "vol-1").estado is EstadoDoRecurso.DISPONIVEL
+    lb = next(r for r in inv.recursos if r.tipo is TipoDeRecurso.BALANCEADOR)
+    sg = _por_id(inv, "sg-alb").chave
+    assert any(
+        r.de == lb.chave and r.para == sg and r.tipo is TipoDeRelacao.PROTEGIDO_POR
+        for r in inv.relacoes
+    )
+
+
+def test_padroes_da_aws_ficam_fora_e_sao_contados(tmp_path) -> None:
+    itens = [
+        _ci(
+            "AWS::CodeDeploy::DeploymentConfig",
+            "d1",
+            {},
+            resourceName="CodeDeployDefault.AllAtOnce",
+        ),
+        _ci("AWS::KMS::Key", "k1", {"keyManager": "AWS"}),
+        _ci("AWS::KMS::Key", "k2", {"keyManager": "CUSTOMER"}),
+        _ci("AWS::EC2::EC2Fleet", "fleet-1", {"type": "instant"}),
+        _ci("AWS::Events::EventBus", "default", {}, resourceName="default"),
+        _ci("AWS::Lambda::Function", "fn", {}, resourceName="lambda-infra-start-prd"),
+    ]
+    inv = _normalizar(_select(tmp_path, itens)).inventario
+    assert sorted(r.tipo_nativo for r in inv.recursos) == ["AWS::KMS::Key", "AWS::Lambda::Function"]
+    assert inv.contagens["padrao_do_provedor:AWS::EC2::EC2Fleet"] == 1
+    assert inv.contagens["padrao_do_provedor:AWS::KMS::Key"] == 1
+    assert "tipo_nao_modelado:AWS::CodeDeploy::DeploymentConfig" not in inv.contagens
+
+
+def test_balanceador_e_disco_criados_pelo_cluster_sao_membros_dele(tmp_path) -> None:
+    cluster = _ci("AWS::EKS::Cluster", "prd", {"name": "prd"}, resourceName="prd")
+    nlb = _ci(
+        "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/net/kong/1",
+        {"type": "network"},
+        arn="arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/net/kong/1",
+        tags=[_par("elbv2.k8s.aws/cluster", "prd")],
+    )
+    pv = _ci(
+        "AWS::EC2::Volume",
+        "vol-pv",
+        {"size": 5, "state": "available"},
+        tags=[_par("KubernetesCluster", "prd")],
+    )
+    inv = _normalizar(_select(tmp_path, [cluster, nlb, pv])).inventario
+    alvo = _por_id(inv, "prd").chave
+    membros = {r.de for r in inv.relacoes if r.para == alvo and r.tipo is TipoDeRelacao.MEMBRO_DE}
+    assert membros == {
+        _por_id(inv, "vol-pv").chave,
+        next(r.chave for r in inv.recursos if r.tipo is TipoDeRecurso.BALANCEADOR),
+    }

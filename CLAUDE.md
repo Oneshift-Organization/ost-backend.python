@@ -43,6 +43,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Migrar uma aplicação ou um serviço com tudo que vai junto / rotas `applications` e `migration-plans` / custo do escopo / exportação / Terraform do escopo | [`PLANO_ESCOPO_DE_MIGRACAO.md`](PLANO_ESCOPO_DE_MIGRACAO.md) · [`docs/endpoints/migration-plans.md`](docs/endpoints/migration-plans.md) |
 | Estratégia da sprint: fechamento do 13/10, decisões do usuário, pendências do MCP, sprint de Terraform em blocos (T0–T7) | [`PLANO_ESTRATEGIA_SPRINT_TERRAFORM.md`](PLANO_ESTRATEGIA_SPRINT_TERRAFORM.md) |
 | Ciclo de vida do preço (VIVO → ADUBO, revitalização por billing, quórum) — P3 da fila de precisão | [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) |
+| Cenários de entrada (Cost Explorer, fatura sem ID, CUR, com ou sem inventário) / custo estimado pelo tipo / diagnóstico de entrada da análise | [`PLANO_CENARIOS_DE_ENTRADA.md`](PLANO_CENARIOS_DE_ENTRADA.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
 

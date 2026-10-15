@@ -13,7 +13,13 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 
-from app.domain.entities.topologia import DADOS
+from app.domain.entities.topologia import (
+    DADOS,
+    Acao,
+    Direcao,
+    TipoDeRecurso,
+    TipoDeSeletor,
+)
 from app.domain.services.grafo import UniaoBusca
 from app.domain.services.topologia.dependencias import Achado
 from app.domain.services.topologia.indice import Indice
@@ -29,6 +35,10 @@ BALANCEADOR_COMPARTILHADO_MINIMO = 2
 HUB_MINIMO_DE_ALVOS = 3
 GRUPO_GRANDE_UNIDADES = 5
 GRUPO_GRANDE_FRACAO = 0.4
+# Porta de VPN aberta para a internet denuncia o ponto de acesso remoto: OpenVPN,
+# WireGuard, IPsec (IKE e NAT-T), L2TP e PPTP. Quem entra por ele chega ao banco
+# para administrar, não para servir a aplicação.
+PORTAS_DE_ACESSO_REMOTO = frozenset({1194, 51820, 500, 4500, 1701, 1723})
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +70,7 @@ def agrupar(
 ) -> ResultadoDoAcoplamento:
     deps = list(dependencias)
     achados: list[Achado] = []
-    ferramentas = _ferramentas(deps, unidades, ferramentas_declaradas, achados)
+    ferramentas = _ferramentas(indice, deps, unidades, ferramentas_declaradas, achados)
     deps = _rebaixar_balanceadores(deps, unidade_de, destinos_do_balanceador, achados)
     deps = _rebaixar_hubs(deps, unidades, ferramentas, achados)
 
@@ -96,12 +106,16 @@ def agrupar(
 
 
 def _ferramentas(
+    indice: Indice,
     deps: list[Dependencia],
     unidades: Mapping[str, Unidade],
     declaradas: Iterable[str],
     achados: list[Achado],
 ) -> set[str]:
-    """1. Ferramenta de administração: a porta denuncia (ou o cliente declara)."""
+    """1. Ferramenta de administração: a porta denuncia (ou o cliente declara).
+
+    Duas portas denunciam: a administrativa usada contra várias unidades (bastion)
+    e a de VPN aberta para a internet (ponto de acesso remoto)."""
     alvos_admin: dict[str, set[str]] = defaultdict(set)
     for d in deps:
         if d.natureza is Natureza.ADMINISTRATIVO:
@@ -117,6 +131,16 @@ def _ferramentas(
                 f"acesso administrativo a {len(alvos_admin[u])} unidades",
             )
         )
+    for u, portas in sorted(_acesso_remoto(indice, unidades).items()):
+        if u not in ferramentas:
+            ferramentas.add(u)
+            achados.append(
+                Achado(
+                    "ferramenta_administrativa",
+                    u,
+                    f"aceita VPN da internet ({', '.join(map(str, sorted(portas)))})",
+                )
+            )
     for u in sorted(set(declaradas) - ferramentas):
         if u in unidades:
             ferramentas.add(u)
@@ -147,6 +171,33 @@ def _rebaixar_balanceadores(
         else d
         for d in deps
     ]
+
+
+def _acesso_remoto(indice: Indice, unidades: Mapping[str, Unidade]) -> dict[str, set[int]]:
+    """Unidade de máquina protegida por grupo que aceita porta de VPN de qualquer
+    origem. Grupo com tudo aberto não conta: ali a porta não denuncia nada."""
+    vpn: dict[str, set[int]] = defaultdict(set)
+    for regra in indice.inventario.regras:
+        if (
+            regra.direcao is not Direcao.ENTRADA
+            or regra.acao is not Acao.PERMITIR
+            or regra.origem.tipo is not TipoDeSeletor.QUALQUER
+            or regra.todas_as_portas
+        ):
+            continue
+        vpn[regra.grupo] |= {p for p in PORTAS_DE_ACESSO_REMOTO if regra.cobre_porta(p)}
+    resultado: dict[str, set[int]] = {}
+    for u in unidades.values():
+        if set(u.tipos) & {t.value for t in (*DADOS, TipoDeRecurso.CLUSTER_KUBERNETES)}:
+            continue
+        if TipoDeRecurso.INSTANCIA.value not in u.tipos:
+            continue
+        portas = {
+            p for r in u.recursos for g in indice.grupos_de.get(r, ()) for p in vpn.get(g, ())
+        }
+        if portas:
+            resultado[u.id] = portas
+    return resultado
 
 
 def _rebaixar_hubs(

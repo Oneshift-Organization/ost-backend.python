@@ -21,7 +21,7 @@ cliente, com o comando oficial do provedor; a API recebe só o arquivo.
 
 | Origem | Comando | O que enviar |
 |---|---|---|
-| AWS | `aws configservice deliver-config-snapshot --delivery-channel-name <canal>` | Os `.json.gz` do bucket do canal, um por conta e região. Também aceita a saída de `aws configservice select-resource-config`. |
+| AWS | `aws configservice deliver-config-snapshot --delivery-channel-name <canal>` | Os `.json.gz` do bucket do canal, um por conta e região. Também aceita a saída de `aws configservice select-resource-config --expression "SELECT * WHERE resourceType LIKE 'AWS::%'"` (tags em lista, portas decimais e campos `{"value": …}` são lidos). Configurações que a AWS cria em toda conta (CodeDeploy, AppConfig, chaves `alias/aws/*`, frotas `instant` do autoscaling…) ficam fora e aparecem em `contagens` como `padrao_do_provedor:<tipo>`. |
 | GCP | `gcloud asset export --project=<p> --content-type=resource --output-path=gs://<bucket>/inventario.json` | O NDJSON exportado (ou `gcloud asset list … --format=json`). |
 | Azure | `az graph query -q "Resources \| project id, name, type, location, resourceGroup, subscriptionId, tags, properties, sku, kind, zones, managedBy" --first 1000` | As páginas em JSON. O Resource Graph não diz quando capturou: a data de captura é a do envio, marcada como estimada. |
 | OCI e outras | — | O formato canônico `oneshift-inventory-v1` (ver o plano, §2). |

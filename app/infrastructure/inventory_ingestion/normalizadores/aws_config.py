@@ -20,6 +20,7 @@ primeiro na conta e região do item que cita, depois pelo par (tipo, id) se for
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 from collections.abc import Iterator
 from typing import Any, ClassVar
@@ -50,8 +51,8 @@ from app.infrastructure.inventory_ingestion.normalizadores.comum import (
     protocolo_canonico,
     seletor_de_endereco,
     sem_vazios,
-    tags_de_objeto,
-    tags_de_pares,
+    simples,
+    tags_de,
     texto,
 )
 
@@ -89,6 +90,46 @@ _SG = "AWS::EC2::SecurityGroup"
 _GRAFIA = {t.casefold(): t for t in (*TIPOS, _CLUSTER_RDS)}
 
 _REMOVIDO = frozenset({"ResourceDeleted", "ResourceDeletedNotRecorded"})
+
+# O que a AWS cria em toda conta e o cliente não migra: configurações padrão,
+# chaves gerenciadas, frotas que o autoscaling abre a cada máquina. Ficam fora
+# do inventário (contadas): numa conta real eram mais de 100 dos 241 itens.
+_PADRAO_PELO_NOME: dict[str, re.Pattern[str]] = {
+    "AWS::CodeDeploy::DeploymentConfig": re.compile(r"^CodeDeployDefault\."),
+    "AWS::AppConfig::DeploymentStrategy": re.compile(r"^AppConfig\."),
+    "AWS::Cassandra::Keyspace": re.compile(r"^system"),
+    "AWS::KMS::Alias": re.compile(r"^alias/aws/"),
+    "AWS::Route53Resolver::ResolverRule": re.compile(r"^Internet Resolver$"),
+    "AWS::Route53Resolver::ResolverRuleAssociation": re.compile(r"^System Rule Association$"),
+    "AWS::ECS::CapacityProvider": re.compile(r"^FARGATE(_SPOT)?$"),
+    "AWS::Events::EventBus": re.compile(r"^default$"),
+    "AWS::Events::Rule": re.compile(r"^(AutoScalingManagedRule|ecs-managed-)"),
+    "AWS::Athena::WorkGroup": re.compile(r"^primary$"),
+    "AWS::Scheduler::ScheduleGroup": re.compile(r"^default$"),
+    "AWS::S3::StorageLens": re.compile(r"^default-account-dashboard$"),
+    "AWS::RDS::OptionGroup": re.compile(r"^default:"),
+    "AWS::RDS::DBParameterGroup": re.compile(r"^default\."),
+    "AWS::RDS::DBClusterParameterGroup": re.compile(r"^default\."),
+}
+_PADRAO_SEMPRE = frozenset(
+    {
+        "AWS::Config::ConfigurationRecorder",
+        "AWS::EC2::VPCBlockPublicAccessOptions",
+        "AWS::ResourceExplorer2::Index",
+    }
+)
+
+# Tag que diz de qual cluster Kubernetes o recurso é: o nó (grupo de nós do EKS),
+# o balanceador que o controlador cria para um Service e o disco de um volume
+# persistente. Recurso do cluster migra com ele.
+_TAGS_DO_CLUSTER = (
+    "eks:cluster-name",
+    "aws:eks:cluster-name",
+    "elbv2.k8s.aws/cluster",
+    "KubernetesCluster",
+    "ebs.csi.aws.com/cluster-name",
+)
+_DO_CLUSTER = frozenset({_T.INSTANCIA, _T.BALANCEADOR, _T.DISCO})
 _SSD = frozenset({"gp2", "gp3", "io1", "io2"})
 
 # Par de tipos canônicos → (relação, tipo que fica do lado "de"). Para a lista
@@ -201,11 +242,19 @@ class NormalizadorAwsConfig:
             arn if arn and arn.startswith("arn:") else f"aws:{conta}:{regiao}:{tipo_nativo}:{rid}"
         )
         tipo = TIPOS.get(tipo_nativo, _T.OUTRO)
+        tags = {
+            **tags_de(config.get("tags")),
+            **tags_de(config.get("tagList")),
+            **tags_de(config.get("Tags")),
+            **_tags_do_bucket(ci),
+            **tags_de(ci.get("tags")),
+        }
+        nome = texto(ci.get("resourceName")) or tags.get("Name") or rid
+        if _padrao_do_provedor(tipo_nativo, nome, config):
+            self._c.contar(f"padrao_do_provedor:{tipo_nativo}")
+            return
         if tipo is _T.OUTRO and tipo_nativo != _CLUSTER_RDS:
             self._c.contar(f"tipo_nao_modelado:{tipo_nativo}")
-
-        tags = {**tags_de_pares(lista(config.get("tags"))), **tags_de_objeto(ci.get("tags"))}
-        nome = texto(ci.get("resourceName")) or tags.get("Name") or rid
         atributos, estado, extras = self._especifico(
             tipo_nativo=tipo_nativo, chave=chave, cfg=config, conta=conta, regiao=regiao, tags=tags
         )
@@ -238,6 +287,13 @@ class NormalizadorAwsConfig:
 
         for rel in lista(ci.get("relationships")):
             self._relacao_declarada(chave, tipo, dicionario(rel), conta, regiao)
+        cluster = next((tags[k] for k in _TAGS_DO_CLUSTER if tags.get(k)), None)
+        if cluster and tipo in _DO_CLUSTER:
+            self._c.relacionar(
+                chave,
+                Referencia("AWS::EKS::Cluster", cluster, conta, regiao, por_nome=True),
+                _R.MEMBRO_DE,
+            )
 
     def _relacao_declarada(
         self, chave: str, tipo: TipoDeRecurso, rel: dict[str, Any], conta: str, regiao: str
@@ -319,13 +375,6 @@ class NormalizadorAwsConfig:
                     chave,
                     _R.ANEXADO_A,
                 )
-            cluster = tags.get("eks:cluster-name")
-            if cluster:
-                self._c.relacionar(
-                    chave,
-                    Referencia("AWS::EKS::Cluster", cluster, conta, regiao, por_nome=True),
-                    _R.MEMBRO_DE,
-                )
             return (
                 {
                     "tipo_maquina": cfg.get("instanceType"),
@@ -342,7 +391,7 @@ class NormalizadorAwsConfig:
             )
 
         if tipo_nativo == "AWS::EC2::Volume":
-            estado_vol = str(cfg.get("state") or "").lower()
+            estado_vol = str(simples(cfg.get("state")) or "").lower()
             tipo_disco = texto(cfg.get("volumeType"))
             for a in lista(cfg.get("attachments")):
                 liga(
@@ -512,7 +561,9 @@ class NormalizadorAwsConfig:
                     chave,
                     ref(
                         _SG,
-                        g if isinstance(g, str) else dicionario(g).get("groupId"),
+                        g
+                        if isinstance(g, str)
+                        else dicionario(g).get("groupId") or dicionario(g).get("value"),
                         conta,
                         regiao,
                     ),
@@ -674,3 +725,29 @@ def _libera_tudo(perm: dict[str, Any]) -> bool:
         for r in lista(perm.get("ipRanges")) + lista(perm.get("ipv4Ranges"))
     ]
     return "0.0.0.0/0" in faixas
+
+
+def _padrao_do_provedor(tipo_nativo: str, nome: str, cfg: dict[str, Any]) -> bool:
+    if tipo_nativo in _PADRAO_SEMPRE:
+        return True
+    if tipo_nativo == "AWS::KMS::Key":
+        return str(cfg.get("keyManager") or cfg.get("KeyManager") or "").upper() == "AWS"
+    if tipo_nativo == "AWS::EC2::EC2Fleet":
+        # Frota "instant" é a que o autoscaling abre a cada máquina; a "maintain" é do cliente
+        return str(simples(cfg.get("type") or cfg.get("Type")) or "").lower() == "instant"
+    padrao = _PADRAO_PELO_NOME.get(tipo_nativo)
+    return bool(padrao and padrao.search(nome))
+
+
+def _tags_do_bucket(ci: dict[str, Any]) -> dict[str, str]:
+    """Tags do S3 no snapshot: ``supplementaryConfiguration.BucketTaggingConfiguration``."""
+    marcacao = dicionario(ci.get("supplementaryConfiguration")).get("BucketTaggingConfiguration")
+    if isinstance(marcacao, str):
+        try:
+            marcacao = json.loads(marcacao)
+        except json.JSONDecodeError:
+            return {}
+    tags: dict[str, str] = {}
+    for conjunto in lista(dicionario(marcacao).get("tagSets")):
+        tags |= tags_de(dicionario(conjunto).get("tags"))
+    return tags
