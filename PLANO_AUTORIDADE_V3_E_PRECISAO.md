@@ -128,6 +128,21 @@ o disco inteiro é cotado no meio-oeste (`PLANO_PRECO_REGIONAL` R4).
 - Medir nos 6 relatórios: só deve mudar bill com custo relevante fora da zona
   dominante.
 
+**Feito (16/10):** `domain/services/categoria_por_zona.py`; o agregador guarda
+`AuxiliaryCosts.por_regiao`; cada categoria sai com `zonas` (fração, região da
+origem e parte sem região) quando cai em mais de uma. Zona sem taxa para um
+provedor usa a razão da parte maior; a confiança é a mais fraca entre as partes
+que pesam (20% ou mais), para uma fatia pequena não rebaixar a categoria.
+
+| relatório | decisão | confiança | economia antes → depois (US$/mês) |
+|---|---|---|---|
+| AWS Cost Explorer (real) | OCI = OCI | medium = medium | OCI 40.430,87 → 40.419,93 · Azure −8.573,36 → −8.628,91 · GCP −16.944,08 → −16.886,13 |
+| GCP Cost Table (real) | OCI = OCI | medium = medium | OCI 2.762,07 → 2.779,59 · Azure 493,98 → 546,79 · AWS 439,89 → 401,41 |
+| GCP BigQuery (mock) | OCI = OCI | medium = medium | OCI 2.760,47 → 2.777,98 · Azure 492,42 → 545,17 · AWS 438,31 → 399,82 |
+| AWS CUR (mock) | OCI = OCI | medium = medium | OCI 37.370,40 → 37.352,99 · Azure −10.074,43 → −10.168,77 · GCP −20.291,44 → −20.230,12 |
+| Azure (mock) | OCI = OCI | medium = medium | igual |
+| OCI São Paulo (mock) | nenhum = nenhum | medium = medium | igual |
+
 ### P1b Burstable na origem para destino sem burstable
 
 T3A, T4G e T2 do bill AWS saem 3–6x no GCP: a vCPU burstable tem base de

@@ -154,6 +154,9 @@ class BillingAggregator:
 
         pool_buckets: dict[PoolKey, dict[str, Any]] = defaultdict(_novo_bucket)
         aux_totals: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+        aux_por_regiao: dict[str, dict[str, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal("0"))
+        )
         commitment_cost = Decimal("0")
         commitment_compute = Decimal("0")
         orphan_cost = Decimal("0")
@@ -199,6 +202,8 @@ class BillingAggregator:
                     orphan_skus.append(item.sku_id or item.usage_type or "unknown")
             elif component_type in _AUX_BUCKET:
                 aux_totals[_AUX_BUCKET[component_type]] += cost
+                regiao = regiao_da_linha(item.provider, item.region, item.usage_type) or ""
+                aux_por_regiao[_AUX_BUCKET[component_type]][regiao] += cost
                 if atributos:
                     _medir_auxiliar(item, component_type, armazenamento, bancos)
             else:
@@ -255,6 +260,7 @@ class BillingAggregator:
                 commitment_compute=commitment_compute,
                 orphan=orphan_cost,
                 orphan_skus=tuple(sorted(set(orphan_skus))),
+                por_regiao={c: dict(r) for c, r in aux_por_regiao.items()},
             ),
             unmapped_cost=orphan_cost,
             hours_window=hours_window,
