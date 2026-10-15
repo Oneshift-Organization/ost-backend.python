@@ -30,6 +30,7 @@ from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRep
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
 from app.domain.services.alertas import avaliar_cambio, avaliar_regioes
+from app.domain.services.categoria_por_zona import dividir_por_zona
 from app.domain.services.category_calculator import (
     CategoryRate,
     estimate_by_cost_ratio,
@@ -122,6 +123,52 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
 
 
 _RANK_CONFIANCA = {"official": 2, "reference": 1, "low": 0}
+
+
+def _somar_partes(
+    cotadas: list[tuple[Any, dict[str, CategoryRate], list[Any], Decimal]],
+) -> dict[str, tuple[Decimal, Decimal, str]]:
+    """Provedor → (custo, delta, confiança) somando as zonas.
+
+    Zona sem taxa para um provedor usa a razão que esse provedor teve na parte maior,
+    para a soma não sair menor só porque falta a taxa regional. A confiança é a mais
+    fraca entre a parte maior e as que pesam (20% ou mais do custo): uma fatia pequena
+    em zona sem taxa oficial não rebaixa a categoria inteira."""
+    _, _, principais, custo_principal = cotadas[0]
+    total = sum((c for *_, c in cotadas), Decimal(0))
+    razao = {
+        e.provider: (e.estimated_monthly_cost / custo_principal) if custo_principal > 0 else None
+        for e in principais
+    }
+    somas: dict[str, tuple[Decimal, Decimal, str]] = {}
+    for indice, (_parte, _rates, equivs, custo) in enumerate(cotadas):
+        da_parte = {e.provider: e for e in equivs}
+        pesa = indice == 0 or (total > 0 and custo / total >= _PARTE_QUE_PESA)
+        for prov, r in razao.items():
+            if r is None:
+                continue
+            e = da_parte.get(prov)
+            estimado = e.estimated_monthly_cost if e else custo * r
+            confianca = e.pricing_confidence if e else "low"
+            antes = somas.get(prov)
+            if antes is None:
+                somas[prov] = (estimado, estimado - custo, confianca)
+                continue
+            somas[prov] = (
+                antes[0] + estimado,
+                antes[1] + (estimado - custo),
+                _mais_fraca(antes[2], confianca) if pesa else antes[2],
+            )
+    return somas
+
+
+_PARTE_QUE_PESA = Decimal("0.2")
+
+
+def _mais_fraca(a: str, b: str) -> str:
+    """A mesma ordem de `category_calculator`: official > reference > low."""
+    ordem = {"official": 3, "reference": 2, "low": 1}
+    return a if ordem.get(a, 0) <= ordem.get(b, 0) else b
 
 
 def _taxas_por_provedor(
@@ -227,9 +274,7 @@ class BuildMigrationContextUseCase:
         self._item_repo = item_repo
         self._metadata_repo = metadata_repo
         self._comparison_repo = comparison_repo
-        self._matcher = (
-            EquivalenceMatcher(sku_repo, price_repo) if sku_repo else None
-        )
+        self._matcher = EquivalenceMatcher(sku_repo, price_repo) if sku_repo else None
         self._aggregator = BillingAggregator(sku_repo) if sku_repo else None
         self._fx_repo = fx_repo
         self._price_repo = price_repo
@@ -310,8 +355,11 @@ class BuildMigrationContextUseCase:
         # não-reproduzível e injetava ruído na entrada do modelo — dois runs do
         # mesmo CSV produziam a mesma verdade em ordem diferente.
         target_providers = sorted(
-            {c.provider for c in await self._comparison_repo.list_all()
-             if c.provider != source_provider}
+            {
+                c.provider
+                for c in await self._comparison_repo.list_all()
+                if c.provider != source_provider
+            }
         )
         target_metadata_all = await self._metadata_repo.list_by_providers(target_providers)
         target_meta_map: dict[tuple[str, str], Any] = {
@@ -349,8 +397,9 @@ class BuildMigrationContextUseCase:
                         service_name=eq.service_name,
                         category=category,
                         service_type=eq.service_type,
-                        metadata=target_meta_map.get((eq.provider.lower(),
-                                                      service_key(eq.provider, eq.service_name))),
+                        metadata=target_meta_map.get(
+                            (eq.provider.lower(), service_key(eq.provider, eq.service_name))
+                        ),
                         docs_costs=target_docs_map.get((eq.provider, eq.service_name)),
                     )
                     for eq in raw
@@ -363,9 +412,7 @@ class BuildMigrationContextUseCase:
             aliases = PROVIDER_SERVICE_ALIASES.get(source_provider, {})
             return aliases.get(name, name)
 
-        def _match(
-            svc_name: str, hint_type: str | None = None
-        ) -> ServiceComparison | None:
+        def _match(svc_name: str, hint_type: str | None = None) -> ServiceComparison | None:
             name = _canonical_name(svc_name)
             # Ponte concatenado <-> espaçado. Quando o serviço tem várias
             # capacidades, prefere a que bate com o tipo que o classificador
@@ -393,12 +440,12 @@ class BuildMigrationContextUseCase:
         categories: dict[str, dict[str, Any]] = {}
         for raw in sorted_services:
             comp = _match(raw["service_name"], raw.get("service_type"))
-            category_name = comp.category if comp else (
-                raw.get("category") or _meta_category(raw["service_name"]) or "unknown"
+            category_name = (
+                comp.category
+                if comp
+                else (raw.get("category") or _meta_category(raw["service_name"]) or "unknown")
             )
-            service_type = comp.service_type if comp else (
-                raw.get("service_type") or "unknown"
-            )
+            service_type = comp.service_type if comp else (raw.get("service_type") or "unknown")
             hint = service_type_hint(source_provider, raw["service_name"])
             if hint and comp is None:
                 category_name, service_type = hint
@@ -418,9 +465,12 @@ class BuildMigrationContextUseCase:
             # não recebe expectativa. Derivação determinística no backend.
             svc_meta = meta_map.get(_normalize(_canonical_name(raw["service_name"])))
             if svc_meta is None:
-                svc_meta = meta_squashed.get(service_key(
-                    source_provider, _canonical_name(raw["service_name"]),
-                ))
+                svc_meta = meta_squashed.get(
+                    service_key(
+                        source_provider,
+                        _canonical_name(raw["service_name"]),
+                    )
+                )
             expectation = None
             if not sem_uso:
                 expectation = derive_expectation(svc_meta.metadata) if svc_meta else None
@@ -483,12 +533,9 @@ class BuildMigrationContextUseCase:
                     target_providers=target_providers,
                 )
 
-                has_specs = (
-                    matched.source_specs is not None
-                    and (
-                        matched.source_specs.vcpus is not None
-                        or matched.source_specs.ram_gb is not None
-                    )
+                has_specs = matched.source_specs is not None and (
+                    matched.source_specs.vcpus is not None
+                    or matched.source_specs.ram_gb is not None
                 )
                 if not has_specs and matched.canonical_service in _COMPUTE_SERVICE_TYPES:
                     missing_sku_set.add(agg["sku_id"])
@@ -503,10 +550,14 @@ class BuildMigrationContextUseCase:
                 equiv_items = []
                 for eq in matched.equivalents:
                     _t = eq.technical_match
-                    tm = TechnicalMatch(
-                        vcpus=_t.vcpus,
-                        ram_gb=_t.ram_gb,
-                    ) if _t else None
+                    tm = (
+                        TechnicalMatch(
+                            vcpus=_t.vcpus,
+                            ram_gb=_t.ram_gb,
+                        )
+                        if _t
+                        else None
+                    )
                     _f = eq.financials
                     fin = None
                     if _f is not None:
@@ -609,8 +660,9 @@ class BuildMigrationContextUseCase:
                             }
                         )
                     # L3: enrich with curated metadata
-                    meta = target_meta_map.get((opt.provider.lower(),
-                                               service_key(opt.provider, opt.service_name)))
+                    meta = target_meta_map.get(
+                        (opt.provider.lower(), service_key(opt.provider, opt.service_name))
+                    )
                     docs = target_docs_map.get((opt.provider, opt.service_name))
                     fin = None
                     if opt.financials is not None:
@@ -630,34 +682,38 @@ class BuildMigrationContextUseCase:
                             vcpus=opt.technical_match.vcpus,
                             ram_gb=opt.technical_match.ram_gb,
                         )
-                    equivs.append(EquivalentService(
-                        provider=opt.provider,
-                        service_name=opt.service_name,
-                        category=opt.category,
-                        service_type=opt.service_type,
-                        sku_id=opt.sku_id,
-                        match_basis="pool_capacity",
-                        instances=opt.instances,
-                        metadata=meta,
-                        docs_costs=docs,
-                        technical_match=tm,
-                        financials=fin,
-                        architecture_mismatch=opt.architecture_mismatch,
-                    ))
+                    equivs.append(
+                        EquivalentService(
+                            provider=opt.provider,
+                            service_name=opt.service_name,
+                            category=opt.category,
+                            service_type=opt.service_type,
+                            sku_id=opt.sku_id,
+                            match_basis="pool_capacity",
+                            instances=opt.instances,
+                            metadata=meta,
+                            docs_costs=docs,
+                            technical_match=tm,
+                            financials=fin,
+                            architecture_mismatch=opt.architecture_mismatch,
+                        )
+                    )
 
                 # L3-only curated fallback for providers without hardware match
                 for ce in curated_compute:
                     if ce.provider.lower() in providers_with_l2:
                         continue
-                    equivs.append(EquivalentService(
-                        provider=ce.provider,
-                        service_name=ce.service_name,
-                        category=ce.category,
-                        service_type=ce.service_type,
-                        match_basis="curated_only",
-                        metadata=ce.metadata,
-                        docs_costs=ce.docs_costs,
-                    ))
+                    equivs.append(
+                        EquivalentService(
+                            provider=ce.provider,
+                            service_name=ce.service_name,
+                            category=ce.category,
+                            service_type=ce.service_type,
+                            match_basis="curated_only",
+                            metadata=ce.metadata,
+                            docs_costs=ce.docs_costs,
+                        )
+                    )
 
                 family_equivalents[fpool.pool_key.as_str()] = equivs
                 # Compat: expõe os mesmos equivalentes por projeto (drill-down
@@ -697,12 +753,13 @@ class BuildMigrationContextUseCase:
                 rate_points = await self._price_repo.rates_for_category(category)
                 if not rate_points:
                     continue
-                rates = _taxas_por_provedor(
-                    rate_points,
-                    category,
-                    source_provider=source_provider,
-                    zona=zona_categorias,
-                    regiao_origem=regiao_origem,
+                # P1: cada parte da categoria na taxa da zona dela, somadas. Sem região na
+                # linha, a parte vai para a zona dominante (fração declarada em `zonas`).
+                partes = dividir_por_zona(
+                    source_provider,
+                    auxiliary.por_regiao.get(category) or {"": aux_cost},
+                    zona_dominante=zona_categorias,
+                    regiao_dominante=regiao_origem,
                 )
                 # Só avisa o que um sync corrige: taxa oficial do provedor
                 # existe, mas não na zona. Taxa que só existe como referência
@@ -710,53 +767,85 @@ class BuildMigrationContextUseCase:
                 com_oficial = {
                     p.provider.lower() for p in rate_points if p.confidence == "official"
                 }
-                for prov, taxa in rates.items():
-                    if taxa.approximate and prov in com_oficial:
-                        cotacoes_aproximadas.append(
-                            {
-                                "provedor": prov,
-                                "pedida": str(
-                                    (regiao_origem if prov == source_provider else None)
-                                    or regiao_canonica(zona_categorias, prov)
-                                    or "?"
-                                ),
-                                "cotada": str(taxa.region),
-                                "uso": category,
-                            }
-                        )
-                source_cost = convert(aux_cost, fx) or Decimal("0")
-                equivs = estimate_by_cost_ratio(
-                    source_provider=source_provider,
-                    source_cost=source_cost,
-                    rates=rates,
-                )
-                if equivs:
-                    category_equivalents[category] = [
+                cotadas: list[tuple[Any, dict[str, CategoryRate], list[Any], Decimal]] = []
+                for parte in partes:
+                    rates = _taxas_por_provedor(
+                        rate_points,
+                        category,
+                        source_provider=source_provider,
+                        zona=parte.zona,
+                        regiao_origem=parte.regiao_origem,
+                    )
+                    for prov, taxa in rates.items():
+                        if taxa.approximate and prov in com_oficial:
+                            cotacoes_aproximadas.append(
+                                {
+                                    "provedor": prov,
+                                    "pedida": str(
+                                        (parte.regiao_origem if prov == source_provider else None)
+                                        or regiao_canonica(parte.zona, prov)
+                                        or "?"
+                                    ),
+                                    "cotada": str(taxa.region),
+                                    "uso": category,
+                                }
+                            )
+                    custo_da_parte = convert(parte.custo, fx) or Decimal("0")
+                    equivs = estimate_by_cost_ratio(
+                        source_provider=source_provider,
+                        source_cost=custo_da_parte,
+                        rates=rates,
+                    )
+                    cotadas.append((parte, rates, equivs, custo_da_parte))
+                if not cotadas or not cotadas[0][2]:
+                    continue
+                # A parte maior dá as taxas que a resposta mostra; a soma dá o custo
+                _, rates, principais, _ = cotadas[0]
+                somas = _somar_partes(cotadas)
+                zonas = (
+                    [
                         {
-                            "provedor": e.provider,
-                            "custo_mensal_estimado": round(float(e.estimated_monthly_cost), 2),
-                            "delta_custo": round(float(e.cost_delta), 2),
-                            "confianca_preco": e.pricing_confidence,
-                            "metodo": "category_rate_ratio",
-                            "taxa_origem": str(rates[source_provider].rate),
-                            "taxa_destino": str(rates[e.provider].rate),
-                            "unidade": rates[e.provider].unit,
-                            "categoria": category,
-                            "taxa_origem_regiao": rates[source_provider].region,
-                            "taxa_destino_regiao": rates[e.provider].region,
+                            "zona": parte.zona,
+                            "fracao": round(float(parte.fracao), 4),
+                            "regiao_origem": parte.regiao_origem,
                             **(
-                                {"taxa_origem_aproximada": True}
-                                if rates[source_provider].approximate
-                                else {}
-                            ),
-                            **(
-                                {"taxa_destino_aproximada": True}
-                                if rates[e.provider].approximate
+                                {"sem_regiao": round(float(parte.sem_regiao / parte.custo), 4)}
+                                if parte.sem_regiao > 0
                                 else {}
                             ),
                         }
-                        for e in equivs
+                        for parte, *_ in cotadas
                     ]
+                    if len(cotadas) > 1
+                    else None
+                )
+                category_equivalents[category] = [
+                    {
+                        "provedor": e.provider,
+                        "custo_mensal_estimado": round(float(somas[e.provider][0]), 2),
+                        "delta_custo": round(float(somas[e.provider][1]), 2),
+                        "confianca_preco": somas[e.provider][2],
+                        "metodo": "category_rate_ratio",
+                        "taxa_origem": str(rates[source_provider].rate),
+                        "taxa_destino": str(rates[e.provider].rate),
+                        "unidade": rates[e.provider].unit,
+                        "categoria": category,
+                        "taxa_origem_regiao": rates[source_provider].region,
+                        "taxa_destino_regiao": rates[e.provider].region,
+                        **(
+                            {"taxa_origem_aproximada": True}
+                            if rates[source_provider].approximate
+                            else {}
+                        ),
+                        **(
+                            {"taxa_destino_aproximada": True}
+                            if rates[e.provider].approximate
+                            else {}
+                        ),
+                        **({"zonas": zonas} if zonas else {}),
+                    }
+                    for e in principais
+                ]
 
         # ── 10. Ledger de premissas (auditoria) ───────────────────
         mapped_cost = total_spend - (auxiliary.orphan if auxiliary else Decimal("0"))
@@ -767,9 +856,7 @@ class BuildMigrationContextUseCase:
         for equivs in family_equivalents.values():
             for e in equivs:
                 if e.financials is not None:
-                    confianca_por_provedor[e.provider.lower()] = (
-                        e.financials.pricing_confidence
-                    )
+                    confianca_por_provedor[e.provider.lower()] = e.financials.pricing_confidence
         # Cobertura de ANÁLISE: fração do gasto que tem equivalentes cross-cloud
         # (compute + categorias reprecificadas), vs. classificação apenas. É o que
         # mede o avanço da Wave 4: sair de balde opaco para comparação.
@@ -811,11 +898,16 @@ class BuildMigrationContextUseCase:
         for fkey, equivs in family_equivalents.items():
             src = family_src.get(fkey, Decimal("0"))
             chosen: dict[str, EquivalentService] = {}
-            for e in sorted(equivs, key=lambda e: (
-                e.financials.estimated_monthly_cost
-                if e.financials and e.financials.estimated_monthly_cost is not None
-                else Decimal("Infinity"), e.sku_id or "", e.service_name,
-            )):
+            for e in sorted(
+                equivs,
+                key=lambda e: (
+                    e.financials.estimated_monthly_cost
+                    if e.financials and e.financials.estimated_monthly_cost is not None
+                    else Decimal("Infinity"),
+                    e.sku_id or "",
+                    e.service_name,
+                ),
+            ):
                 fin = e.financials
                 if fin is not None and fin.estimated_monthly_cost is not None:
                     if e.provider.lower() in chosen:
@@ -893,10 +985,7 @@ class BuildMigrationContextUseCase:
         # o comparativo assume origem de custo zero. Declarar é o que temos —
         # ratear o compromisso entre pools seria estimativa vestida de fato.
         cobertura_compromisso = avaliar_cobertura(
-            {
-                fp.pool_key.as_str(): (fp.capacity.vcpus, fp.monthly_cost)
-                for fp in family_pools
-            },
+            {fp.pool_key.as_str(): (fp.capacity.vcpus, fp.monthly_cost) for fp in family_pools},
             auxiliary.commitment if auxiliary is not None else Decimal("0"),
         )
 
@@ -989,13 +1078,15 @@ class BuildMigrationContextUseCase:
         # transforma "achei um bug lendo o CSV" em "a API sabe onde não confia".
         # Fração do gasto cujo tipo é palpite do classificador, não catálogo curado.
         custo_inferido = sum(
-            (sv.total_cost for c in categories.values() for sv in c["services"]
-             if getattr(sv, "type_source", "curado") != "curado"),
+            (
+                sv.total_cost
+                for c in categories.values()
+                for sv in c["services"]
+                if getattr(sv, "type_source", "curado") != "curado"
+            ),
             Decimal("0"),
         )
-        fracao_inferida = (
-            float(custo_inferido / total_spend) if total_spend > 0 else 0.0
-        )
+        fracao_inferida = float(custo_inferido / total_spend) if total_spend > 0 else 0.0
         premissas["tipo_servico_inferido"] = fracao_inferida
 
         # ── 10c. Export detalhado: o que foi medido e em que base ─────

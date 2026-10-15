@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from app.domain.entities.inventario_medido import InventarioDoPool
@@ -100,16 +101,21 @@ class AuxiliaryCosts:
     commitment_compute: Decimal = Decimal("0")
     orphan: Decimal = Decimal("0")
     orphan_skus: tuple[str, ...] = ()
+    # Categoria → região da linha → custo ("" = linha sem região). A cotação das
+    # categorias usa a taxa da zona de cada parte (P1); a soma é o total da categoria.
+    por_regiao: Mapping[str, Mapping[str, Decimal]] = field(default_factory=dict)
 
     @property
     def any_positive(self) -> bool:
-        return any((
-            self.gke_control_plane > 0,
-            self.storage_ssd > 0,
-            self.storage_hdd > 0,
-            self.object_storage > 0,
-            self.network_egress > 0,
-            self.database > 0,
-            self.commitment > 0,
-            self.orphan > 0,
-        ))
+        return any(
+            (
+                self.gke_control_plane > 0,
+                self.storage_ssd > 0,
+                self.storage_hdd > 0,
+                self.object_storage > 0,
+                self.network_egress > 0,
+                self.database > 0,
+                self.commitment > 0,
+                self.orphan > 0,
+            )
+        )

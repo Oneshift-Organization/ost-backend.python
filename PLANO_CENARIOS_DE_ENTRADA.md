@@ -225,7 +225,11 @@ A Cost Table e o export padrão do BigQuery não trazem o recurso; a descrição
 
 "Americas", "multi-region" e afins são grupo de preço, não região: não restringem.
 
-## 9. Proposta: aplicações de dentro do Kubernetes (aguarda decisão)
+## 9. Aplicações de dentro do Kubernetes — opção A feita (16/10)
+
+> Feito: `app/domain/services/topologia/cargas_no_cluster.py`; `clusters[]` em cada aplicação de
+> `GET /applications`; seção "Prováveis aplicações no cluster" no detalhe da aplicação. Na kitconta,
+> 20 cargas. A opção B continua como evolução.
 
 Na conta kitconta, as ~18 aplicações (`ghnetsoft-erp-*`) rodam como pods no EKS. O AWS Config
 vê o cluster, os nós, o balanceador do Kong e os discos dos volumes; não vê Deployment, Service
