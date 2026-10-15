@@ -154,6 +154,8 @@ def construir_unidades(
             else:
                 primeiro_do_escopo[escopo] = r.chave
 
+        _juntar_componentes(uniao, recursos, primeiro_do_escopo, aplicacao, ambiente)
+
     unidades: dict[str, Unidade] = {}
     unidade_de: dict[str, str] = {}
     for representante, membros in uniao.conjuntos().items():
@@ -192,6 +194,37 @@ def construir_unidades(
         ambiente=ambiente,
         premissas=tuple(premissas),
     )
+
+
+def _juntar_componentes(
+    uniao: UniaoBusca,
+    recursos: Mapping[str, Recurso],
+    primeiro_do_escopo: Mapping[tuple[str, str, str, str], str],
+    aplicacao: EscolhaDeChave,
+    ambiente: EscolhaDeChave,
+) -> None:
+    """Componente (função, CDN, fila, segredo, tabela NoSQL, repositório de imagens)
+    com a tag da aplicação vai na unidade dela. Não forma unidade sozinho: sem a tag,
+    fica fora, e a cobertura da chave não conta com ele.
+
+    Serviço global (CDN) não tem a região da aplicação: entra pela aplicação da mesma
+    conta e ambiente quando ela está numa região só."""
+    por_app: dict[tuple[str, str, str], list[str]] = {}
+    for (conta, _regiao, app, amb), chave in primeiro_do_escopo.items():
+        por_app.setdefault((conta, app, amb), []).append(chave)
+    for r in sorted(recursos.values(), key=lambda x: x.chave):
+        if not r.atributos.get("componente"):
+            continue
+        app = valor_da_tag(r, aplicacao.chave)
+        if not app:
+            continue
+        amb = valor_da_tag(r, ambiente.chave) or ""
+        alvo = primeiro_do_escopo.get((r.conta or "", r.regiao or "", app, amb))
+        if alvo is None:
+            candidatos = por_app.get((r.conta or "", app, amb), [])
+            alvo = candidatos[0] if len(candidatos) == 1 else None
+        if alvo is not None:
+            uniao.unir(alvo, r.chave)
 
 
 def _unidade(

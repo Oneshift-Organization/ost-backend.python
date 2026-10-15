@@ -18,6 +18,11 @@ A regra, por linha:
   quanto cada um consome (vários buckets, vários balanceadores);
 - sem candidato, a linha fica como estava: custo sem recurso.
 
+Candidatos que a divisão não sabe separar (duas funções, três buckets) ainda
+recebem o custo, em partes iguais, quando estão **todos na mesma unidade**: aí a
+divisão não muda o custo da aplicação, que é o que a tela mostra. Quem chama
+passa ``unidade_de`` quando já tem a topologia.
+
 Também vale para a linha **com** ID de máquina ou disco que não está no
 inventário: o nó que o autoscaling trocou (o EKS que liga de manhã e desliga à
 noite cria máquinas novas todo dia) cobra pelo tipo dele, que o inventário tem.
@@ -35,7 +40,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Literal
@@ -81,6 +86,8 @@ def _r(texto: str) -> re.Pattern[str]:
 
 
 _EC2 = frozenset({"AmazonEC2"})
+# Serviço inteiro de um tipo de recurso; o CloudFront cobra por edge (`US-`, `EU-`)
+_QUALQUER_USO = re.compile(r"^.+$")
 REGRAS: Mapping[str, tuple[RegraDeTipo, ...]] = {
     "aws": (
         RegraDeTipo(
@@ -150,6 +157,19 @@ REGRAS: Mapping[str, tuple[RegraDeTipo, ...]] = {
             "igual",
             atributo="classe",
         ),
+        # Componentes (atributo `componente`): o serviço inteiro é deles
+        *(
+            RegraDeTipo(frozenset({servico}), _QUALQUER_USO, _T.OUTRO, "unico", nativo=nativo)
+            for nativo, servico in (
+                ("AWS::Lambda::Function", "AWSLambda"),
+                ("AWS::CloudFront::Distribution", "AmazonCloudFront"),
+                ("AWS::DynamoDB::Table", "AmazonDynamoDB"),
+                ("AWS::ECR::Repository", "AmazonECR"),
+                ("AWS::SecretsManager::Secret", "AWSSecretsManager"),
+                ("AWS::SQS::Queue", "AWSQueueService"),
+                ("AWS::SNS::Topic", "AmazonSNS"),
+            )
+        ),
     ),
 }
 
@@ -166,11 +186,23 @@ SERVICO_DO_TIPO: Mapping[str, Mapping[TipoDeRecurso, str]] = {
         _T.CLUSTER_KUBERNETES: "AmazonEKS",
     },
 }
+# Componente: o tipo canônico é "outro", o nativo diz o serviço
+SERVICO_DO_NATIVO: Mapping[str, str] = {
+    "AWS::Lambda::Function": "AWSLambda",
+    "AWS::CloudFront::Distribution": "AmazonCloudFront",
+    "AWS::DynamoDB::Table": "AmazonDynamoDB",
+    "AWS::ECR::Repository": "AmazonECR",
+    "AWS::SecretsManager::Secret": "AWSSecretsManager",
+    "AWS::SQS::Queue": "AWSQueueService",
+    "AWS::SNS::Topic": "AmazonSNS",
+}
 
 
 def servicos_do_recurso(provedor: str | None, recursos: Iterable[Recurso]) -> set[str]:
     tabela = SERVICO_DO_TIPO.get((provedor or "").lower(), {})
-    return {s for r in recursos if (s := tabela.get(r.tipo))}
+    return {
+        s for r in recursos if (s := SERVICO_DO_NATIVO.get(r.tipo_nativo) or tabela.get(r.tipo))
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,7 +216,12 @@ class _Linha:
     origem: str | None  # o ID que a fatura trazia, quando trazia
 
 
-def atribuir_por_tipo(inventario: Inventario, custos: CustosDoBilling) -> CustosDoBilling:
+def atribuir_por_tipo(
+    inventario: Inventario,
+    custos: CustosDoBilling,
+    *,
+    unidade_de: Callable[[str], str | None] | None = None,
+) -> CustosDoBilling:
     """``custos`` com as linhas que dá para ligar pelo tipo já ligadas a um recurso.
 
     A linha atribuída sai com ``resource_id`` igual à chave do recurso no inventário
@@ -218,6 +255,7 @@ def atribuir_por_tipo(inventario: Inventario, custos: CustosDoBilling) -> Custos
             regras,
             por_tipo,
             so_quem_troca_de_id=True,
+            unidade_de=unidade_de,
         )
         por_recurso.extend(estimadas or [linha])
 
@@ -237,6 +275,7 @@ def atribuir_por_tipo(inventario: Inventario, custos: CustosDoBilling) -> Custos
                 regras,
                 por_tipo,
                 so_quem_troca_de_id=False,
+                unidade_de=unidade_de,
             )
             if s.uso
             else []
@@ -254,6 +293,7 @@ def _estimar(
     por_tipo: Mapping[TipoDeRecurso, list[Recurso]],
     *,
     so_quem_troca_de_id: bool,
+    unidade_de: Callable[[str], str | None] | None,
 ) -> list[CustoDeRecurso]:
     for regra in regras:
         if so_quem_troca_de_id and not regra.substitui_id:
@@ -275,9 +315,14 @@ def _estimar(
             )
         ]
         pesos = _pesos(regra, candidatos)
+        mesma_unidade = False
+        if not pesos and len(candidatos) > 1 and unidade_de is not None:
+            unidades = {unidade_de(r.chave) for r in candidatos}
+            if len(unidades) == 1 and None not in unidades:
+                pesos, mesma_unidade = [(r, Decimal(1)) for r in candidatos], True
         if not pesos:
             return []
-        return _dividir(linha, regra, valor, pesos)
+        return _dividir(linha, regra, valor, pesos, mesma_unidade=mesma_unidade)
     return []
 
 
@@ -309,10 +354,18 @@ def _numero(valor: object) -> Decimal:
 
 
 def _dividir(
-    linha: _Linha, regra: RegraDeTipo, valor: str | None, pesos: list[tuple[Recurso, Decimal]]
+    linha: _Linha,
+    regra: RegraDeTipo,
+    valor: str | None,
+    pesos: list[tuple[Recurso, Decimal]],
+    *,
+    mesma_unidade: bool = False,
 ) -> list[CustoDeRecurso]:
     total = sum((p for _, p in pesos), _ZERO)
-    descricao = f"{regra.tipo.value} {valor}" if valor else regra.tipo.value
+    nome = regra.nativo or regra.tipo.value
+    descricao = f"{nome} {valor}" if valor else nome
+    if mesma_unidade:
+        descricao += ", todos na mesma aplicação"
     base = (
         f"{linha.uso}: {descricao}"
         if len(pesos) == 1

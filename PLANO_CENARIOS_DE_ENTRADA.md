@@ -180,8 +180,30 @@ Sem migration. Só código. O ambiente de develop precisa do deploy das imagens 
 
 ### Pendente (fora deste lote, §4)
 
-- Tipos próprios para CloudFront, Lambda, DynamoDB, ECR, Secrets Manager e grupos de autoscaling.
+- ~~Tipos próprios para CloudFront, Lambda, DynamoDB, ECR, Secrets Manager~~: resolvido como
+  componente da aplicação (§7). Grupos de autoscaling seguem como "outro".
 - Aplicações de dentro do Kubernetes (export do `kubectl`).
 - Atribuição pelo tipo para GCP, Azure e OCI (hoje só AWS; os detalhados dessas nuvens trazem ID).
-- Teste do front `tests/additional-information.test.mjs` falha na develop por módulo não
-  resolvido pelo runner do Node (anterior a este lote).
+- ~~Teste do front `tests/additional-information.test.mjs`~~: corrigido (front `19e14bd`).
+
+## 7. Componentes da aplicação (16/10/2026)
+
+**Decisão:** função, CDN, tabela NoSQL, repositório de imagens, segredo e fila **não** viraram
+tipo canônico de unidade. Como unidade, cada um dos 18 repositórios e 18 segredos sem tag da
+conta kitconta viraria uma "aplicação", e a cobertura da tag `project` cairia abaixo de 50%:
+a kitconta sumiria de novo.
+
+**Como ficou:**
+- o normalizador da AWS marca esses tipos com `atributos.componente` (`funcao`, `cdn`,
+  `tabela_nosql`, `registro_de_imagens`, `segredo`, `fila`);
+- a topologia junta à unidade da aplicação o componente com a tag dela (mesma conta, região e
+  ambiente; serviço global, como a CDN, entra pela aplicação da mesma conta quando ela está
+  numa região só). Sem a tag, fica fora, e a cobertura da chave não conta com ele;
+- a atribuição pelo tipo cobra o serviço inteiro (AWSLambda, AmazonCloudFront, AmazonDynamoDB,
+  AmazonECR, AWSSecretsManager, SQS, SNS) do componente, e divide entre candidatos que estão
+  todos na mesma aplicação (aí a divisão não muda o custo dela);
+- o rótulo vem do tipo nativo: "função", "CDN", "repositório de imagens"… (tela e export).
+
+**Impacto:** só inventário enviado depois do deploy (o atributo é gravado na normalização).
+Na conta real: CloudFront, 2 Lambdas, 1 repositório e 1 segredo entram em kitconta; 35
+componentes sem tag ficam de fora.

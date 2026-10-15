@@ -613,3 +613,18 @@ def test_balanceador_e_disco_criados_pelo_cluster_sao_membros_dele(tmp_path) -> 
         _por_id(inv, "vol-pv").chave,
         next(r.chave for r in inv.recursos if r.tipo is TipoDeRecurso.BALANCEADOR),
     }
+
+
+def test_servico_gerenciado_e_marcado_como_componente(tmp_path) -> None:
+    itens = [
+        _ci("AWS::Lambda::Function", "fn", {}, resourceName="lambda-infra-start-prd"),
+        _ci("AWS::CloudFront::Distribution", "E1", {}),
+        _ci("AWS::EC2::RouteTable", "rtb-1", {}),
+    ]
+    inv = _normalizar(_select(tmp_path, itens)).inventario
+    componentes = {r.tipo_nativo: r.atributos.get("componente") for r in inv.recursos}
+    assert componentes == {
+        "AWS::Lambda::Function": "funcao",
+        "AWS::CloudFront::Distribution": "cdn",
+        "AWS::EC2::RouteTable": None,
+    }

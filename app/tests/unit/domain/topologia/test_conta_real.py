@@ -108,3 +108,27 @@ def test_grupos_com_a_mesma_exposicao_viram_um_risco() -> None:
     assert risco.total == 2
     assert "sg-a: 22" in risco.detalhe
     assert "sg-b: 3389" in risco.detalhe
+
+
+def _com_componentes():
+    inv = _conta()
+    componentes = [
+        recurso("cdn-front", T.OUTRO, tags=_MARCAS, regiao="global", componente="cdn"),
+        recurso("lambda-start", T.OUTRO, tags=_MARCAS, componente="funcao"),
+        recurso("ecr-sem-tag", T.OUTRO, componente="registro_de_imagens"),
+        recurso("rtb-com-tag", T.OUTRO, tags=_MARCAS),  # rota: não é componente
+    ]
+    return inventario([*inv.recursos, *componentes], inv.relacoes, inv.regras)
+
+
+def test_componente_com_a_tag_vai_com_a_aplicacao_e_o_global_entra_pela_conta() -> None:
+    analise = analisar_topologia(_com_componentes())
+    loja = _unidade_de(analise, "rds-loja")
+    assert {"cdn-front", "lambda-start"} <= set(loja.recursos)
+    # Sem tag não vira unidade; tabela de rota não é componente
+    em_unidade = {r for u in analise.unidades for r in u.recursos}
+    assert "ecr-sem-tag" not in em_unidade
+    assert "rtb-com-tag" not in em_unidade
+    # A cobertura da chave não muda com componentes sem tag
+    premissa = next(p for p in analise.premissas if p.campo == "chave_aplicacao")
+    assert premissa.valor == "project"

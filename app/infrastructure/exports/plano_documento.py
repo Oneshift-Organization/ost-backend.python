@@ -71,6 +71,18 @@ _TIPO = {
     "gateway": "Gateway",
     "outro": "Outro",
 }
+# O nativo diz mais que "outro": componentes da aplicação e o cluster de banco
+_NATIVO = {
+    "AWS::Lambda::Function": "Função",
+    "AWS::StepFunctions::StateMachine": "Fluxo de funções",
+    "AWS::CloudFront::Distribution": "CDN",
+    "AWS::DynamoDB::Table": "Tabela NoSQL",
+    "AWS::ECR::Repository": "Repositório de imagens",
+    "AWS::SecretsManager::Secret": "Segredo",
+    "AWS::SQS::Queue": "Fila",
+    "AWS::SNS::Topic": "Tópico de mensagens",
+    "AWS::RDS::DBCluster": "Cluster de banco",
+}
 
 _PLURAL = {
     "Instância": "instâncias",
@@ -436,7 +448,7 @@ def _recursos(x: _Leitura) -> tuple[RecursoNoPlano, ...]:
                     aplicacao=unidade.aplicacao or unidade.nome,
                     ambiente=unidade.ambiente,
                     nome=r.nome or chave.rsplit("/", 1)[-1].rsplit(":", 1)[-1],
-                    tipo=_TIPO.get(r.tipo, r.tipo),
+                    tipo=_NATIVO.get(r.tipo_nativo) or _TIPO.get(r.tipo, r.tipo),
                     tipo_nativo=r.tipo_nativo,
                     regiao=r.regiao,
                     custo=float(round(r.custo, 2)),
