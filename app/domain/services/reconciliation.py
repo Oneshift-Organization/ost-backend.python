@@ -19,6 +19,8 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from app.domain.services.currency import FxRate, convert
+from app.domain.services.rede_por_uso import CATEGORIAS as CATEGORIAS_DE_REDE
+from app.domain.services.rede_por_uso import EGRESS
 
 if TYPE_CHECKING:
     from app.domain.analysis import EquivalentService
@@ -203,6 +205,7 @@ def _check_conservacao(
             auxiliary.storage_hdd,
             auxiliary.object_storage,
             auxiliary.network_egress,
+            *(getattr(auxiliary, c) for c in CATEGORIAS_DE_REDE if c != EGRESS),
             auxiliary.database,
             auxiliary.commitment,
             auxiliary.orphan,

@@ -18,6 +18,7 @@ from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRep
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
 from app.domain.services.currency import FxRate, convert, identity_rate
+from app.domain.services.rede_por_uso import CHAVE_NO_PAYLOAD as CHAVE_DA_REDE
 from app.domain.services.sku_normalization import normalize_provider
 from app.infrastructure.llm.orchestrator import LLMOrchestrator
 from app.infrastructure.repositories.service_repositories import (
@@ -177,8 +178,14 @@ def _serialize_inventario(inv, fx: FxRate) -> dict[str, object]:
             chave = (b.classe, b.motor, b.multi_az, b.regiao)
             g = grupos.setdefault(
                 chave,
-                {"classe": b.classe, "motor": b.motor, "multi_az": b.multi_az,
-                 "regiao": b.regiao, "quantidade": 0, "custo": Decimal("0")},
+                {
+                    "classe": b.classe,
+                    "motor": b.motor,
+                    "multi_az": b.multi_az,
+                    "regiao": b.regiao,
+                    "quantidade": 0,
+                    "custo": Decimal("0"),
+                },
             )
             g["quantidade"] += 1
             g["custo"] += b.custo
@@ -246,6 +253,15 @@ def _round2(value: Decimal) -> float:
     (28 casas), o que só gasta token e sugere uma exatidão que não existe.
     """
     return round(float(value), 2)
+
+
+def _rede_por_tipo(auxiliary: Any, fx: Any) -> dict[str, object]:
+    """O balde de rede além do egress, por tipo (PLANO_PRECO_NAO_COMPUTE)."""
+    return {
+        chave: _money(getattr(auxiliary, categoria), fx)
+        for categoria, chave in CHAVE_DA_REDE.items()
+        if getattr(auxiliary, categoria) > 0
+    }
 
 
 def _money(amount: Decimal | None, fx: FxRate) -> float:
@@ -318,20 +334,22 @@ def _aggregate_pools_by_family(
         if not agg_equivs:
             missing_equiv_family_ids.append(family_id)
 
-        compute_pools.append({
-            "familia": family,
-            "regiao": region,
-            "projetos_origem": b["source_projects"],
-            "capacidade": {
-                "vcpus": round(float(b["vcpus"]), 2),
-                "ram_gib": round(float(b["ram_gib"]), 2),
-            },
-            "custos": {
-                "custo_computacao": round(float(b["compute_base"]), 2),
-                "custo_licenca_so": round(float(b["os_licensing"]), 2),
-            },
-            "equivalentes": list(agg_equivs.values()),
-        })
+        compute_pools.append(
+            {
+                "familia": family,
+                "regiao": region,
+                "projetos_origem": b["source_projects"],
+                "capacidade": {
+                    "vcpus": round(float(b["vcpus"]), 2),
+                    "ram_gib": round(float(b["ram_gib"]), 2),
+                },
+                "custos": {
+                    "custo_computacao": round(float(b["compute_base"]), 2),
+                    "custo_licenca_so": round(float(b["os_licensing"]), 2),
+                },
+                "equivalentes": list(agg_equivs.values()),
+            }
+        )
 
     return compute_pools, missing_equiv_family_ids
 
@@ -378,6 +396,7 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
             aux_payload["armazenamento_objetos"] = _money(auxiliary.object_storage, fx)
         if auxiliary.network_egress > 0:
             aux_payload["egresso_rede"] = _money(auxiliary.network_egress, fx)
+        aux_payload.update(_rede_por_tipo(auxiliary, fx))
         if auxiliary.database > 0:
             aux_payload["banco_dados"] = _money(auxiliary.database, fx)
             if database_equivalents:
@@ -402,6 +421,7 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
             "object_storage": "armazenamento_objetos",
             "network_egress": "egresso_rede",
             "database": "banco_dados",
+            **CHAVE_DA_REDE,
         }
         for category, equivs in category_equivalents.items():
             aux_payload[f"equivalentes_{_cat_key.get(category, category)}"] = equivs
@@ -449,22 +469,29 @@ def build_pipeline_llm_input_payload(
 
 def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
     """Persist catalog evidence before the model can reinterpret any of it."""
-    return [{
-        "name": service.service_name,
-        "category": category.category,
-        "service_type": service.service_type,
-        "cost": _money(service.total_cost, fx),
-        "migration": getattr(service, "migration_expectation", None) or {},
-        "source_metadata": getattr(service, "migration_metadata", None) or {},
-        "type_source": getattr(service, "type_source", "inferido"),
-        "evidence_source": "catalog_snapshot",
-        "targets": [{
-            "provider": normalize_provider(eq.provider),
-            "service_name": eq.service_name,
-            "service_type": eq.service_type,
-            "metadata": eq.metadata or {},
-        } for eq in service.equivalents],
-    } for category in getattr(ctx, "categories", []) or [] for service in category.services]
+    return [
+        {
+            "name": service.service_name,
+            "category": category.category,
+            "service_type": service.service_type,
+            "cost": _money(service.total_cost, fx),
+            "migration": getattr(service, "migration_expectation", None) or {},
+            "source_metadata": getattr(service, "migration_metadata", None) or {},
+            "type_source": getattr(service, "type_source", "inferido"),
+            "evidence_source": "catalog_snapshot",
+            "targets": [
+                {
+                    "provider": normalize_provider(eq.provider),
+                    "service_name": eq.service_name,
+                    "service_type": eq.service_type,
+                    "metadata": eq.metadata or {},
+                }
+                for eq in service.equivalents
+            ],
+        }
+        for category in getattr(ctx, "categories", []) or []
+        for service in category.services
+    ]
 
 
 def _serialize_financeiro(fin: FinancialEstimate) -> dict[str, object]:
@@ -566,40 +593,42 @@ def serialize_as_legacy(ctx) -> dict:
         if pool.capacity.vcpus <= 0 and pool.capacity.ram_gib <= 0:
             continue
         pool_key = (
-            f"{pool.pool_key.project_id}/"
-            f"{pool.pool_key.machine_family}/"
-            f"{pool.pool_key.region}"
+            f"{pool.pool_key.project_id}/{pool.pool_key.machine_family}/{pool.pool_key.region}"
         )
         equivs = pool_equivalents.get(pool_key, [])
-        workloads.append({
-            "canonical_service": "virtual_server",
-            "category": "compute",
-            "service_name": (
-                f"{pool.pool_key.machine_family} Compute ({pool.pool_key.project_id})"
-            ),
-            "service_type": "virtual_server",
-            "source_usage": {
-                "sku_id": pool_key,
-                "billed_cost": round(float(pool.monthly_cost), 6),
-                "usage_quantity": round(float(pool.capacity.vcpus), 2),
-                "currency": ctx.currency,
-            },
-            "equivalents": [_equiv_to_legacy(e) for e in equivs],
-        })
+        workloads.append(
+            {
+                "canonical_service": "virtual_server",
+                "category": "compute",
+                "service_name": (
+                    f"{pool.pool_key.machine_family} Compute ({pool.pool_key.project_id})"
+                ),
+                "service_type": "virtual_server",
+                "source_usage": {
+                    "sku_id": pool_key,
+                    "billed_cost": round(float(pool.monthly_cost), 6),
+                    "usage_quantity": round(float(pool.capacity.vcpus), 2),
+                    "currency": ctx.currency,
+                },
+                "equivalents": [_equiv_to_legacy(e) for e in equivs],
+            }
+        )
 
     if auxiliary and auxiliary.database > 0 and db_equivalents:
-        workloads.append({
-            "canonical_service": "relational_database",
-            "category": "database",
-            "service_name": "Database Services",
-            "service_type": "relational_database",
-            "source_usage": {
-                "sku_id": "database",
-                "billed_cost": round(float(auxiliary.database), 6),
-                "currency": ctx.currency,
-            },
-            "equivalents": [_equiv_to_legacy(e) for e in db_equivalents],
-        })
+        workloads.append(
+            {
+                "canonical_service": "relational_database",
+                "category": "database",
+                "service_name": "Database Services",
+                "service_type": "relational_database",
+                "source_usage": {
+                    "sku_id": "database",
+                    "billed_cost": round(float(auxiliary.database), 6),
+                    "currency": ctx.currency,
+                },
+                "equivalents": [_equiv_to_legacy(e) for e in db_equivalents],
+            }
+        )
 
     result = {
         "source_provider": ctx.source_provider,
@@ -622,11 +651,13 @@ def serialize_as_legacy(ctx) -> dict:
     }
     # The direct/legacy narrative keeps its format but shares exactly the same
     # deterministic snapshot and policy as the primary pipeline.
-    result.update({
-        key: value
-        for key, value in build_pipeline_llm_input_payload(ctx)[0].items()
-        if key in {"decision_workloads", "decision_support", "resumo_executivo", "premissas"}
-    })
+    result.update(
+        {
+            key: value
+            for key, value in build_pipeline_llm_input_payload(ctx)[0].items()
+            if key in {"decision_workloads", "decision_support", "resumo_executivo", "premissas"}
+        }
+    )
     return result
 
 
@@ -639,14 +670,18 @@ def _equiv_to_legacy(e) -> dict:
         "technical_match": {
             "vcpus": float(tm.vcpus) if tm and tm.vcpus is not None else None,
             "ram_gb": float(tm.ram_gb) if tm and tm.ram_gb is not None else None,
-        } if tm else None,
+        }
+        if tm
+        else None,
         "financials": {
             "estimated_monthly_cost": float(fin.estimated_monthly_cost)
-            if fin and fin.estimated_monthly_cost is not None else None,
-            "cost_delta": float(fin.cost_delta)
-            if fin and fin.cost_delta is not None else None,
+            if fin and fin.estimated_monthly_cost is not None
+            else None,
+            "cost_delta": float(fin.cost_delta) if fin and fin.cost_delta is not None else None,
             "pricing_confidence": fin.pricing_confidence if fin else "low",
-        } if fin else None,
+        }
+        if fin
+        else None,
         "metadata": getattr(e, "metadata", None),
     }
 
@@ -757,24 +792,26 @@ class RunAnalysisPipelineUseCase:
             # (premissas.reconciliacao). O que o modelo escreveu de qualitativo
             # é preservado. Sem isto a resposta da API poderia contradizer a
             # própria reconciliação.
-            ui_report = apply_backend_authority(
-                ui_report, llm_input.get("resumo_executivo")
-            )
+            ui_report = apply_backend_authority(ui_report, llm_input.get("resumo_executivo"))
             ui_report = impose_decision(ui_report, llm_input)
 
             flags = ui_report.flags
             if ctx.missing_sku_ids:
                 flags.setdefault("catalog", []).extend(
-                    {"code": "MISSING_SKU_DEFINITION",
-                     "message": f"SKU '{sku_id}' without vCPU/RAM definition in catalog",
-                     "impact_area": "catalog"}
+                    {
+                        "code": "MISSING_SKU_DEFINITION",
+                        "message": f"SKU '{sku_id}' without vCPU/RAM definition in catalog",
+                        "impact_area": "catalog",
+                    }
                     for sku_id in ctx.missing_sku_ids
                 )
             if missing_equiv_ids:
                 flags.setdefault("equivalents", []).extend(
-                    {"code": "MISSING_EQUIVALENT",
-                     "message": f"Pool '{pool_id}' has no cross-cloud equivalent in catalog",
-                     "impact_area": "catalog"}
+                    {
+                        "code": "MISSING_EQUIVALENT",
+                        "message": f"Pool '{pool_id}' has no cross-cloud equivalent in catalog",
+                        "impact_area": "catalog",
+                    }
                     for pool_id in missing_equiv_ids
                 )
 

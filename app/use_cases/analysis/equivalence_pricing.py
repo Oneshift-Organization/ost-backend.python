@@ -12,6 +12,16 @@ _CATEGORIES = {
     "armazenamento_hdd": ("Discos HDD", {"block_storage"}),
     "armazenamento_objetos": ("Armazenamento de objetos", {"object_storage"}),
     "egresso_rede": ("Tráfego de saída", {"network_egress"}),
+    # Rede por tipo (PLANO_PRECO_NAO_COMPUTE). Hora e processamento do balanceador são
+    # categorias separadas: o serviço inteiro só casa com a soma, então aparecem como
+    # linha agregada por cenário até a parte de cada serviço ir ao payload (R2).
+    "transferencia_entre_zonas": ("Tráfego entre zonas", set()),
+    "balanceador": ("Balanceador de carga", {"load_balancer"}),
+    "balanceador_dados": ("Processamento do balanceador", {"load_balancer"}),
+    "nat": ("NAT", {"nat_gateway"}),
+    "nat_dados": ("Dados processados pelo NAT", {"nat_gateway"}),
+    "ip_publico": ("IP público", set()),
+    "vpn": ("VPN", {"vpn_gateway"}),
     "banco_dados": ("Bancos de dados", {"relational_database", "managed_relational_database"}),
 }
 
@@ -21,14 +31,19 @@ def _provider(target: dict) -> str:
 
 
 def _eligible(sources: list[dict], kinds: set[str], provider: str) -> list[dict]:
-    return [s for s in sources if (
-        s.get("service_type") in kinds
-        and s.get("type_source") == "curado"
-        and (number(s.get("cost")) or Decimal(0)) > 0
-        and any(_provider(t) == provider for t in s.get("targets", []))
-        and not any(_provider(t) == provider and t.get("financials")
-                    for t in s.get("targets", []))
-    )]
+    return [
+        s
+        for s in sources
+        if (
+            s.get("service_type") in kinds
+            and s.get("type_source") == "curado"
+            and (number(s.get("cost")) or Decimal(0)) > 0
+            and any(_provider(t) == provider for t in s.get("targets", []))
+            and not any(
+                _provider(t) == provider and t.get("financials") for t in s.get("targets", [])
+            )
+        )
+    ]
 
 
 def _financials(quote: dict, base: Decimal, price: Decimal) -> dict:
@@ -38,7 +53,8 @@ def _financials(quote: dict, base: Decimal, price: Decimal) -> dict:
         "confianca_preco": quote.get("confianca_preco", "low"),
         "pricing_method": "category_rate_ratio",
         "pricing_evidence": {
-            **quote, "source_cost": float(base),
+            **quote,
+            "source_cost": float(base),
             "assumption": "Razão de tarifas de referência; não é cotação de SKU nem uso medido.",
         },
     }
@@ -83,15 +99,23 @@ def attach_category_prices(sources: list[dict], payload: dict) -> list[dict]:
             if members and member_total == base:
                 _allocate(members, provider, base, quote)
                 continue
-            sources.append({
-                "identity": f"category/{key}/{provider}", "name": f"{label} (agregado)",
-                "source_service": label, "cost": float(base), "basis": "category_budget",
-                "targets": [{
-                    "provider": provider, "service_name": f"{label} — cenário {provider.upper()}",
-                    "financials": _financials(quote, base, price),
-                }],
-                "scoped_provider": provider,
-            })
+            sources.append(
+                {
+                    "identity": f"category/{key}/{provider}",
+                    "name": f"{label} (agregado)",
+                    "source_service": label,
+                    "cost": float(base),
+                    "basis": "category_budget",
+                    "targets": [
+                        {
+                            "provider": provider,
+                            "service_name": f"{label} — cenário {provider.upper()}",
+                            "financials": _financials(quote, base, price),
+                        }
+                    ],
+                    "scoped_provider": provider,
+                }
+            )
     return sources
 
 
@@ -104,15 +128,15 @@ def reconcile_pricing(rows: list, payload: dict) -> list[dict]:
     # Compromisso que paga máquina virtual e saiu da origem junto com os pools
     # (premissas.compromisso_de_compute). Não é linha da tabela: sem ele aqui, o
     # total não fecharia. Payload sem a premissa reconcilia como antes.
-    compromisso = (
-        ((payload.get("premissas") or {}).get("compromisso_de_compute") or {}).get("por_provedor")
-        or {}
-    )
+    compromisso = ((payload.get("premissas") or {}).get("compromisso_de_compute") or {}).get(
+        "por_provedor"
+    ) or {}
     result = []
     for scenario in summary.get("por_provedor", []):
         provider = _provider(scenario)
-        selected = [r for r in rows if r.target_provider.lower() == provider
-                    and r.included_in_estimate]
+        selected = [
+            r for r in rows if r.target_provider.lower() == provider and r.included_in_estimate
+        ]
         covered = sum((number(r.source_monthly_cost) or Decimal(0) for r in selected), Decimal(0))
         covered += number(compromisso.get(provider)) or Decimal(0)
         priced = sum((number(r.estimated_monthly_cost) or Decimal(0) for r in selected), Decimal(0))
@@ -122,17 +146,22 @@ def reconcile_pricing(rows: list, payload: dict) -> list[dict]:
         # Pool components and totals are independently rounded on serialization.
         tolerance = _CENT * max(1, len(selected))
         reconciled = expected is not None and residual >= 0 and abs(total - expected) <= tolerance
-        result.append({
-            "provider": provider, "currency": payload.get("moeda", "USD"),
-            "status": "reconciled" if reconciled else "review_required",
-            "source_covered": float(covered), "priced_target": float(priced),
-            "unchanged_source_balance": float(residual),
-            "estimated_total": float(total),
-            "published_total": float(expected) if expected is not None else None,
-            "priced_components": len(selected),
-            "note": (
-                "Saldo sem cotação mantido ao custo atual; não é preço validado no destino."
-                if reconciled else "Escopos não reconciliados; revisar antes de usar a economia."
-            ),
-        })
+        result.append(
+            {
+                "provider": provider,
+                "currency": payload.get("moeda", "USD"),
+                "status": "reconciled" if reconciled else "review_required",
+                "source_covered": float(covered),
+                "priced_target": float(priced),
+                "unchanged_source_balance": float(residual),
+                "estimated_total": float(total),
+                "published_total": float(expected) if expected is not None else None,
+                "priced_components": len(selected),
+                "note": (
+                    "Saldo sem cotação mantido ao custo atual; não é preço validado no destino."
+                    if reconciled
+                    else "Escopos não reconciliados; revisar antes de usar a economia."
+                ),
+            }
+        )
     return result

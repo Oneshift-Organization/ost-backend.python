@@ -32,6 +32,7 @@ from app.infrastructure.pricing.azure_price_client import fetch_azure_vm_prices
 from app.infrastructure.pricing.category_rate_client import (
     fetch_aws_category_rates,
     fetch_azure_category_rates,
+    fetch_azure_network_global,
     fetch_gcp_category_rates,
     fetch_oci_category_rates,
 )
@@ -71,7 +72,12 @@ def _fetchers(
         return [
             *fetch_aws_category_rates(regioes["aws"]),
             *fetch_gcp_category_rates(api_key=chave_gcp, regioes=regioes["gcp"]),
-            *(p for r in regioes["azure"] for p in fetch_azure_category_rates(r)),
+            *(
+                p
+                for rede_azure in [fetch_azure_network_global()]
+                for r in regioes["azure"]
+                for p in fetch_azure_category_rates(r, rede_global=rede_azure)
+            ),
             *fetch_oci_category_rates(regioes["oci"]),
         ]
 

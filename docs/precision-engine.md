@@ -106,7 +106,7 @@ Fontes implementadas (`infrastructure/pricing/`):
 | GCP Cloud Billing Catalog (API key) | `gcp_price_client.py` | taxas vCPU/h e GB/h → tipos reais (E2, N2, N2D, N4, C3, C4A, T2A; standard/highmem/highcpu) |
 | Azure Retail Prices API (público) | `azure_price_client.py` | VMs Linux on-demand por região (B/D/E/F, sem DC/EC confidenciais) |
 | OCI cetools API (público) | `oci_price_client.py` | taxas flex → configs com 4, 8 e 16 GB por OCPU, gravadas em cada região |
-| Categorias, 4 provedores | `category_rate_client.py` | SSD, HDD, objeto e egress por região; disco da Azure fica de fora (preço por disco) |
+| Categorias, 4 provedores | `category_rate_client.py` | SSD, HDD, objeto e egress por região; disco da Azure fica de fora (preço por disco). Rede por tipo: balanceador, processamento, NAT, IP, VPN e tráfego entre zonas |
 | Referência publicada | `seed_category_rates.py` | storage/egress/database dos 4 provedores (`us-east`) |
 
 Sync offline por zona: `python scripts/sync_prices.py --providers aws,gcp,azure,oci,categories,categories-live`
@@ -163,6 +163,16 @@ uma tabela de taxas. Cobre storage SSD/HDD, egress e database; falta o modelo de
 unidade fino (IOPS, engine, requests, tiers de egress).
 
 Confiança do resultado = **elo mais fraco** entre a taxa de origem e a de destino.
+
+**Rede por tipo, pela quantidade medida** ([`PLANO_PRECO_NAO_COMPUTE.md`](../PLANO_PRECO_NAO_COMPUTE.md)).
+O balde `network_egress` misturava egress, balanceador, NAT, IP público, VPN e
+tráfego entre zonas, e tudo saía pela taxa de egress. `domain/services/rede_por_uso.py`
+separa cada linha pelo uso (tabela por nuvem). Balanceador (hora e processamento),
+NAT (hora e GB), IP, VPN e tráfego entre zonas são cotados por **quantidade medida ×
+taxa do destino**, sem precisar da taxa da origem; a linha sem quantidade usa o preço
+efetivo das medidas. Taxa zero é destino grátis (NAT, VPN e IP da OCI). A confiança é
+a da taxa do destino. Endpoint, DNS, resolver e log (`network_other`) ficam ao custo
+atual. O egress de verdade segue pela razão.
 
 A taxa de `storage_ssd` é a do SSD **de propósito geral** de cada provedor: gp3,
 Premium SSD, **pd-balanced** e Block Volume balanceado. No GCP era a do pd-ssd
@@ -277,7 +287,7 @@ DE-PARA e `migracao`), `premissas`, `resumo_executivo`, `confianca_classificacao
 | Disco da Azure e banco gerenciado oficiais | a Azure cobra por disco (P10, P20…), não por GB; banco não tem índice $/vCPU único |
 | Commitment tiers (1yr/3yr) | custo é segregado, mas não há cenário |
 | `payback_period_months` na tela | o fluxo do LLM não tem de onde tirar o custo de migração |
-| `ICategoryCalculator` pleno | falta modelo de unidade fino por categoria |
+| `ICategoryCalculator` pleno | falta modelo de unidade fino por categoria; a rede por tipo já cota pela quantidade medida |
 | **Validade externa das taxas** | 61% do custo AWS é reprecificado por taxa `reference` digitada; a reconciliação não pega viés (ex.: um provedor mais barato em *todas* as categorias) |
 | `fator_utilizacao` por telemetria | knob existe fixo em 1.0 |
 | Filestore como `storage_hdd` | é arquivo (NFS), não bloco; não há categoria `file_storage`. No mock BigQuery são 234 GiB e US$ 358/mês que viram volume HDD no Terraform |

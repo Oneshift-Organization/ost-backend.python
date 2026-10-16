@@ -23,6 +23,9 @@ from app.domain.entities.workload_pool import (
 from app.domain.services.azure_shape import parse_azure_shape
 from app.domain.services.compromisso_de_compute import paga_maquina_virtual
 from app.domain.services.instance_shape import parse_instance_shape
+from app.domain.services.rede_por_uso import CATEGORIAS as _CATEGORIAS_DE_REDE
+from app.domain.services.rede_por_uso import EGRESS as _REDE
+from app.domain.services.rede_por_uso import quantidade_na_unidade, tipo_de_rede
 from app.domain.services.regioes import regiao_da_linha
 from app.domain.services.sku_matcher import extract_family
 
@@ -157,6 +160,11 @@ class BillingAggregator:
         aux_por_regiao: dict[str, dict[str, Decimal]] = defaultdict(
             lambda: defaultdict(lambda: Decimal("0"))
         )
+        # Rede cotada pela quantidade: categoria → região → quantidade e custo medido
+        aux_quantidade: dict[str, dict[str, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: _ZERO)
+        )
+        aux_medido: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: _ZERO))
         commitment_cost = Decimal("0")
         commitment_compute = Decimal("0")
         orphan_cost = Decimal("0")
@@ -200,6 +208,23 @@ class BillingAggregator:
                 elif destino == _ORFAO:
                     orphan_cost += sobra
                     orphan_skus.append(item.sku_id or item.usage_type or "unknown")
+            elif component_type == _REDE:
+                # O balde de rede mistura egress, balanceador, NAT, IP e VPN; cada um
+                # tem taxa própria (domain/services/rede_por_uso)
+                tipo = tipo_de_rede(item.provider, item.service_name, item.usage_type)
+                regiao = regiao_da_linha(item.provider, item.region, item.usage_type) or ""
+                aux_totals[tipo.categoria] += cost
+                aux_por_regiao[tipo.categoria][regiao] += cost
+                # Só linha paga dá quantidade: faixa gratuita da origem não é cobrada
+                # e, como nas outras categorias, a do destino também não entra
+                quantidade = (
+                    quantidade_na_unidade(item.provider, tipo, item.usage_amount, item.usage_unit)
+                    if cost > 0
+                    else None
+                )
+                if quantidade is not None:
+                    aux_quantidade[tipo.categoria][regiao] += quantidade
+                    aux_medido[tipo.categoria][regiao] += cost
             elif component_type in _AUX_BUCKET:
                 aux_totals[_AUX_BUCKET[component_type]] += cost
                 regiao = regiao_da_linha(item.provider, item.region, item.usage_type) or ""
@@ -254,13 +279,15 @@ class BillingAggregator:
                 storage_ssd=aux_totals["storage_ssd"],
                 storage_hdd=aux_totals["storage_hdd"],
                 object_storage=aux_totals["object_storage"],
-                network_egress=aux_totals["network_egress"],
+                **{c: aux_totals[c] for c in _CATEGORIAS_DE_REDE},
                 database=aux_totals["database"],
                 commitment=commitment_cost,
                 commitment_compute=commitment_compute,
                 orphan=orphan_cost,
                 orphan_skus=tuple(sorted(set(orphan_skus))),
                 por_regiao={c: dict(r) for c, r in aux_por_regiao.items()},
+                quantidade_por_regiao={c: dict(r) for c, r in aux_quantidade.items()},
+                medido_por_regiao={c: dict(r) for c, r in aux_medido.items()},
             ),
             unmapped_cost=orphan_cost,
             hours_window=hours_window,

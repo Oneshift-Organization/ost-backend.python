@@ -61,8 +61,12 @@ _HASH_POR_VERSAO = {
     # passou a ler `premissas.compromisso_de_compute`, que só existe em payload
     # preparado depois da mudança. Snapshot antigo reconcilia igual (teste em
     # test_equivalence_pricing.py).
+    # Hash trocado de novo sem subir a versão (PLANO_PRECO_NAO_COMPUTE):
+    # `equivalence_pricing._CATEGORIES` ganhou as categorias de rede por tipo, que só
+    # existem em `custos_auxiliares` de payload preparado depois da mudança. Snapshot
+    # antigo não tem as chaves e anexa os mesmos preços.
     "agent-authority-v2": (
-        "7329f9fd996a9a63d2f182528642c22bca96d5b543a33594593384a03f543b66"
+        "22df4139f48d03c9b14c241a0f5f82ce4f12bca3bcbc65b32779b8a421ab1067"
     ),
 }
 

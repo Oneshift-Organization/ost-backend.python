@@ -34,6 +34,7 @@ from app.domain.services.categoria_por_zona import dividir_por_zona
 from app.domain.services.category_calculator import (
     CategoryRate,
     estimate_by_cost_ratio,
+    estimate_by_quantity,
 )
 from app.domain.services.cobertura_por_compromisso import avaliar_cobertura
 from app.domain.services.confidence import avaliar_confianca
@@ -63,6 +64,7 @@ from app.domain.services.provider_consolidation import (
     weakest_confidence,
 )
 from app.domain.services.reconciliation import reconcile
+from app.domain.services.rede_por_uso import UNIDADE as UNIDADE_DA_REDE
 from app.domain.services.regioes import (
     ZONA_PADRAO,
     escolher_regiao_de_preco,
@@ -856,6 +858,8 @@ class BuildMigrationContextUseCase:
                 "object_storage": auxiliary.object_storage,
                 "network_egress": auxiliary.network_egress,
                 "database": auxiliary.database,
+                # Rede por tipo, cotada pela quantidade medida (PLANO_PRECO_NAO_COMPUTE)
+                **{c: getattr(auxiliary, c) for c in UNIDADE_DA_REDE},
             }
             for category, aux_cost in aux_by_category.items():
                 if aux_cost <= 0:
@@ -870,6 +874,18 @@ class BuildMigrationContextUseCase:
                     auxiliary.por_regiao.get(category) or {"": aux_cost},
                     zona_dominante=zona_categorias,
                     regiao_dominante=regiao_origem,
+                    quantidade_por_regiao=auxiliary.quantidade_por_regiao.get(category),
+                    medido_por_regiao=auxiliary.medido_por_regiao.get(category),
+                )
+                # Rede: a quantidade medida dispensa a taxa da origem. O preço efetivo
+                # (custo medido / quantidade) converte o custo das linhas sem quantidade.
+                unidade_medida = UNIDADE_DA_REDE.get(category)
+                quantidade_total = sum((p.quantidade for p in partes), Decimal("0"))
+                medido_total = convert(sum((p.custo_medido for p in partes), Decimal("0")), fx)
+                preco_efetivo = (
+                    medido_total / quantidade_total
+                    if unidade_medida and medido_total and quantidade_total > 0
+                    else None
                 )
                 # Só avisa o que um sync corrige: taxa oficial do provedor
                 # existe, mas não na zona. Taxa que só existe como referência
@@ -901,10 +917,22 @@ class BuildMigrationContextUseCase:
                                 }
                             )
                     custo_da_parte = convert(parte.custo, fx) or Decimal("0")
-                    equivs = estimate_by_cost_ratio(
-                        source_provider=source_provider,
-                        source_cost=custo_da_parte,
-                        rates=rates,
+                    equivs = (
+                        estimate_by_quantity(
+                            source_provider=source_provider,
+                            source_cost=custo_da_parte,
+                            quantity=parte.quantidade,
+                            measured_cost=convert(parte.custo_medido, fx) or Decimal("0"),
+                            effective_price=preco_efetivo,
+                            rates=rates,
+                            unit=unidade_medida,
+                        )
+                        if preco_efetivo is not None and unidade_medida
+                        else estimate_by_cost_ratio(
+                            source_provider=source_provider,
+                            source_cost=custo_da_parte,
+                            rates=rates,
+                        )
                     )
                     cotadas.append((parte, rates, equivs, custo_da_parte))
                 if not cotadas or not cotadas[0][2]:
@@ -929,24 +957,37 @@ class BuildMigrationContextUseCase:
                     if len(cotadas) > 1
                     else None
                 )
+                taxa_da_origem = rates.get(source_provider.lower())
+                origem: dict[str, Any] = (
+                    {
+                        "metodo": "quantidade_medida",
+                        "quantidade": round(float(quantidade_total), 4),
+                        "taxa_origem": str(round(preco_efetivo, 6)),
+                        "taxa_origem_regiao": None,
+                    }
+                    if preco_efetivo is not None
+                    else {
+                        "metodo": "category_rate_ratio",
+                        "taxa_origem": str(taxa_da_origem.rate) if taxa_da_origem else None,
+                        "taxa_origem_regiao": taxa_da_origem.region if taxa_da_origem else None,
+                        **(
+                            {"taxa_origem_aproximada": True}
+                            if taxa_da_origem and taxa_da_origem.approximate
+                            else {}
+                        ),
+                    }
+                )
                 category_equivalents[category] = [
                     {
                         "provedor": e.provider,
                         "custo_mensal_estimado": round(float(somas[e.provider][0]), 2),
                         "delta_custo": round(float(somas[e.provider][1]), 2),
                         "confianca_preco": somas[e.provider][2],
-                        "metodo": "category_rate_ratio",
-                        "taxa_origem": str(rates[source_provider].rate),
+                        **origem,
                         "taxa_destino": str(rates[e.provider].rate),
                         "unidade": rates[e.provider].unit,
                         "categoria": category,
-                        "taxa_origem_regiao": rates[source_provider].region,
                         "taxa_destino_regiao": rates[e.provider].region,
-                        **(
-                            {"taxa_origem_aproximada": True}
-                            if rates[source_provider].approximate
-                            else {}
-                        ),
                         **(
                             {"taxa_destino_aproximada": True}
                             if rates[e.provider].approximate
