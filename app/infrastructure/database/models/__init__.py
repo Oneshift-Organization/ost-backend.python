@@ -23,6 +23,7 @@ from app.infrastructure.database.models.inventory import (
     InventoryResourceModel,
 )
 from app.infrastructure.database.models.price_lifecycle import (
+    PedidoDeSyncModel,
     PriceLifecycleRuleModel,
     PriceObservationModel,
     PriceSourceWeightModel,
@@ -51,6 +52,7 @@ __all__ = [
     "InventoryModel",
     "InventoryRelationModel",
     "InventoryResourceModel",
+    "PedidoDeSyncModel",
     "PriceLifecycleRuleModel",
     "PriceObservationModel",
     "PriceSourceWeightModel",

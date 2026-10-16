@@ -70,3 +70,21 @@ class PriceSourceWeightModel(Base):
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class PedidoDeSyncModel(Base):
+    """Preço contestado pelo agente que precisa ser reconfirmado (lote v4, V4.1)."""
+
+    __tablename__ = "pedidos_de_sync"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    provider: Mapped[str] = mapped_column(String(10), nullable=False)
+    region: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    service_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    sku_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    motivo: Mapped[str] = mapped_column(String(300), nullable=False)
+    snapshot_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    atendido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

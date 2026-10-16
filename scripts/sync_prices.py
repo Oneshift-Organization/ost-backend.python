@@ -12,6 +12,7 @@ Uso:
     python scripts/sync_prices.py --providers azure --zonas sao-paulo
     python scripts/sync_prices.py --providers categories        # referência, sem rede
     python scripts/sync_prices.py --zonas todas                 # as 11 zonas
+    python scripts/sync_prices.py --pedidos     # só o que a contestação do agente pediu
 
 O GCP exige `GCP_BILLING_API_KEY`; sem ela, o GCP sai vazio e os outros seguem.
 """
@@ -21,9 +22,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections.abc import Callable, Sequence
+from uuid import UUID
 
 from app.core.config import get_settings
 from app.domain.entities.cloud_price_point import CloudPricePoint
+from app.domain.services.contestacao import PedidoDeSync
 from app.domain.services.regioes import ZONAS, regiao_canonica
 from app.infrastructure.database.seed_category_rates import category_rate_points
 from app.infrastructure.database.session import get_sessionmaker
@@ -39,6 +42,7 @@ from app.infrastructure.pricing.category_rate_client import (
 from app.infrastructure.pricing.ciclo_de_vida import recalcular_ciclo_de_vida
 from app.infrastructure.pricing.gcp_price_client import fetch_gcp_compute_prices
 from app.infrastructure.pricing.oci_price_client import fetch_oci_compute_prices
+from app.infrastructure.repositories.pg_acoes_de_preco_repo import PgAcoesDePrecoRepository
 from app.infrastructure.repositories.pg_cloud_price_point_repo import (
     PgCloudPricePointRepository,
 )
@@ -92,6 +96,20 @@ def _fetchers(
     }
 
 
+def _regioes_dos_pedidos(
+    pedidos: Sequence[PedidoDeSync],
+) -> tuple[dict[str, list[str]], set[str]]:
+    """Regiões e coletas que os pedidos abertos pedem: compute do provedor e, para
+    taxa de categoria, as categorias oficiais."""
+    regioes: dict[str, list[str]] = {p: [] for p in ("aws", "gcp", "azure", "oci")}
+    wanted: set[str] = set()
+    for p in pedidos:
+        if p.regiao and p.provedor in regioes and p.regiao not in regioes[p.provedor]:
+            regioes[p.provedor].append(p.regiao)
+        wanted.add("categories-live" if p.tipo != "virtual_server" else p.provedor)
+    return regioes, wanted
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--providers", default="azure,oci", help="csv: " + ",".join(_ORDEM))
@@ -101,6 +119,11 @@ async def main() -> None:
         help="csv de zonas, ou 'todas': " + ",".join(z.id for z in ZONAS),
     )
     parser.add_argument("--max-pages", type=int, default=8)
+    parser.add_argument(
+        "--pedidos",
+        action="store_true",
+        help="atende os pedidos de sync abertos pela contestação do agente (ignora as zonas)",
+    )
     args = parser.parse_args()
 
     wanted = {p.strip() for p in args.providers.split(",") if p.strip()}
@@ -110,9 +133,15 @@ async def main() -> None:
         else [z.strip() for z in args.zonas.split(",") if z.strip()]
     )
     regioes = regioes_por_provedor(zonas)
+    sm = get_sessionmaker()
+    pedidos: list[tuple[UUID, PedidoDeSync]] = []
+    if args.pedidos:
+        async with sm() as session:
+            pedidos = await PgAcoesDePrecoRepository(session).pedidos_abertos()
+        regioes, wanted = _regioes_dos_pedidos([p for _, p in pedidos])
+        print(f"pedidos abertos: {len(pedidos)}")  # noqa: T201
     fetchers = _fetchers(regioes, args.max_pages)
 
-    sm = get_sessionmaker()
     falhas: list[str] = []
     for provider in _ORDEM:
         if provider not in wanted:
@@ -131,6 +160,16 @@ async def main() -> None:
             await session.commit()
         linha = f"fetched={res.fetched} upserted={res.upserted} ausentes={res.removed}"
         print(f"{provider}: {linha}")  # noqa: T201
+    if pedidos:
+        atendidos = [
+            i
+            for i, p in pedidos
+            if ("categories-live" if p.tipo != "virtual_server" else p.provedor) not in falhas
+        ]
+        async with sm() as session:
+            fechados = await PgAcoesDePrecoRepository(session).marcar_atendidos(atendidos)
+            await session.commit()
+        print(f"pedidos atendidos: {fechados}")  # noqa: T201
     # Estado e score dos preços depois da coleta (PLANO_CICLO_DE_VIDA_DO_PRECO)
     print(await recalcular_ciclo_de_vida())  # noqa: T201
     if falhas:

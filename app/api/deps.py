@@ -12,6 +12,7 @@ from app.core.logging import get_logger
 from app.core.security import verify_jwt
 from app.domain.analysis import MigrationContext
 from app.infrastructure.database.session import get_db_session
+from app.infrastructure.repositories.pg_acoes_de_preco_repo import PgAcoesDePrecoRepository
 from app.infrastructure.repositories.pg_agent_snapshot_repo import (
     PgAgentSnapshotRepository,
     PgAgentSubmissionRepository,
@@ -238,6 +239,7 @@ def submeter_analise_uc(session: AsyncSession) -> SubmeterAnaliseUseCase:
         envios=PgAgentSubmissionRepository(session),
         relatorios=PgBillingReportRepository(session),
         inventarios=PgInventoryRepository(session),
+        acoes=PgAcoesDePrecoRepository(session),
     )
 
 

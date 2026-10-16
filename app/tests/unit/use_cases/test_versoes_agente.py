@@ -42,6 +42,7 @@ _ARQUIVOS_DA_AUTORIDADE = (
     "app/schemas/corporate_benefits.py",
     "app/domain/services/corporate_benefits.py",
     "app/domain/services/technical_assessment.py",
+    "app/domain/services/contestacao.py",
 )
 # Do `topologia_no_payload`, só o que roda no envio. O resto do arquivo monta o
 # payload na preparação, e mudança lá já gera snapshot novo pelo fingerprint.
@@ -59,7 +60,7 @@ _HASH_POR_VERSAO = {
     # v4: lote da autoridade (PLANO_AUTORIDADE_V3_E_PRECISAO §2). Atualizado a cada item
     # do lote até a entrega; a versão sobe uma vez só.
     "agent-authority-v4": (
-        "c5423f27a52b7b3140acb2748e7e701d12042f2365e2e05a9ddddac6be99d1b1"
+        "e922c4c5a976e929558098440059397704e236a2cee2d05025e1819184668da1"
     ),
     # v3: score normalizado 50/40/10 e benefícios informativos sem efeito financeiro.
     # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE):
