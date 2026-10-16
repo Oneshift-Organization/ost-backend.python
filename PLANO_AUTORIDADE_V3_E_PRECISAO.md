@@ -244,3 +244,15 @@ versão de autoridade.
 - P1 não depende de ninguém; P2 depende da escolha da fonte.
 - Nada aqui toca o Terraform, exceto o efeito do V3.3 no disco fantasma, que
   vai junto com a sprint de Terraform.
+
+## 5. Fila do agente (espera uso real)
+
+Itens 11 a 13 da lista de 12/10 e um achado da análise crítica de 11/10. Só existiam na
+conversa; registrados em 16/10. Nenhum tem dono nem data: esperam o agente em produção.
+
+| # | item | por que espera |
+|---|---|---|
+| 11 | **Peso da contestação pela materialidade:** contestar um SKU de US$ 5 e um que é 60% da economia hoje tem o mesmo efeito (um degrau) | a `referencia` precisa ser estruturada (já é `PROVEDOR/sku/região` desde a V4.1) e a regra precisa de volume real para calibrar |
+| 12 | **Métrica de acerto do agente:** quantas contestações se confirmam, nos dois sentidos | os dados brutos já ficam gravados por snapshot (bruto, corrigido e entrada); sem volume não há o que medir |
+| 13 | **Dúvida do agente freia, não acelera:** restrições propostas e recomendação condicional ("migrar só se...") pesam na decisão, de forma rastreável | precisa de tela de confirmação humana no front |
+| — | **Dependências deduzidas pelo agente:** app que chama outra por endpoint público não aparece nas regras de rede; hoje essa dedução se perde | entraria como sugestão de dependência, nunca como fato, com o mesmo cuidado da classe |
