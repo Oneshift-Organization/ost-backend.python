@@ -1033,9 +1033,9 @@ class BuildMigrationContextUseCase:
         # ── 9c. Consolidação por provedor (backend calcula, IA narra) ──
         # Cada provedor só reprecifica o que ELE cobre; o resto fica ao custo atual.
         _tally: dict[str, dict[str, Any]] = {}
-        # Custo cotado agrupado pelo rótulo de confiança do PREÇO. É o insumo da
-        # confiança da análise (domain/services/confidence.py): a pergunta que
-        # ele responde é "que fração do dinheiro cotado veio de preço oficial?".
+        # Custo atual (origem) agrupado pelo rótulo de confiança do PREÇO que o cotou.
+        # É o insumo da confiança da análise (domain/services/confidence.py): "que
+        # fração do custo atual foi cotada com preço oficial?" (lote v4, V4.7).
         _custo_por_confianca: dict[str, Decimal] = {}
 
         def _add(provider: str, analyzed_cost: Decimal, source_cost: Decimal, conf: str) -> None:
@@ -1046,9 +1046,10 @@ class BuildMigrationContextUseCase:
             acc["analyzed"] += analyzed_cost
             acc["covered"] += source_cost
             acc["confs"].append(conf)
-            _custo_por_confianca[conf] = (
-                _custo_por_confianca.get(conf, Decimal("0")) + analyzed_cost
-            )
+            # V4.7: pesa pelo custo ATUAL que a cotação cobre, não pelo valor cotado
+            # no destino. Senão uma cotação mais barata (e mais precisa) com preço
+            # oficial baixava a confiança da análise.
+            _custo_por_confianca[conf] = _custo_por_confianca.get(conf, Decimal("0")) + source_cost
 
         family_src = {
             fp.pool_key.as_str(): convert(fp.monthly_cost, fx) or Decimal("0")

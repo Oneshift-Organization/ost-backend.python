@@ -74,8 +74,7 @@ class AdaptadorNuvem(Protocol):
         `resource_group` na Azure."""
         ...
 
-    def outputs(self, bp: TerraformBlueprint) -> list[str]:
-        ...
+    def outputs(self, bp: TerraformBlueprint) -> list[str]: ...
 
     def preambulo(self, bp: TerraformBlueprint) -> list[str]:
         """Recursos que a nuvem exige antes de tudo — o grupo de recursos da
@@ -103,33 +102,37 @@ def montar(
 
 
 def _versions(a: AdaptadorNuvem) -> str:
-    return arquivo([
-        comentario(
-            "Versões fixas de propósito.\n"
-            "`latest` num arquivo aplicado meses depois é o mesmo que não\n"
-            "versionar: o plano mudaria sozinho."
-        ),
-        "terraform {\n"
-        f'  required_version = "{VERSAO_TERRAFORM}"\n'
-        "  required_providers {\n"
-        f"    {a.provider_nome} = {{\n"
-        f'      source  = "{a.provider_source}"\n'
-        f'      version = "{a.provider_version}"\n'
-        "    }\n"
-        "  }\n"
-        "}",
-    ])
+    return arquivo(
+        [
+            comentario(
+                "Versões fixas de propósito.\n"
+                "`latest` num arquivo aplicado meses depois é o mesmo que não\n"
+                "versionar: o plano mudaria sozinho."
+            ),
+            "terraform {\n"
+            f'  required_version = "{VERSAO_TERRAFORM}"\n'
+            "  required_providers {\n"
+            f"    {a.provider_nome} = {{\n"
+            f'      source  = "{a.provider_source}"\n'
+            f'      version = "{a.provider_version}"\n'
+            "    }\n"
+            "  }\n"
+            "}",
+        ]
+    )
 
 
 def _providers(a: AdaptadorNuvem, bp: TerraformBlueprint) -> str:
-    return arquivo([
-        comentario(
-            "Sem credencial neste arquivo. O provider usa a autenticação do\n"
-            "ambiente de quem aplica. A plataforma nunca recebe, armazena nem\n"
-            "gera credencial de nuvem."
-        ),
-        a.provider_bloco(bp),
-    ])
+    return arquivo(
+        [
+            comentario(
+                "Sem credencial neste arquivo. O provider usa a autenticação do\n"
+                "ambiente de quem aplica. A plataforma nunca recebe, armazena nem\n"
+                "gera credencial de nuvem."
+            ),
+            a.provider_bloco(bp),
+        ]
+    )
 
 
 def _variables(a: AdaptadorNuvem, bp: TerraformBlueprint) -> str:
@@ -327,14 +330,13 @@ def _secao_procedencia(premissas: dict[str, Any]) -> str:
     if fx:
         data = fx.get("data") or "sem data"
         linhas.append(
-            f"- **Câmbio:** {fx.get('par')} = {fx.get('taxa')} "
-            f"(fonte: {fx.get('fonte')}, {data})"
+            f"- **Câmbio:** {fx.get('par')} = {fx.get('taxa')} (fonte: {fx.get('fonte')}, {data})"
         )
     confianca = premissas.get("confianca_analise") or {}
     if confianca:
         linhas.append(
             f"- **Confiança da análise:** {confianca.get('nivel')} "
-            f"(razão de custo com preço oficial: "
+            f"(fração do custo atual cotado com preço oficial: "
             f"{confianca.get('razao_custo_confiavel')})"
         )
         for motivo in confianca.get("rebaixada_por") or []:
@@ -493,17 +495,17 @@ def nome_cloud(*partes: object, maximo: int = 63, separador: str = "-") -> str:
     real: `project_name` aceita `_` (válido em HCL) e as nuvens recusam. O erro
     só aparecia no `terraform validate`, contra o schema do provider.
     """
-    bruto = separador.join(str(p) for p in partes if p) if separador else "".join(
-        str(p) for p in partes if p
+    bruto = (
+        separador.join(str(p) for p in partes if p)
+        if separador
+        else "".join(str(p) for p in partes if p)
     )
     if not separador:
         # Azure exige storage account só com minúscula e dígito: nada de
         # separador. `"".split("")` levanta ValueError, então o caminho é outro.
         limpo = "".join(c for c in bruto.lower() if c.isascii() and c.isalnum())
     else:
-        limpo = "".join(
-            c if (c.isascii() and c.isalnum()) else separador for c in bruto.lower()
-        )
+        limpo = "".join(c if (c.isascii() and c.isalnum()) else separador for c in bruto.lower())
         limpo = separador.join(p for p in limpo.split(separador) if p)
     while limpo and not (limpo[0].isascii() and limpo[0].isalpha()):
         limpo = limpo[1:]

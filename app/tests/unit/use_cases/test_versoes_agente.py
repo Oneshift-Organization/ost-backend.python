@@ -60,7 +60,7 @@ _HASH_POR_VERSAO = {
     # v4: lote da autoridade (PLANO_AUTORIDADE_V3_E_PRECISAO §2). Atualizado a cada item
     # do lote até a entrega; a versão sobe uma vez só.
     "agent-authority-v4": (
-        "e922c4c5a976e929558098440059397704e236a2cee2d05025e1819184668da1"
+        "22655190fe03ba7d0f5cd86f5fbce1a08f9652fb6f723fd44de11c78d0e3ed5e"
     ),
     # v3: score normalizado 50/40/10 e benefícios informativos sem efeito financeiro.
     # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE):
