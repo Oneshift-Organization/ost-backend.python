@@ -77,7 +77,27 @@ TIPOS: dict[str, TipoDeRecurso] = {
     "microsoft.cache/redis": _T.CACHE,
     "microsoft.storage/storageaccounts": _T.BUCKET,
     "microsoft.containerservice/managedclusters": _T.CLUSTER_KUBERNETES,
+    # Os nós do AKS (e qualquer conjunto de VMs) são um VMSS: máquina, com N instâncias
+    "microsoft.compute/virtualmachinescalesets": _T.INSTANCIA,
 }
+# Serviço gerenciado que vai com a aplicação pela tag (PLANO_CENARIOS_DE_ENTRADA §7).
+# `microsoft.web/sites` só é função quando o `kind` diz `functionapp`.
+_COMPONENTE = {
+    "microsoft.containerregistry/registries": "registro_de_imagens",
+    "microsoft.keyvault/vaults": "segredo",
+    "microsoft.servicebus/namespaces": "fila",
+    "microsoft.eventhub/namespaces": "fila",
+    "microsoft.cdn/profiles": "cdn",
+    "microsoft.network/frontdoors": "cdn",
+    "microsoft.documentdb/databaseaccounts": "tabela_nosql",
+    "microsoft.logic/workflows": "funcao",
+}
+# Tags que o provedor de nuvem do Kubernetes (cloud-provider-azure) põe: o Service
+# no IP público que ele criou, o namespace do volume no disco
+_TAG_SERVICO_K8S = "k8s-azure-service"
+_TAG_NAMESPACE_K8S = "kubernetes.io-created-for-pvc-namespace"
+# Recurso do grupo de nós do AKS que é parte do cluster
+_DO_CLUSTER = frozenset({_T.INSTANCIA, _T.BALANCEADOR, _T.DISCO})
 _SUBREDE = "microsoft.network/virtualnetworks/subnets"
 _ASG = "microsoft.network/applicationsecuritygroups"
 _HDD = frozenset({"standard_lrs"})
@@ -116,6 +136,9 @@ class NormalizadorAzureGraph:
 
     def __init__(self) -> None:
         self._c = Construtor("azure")
+        # (assinatura, grupo de recursos) → recursos; e o grupo de nós de cada AKS
+        self._do_grupo: dict[tuple[str, str], list[tuple[str, TipoDeRecurso]]] = {}
+        self._grupo_de_nos: list[tuple[str, str, str]] = []
 
     @classmethod
     def reconhece(cls, objeto: dict[str, Any] | None, primeiro: dict[str, Any] | None) -> bool:
@@ -174,6 +197,15 @@ class NormalizadorAzureGraph:
             conta=conta,
             regiao=regiao,
         )
+        tags = tags_de_objeto(linha.get("tags"))
+        atributos = {**atributos, **_marcas(tipo_nativo, str(linha.get("kind") or ""), tags)}
+        grupo = str(linha.get("resourceGroup") or "").lower()
+        if grupo:
+            self._do_grupo.setdefault((conta or "", grupo), []).append((chave, tipo))
+        if tipo_nativo == "microsoft.containerservice/managedclusters":
+            grupo_de_nos = str(props.get("nodeResourceGroup") or "").lower()
+            if grupo_de_nos:
+                self._grupo_de_nos.append((chave, conta or "", grupo_de_nos))
         self._c.adicionar(
             Recurso(
                 chave=chave,
@@ -185,7 +217,7 @@ class NormalizadorAzureGraph:
                 zona=texto(zonas[0]) if zonas else None,
                 estado=estado,
                 atributos=sem_vazios(atributos),
-                tags=tags_de_objeto(linha.get("tags")),
+                tags=tags,
                 apelidos=apelidos(chave, props.get("vmId")),
             )
         )
@@ -407,6 +439,16 @@ class NormalizadorAzureGraph:
         if tipo_nativo == "microsoft.storage/storageaccounts":
             return {"publico": booleano(props.get("allowBlobPublicAccess"))}, ativo
 
+        if tipo_nativo == "microsoft.compute/virtualmachinescalesets":
+            perfil_de_rede = caminho(props, "virtualMachineProfile", "networkProfile") or {}
+            for nic in lista(dicionario(perfil_de_rede).get("networkInterfaceConfigurations")):
+                for ip in lista(caminho(nic, "properties", "ipConfigurations")):
+                    liga(chave, arm(caminho(ip, "properties", "subnet", "id")), _R.CONTIDO_EM)
+            return {
+                "tipo_maquina": sku.get("name"),
+                "instancias": inteiro(sku.get("capacity")),
+            }, ativo
+
         return {}, ativo
 
     def _liga(self, de: str | None, para: str | None, relacao: TipoDeRelacao) -> None:
@@ -497,6 +539,12 @@ class NormalizadorAzureGraph:
         return ref.ident if self._c.existe(ref.ident) else None
 
     def finalizar(self) -> Inventario:
+        # Tudo que o AKS cria fica no grupo de nós dele (`MC_…`): VMSS dos nós, o
+        # balanceador dos Services, os discos dos volumes. É parte do cluster.
+        for cluster, conta, grupo in self._grupo_de_nos:
+            for chave, tipo in self._do_grupo.get((conta, grupo), []):
+                if tipo in _DO_CLUSTER and chave != cluster:
+                    self._c.relacionar(chave, cluster, _R.MEMBRO_DE)
         return self._c.finalizar(self._resolver)
 
 
@@ -506,3 +554,18 @@ def _prefixo_da_subrede(props: dict[str, Any]) -> str | None:
         return prefixo
     prefixos = lista(props.get("addressPrefixes"))
     return texto(prefixos[0]) if prefixos else None
+
+
+def _marcas(tipo_nativo: str, kind: str, tags: dict[str, str]) -> dict[str, str]:
+    """Componente da aplicação e as marcas do Kubernetes, como atributos genéricos."""
+    marcas: dict[str, str] = {}
+    componente = _COMPONENTE.get(tipo_nativo)
+    if tipo_nativo == "microsoft.web/sites" and "functionapp" in kind.lower():
+        componente = "funcao"
+    if componente:
+        marcas["componente"] = componente
+    if servico := tags.get(_TAG_SERVICO_K8S):
+        marcas["servico_kubernetes"] = servico
+    if namespace := tags.get(_TAG_NAMESPACE_K8S):
+        marcas["namespace_kubernetes"] = namespace
+    return marcas

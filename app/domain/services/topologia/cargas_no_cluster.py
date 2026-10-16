@@ -85,8 +85,11 @@ def cargas_no_cluster(
                 v
                 for r in inventario.recursos
                 if r.conta == cluster.conta
-                for k in (*_TAGS_DO_NAMESPACE,)
-                if (v := r.tags.get(k))
+                for v in (
+                    r.atributos.get("namespace_kubernetes"),
+                    *(r.tags.get(k) for k in _TAGS_DO_NAMESPACE),
+                )
+                if v
             }
             | {ns for _, fonte, ns in rastros if fonte == BALANCEADOR and ns}
         )
@@ -108,10 +111,13 @@ def _rastros(
         fonte = _FONTE_DO_COMPONENTE.get(str(r.atributos.get("componente") or ""))
         if fonte:
             yield r.nome or r.chave.rsplit("/", 1)[-1], fonte, None
-        for k in _TAGS_DO_SERVICE:
-            if stack := r.tags.get(k):
-                namespace, _, servico = stack.partition("/")
-                yield _sem_namespace(servico or namespace, namespace), BALANCEADOR, namespace
+        # O normalizador de cada nuvem traduz a marca dela para `servico_kubernetes`
+        # (`<namespace>/<service>`); a tag da AWS segue lida direto (inventários antigos)
+        stacks = [str(v) for v in [r.atributos.get("servico_kubernetes")] if v]
+        stacks += [v for k in _TAGS_DO_SERVICE if (v := r.tags.get(k))]
+        for stack in dict.fromkeys(stacks):
+            namespace, _, servico = stack.partition("/")
+            yield _sem_namespace(servico or namespace, namespace), BALANCEADOR, namespace
 
 
 def _sem_namespace(servico: str, namespace: str) -> str:

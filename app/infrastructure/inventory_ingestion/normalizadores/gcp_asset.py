@@ -22,6 +22,7 @@ Três particularidades do GCP:
 
 from __future__ import annotations
 
+import json
 import re
 from collections import defaultdict
 from collections.abc import Iterator
@@ -178,12 +179,23 @@ class NormalizadorGcpAsset:
 
         atributos, estado, extras = self._especifico(tipo_nativo, chave, data, projeto)
         tags = tags_de_objeto(data.get("labels"))
+        atributos = {**atributos, **_marcas(tipo_nativo, data)}
+        nome = texto(data.get("name")) or _ultimo(chave)
+        if tipo_nativo == _IMAGEM_DOCKER and nome:
+            # `…/dockerImages/api@sha256:…`: cada versão é um asset; o nome é o da imagem
+            nome = _ultimo(nome).split("@", 1)[0]
+        # Disco de volume e balanceador de Service do GKE levam o rótulo do cluster
+        cluster = tags.get("goog-k8s-cluster-name")
+        if cluster and projeto and tipo in {_T.DISCO, _T.BALANCEADOR}:
+            self._c.relacionar(
+                chave, Referencia(_CLUSTER, f"{projeto}/{cluster}", por_nome=True), _R.MEMBRO_DE
+            )
         self._c.adicionar(
             Recurso(
                 chave=chave,
                 tipo=tipo,
                 tipo_nativo=tipo_nativo,
-                nome=texto(data.get("name")) or _ultimo(chave),
+                nome=nome,
                 conta=projeto,
                 regiao=regiao,
                 zona=zona,
@@ -555,3 +567,36 @@ def _versao_cloud_sql(bruto: str | None) -> tuple[str | None, str | None]:
     if motor == "sqlserver":
         return motor, numeros[0] if numeros else None
     return motor, ".".join(numeros) or None
+
+
+# Serviço gerenciado que vai com a aplicação pelo rótulo (PLANO_CENARIOS_DE_ENTRADA §7)
+_IMAGEM_DOCKER = "artifactregistry.googleapis.com/DockerImage"
+_COMPONENTE = {
+    "cloudfunctions.googleapis.com/CloudFunction": "funcao",
+    "cloudfunctions.googleapis.com/Function": "funcao",
+    "run.googleapis.com/Service": "funcao",
+    _IMAGEM_DOCKER: "registro_de_imagens",
+    "artifactregistry.googleapis.com/Repository": "registro_de_imagens",
+    "secretmanager.googleapis.com/Secret": "segredo",
+    "pubsub.googleapis.com/Topic": "fila",
+}
+
+
+def _marcas(tipo_nativo: str, data: dict[str, Any]) -> dict[str, str]:
+    """Componente e as marcas que o GKE grava na descrição (JSON) do que ele cria: o
+    Service no balanceador e o namespace do volume no disco."""
+    marcas: dict[str, str] = {}
+    if componente := _COMPONENTE.get(tipo_nativo):
+        marcas["componente"] = componente
+    descricao = data.get("description")
+    if isinstance(descricao, str) and descricao.lstrip().startswith("{"):
+        try:
+            k8s = json.loads(descricao)
+        except json.JSONDecodeError:
+            k8s = {}
+        if isinstance(k8s, dict):
+            if servico := k8s.get("kubernetes.io/service-name"):
+                marcas["servico_kubernetes"] = str(servico)
+            if namespace := k8s.get("kubernetes.io/created-for/pvc/namespace"):
+                marcas["namespace_kubernetes"] = str(namespace)
+    return marcas

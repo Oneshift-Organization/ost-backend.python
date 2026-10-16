@@ -369,3 +369,80 @@ def test_reducao_de_sub_recurso() -> None:
     assert arm_pai(_SUB_APP) == _SUB_APP.lower()
     assert arm_pai(None) is None
     assert arm_pai("/sem/provedor") == "/sem/provedor"
+
+
+# ── AKS e componentes (formato documentado do Resource Graph; sem conta real ainda) ──
+
+_RG_NOS = "MC_rg-loja_aks-loja_eastus"
+
+
+def _aks_e_grupo_de_nos() -> list[dict]:
+    base = f"/subscriptions/{_S}/resourceGroups"
+    aks = _linha(
+        f"{base}/rg-loja/providers/Microsoft.ContainerService/managedClusters/aks-loja",
+        "microsoft.containerservice/managedclusters",
+        {"kubernetesVersion": "1.29", "nodeResourceGroup": _RG_NOS},
+    )
+    vmss = _linha(
+        f"{base}/{_RG_NOS}/providers/Microsoft.Compute/virtualMachineScaleSets/aks-pool1",
+        "microsoft.compute/virtualmachinescalesets",
+        {},
+        sku={"name": "Standard_D4s_v5", "capacity": 3},
+    )
+    lb = _linha(
+        f"{base}/{_RG_NOS}/providers/Microsoft.Network/loadBalancers/kubernetes",
+        "microsoft.network/loadbalancers",
+        {},
+    )
+    disco = _linha(
+        f"{base}/{_RG_NOS}/providers/Microsoft.Compute/disks/pvc-1",
+        "microsoft.compute/disks",
+        {"diskSizeGB": 32},
+        tags={"kubernetes.io-created-for-pvc-namespace": "pagamentos"},
+    )
+    ip = _linha(
+        f"{base}/{_RG_NOS}/providers/Microsoft.Network/publicIPAddresses/kubernetes-a1",
+        "microsoft.network/publicipaddresses",
+        {"ipAddress": "20.1.1.1"},
+        tags={"k8s-azure-service": "pagamentos/api"},
+    )
+    acr = _linha(
+        f"{base}/rg-loja/providers/Microsoft.ContainerRegistry/registries/acrloja",
+        "microsoft.containerregistry/registries",
+        {},
+    )
+    funcao = {
+        **_linha(
+            f"{base}/rg-loja/providers/Microsoft.Web/sites/fn-loja", "microsoft.web/sites", {}
+        ),
+        "kind": "functionapp,linux",
+    }
+    for item in (aks, vmss, lb, disco, ip):
+        if _RG_NOS in item["id"]:
+            item["resourceGroup"] = _RG_NOS
+    return [aks, vmss, lb, disco, ip, acr, funcao]
+
+
+def test_grupo_de_nos_do_aks_faz_parte_do_cluster(tmp_path) -> None:
+    inv = _inv(tmp_path, _aks_e_grupo_de_nos())
+    cluster = next(r for r in inv.recursos if r.tipo_nativo.endswith("managedclusters"))
+    membros = {
+        r.de for r in inv.relacoes if r.para == cluster.chave and r.tipo.value == "membro_de"
+    }
+    nomes = {next(x.nome for x in inv.recursos if x.chave == m) for m in membros}
+    assert nomes == {"aks-pool1", "kubernetes", "pvc-1"}
+    vmss = next(r for r in inv.recursos if r.nome == "aks-pool1")
+    assert (vmss.tipo.value, vmss.atributos["tipo_maquina"], vmss.atributos["instancias"]) == (
+        "instancia",
+        "Standard_D4s_v5",
+        3,
+    )
+
+
+def test_marcas_do_kubernetes_e_componentes_da_azure(tmp_path) -> None:
+    inv = _inv(tmp_path, _aks_e_grupo_de_nos())
+    por_nome = {r.nome: r for r in inv.recursos}
+    assert por_nome["kubernetes-a1"].atributos["servico_kubernetes"] == "pagamentos/api"
+    assert por_nome["pvc-1"].atributos["namespace_kubernetes"] == "pagamentos"
+    assert por_nome["acrloja"].atributos["componente"] == "registro_de_imagens"
+    assert por_nome["fn-loja"].atributos["componente"] == "funcao"
