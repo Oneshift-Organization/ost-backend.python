@@ -54,3 +54,17 @@ def test_rastros_viram_cargas_provaveis_do_cluster() -> None:
 def test_sem_cluster_nao_ha_cargas() -> None:
     inv = inventario([vm("a"), _comp("acme-api", "registro_de_imagens")])
     assert cargas_no_cluster(inv, analisar_topologia(inv)) == {}
+
+
+def test_marcas_genericas_valem_para_qualquer_nuvem() -> None:
+    """AKS e GKE: o normalizador traduz a marca da nuvem para `servico_kubernetes` e
+    `namespace_kubernetes`; o domínio não conhece tag de provedor."""
+    recursos = [
+        recurso("aks-loja", T.CLUSTER_KUBERNETES),
+        recurso("ip-svc", T.IP_PUBLICO, servico_kubernetes="pagamentos/api"),
+        recurso("pvc-1", T.DISCO, namespace_kubernetes="pagamentos"),
+    ]
+    inv = inventario(recursos)
+    [cluster] = cargas_no_cluster(inv, analisar_topologia(inv)).values()
+    assert [c.nome for c in cluster.cargas] == ["api"]
+    assert cluster.namespaces == ("pagamentos",)

@@ -378,3 +378,59 @@ def test_um_asset_so_no_arquivo(tmp_path) -> None:
     arq.write_text(json.dumps(_assets()[0]))
     inv = normalizar_arquivos([(arq.name, arq)]).inventario
     assert [r.chave for r in inv.recursos] == [_REDE]
+
+
+# ── GKE e componentes (formato documentado do Cloud Asset Inventory) ─────────────
+
+
+def test_disco_e_balanceador_do_gke_e_componentes(tmp_path) -> None:
+    p = "//compute.googleapis.com/projects/loja"
+    cluster = _asset(
+        "//container.googleapis.com/projects/loja/locations/us-central1/clusters/gke-loja",
+        "container.googleapis.com/Cluster",
+        {"name": "gke-loja"},
+        "us-central1",
+    )
+    disco = _asset(
+        f"{p}/zones/us-central1-a/disks/pvc-1",
+        "compute.googleapis.com/Disk",
+        {
+            "name": "pvc-1",
+            "sizeGb": "10",
+            "labels": {"goog-k8s-cluster-name": "gke-loja"},
+            "description": json.dumps({"kubernetes.io/created-for/pvc/namespace": "pagamentos"}),
+        },
+        "us-central1-a",
+    )
+    regra = _asset(
+        f"{p}/regions/us-central1/forwardingRules/a1b2",
+        "compute.googleapis.com/ForwardingRule",
+        {
+            "name": "a1b2",
+            "labels": {"goog-k8s-cluster-name": "gke-loja"},
+            "description": json.dumps({"kubernetes.io/service-name": "pagamentos/api"}),
+        },
+        "us-central1",
+    )
+    imagem = _asset(
+        "//artifactregistry.googleapis.com/projects/loja/locations/us/repositories/r/dockerImages/api@sha256:abc",
+        "artifactregistry.googleapis.com/DockerImage",
+        {"name": "projects/loja/locations/us/repositories/r/dockerImages/api@sha256:abc"},
+        "us",
+    )
+    segredo = _asset(
+        "//secretmanager.googleapis.com/projects/loja/secrets/api-db",
+        "secretmanager.googleapis.com/Secret",
+        {"name": "projects/loja/secrets/api-db"},
+        "global",
+    )
+    arq = _ndjson(tmp_path, [cluster, disco, regra, imagem, segredo])
+    inv = normalizar_arquivos([(arq.name, arq)]).inventario
+    alvo = next(r for r in inv.recursos if r.tipo.value == "cluster_kubernetes")
+    membros = {r.de for r in inv.relacoes if r.para == alvo.chave and r.tipo.value == "membro_de"}
+    por_nome = {r.nome: r for r in inv.recursos}
+    assert {por_nome["pvc-1"].chave, por_nome["a1b2"].chave} <= membros
+    assert por_nome["pvc-1"].atributos["namespace_kubernetes"] == "pagamentos"
+    assert por_nome["a1b2"].atributos["servico_kubernetes"] == "pagamentos/api"
+    assert por_nome["api"].atributos["componente"] == "registro_de_imagens"
+    assert any(r.atributos.get("componente") == "segredo" for r in inv.recursos)

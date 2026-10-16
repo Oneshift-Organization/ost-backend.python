@@ -288,3 +288,22 @@ entrada do DE-PARA muda. Tipo identificado mexe no score de lock-in: medido.
 | AWS CUR (mock) | 6% → 3% → 3% (MSK fora do DE-PARA; Savings Plan é financeiro) |
 
 Seis relatórios: mesmas decisões, economia e confiança.
+
+## 12. Kubernetes e componentes na Azure e no GCP (16/10/2026)
+
+Pelo formato documentado de cada nuvem; **ainda sem conta real** para validar.
+
+| | Azure (Resource Graph) | GCP (Cloud Asset Inventory) |
+|---|---|---|
+| Nós do cluster | VMSS vira máquina (`tipo_maquina`, `instancias`); membro do AKS pelo `nodeResourceGroup` | já era (rótulo `goog-k8s-cluster-name`) |
+| Balanceador e discos do cluster | tudo do grupo de nós (`MC_…`) é membro do AKS | rótulo `goog-k8s-cluster-name` no disco e na regra de encaminhamento |
+| Service e namespace | tags `k8s-azure-service` (IP público) e `kubernetes.io-created-for-pvc-namespace` (disco) | `description` em JSON que o GKE grava |
+| Componentes | ACR, Key Vault, Service Bus, Event Hubs, CDN, Front Door, Cosmos DB, Logic Apps, Function App | Cloud Functions, Cloud Run, Artifact Registry (imagem e repositório), Secret Manager, Pub/Sub |
+
+As marcas viram atributos genéricos (`servico_kubernetes`, `namespace_kubernetes`); o
+domínio não conhece tag de provedor.
+
+**Impacto:** só inventário novo. Mocks de Azure e GCP sem VMSS nem GKE: caracterização
+do Terraform igual (suíte inteira verde). Em conta com AKS, os pools dos nós passam a
+casar com o VMSS (o ID de instância da fatura cai no pai) e podem ganhar posicionamento
+no pacote do Terraform.
