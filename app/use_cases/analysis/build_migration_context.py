@@ -118,6 +118,24 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         "Elastic Container Registry Public": "Amazon Elastic Container Registry (ECR)",
         "Kinesis Firehose": "Amazon Kinesis Data Streams",
         "Simple Workflow Service": "AWS Step Functions",
+        # Código do produto (`line_item_product_code` no CUR 2.0, `ProductCode` na fatura
+        # detalhada) que não se parece com o nome comercial. Os que se parecem
+        # (`AWSLambda`, `AmazonRoute53`) já casam pela normalização. Sem estes, o AWSELB
+        # de uma conta real saía "tipo inferido" e sem equivalente em nenhum destino.
+        "AWSELB": "Elastic Load Balancing",
+        "AWSQueueService": "Amazon Simple Queue Service (SQS)",
+        "AWSKMS": "AWS Key Management Service (KMS)",
+        "awskms": "AWS Key Management Service (KMS)",
+        "AmazonStates": "AWS Step Functions",
+        "ElasticMapReduce": "Amazon EMR",
+        "AmazonES": "Amazon OpenSearch Service",
+        "AmazonDocDB": "Amazon DocumentDB",
+        "AmazonECR": "Amazon Elastic Container Registry (ECR)",
+        "AmazonECRPublic": "Amazon Elastic Container Registry (ECR)",
+        "AmazonECS": "Amazon Elastic Container Service (ECS)",
+        "AmazonEKS": "Amazon Elastic Kubernetes Service (EKS)",
+        "AmazonEFS": "Amazon Elastic File System (EFS)",
+        "AmazonInspectorV2": "Amazon Inspector",
     },
 }
 
