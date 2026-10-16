@@ -12,9 +12,8 @@ _CATEGORIES = {
     "armazenamento_hdd": ("Discos HDD", {"block_storage"}),
     "armazenamento_objetos": ("Armazenamento de objetos", {"object_storage"}),
     "egresso_rede": ("Tráfego de saída", {"network_egress"}),
-    # Rede por tipo (PLANO_PRECO_NAO_COMPUTE). Hora e processamento do balanceador são
-    # categorias separadas: o serviço inteiro só casa com a soma, então aparecem como
-    # linha agregada por cenário até a parte de cada serviço ir ao payload (R2).
+    # Rede por tipo (PLANO_PRECO_NAO_COMPUTE). Sem `por_servico` no payload, o serviço
+    # inteiro só casa com uma categoria e a rede aparece como linha agregada.
     "transferencia_entre_zonas": ("Tráfego entre zonas", set()),
     "balanceador": ("Balanceador de carga", {"load_balancer"}),
     "balanceador_dados": ("Processamento do balanceador", {"load_balancer"}),
@@ -46,17 +45,49 @@ def _eligible(sources: list[dict], kinds: set[str], provider: str) -> list[dict]
     ]
 
 
+_PREMISSA = {
+    "category_rate_ratio": "Razão de tarifas de referência; não é cotação de SKU nem uso medido.",
+    "quantidade_medida": "Quantidade medida na fatura vezes a tarifa do destino; sem descontos.",
+}
+_ORDEM_DA_CONFIANCA = {"official": 3, "reference": 2, "low": 1}
+
+
+def _metodo(quote: dict) -> str:
+    metodo = quote.get("metodo")
+    return metodo if metodo in _PREMISSA else "category_rate_ratio"
+
+
 def _financials(quote: dict, base: Decimal, price: Decimal) -> dict:
     return {
         "custo_mensal_estimado": float(price),
         "delta_custo": float(price - base),
         "confianca_preco": quote.get("confianca_preco", "low"),
-        "pricing_method": "category_rate_ratio",
+        "pricing_method": _metodo(quote),
         "pricing_evidence": {
             **quote,
             "source_cost": float(base),
-            "assumption": "Razão de tarifas de referência; não é cotação de SKU nem uso medido.",
+            "assumption": _PREMISSA[_metodo(quote)],
         },
+    }
+
+
+def _linha_agregada(
+    key: str, label: str, provider: str, *, base: Decimal, price: Decimal, quote: dict
+) -> dict:
+    return {
+        "identity": f"category/{key}/{provider}",
+        "name": f"{label} (agregado)",
+        "source_service": label,
+        "cost": float(base),
+        "basis": "category_budget",
+        "targets": [
+            {
+                "provider": provider,
+                "service_name": f"{label} — cenário {provider.upper()}",
+                "financials": _financials(quote, base, price),
+            }
+        ],
+        "scoped_provider": provider,
     }
 
 
@@ -79,6 +110,9 @@ def attach_category_prices(sources: list[dict], payload: dict) -> list[dict]:
     """Allocate only when the *whole* source category reconciles; otherwise expose its scope."""
     sources = deepcopy(sources)
     auxiliary = payload.get("custos_auxiliares") or {}
+    por_servico = auxiliary.get("por_servico")
+    if isinstance(por_servico, dict) and por_servico:
+        return _pela_parte_do_servico(sources, auxiliary, por_servico)
     for key, (label, kinds) in _CATEGORIES.items():
         base = number(auxiliary.get(key))
         if base is None or base <= 0:
@@ -100,21 +134,151 @@ def attach_category_prices(sources: list[dict], payload: dict) -> list[dict]:
                 _allocate(members, provider, base, quote)
                 continue
             sources.append(
+                _linha_agregada(key, label, provider, base=base, price=price, quote=quote)
+            )
+    return sources
+
+
+def _cotacoes(auxiliary: dict) -> dict[tuple[str, str], tuple[str, Decimal, Decimal, dict]]:
+    """(chave, destino) → (rótulo, custo da categoria, preço no destino, cotação)."""
+    cotacoes: dict[tuple[str, str], tuple[str, Decimal, Decimal, dict]] = {}
+    for key, (label, _kinds) in _CATEGORIES.items():
+        base = number(auxiliary.get(key))
+        if base is None or base <= 0:
+            continue
+        for quote in auxiliary.get(f"equivalentes_{key}", []):
+            price = number(quote.get("custo_mensal_estimado"))
+            if price is not None and price >= 0:
+                cotacoes[(key, _provider(quote))] = (label, base, price, quote)
+    return cotacoes
+
+
+# Serviço identificado pelo catálogo: curado ou pelo apelido/uso (não inferido)
+_IDENTIFICADO = frozenset({"curado", "catalog_alias"})
+
+
+def _partes(source: dict, por_servico: dict) -> dict[str, Decimal]:
+    """Custo do serviço em cada categoria auxiliar (cotada ou não)."""
+    custo = number(source.get("cost"))
+    if source.get("type_source") not in _IDENTIFICADO or custo is None or custo <= 0:
+        return {}
+    partes = {
+        key: valor
+        for key, por_nome in por_servico.items()
+        if isinstance(por_nome, dict)
+        and (valor := number(por_nome.get(source.get("name")))) is not None
+        and valor > 0
+    }
+    # Cada valor do payload é arredondado sozinho: até um centavo por parte
+    if sum(partes.values(), Decimal(0)) > custo + _CENT * len(partes):
+        return {}
+    return partes
+
+
+def _financials_por_parte(
+    partes: dict[str, Decimal],
+    precos: dict[str, Decimal],
+    cotacoes: dict[tuple[str, str], tuple[str, Decimal, Decimal, dict]],
+    provider: str,
+    custo: Decimal,
+) -> dict:
+    # O que não tem tarifa no destino (rede sem cotação, categoria que ele não cota,
+    # linha fora das categorias) fica ao custo atual, como no total do cenário
+    mantido = max(custo - sum(partes.values(), Decimal(0)), Decimal(0))
+    total = sum(precos.values(), Decimal(0)) + mantido
+    quotes = {key: cotacoes[(key, provider)][3] for key in partes}
+    metodos = {_metodo(q) for q in quotes.values()}
+    metodo = "quantidade_medida" if metodos == {"quantidade_medida"} else "category_rate_ratio"
+    return {
+        "custo_mensal_estimado": float(total),
+        "delta_custo": float(total - custo),
+        "confianca_preco": min(
+            (str(q.get("confianca_preco", "low")) for q in quotes.values()),
+            key=lambda c: _ORDEM_DA_CONFIANCA.get(c, 0),
+        ),
+        "pricing_method": metodo,
+        "pricing_evidence": {
+            "partes": [
                 {
-                    "identity": f"category/{key}/{provider}",
-                    "name": f"{label} (agregado)",
-                    "source_service": label,
-                    "cost": float(base),
-                    "basis": "category_budget",
-                    "targets": [
-                        {
-                            "provider": provider,
-                            "service_name": f"{label} — cenário {provider.upper()}",
-                            "financials": _financials(quote, base, price),
-                        }
-                    ],
-                    "scoped_provider": provider,
+                    "categoria": cotacoes[(key, provider)][0],
+                    "custo_origem": float(partes[key]),
+                    "custo_destino": float(precos[key]),
+                    "metodo": _metodo(quotes[key]),
+                    "taxa_destino": quotes[key].get("taxa_destino"),
+                    "unidade": quotes[key].get("unidade"),
                 }
+                for key in sorted(partes)
+            ]
+            + (
+                [
+                    {
+                        "categoria": "Mantido ao custo atual",
+                        "custo_origem": float(mantido),
+                        "custo_destino": float(mantido),
+                        "metodo": "sem_tarifa_no_destino",
+                    }
+                ]
+                if mantido > 0
+                else []
+            ),
+            "source_cost": float(custo),
+            "assumption": "Preço de cada categoria pela parte do serviço nela. "
+            + " ".join(_PREMISSA[m] for m in sorted(metodos)),
+        },
+    }
+
+
+def _pela_parte_do_servico(sources: list[dict], auxiliary: dict, por_servico: dict) -> list[dict]:
+    """Cada serviço recebe o preço das categorias pela parte dele (PLANO_PRECO_NAO_COMPUTE R2).
+
+    O balanceador da AWS espalha linhas por hora, processamento, egress e tráfego entre
+    zonas; pela regra antiga (o serviço inteiro igual a uma categoria) ficava sem preço.
+    Ganha preço o serviço identificado com ao menos uma parte cotada no destino; a parte
+    sem tarifa lá fica ao custo atual, como no total do cenário. O resto de cada
+    categoria vira a linha agregada, e a conciliação fecha como antes.
+    """
+    cotacoes = _cotacoes(auxiliary)
+    alocado: dict[tuple[str, str], list[Decimal]] = {}
+    for source in sorted(sources, key=lambda s: s["identity"]):
+        partes = _partes(source, por_servico)
+        if not partes:
+            continue
+        custo = number(source["cost"]) or Decimal(0)
+        por_provedor: dict[str, list[dict]] = {}
+        for target in source.get("targets", []):
+            por_provedor.setdefault(_provider(target), []).append(target)
+        for provider, targets in sorted(por_provedor.items()):
+            if any(t.get("financials") for t in targets):
+                continue
+            cotadas = {key: parte for key, parte in partes.items() if (key, provider) in cotacoes}
+            if not cotadas:
+                continue
+            precos = {
+                key: (cotacoes[(key, provider)][2] * parte / cotacoes[(key, provider)][1]).quantize(
+                    _CENT, rounding=ROUND_HALF_UP
+                )
+                for key, parte in cotadas.items()
+            }
+            for key, parte in cotadas.items():
+                acumulado = alocado.setdefault((key, provider), [Decimal(0), Decimal(0)])
+                acumulado[0] += parte
+                acumulado[1] += precos[key]
+            financials = _financials_por_parte(cotadas, precos, cotacoes, provider, custo)
+            # Alternativas dividem o orçamento e nunca somam
+            for target in targets:
+                target["financials"] = financials
+    for (key, provider), (label, base, price, quote) in sorted(cotacoes.items()):
+        base_alocada, preco_alocado = alocado.get((key, provider), [Decimal(0), Decimal(0)])
+        if base - base_alocada > _CENT:
+            sources.append(
+                _linha_agregada(
+                    key,
+                    label,
+                    provider,
+                    base=base - base_alocada,
+                    price=price - preco_alocado,
+                    quote=quote,
+                )
             )
     return sources
 

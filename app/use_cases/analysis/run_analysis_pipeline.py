@@ -255,6 +255,30 @@ def _round2(value: Decimal) -> float:
     return round(float(value), 2)
 
 
+# Categoria auxiliar → chave dela em `custos_auxiliares`
+_CHAVE_DA_CATEGORIA = {
+    "storage_ssd": "armazenamento_ssd",
+    "storage_hdd": "armazenamento_hdd",
+    "object_storage": "armazenamento_objetos",
+    "network_egress": "egresso_rede",
+    "database": "banco_dados",
+    **CHAVE_DA_REDE,
+}
+
+
+def _por_servico(auxiliary: Any, fx: Any) -> dict[str, object]:
+    """Quanto de cada categoria é de cada serviço da fatura. Com isso o preço da
+    categoria chega ao serviço pela parte dele (equivalence_pricing)."""
+    por_servico = {
+        _CHAVE_DA_CATEGORIA[categoria]: {
+            servico: _money(custo, fx) for servico, custo in sorted(servicos.items()) if custo > 0
+        }
+        for categoria, servicos in sorted(auxiliary.por_servico.items())
+        if categoria in _CHAVE_DA_CATEGORIA
+    }
+    return {"por_servico": por_servico} if por_servico else {}
+
+
 def _rede_por_tipo(auxiliary: Any, fx: Any) -> dict[str, object]:
     """O balde de rede além do egress, por tipo (PLANO_PRECO_NAO_COMPUTE)."""
     return {
@@ -415,16 +439,9 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
         # Equivalentes cross-cloud por categoria (storage/egress), já em moeda de
         # análise — reprecificados por razão de taxa em build_migration_context.
         category_equivalents = getattr(ctx, "category_equivalents", {}) or {}
-        _cat_key = {
-            "storage_ssd": "armazenamento_ssd",
-            "storage_hdd": "armazenamento_hdd",
-            "object_storage": "armazenamento_objetos",
-            "network_egress": "egresso_rede",
-            "database": "banco_dados",
-            **CHAVE_DA_REDE,
-        }
         for category, equivs in category_equivalents.items():
-            aux_payload[f"equivalentes_{_cat_key.get(category, category)}"] = equivs
+            aux_payload[f"equivalentes_{_CHAVE_DA_CATEGORIA.get(category, category)}"] = equivs
+        aux_payload |= _por_servico(auxiliary, fx)
         payload["custos_auxiliares"] = aux_payload
 
     mapping_confidence = getattr(ctx, "mapping_confidence", None)

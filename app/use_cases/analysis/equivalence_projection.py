@@ -18,8 +18,17 @@ from app.schemas.analysis_v2 import CrossCloudEquivalent
 from app.use_cases.analysis.equivalence_pricing import attach_category_prices
 
 _PROVIDERS = {"aws", "azure", "gcp", "oci"}
-_BILLING_ONLY = {"tax", "taxes", "imposto", "impostos", "commitment", "compromisso",
-                 "discount", "credits", "support"}
+_BILLING_ONLY = {
+    "tax",
+    "taxes",
+    "imposto",
+    "impostos",
+    "commitment",
+    "compromisso",
+    "discount",
+    "credits",
+    "support",
+}
 
 
 def _provider(value: object) -> str:
@@ -43,50 +52,60 @@ def _sources(payload: dict) -> list[dict]:
     for pool in pools:
         family = str(pool.get("familia") or "Família não identificada")
         region = str(pool.get("regiao") or "global")
-        sources.append({
-            "identity": f"pool/{family}/{region}",
-            "name": f"{family} · {region}",
-            "source_service": family,
-            "targets": pool.get("equivalentes") or [],
-            "basis": "family_pool",
-            # Máquina virtual migra por rehost em qualquer nuvem: pouco acoplamento
-            # e nenhuma reescrita do lado de origem. Sem isto o pool chegava sem
-            # evidência e a API devolvia acoplamento vazio para todo o compute.
-            # O que o destino exigir a mais continua valendo: `technical_evidence`
-            # fica com a pior restrição dos dois lados.
-            "source_metadata": {"requires_refactoring": False, "vendor_lock_in_level": "low"},
-            "commitment": pool.get("custo_coberto_por_compromisso") is True,
-            "cost": sum(float(pool.get(k) or (pool.get("custos") or {}).get(k) or 0)
-                        for k in ("custo_computacao", "custo_licenca_so")),
-        })
+        sources.append(
+            {
+                "identity": f"pool/{family}/{region}",
+                "name": f"{family} · {region}",
+                "source_service": family,
+                "targets": pool.get("equivalentes") or [],
+                "basis": "family_pool",
+                # Máquina virtual migra por rehost em qualquer nuvem: pouco acoplamento
+                # e nenhuma reescrita do lado de origem. Sem isto o pool chegava sem
+                # evidência e a API devolvia acoplamento vazio para todo o compute.
+                # O que o destino exigir a mais continua valendo: `technical_evidence`
+                # fica com a pior restrição dos dois lados.
+                "source_metadata": {"requires_refactoring": False, "vendor_lock_in_level": "low"},
+                "commitment": pool.get("custo_coberto_por_compromisso") is True,
+                "cost": sum(
+                    float(pool.get(k) or (pool.get("custos") or {}).get(k) or 0)
+                    for k in ("custo_computacao", "custo_licenca_so")
+                ),
+            }
+        )
     if "decision_workloads" in payload:
         workloads = payload.get("decision_workloads") or []
     else:
-        workloads = [{
-            **w,
-            "name": w.get("service_name") or w.get("canonical_service"),
-            "targets": w.get("equivalents") or [],
-            "basis": "provided_workload_data",
-        } for w in payload.get("workloads") or []]
+        workloads = [
+            {
+                **w,
+                "name": w.get("service_name") or w.get("canonical_service"),
+                "targets": w.get("equivalents") or [],
+                "basis": "provided_workload_data",
+            }
+            for w in payload.get("workloads") or []
+        ]
     # Older snapshots already contain service types in the compact service list.
     types = {s.get("nome"): s.get("tipo") for s in payload.get("servicos") or []}
     for workload in workloads:
         category = normalized(workload.get("category"))
         if category in _BILLING_ONLY or is_financial_component(
-            str(workload.get("name") or ""), category,
+            str(workload.get("name") or ""),
+            category,
         ):
             continue
         name = str(workload.get("name") or "Serviço não identificado")
         service_type = workload.get("service_type") or types.get(name)
         if pools and service_type == "virtual_server":
             continue  # compute is already represented at family/region granularity
-        sources.append({
-            **workload,
-            "identity": f"service/{category}/{name}",
-            "name": name,
-            "source_service": name,
-            "basis": workload.get("basis", "catalog_snapshot"),
-        })
+        sources.append(
+            {
+                **workload,
+                "identity": f"service/{category}/{name}",
+                "name": name,
+                "source_service": name,
+                "basis": workload.get("basis", "catalog_snapshot"),
+            }
+        )
     return attach_category_prices(sources, payload)
 
 
@@ -110,9 +129,8 @@ def _row(source: dict, target: dict, provider: str) -> CrossCloudEquivalent:
         target_service=name,
         target_sku=target["sku"],
         source_monthly_cost=float(source["cost"]) if source.get("cost") is not None else None,
-        pricing_method=financials.get("pricing_method") or (
-            "capacity_quote" if financials and source["basis"] == "family_pool" else None
-        ),
+        pricing_method=financials.get("pricing_method")
+        or ("capacity_quote" if financials and source["basis"] == "family_pool" else None),
         pricing_reason=_pricing_reason(source, name, financials),
         pricing_evidence=financials.get("pricing_evidence") or financials,
         mapping_basis="inferred_catalog" if inferred else target["basis"] or source["basis"],
@@ -120,9 +138,9 @@ def _row(source: dict, target: dict, provider: str) -> CrossCloudEquivalent:
         estimated_monthly_cost=_money(
             financials, "estimated_monthly_cost", "custo_mensal_estimado"
         ),
-        cost_delta=None if source.get("commitment") else _money(
-            financials, "cost_delta", "delta_custo"
-        ),
+        cost_delta=None
+        if source.get("commitment")
+        else _money(financials, "cost_delta", "delta_custo"),
         pricing_confidence=financials.get("pricing_confidence", financials.get("confianca_preco")),
         portability="unknown" if inferred else metadata.get("portability") or "unknown",
         migration_risk="unknown" if inferred else metadata.get("migration_risk") or "unknown",
@@ -136,6 +154,8 @@ def _pricing_reason(source: dict, name: str | None, financials: dict) -> str:
         return "Mapeamento ausente: validar serviço de destino antes de cotar."
     if financials.get("pricing_method") == "category_rate_ratio":
         return "Estimativa por razão de tarifas da categoria; validar consumo, região e descontos."
+    if financials.get("pricing_method") == "quantidade_medida":
+        return "Quantidade medida na fatura vezes a tarifa do destino; validar descontos e região."
     if financials:
         return "Estimativa de capacidade; confirmar arquitetura, região e condições comerciais."
     if source.get("type_source") == "inferido":
@@ -165,20 +185,31 @@ def project_equivalences(payload: dict) -> list[CrossCloudEquivalent]:
             row = _row(source, target, provider)
             key = json.dumps(row.model_dump(), sort_keys=True)
             rows[key] = row  # exact duplicates only; alternative SKUs are preserved
-    ordered = sorted(rows.values(), key=lambda r: (
-        r.workload.casefold(), r.workload_id or "", r.target_provider,
-        r.target_service or "", r.target_sku or "", r.model_dump_json(),
-    ))
+    ordered = sorted(
+        rows.values(),
+        key=lambda r: (
+            r.workload.casefold(),
+            r.workload_id or "",
+            r.target_provider,
+            r.target_service or "",
+            r.target_sku or "",
+            r.model_dump_json(),
+        ),
+    )
     _select_scenario_rows(ordered)
     return ordered
 
 
 def _select_scenario_rows(rows: list[CrossCloudEquivalent]) -> None:
     chosen: set[tuple[str, str]] = set()
-    for row in sorted(rows, key=lambda r: (
-        r.estimated_monthly_cost if r.estimated_monthly_cost is not None else float("inf"),
-        r.target_sku or "", r.target_service or "",
-    )):
+    for row in sorted(
+        rows,
+        key=lambda r: (
+            r.estimated_monthly_cost if r.estimated_monthly_cost is not None else float("inf"),
+            r.target_sku or "",
+            r.target_service or "",
+        ),
+    ):
         key = (row.workload_id, row.target_provider)
         if row.estimated_monthly_cost is not None and key not in chosen:
             row.included_in_estimate = True

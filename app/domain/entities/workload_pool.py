@@ -120,6 +120,9 @@ class AuxiliaryCosts:
     # das linhas que trouxeram essa quantidade (o resto usa o preço efetivo delas)
     quantidade_por_regiao: Mapping[str, Mapping[str, Decimal]] = field(default_factory=dict)
     medido_por_regiao: Mapping[str, Mapping[str, Decimal]] = field(default_factory=dict)
+    # Categoria → serviço da fatura → custo. Reparte a cotação da categoria entre os
+    # serviços (o detalhe do AWSELB com o preço das linhas dele, PLANO_PRECO_NAO_COMPUTE R2)
+    por_servico: Mapping[str, Mapping[str, Decimal]] = field(default_factory=dict)
 
     @property
     def any_positive(self) -> bool:

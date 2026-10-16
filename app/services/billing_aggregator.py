@@ -165,6 +165,9 @@ class BillingAggregator:
             lambda: defaultdict(lambda: _ZERO)
         )
         aux_medido: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: _ZERO))
+        aux_por_servico: dict[str, dict[str, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: _ZERO)
+        )
         commitment_cost = Decimal("0")
         commitment_compute = Decimal("0")
         orphan_cost = Decimal("0")
@@ -215,6 +218,7 @@ class BillingAggregator:
                 regiao = regiao_da_linha(item.provider, item.region, item.usage_type) or ""
                 aux_totals[tipo.categoria] += cost
                 aux_por_regiao[tipo.categoria][regiao] += cost
+                aux_por_servico[tipo.categoria][item.service_name] += cost
                 # Só linha paga dá quantidade: faixa gratuita da origem não é cobrada
                 # e, como nas outras categorias, a do destino também não entra
                 quantidade = (
@@ -227,6 +231,7 @@ class BillingAggregator:
                     aux_medido[tipo.categoria][regiao] += cost
             elif component_type in _AUX_BUCKET:
                 aux_totals[_AUX_BUCKET[component_type]] += cost
+                aux_por_servico[_AUX_BUCKET[component_type]][item.service_name] += cost
                 regiao = regiao_da_linha(item.provider, item.region, item.usage_type) or ""
                 aux_por_regiao[_AUX_BUCKET[component_type]][regiao] += cost
                 if atributos:
@@ -288,6 +293,7 @@ class BillingAggregator:
                 por_regiao={c: dict(r) for c, r in aux_por_regiao.items()},
                 quantidade_por_regiao={c: dict(r) for c, r in aux_quantidade.items()},
                 medido_por_regiao={c: dict(r) for c, r in aux_medido.items()},
+                por_servico={c: dict(s) for c, s in aux_por_servico.items()},
             ),
             unmapped_cost=orphan_cost,
             hours_window=hours_window,
