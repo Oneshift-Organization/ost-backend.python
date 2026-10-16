@@ -126,6 +126,19 @@ Roda **offline**, nunca no caminho crítico. O GCP exige `GCP_BILLING_API_KEY`;
 sem ela sai vazio e os outros seguem. Cada provedor grava num commit próprio:
 uma API fora do ar não descarta as outras.
 
+Ao fim de cada sync, o ciclo de vida dos preços é recalculado: estado (vivo,
+maduro, em decomposição, adubo) e score de cada ponto. O decaimento anda com o
+relógio, então em ambiente de verdade isto também roda agendado, uma vez por dia:
+
+```bash
+PYTHONPATH=. python scripts/recalcular_ciclo_de_vida.py
+python - < scripts/recalcular_ciclo_de_vida.py     # no pod
+```
+
+As regras (meia-vida, limiares, peso de cada fonte) estão nas tabelas
+`price_lifecycle_rules` e `price_source_weights`, criadas pela migração
+`c3d4e5f6a7b8`. Ver [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](../PLANO_CICLO_DE_VIDA_DO_PRECO.md).
+
 Sem isso a análise funciona, mas os equivalentes ficam com `confianca_preco:
 low` (catálogo seed). Com o sync de uma zona só, uma carga de outra zona é
 cotada com preço de fora e sai `reference`, com o aviso "Preço de outra região

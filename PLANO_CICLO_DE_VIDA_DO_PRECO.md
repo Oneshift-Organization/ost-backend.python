@@ -83,3 +83,102 @@ configuração**, não em código.
 4. SKU que some da doc oficial mas segue nos billings.
 5. Quando: proposta é **depois** da sprint de Terraform; a P3.0 (descoberta) é
    barata e pode rodar em paralelo.
+
+## 7. Feito (16/10/2026)
+
+O usuário mandou pôr o plano em prática seguindo o padrão de qualidade do projeto:
+- TDD nas regras de cálculo;
+- domínio puro, mypy strict e Ruff;
+- cobertura em `domain/` e `use_cases/`;
+- regras em tabela de dados, não em código;
+- análise de impacto antes;
+- nada que mude número.
+
+### P3.0 Descoberta
+
+| formato | preço de lista na fatura | serve para revitalizar (P3.3) |
+|---|---|---|
+| AWS CUR (legado e 2.0) | `pricing_public_on_demand_cost` / `pricing/publicOnDemandCost` | sim |
+| Azure Cost Details | `PayGPrice` | sim |
+| GCP BigQuery | `cost_at_list` | sim |
+| AWS Cost Explorer, fatura legada da AWS | não tem | não |
+| GCP Cost Table | não tem (só custo) | não |
+| OCI cost report | não tem (`cost/myCost`) | não |
+
+Idade dos preços hoje:
+- tudo tem menos de 30 dias, porque os syncs acabaram de rodar;
+- achado: a referência ganhava `captured_at` = dia do seed e pareceria nova para
+  sempre. Agora ela leva a data em que o valor foi conferido (o commit que trouxe o
+  valor). Por isso 15 taxas de 25/07 já saem "em decomposição".
+
+### P3.1 Fundação
+
+- **Domínio** (`domain/services/ciclo_de_vida_do_preco.py`, 22 testes): estados,
+  score = peso da fonte × 0,5^(idade/meia-vida), estado pelos limiares, duração de
+  cada estado e a regra mais específica.
+- **Regra do agente (decisão do usuário, 16/10):**
+  - o agente observa e não confirma;
+  - a observação dele nunca revive um preço nem sobe o score (pode ser alucinação);
+  - quando o preço já é ADUBO, ela pode ir para a tela ao lado dele, marcada como
+    não verificada (`informacao_do_agente`).
+- **Tabelas** (migração `c3d4e5f6a7b8`):
+  - colunas `estado`, `confianca_score`, `confirmado_em`, `ultima_fonte` e `versao`
+    em `cloud_price_points`;
+  - `price_observations`, o histórico de valores, billing e agente;
+  - `price_lifecycle_rules`, com meia-vida e limiares por padrão de tipo e de nome;
+  - `price_source_weights`, com o peso e o "confirma" de cada fonte;
+  - os valores iniciais do plano vêm na migração.
+- **Histórico:** a confirmação diária do sync não grava linha; atualiza o ponto.
+  Grava observação a primeira vez e cada troca de valor, que sobe `versao`. Todo
+  valor atual fica rastreável até uma observação.
+
+### P3.2 Decaimento
+
+- `RecalcularCicloDeVidaUseCase` (7 testes) roda:
+  - ao fim de cada `sync_prices`;
+  - em `scripts/recalcular_ciclo_de_vida.py`, para agendar todo dia, porque o
+    decaimento anda com o relógio.
+- **No payload:** `preco_estado` e `preco_score` vão ao lado de `preco_idade_dias`,
+  no financeiro de cada equivalente de compute. Nos candidatos, vale o pior ponto,
+  como a captura mais antiga.
+- **Na tela:** o detalhe do serviço mostra "Atualização do preço". Em decomposição
+  e adubo, mostra também o aviso de que o preço pode ter mudado.
+- Medido nos seis relatórios: números idênticos, como previsto.
+
+## 8. Quanto dura cada estado, e o que muda na tela
+
+Dias desde a última confirmação, sem confirmação nova. Com sync diário, preço
+oficial ativo fica sempre VIVO; o ciclo só anda para o preço que parou de ser
+confirmado (SKU que saiu da API, região sem sync, referência digitada).
+
+| meia-vida (regra) | fonte | VIVO | MADURO | EM DECOMPOSIÇÃO | ADUBO |
+|---|---|---|---|---|---|
+| 90 dias: compute, banco, padrão | oficial (peso 1) | 0–29 | 29–66 | 66–156 | > 156 |
+| | billing (0,9) | 0–15 | 15–53 | 53–143 | > 143 |
+| | referência (0,7) | nunca | 0–20 | 20–110 | > 110 |
+| 180 dias: disco, objeto, rede | oficial | 0–58 | 58–133 | 133–313 | > 313 |
+| | billing | 0–31 | 31–105 | 105–285 | > 285 |
+| | referência | nunca | 0–40 | 40–220 | > 220 |
+| 30 dias: SKU em preview | oficial | 0–10 | 10–22 | 22–52 | > 52 |
+| | referência | nunca | 0–7 | 7–37 | > 37 |
+| qualquer | agente (0, não confirma) | nunca | nunca | nunca | não muda o estado |
+
+O que cada estado faz com o dado exibido. Hoje (P3.2) é só rótulo; nenhum estado
+muda o número da análise:
+
+| estado | na tela | no payload e no agente | no número |
+|---|---|---|---|
+| VIVO | "Atual · capturado há N dias" | `preco_estado: vivo` | usa |
+| MADURO | "Recente · capturado há N dias" | `maduro` | usa |
+| EM DECOMPOSIÇÃO | "Possivelmente desatualizado" + aviso | `em_decomposicao` | usa; pedir sync (V3.1) é a reação |
+| ADUBO | "Antigo, só como referência" + aviso. Se o agente disse algo depois da última confirmação, mostrar ao lado como "informação do agente, não verificada" | `adubo` | usa até a P3.4; o agente nunca troca o número nem revive o preço |
+
+## 9. Próximos passos
+
+- **Agendar o recálculo diário:** CronJob no infra, como o sync.
+- **Gravar a contestação de preço do agente como observação `agente`:** vai com o
+  lote v3 (V3.1), porque mexe no envio do agente. A tela do ADUBO lê essa observação.
+- **P3.3:** revitalizar por billing só depois da decisão 1 do §6 (termos de uso).
+  Formatos que servem: CUR, Azure Cost Details, BigQuery.
+- **P3.4:** quórum, que muda número e exige versão de autoridade.
+- **P3.5:** calibração com dados reais.

@@ -538,6 +538,14 @@ def _serialize_financeiro(fin: FinancialEstimate) -> dict[str, object]:
         fin_dict["preco_regiao"] = regiao
     if getattr(fin, "price_region_approximate", False):
         fin_dict["preco_regiao_aproximada"] = True
+    # Ciclo de vida (PLANO_CICLO_DE_VIDA_DO_PRECO): rótulo ao lado da idade. Vivo,
+    # maduro, em decomposição ou adubo; o número é o mesmo em todos
+    estado = getattr(fin, "price_lifecycle_state", None)
+    if estado:
+        fin_dict["preco_estado"] = estado
+        score = getattr(fin, "price_lifecycle_score", None)
+        if score is not None:
+            fin_dict["preco_score"] = float(score)
     return fin_dict
 
 

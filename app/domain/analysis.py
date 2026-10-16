@@ -50,6 +50,8 @@ class FinancialEstimate:
     price_captured_at: datetime | None = None
     price_region: str | None = None
     price_region_approximate: bool = False
+    price_lifecycle_state: str | None = None
+    price_lifecycle_score: Decimal | None = None
 
 
 @dataclass(frozen=True)
