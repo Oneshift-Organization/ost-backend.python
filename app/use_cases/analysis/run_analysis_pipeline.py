@@ -18,6 +18,7 @@ from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRep
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
 from app.domain.services.currency import FxRate, convert, identity_rate
+from app.domain.services.categoria_por_uso import CHAVE_NO_PAYLOAD as CHAVE_POR_USO
 from app.domain.services.rede_por_uso import CHAVE_NO_PAYLOAD as CHAVE_DA_REDE
 from app.domain.services.sku_normalization import normalize_provider
 from app.infrastructure.llm.orchestrator import LLMOrchestrator
@@ -273,6 +274,7 @@ _CHAVE_DA_CATEGORIA = {
     "network_egress": "egresso_rede",
     "database": "banco_dados",
     **CHAVE_DA_REDE,
+    **CHAVE_POR_USO,
 }
 
 
@@ -295,6 +297,15 @@ def _rede_por_tipo(auxiliary: Any, fx: Any) -> dict[str, object]:
         chave: _money(getattr(auxiliary, categoria), fx)
         for categoria, chave in CHAVE_DA_REDE.items()
         if getattr(auxiliary, categoria) > 0
+    }
+
+
+def _categorias_por_uso(auxiliary: Any, fx: Any) -> dict[str, object]:
+    """Plano de controle além da hora do cluster, segredos, chaves e serverless (R4)."""
+    return {
+        CHAVE_POR_USO[categoria]: _money(custo, fx)
+        for categoria, custo in sorted(auxiliary.por_uso.items())
+        if categoria in CHAVE_POR_USO and custo > 0
     }
 
 
@@ -431,6 +442,7 @@ def _serialize_pools(ctx) -> tuple[str, list[str]]:
         if auxiliary.network_egress > 0:
             aux_payload["egresso_rede"] = _money(auxiliary.network_egress, fx)
         aux_payload.update(_rede_por_tipo(auxiliary, fx))
+        aux_payload.update(_categorias_por_uso(auxiliary, fx))
         if auxiliary.database > 0:
             aux_payload["banco_dados"] = _money(auxiliary.database, fx)
             if database_equivalents:

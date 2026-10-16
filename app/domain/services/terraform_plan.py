@@ -58,6 +58,8 @@ _REDE_PAGA = (
     "ip_publico",
     "vpn",
     "transferencia_entre_zonas",
+    "cdn",
+    "cdn_requisicoes",
     "rede_outros",
 )
 
@@ -838,7 +840,9 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "Compromisso/reserva (Savings Plan, CUD) é instrumento comercial, "
             "contratado fora do Terraform."
         )
-    if _decimal(auxiliares.get("gke_plano_controle")):
+    if _decimal(auxiliares.get("gke_plano_controle")) or _decimal(
+        auxiliares.get("kubernetes_outros")
+    ):
         plano.nao_suportado.append(
             "Plano de controle de Kubernetes fora do MVP: exige decidir sobre "
             "node pools, versão e rede do cluster."

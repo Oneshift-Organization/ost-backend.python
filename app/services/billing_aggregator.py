@@ -21,6 +21,10 @@ from app.domain.entities.workload_pool import (
     WorkloadPool,
 )
 from app.domain.services.azure_shape import parse_azure_shape
+from app.domain.services.categoria_por_uso import BALDES as _BALDES_POR_USO
+from app.domain.services.categoria_por_uso import CATEGORIAS as _CATEGORIAS_POR_USO
+from app.domain.services.categoria_por_uso import PLANO_DE_CONTROLE as _PLANO_DE_CONTROLE
+from app.domain.services.categoria_por_uso import quantidade_por_uso, tipo_por_uso
 from app.domain.services.compromisso_de_compute import paga_maquina_virtual
 from app.domain.services.instance_shape import parse_instance_shape
 from app.domain.services.reclassificacao_por_uso import reclassificar
@@ -44,7 +48,6 @@ _COMPUTE_ROLES = frozenset({"core", "ram", "os_license"})
 _HOUR_UNITS = frozenset({"hour", "hours", "hr", "hrs", "h", "minute", "minutes", "min"})
 # component_type -> AuxiliaryCosts scalar bucket name (data-driven dispatch).
 _AUX_BUCKET = {
-    "gke_control_plane": "gke_control_plane",
     "network_egress": "network_egress",
     "storage_ssd": "storage_ssd",
     "storage_hdd": "storage_hdd",
@@ -236,6 +239,24 @@ class BillingAggregator:
                 if quantidade is not None:
                     aux_quantidade[tipo.categoria][regiao] += quantidade
                     aux_medido[tipo.categoria][regiao] += cost
+            elif component_type in _BALDES_POR_USO:
+                # Plano de controle, segredos e serverless: o uso diz a categoria e a
+                # unidade (domain/services/categoria_por_uso), como na rede
+                por_uso = tipo_por_uso(
+                    component_type, item.provider, item.service_name, item.usage_type
+                )
+                regiao = regiao_da_linha(item.provider, item.region, item.usage_type) or ""
+                aux_totals[por_uso.categoria] += cost
+                aux_por_regiao[por_uso.categoria][regiao] += cost
+                aux_por_servico[por_uso.categoria][item.service_name] += cost
+                quantidade = (
+                    quantidade_por_uso(item.provider, por_uso, item.usage_amount, item.usage_unit)
+                    if cost > 0
+                    else None
+                )
+                if quantidade is not None:
+                    aux_quantidade[por_uso.categoria][regiao] += quantidade
+                    aux_medido[por_uso.categoria][regiao] += cost
             elif component_type in _AUX_BUCKET:
                 aux_totals[_AUX_BUCKET[component_type]] += cost
                 aux_por_servico[_AUX_BUCKET[component_type]][item.service_name] += cost
@@ -287,7 +308,7 @@ class BillingAggregator:
         return AggregateResult(
             pools=tuple(pools),
             auxiliary=AuxiliaryCosts(
-                gke_control_plane=aux_totals["gke_control_plane"],
+                gke_control_plane=aux_totals[_PLANO_DE_CONTROLE],
                 storage_ssd=aux_totals["storage_ssd"],
                 storage_hdd=aux_totals["storage_hdd"],
                 object_storage=aux_totals["object_storage"],
@@ -301,6 +322,11 @@ class BillingAggregator:
                 quantidade_por_regiao={c: dict(r) for c, r in aux_quantidade.items()},
                 medido_por_regiao={c: dict(r) for c, r in aux_medido.items()},
                 por_servico={c: dict(s) for c, s in aux_por_servico.items()},
+                por_uso={
+                    c: aux_totals[c]
+                    for c in _CATEGORIAS_POR_USO
+                    if c != _PLANO_DE_CONTROLE and aux_totals.get(c)
+                },
             ),
             unmapped_cost=orphan_cost,
             hours_window=hours_window,

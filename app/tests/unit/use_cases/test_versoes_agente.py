@@ -59,8 +59,12 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 _HASH_POR_VERSAO = {
     # v4: lote da autoridade (PLANO_AUTORIDADE_V3_E_PRECISAO §2). Atualizado a cada item
     # do lote até a entrega; a versão sobe uma vez só.
+    # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE R4):
+    # `equivalence_pricing._CATEGORIES` ganhou plano de controle, segredos, chaves e
+    # CDN. As chaves só existem em payload preparado depois da mudança; snapshot
+    # antigo anexa os mesmos preços.
     "agent-authority-v4": (
-        "22655190fe03ba7d0f5cd86f5fbce1a08f9652fb6f723fd44de11c78d0e3ed5e"
+        "257cf33bb62b69e32ab96e435d5c7434e4769e70ec86335d71c5be585817ff86"
     ),
     # v3: score normalizado 50/40/10 e benefícios informativos sem efeito financeiro.
     # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE):

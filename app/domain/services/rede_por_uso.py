@@ -29,10 +29,17 @@ NAT = "nat_gateway"
 NAT_DADOS = "nat_gateway_data"
 IP_PUBLICO = "public_ip"
 VPN = "vpn"
+# CDN: o tráfego entregue pela borda e as requisições (R4). Da borda para a origem é
+# tráfego comum.
+CDN = "cdn"
+CDN_REQUISICOES = "cdn_requests"
 OUTROS = "network_other"
 
 HORA = "hour"
 GB = "gb"
+MES = "month"
+# Operações e requisições, em lotes de 10 mil (a unidade das tabelas de preço)
+DEZ_MIL = "10k"
 
 # Todas as categorias em que o balde de rede se divide, na ordem de exibição
 CATEGORIAS: tuple[str, ...] = (
@@ -44,6 +51,8 @@ CATEGORIAS: tuple[str, ...] = (
     NAT_DADOS,
     IP_PUBLICO,
     VPN,
+    CDN,
+    CDN_REQUISICOES,
     OUTROS,
 )
 
@@ -56,6 +65,8 @@ CHAVE_NO_PAYLOAD: Mapping[str, str] = {
     NAT_DADOS: "nat_dados",
     IP_PUBLICO: "ip_publico",
     VPN: "vpn",
+    CDN: "cdn",
+    CDN_REQUISICOES: "cdn_requisicoes",
     OUTROS: "rede_outros",
 }
 
@@ -69,9 +80,13 @@ UNIDADE: Mapping[str, str] = {
     IP_PUBLICO: HORA,
     VPN: HORA,
     ENTRE_ZONAS: GB,
+    CDN: GB,
+    CDN_REQUISICOES: DEZ_MIL,
 }
 
 _1 = Decimal(1)
+# Requisição contada uma a uma, na unidade de 10 mil
+_POR_DEZ_MIL = Decimal("0.0001")
 # Regra adicional (US$ 0,01/h) contra a mínima, que é o balanceador (US$ 0,025/h)
 _REGRA_ADICIONAL = Decimal("0.4")
 # Cloud NAT cobra por VM (US$ 0,0014/h) até o teto do gateway (US$ 0,044/h, 32 VMs)
@@ -96,6 +111,9 @@ def _r(texto: str) -> re.Pattern[str]:
 # Provedor → (padrão em "serviço | uso", categoria, fator), na ordem: o primeiro que casa
 REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str, Decimal], ...]] = {
     "aws": (
+        # CDN antes do egress: a CloudFront usa o mesmo UsageType da internet
+        (_r(r"cloudfront[^|]*\|.*requests"), CDN_REQUISICOES, _POR_DEZ_MIL),
+        (_r(r"cloudfront[^|]*\|.*datatransfer-out-bytes"), CDN, _1),
         (_r(r"datatransfer-regional-bytes"), ENTRE_ZONAS, _1),
         (_r(r"lcuusage|lcubytes"), BALANCEADOR_DADOS, _1),
         (_r(r"(elb|load ?balanc).*dataprocessing-bytes"), BALANCEADOR_DADOS, _1),
@@ -107,6 +125,8 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str, Decimal], ...]] = {
         (_r(r"datatransfer|-(in|out)-bytes|vpcpeering"), EGRESS, _1),
     ),
     "gcp": (
+        (_r(r"cdn.*lookup"), CDN_REQUISICOES, _1),
+        (_r(r"cdn.*(cache data transfer|cache egress)"), CDN, _1),
         (_r(r"inter ?zone"), ENTRE_ZONAS, _1),
         (_r(r"load ?balanc.*data processing"), BALANCEADOR_DADOS, _1),
         (_r(r"nat.*data processing"), NAT_DADOS, _1),
@@ -124,6 +144,8 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str, Decimal], ...]] = {
         (_r(r"vpn tunnel|cloud vpn"), VPN, _TUNEL_DE_VPN),
     ),
     "azure": (
+        (_r(r"(front door|content delivery network)[^|]*\|.*requests"), CDN_REQUISICOES, _1),
+        (_r(r"(front door|content delivery network)[^|]*\|.*data transfer(?! in)"), CDN, _1),
         (_r(r"inter-availability zone"), ENTRE_ZONAS, _1),
         (_r(r"nat gateway.*data processed"), NAT_DADOS, _1),
         (_r(r"nat gateway"), NAT, _1),
@@ -158,38 +180,61 @@ def tipo_de_rede(provedor: str, servico: str | None, uso: str | None) -> TipoDeR
     return _OUTROS
 
 
-# Rótulo de unidade da linha → dimensão. A Mbps-hora da OCI entra como GB pelo fator.
-_UNIDADES: Mapping[str, str] = {
-    "h": HORA,
-    "hr": HORA,
-    "hrs": HORA,
-    "hour": HORA,
-    "hours": HORA,
-    "1 hour": HORA,
-    "1/hour": HORA,
-    "gb": GB,
-    "gib": GB,
-    "giby": GB,
-    "gibibyte": GB,
-    "gigabyte": GB,
-    "1 gb": GB,
-    "1 gib": GB,
-    "mbps per hour": GB,
-    "mbps hours": GB,
+_ESCALA_1 = Decimal(1)
+
+# Rótulo de unidade da linha → (dimensão, quanto um vale nela). A Mbps-hora da OCI
+# entra como GB pelo fator da regra; a requisição contada uma a uma vira 10 mil aqui.
+_UNIDADES: Mapping[str, tuple[str, Decimal]] = {
+    **{
+        rotulo: (HORA, _ESCALA_1)
+        for rotulo in (
+            "h", "hr", "hrs", "hour", "hours", "1 hour", "1/hour",
+            "cluster per hour", "cluster hours", "clusters per hour",
+        )
+    },
+    **{
+        rotulo: (GB, _ESCALA_1)
+        for rotulo in (
+            "gb", "gib", "giby", "gibibyte", "gigabyte", "1 gb", "1 gib",
+            "mbps per hour", "mbps hours",
+        )
+    },
+    **{
+        rotulo: (MES, _ESCALA_1)
+        for rotulo in ("month", "months", "1/month", "key version per month")
+    },
+    **{rotulo: (DEZ_MIL, _ESCALA_1) for rotulo in ("10k", "10,000", "10000")},
+    **{rotulo: (DEZ_MIL, _POR_DEZ_MIL) for rotulo in ("count", "requests", "api requests")},
+    **{rotulo: (DEZ_MIL, Decimal(100)) for rotulo in ("1m", "1m/month")},
 }
+
+
+def converter_quantidade(
+    dimensao: str | None,
+    provedor: str,
+    fator: Decimal,
+    quantidade: Decimal | None,
+    unidade: str | None,
+) -> Decimal | None:
+    """Quantidade da linha na dimensão da categoria, ou None quando não serve.
+
+    Na AWS o UsageType já diz a unidade (`-Hours`, `-Bytes`, `LCUUsage`), e o rótulo
+    do export varia (`Units`, vazio): vale a quantidade vezes o fator da regra. Nas
+    outras, o rótulo precisa ser da dimensão da categoria, e a escala dele entra."""
+    if dimensao is None or quantidade is None or quantidade <= 0:
+        return None
+    if provedor.lower() == "aws":
+        return quantidade * fator
+    lida = _UNIDADES.get((unidade or "").strip().lower())
+    if lida is None or lida[0] != dimensao:
+        return None
+    return quantidade * lida[1] * fator
 
 
 def quantidade_na_unidade(
     provedor: str, tipo: TipoDeRede, quantidade: Decimal | None, unidade: str | None
 ) -> Decimal | None:
-    """Quantidade da linha na unidade da categoria, ou None quando não serve.
-
-    Na AWS o UsageType já diz a unidade (`-Hours`, `-Bytes`, `LCUUsage`), e o rótulo
-    do export varia (`Units`, vazio): vale a quantidade. Nas outras, a unidade da
-    linha precisa ser a da categoria."""
-    dimensao = UNIDADE.get(tipo.categoria)
-    if dimensao is None or quantidade is None or quantidade <= 0:
-        return None
-    if provedor.lower() != "aws" and _UNIDADES.get((unidade or "").strip().lower()) != dimensao:
-        return None
-    return quantidade * tipo.fator
+    """Quantidade da linha na unidade da categoria, ou None quando não serve."""
+    return converter_quantidade(
+        UNIDADE.get(tipo.categoria), provedor, tipo.fator, quantidade, unidade
+    )

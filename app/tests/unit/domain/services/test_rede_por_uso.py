@@ -5,6 +5,8 @@ import pytest
 from app.domain.services.rede_por_uso import (
     BALANCEADOR,
     BALANCEADOR_DADOS,
+    CDN,
+    CDN_REQUISICOES,
     EGRESS,
     ENTRE_ZONAS,
     IP_PUBLICO,
@@ -166,6 +168,8 @@ def test_unidade_de_cada_categoria_cotada():
         IP_PUBLICO: "hour",
         VPN: "hour",
         ENTRE_ZONAS: "gb",
+        CDN: "gb",
+        CDN_REQUISICOES: "10k",
     }
     # Egress segue pela razão de taxas; o resto da rede não é cotado
     assert EGRESS not in UNIDADE
@@ -209,3 +213,70 @@ def test_quantidade_na_unidade(provedor, uso, quantidade, unidade, esperado):
 def test_categoria_nao_cotada_nao_tem_quantidade():
     tipo = tipo_de_rede("aws", "AmazonVPC", "USE1-VpcEndpoint-Hours")
     assert quantidade_na_unidade("aws", tipo, Decimal(730), "Hrs") is None
+
+
+@pytest.mark.parametrize(
+    ("provedor", "servico", "uso", "categoria", "fator"),
+    [
+        # CDN: o tráfego e a requisição têm taxa própria, não a do egress comum
+        ("aws", "Amazon CloudFront", "US-DataTransfer-Out-Bytes", CDN, "1"),
+        ("aws", "Amazon CloudFront", "US-Requests-Tier2-HTTPS", CDN_REQUISICOES, "0.0001"),
+        ("aws", "Amazon CloudFront", "EU-Requests-Tier1", CDN_REQUISICOES, "0.0001"),
+        # Da CDN para a origem é tráfego comum
+        ("aws", "Amazon CloudFront", "US-DataTransfer-Out-OBytes", EGRESS, "1"),
+        # O mesmo UsageType fora da CloudFront segue o egress
+        ("aws", "AmazonEC2", "US-DataTransfer-Out-Bytes", EGRESS, "1"),
+        (
+            "gcp",
+            "Networking",
+            "Networking Cloud CDN Traffic Cache Data Transfer to North America",
+            CDN,
+            "1",
+        ),
+        ("gcp", "Networking", "Networking Cloud Cdn Cache Lookups", CDN_REQUISICOES, "1"),
+        (
+            "azure",
+            "Azure Front Door",
+            "Azure Front Door | Standard | Standard Data Transfer Out",
+            CDN,
+            "1",
+        ),
+        ("azure", "Azure Front Door", "Azure Front Door | Standard | Standard Requests",
+         CDN_REQUISICOES, "1"),
+        ("azure", "Azure Front Door", "Azure Front Door | Standard | Standard Base Fees",
+         OUTROS, "1"),
+        (
+            "azure",
+            "Content Delivery Network",
+            "Content Delivery Network | Standard Microsoft | Standard Data Transfer Zone 1",
+            CDN,
+            "1",
+        ),
+    ],
+)
+def test_cdn(provedor, servico, uso, categoria, fator):
+    tipo = tipo_de_rede(provedor, servico, uso)
+    assert tipo.categoria == categoria
+    assert tipo.fator == Decimal(fator)
+
+
+@pytest.mark.parametrize(
+    ("provedor", "uso", "quantidade", "unidade", "esperado"),
+    [
+        # Requisição: a unidade dá a escala até 10 mil
+        ("gcp", "Networking Cloud Cdn Cache Lookups", "50000", "count", "5.0000"),
+        ("azure", "Azure Front Door | Standard | Standard Requests", "3", "10K", "3"),
+        ("azure", "Azure Front Door | Standard | Standard Requests", "2", "1M/Month", "200"),
+        ("aws", "US-Requests-Tier2-HTTPS", "30000", "Requests", "3.0000"),
+    ],
+)
+def test_quantidade_de_requisicoes_da_cdn(provedor, uso, quantidade, unidade, esperado):
+    servico = {
+        "aws": "Amazon CloudFront",
+        "gcp": "Networking",
+        "azure": "Azure Front Door",
+    }[provedor]
+    tipo = tipo_de_rede(provedor, servico, uso)
+    assert quantidade_na_unidade(provedor, tipo, Decimal(quantidade), unidade) == Decimal(
+        esperado
+    )
