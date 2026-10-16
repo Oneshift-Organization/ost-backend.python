@@ -311,6 +311,8 @@ async def list_analysis_jobs(
                     ),
                     decision_score_lower_bound=decision_score.get("lower_bound"),
                     decision_score_upper_bound=decision_score.get("upper_bound"),
+                    decision_score_value=decision_score.get("value"),
+                    decision_score_method=decision_score.get("assessment_method"),
                     error=job.error,
                     created_at=job.created_at,
                     diagnostico_de_entrada=_diagnostico_de_entrada(

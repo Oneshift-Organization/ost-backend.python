@@ -46,12 +46,15 @@ def decision_payload() -> dict:
         "decision_workloads": [
             {
                 "name": "Storage",
+                "service_type": "fixture_storage",
+                "type_source": "curado",
                 "category": "storage",
                 "cost": 1000,
                 "migration": {"requer_refatoracao": False, "lock_in": "low"},
                 "targets": [
                     {
                         "provider": "oci",
+                        "service_type": "fixture_storage",
                         "service_name": "Object Storage",
                         "metadata": {
                             "requires_refactoring": False,
@@ -61,6 +64,13 @@ def decision_payload() -> dict:
                 ],
             }
         ],
+        "topologia": {
+            "detalhe": {
+                "servicos": {
+                    "Storage": {"nivel": "low", "cobertura": 1, "motivo": "Fixture completa"}
+                }
+            }
+        },
         "decision_context": {
             "governance": [
                 {
@@ -78,9 +88,9 @@ def decision_payload() -> dict:
 def test_complete_score_and_exact_contributions(decision_payload):
     result = build_decision_support(decision_payload)
     assert result.score.status == "complete"
-    assert result.score.value == 96.5  # F=93 * .5 + T=100 * .5
+    assert result.score.value == 95  # F=90 * .5 + T=100 * .4 + cobertura=100 * .1
     assert sum(a.contribution for a in result.score.axes) == result.score.value
-    assert result.score.axes[0].value == 93
+    assert result.score.axes[0].value == 90
     assert result.workload_strategies[0].strategy == "rehost"
     assert result.workload_strategies[0].status == "candidate"
     assert result.confidence == "high"
@@ -90,11 +100,81 @@ def test_complete_score_and_exact_contributions(decision_payload):
 def test_governance_is_not_a_score_axis(decision_payload):
     decision_payload.pop("decision_context")
     result = build_decision_support(decision_payload)
-    assert [a.id for a in result.score.axes] == ["financial", "technical"]
+    assert [a.id for a in result.score.axes] == ["financial", "technical", "coverage"]
     assert result.score.status == "complete"
-    assert result.score.value == 96.5
+    assert result.score.value == 95
     assert result.score.coverage == 1.0
     assert result.confidence == "high"  # separate from score/data completeness
+
+
+@pytest.mark.parametrize(("lock", "expected"), [("low", 95), ("medium", 91), ("high", 87)])
+def test_lock_in_stays_in_technical_and_coverage_is_ten_percent(decision_payload, lock, expected):
+    workload = decision_payload["decision_workloads"][0]
+    workload["migration"]["lock_in"] = lock
+    workload["targets"][0]["metadata"]["vendor_lock_in_level"] = lock
+    result = build_decision_support(decision_payload)
+    assert result.policy_version == "score-7rs-v4"
+    axes = {a.id: a for a in result.score.axes}
+    assert {k: v.weight for k, v in axes.items()} == {
+        "financial": 0.5,
+        "technical": 0.4,
+        "coverage": 0.1,
+    }
+    assert [f.id for f in axes["technical"].factors] == [
+        "compatibility",
+        "refactoring",
+        "lock_in",
+        "dependencies",
+    ]
+    assert [f.id for f in axes["financial"].factors] == ["savings"]
+    assert result.score.value == expected
+
+
+def test_unknown_lock_in_is_pending_not_zero_technical_grade(decision_payload):
+    workload = decision_payload["decision_workloads"][0]
+    workload["migration"].pop("lock_in")
+    workload["targets"][0]["metadata"].pop("vendor_lock_in_level")
+    score = build_decision_support(decision_payload).score
+    assert score.status == "partial"
+    technical = score.axes[1]
+    assert technical.factors[2].value is None
+    assert technical.value == 100
+    assert technical.coverage == 0.8
+    assert score.value == 94.4
+    assert score.coverage == 0.94
+
+
+def test_benefits_cannot_be_injected_or_change_economics(decision_payload):
+    expected = build_decision_support(decision_payload)
+    decision_payload["corporate_benefits"] = {"approved_credits": 1000000}
+    decision_payload["decision_support"] = {"corporate_benefits": {"score_effect": "bonus"}}
+    actual = build_decision_support(decision_payload)
+    assert actual == expected
+    assert actual.corporate_benefits.score_effect == "none"
+    assert all(o.eligibility == "not_verified" for o in actual.corporate_benefits.opportunities)
+
+
+@pytest.mark.parametrize("version", ["score-7rs-v1", "score-7rs-v2", "score-7rs-v3"])
+def test_old_decisions_keep_their_policy_and_have_no_new_benefits(decision_payload, version):
+    saved = build_decision_support(decision_payload).model_dump(mode="json")
+    saved["policy_version"] = version
+    saved.pop("corporate_benefits")
+    for scenario in [saved["score"], *saved["provider_scores"]]:
+        scenario.pop("assessment_method")
+        scenario.pop("missing_information")
+        if version == "score-7rs-v3":
+            scenario["axes"] = scenario["axes"][:2]
+            scenario["axes"][1]["weight"] = 0.5
+            scenario["axes"][1]["contribution"] = 50
+        else:
+            scenario["axes"][2]["id"] = "enterprise"
+            scenario["axes"][2]["label"] = "Governança"
+    old = DecisionSupport.model_validate(saved)
+    assert old.policy_version == version
+    assert old.corporate_benefits is None
+    assert old.score.assessment_method == "conservative_bound"
+    assert old.score.value == saved["score"]["value"]
+    assert old.model_dump(mode="json")["score"]["axes"] == saved["score"]["axes"]
 
 
 def test_stable_under_ordering_and_non_decision_fields(decision_payload):
@@ -237,7 +317,8 @@ def test_ambiguous_equivalents_do_not_choose_by_list_order(decision_payload):
     workload["targets"].append({"provider": "oci", "service_name": "Other"})
     result = build_decision_support(decision_payload)
     assert result.workload_strategies[0].strategy is None
-    assert result.provider_scores[0].axes[1].value is None
+    assert result.provider_scores[0].status == "not_scored"
+    assert result.provider_scores[0].axes[1].factors[0].value is None
 
 
 @pytest.mark.parametrize("malformed", [float("nan"), float("inf"), True, "bad", None])
@@ -272,11 +353,14 @@ def test_model_cannot_forge_score_strategy_or_provider(decision_payload):
         provider_comparison=[ProviderComparison(provider="fake")],
     )
     result = impose_decision(response, decision_payload)
-    assert result.viability_score == 970
+    assert result.viability_score == 950
     assert result.recommended_provider == "OCI"
-    assert result.oneshift_scores.overall_score == 97
+    assert result.oneshift_scores.overall_score == 95
     assert result.provider_comparison[0].provider == "OCI"
-    assert result.decision_support.score.value == 96.5
+    assert result.decision_support.score.value == 95
+    assert result.oneshift_scores.enterprise_score == 0
+    assert result.provider_comparison[0].enterprise_score == 0
+    assert "corporate_score" not in result.provider_comparison[0].model_dump()
     assert AnalysisV2Response.model_validate(result.model_dump()).decision_support
 
 
@@ -294,8 +378,8 @@ def test_agent_receipt_uses_same_engine_and_keeps_contestation_separate(decision
             }
         ],
     )
-    assert result.resposta["viability_score"] == 970
-    assert result.resposta["decision_support"]["score"]["value"] == 96.5
+    assert result.resposta["viability_score"] == 950
+    assert result.resposta["decision_support"]["score"]["value"] == 95
     assert result.confianca_final == "medium"
     assert result.resposta["decision_support"]["confidence"] == "high"
     assert result.autoridade.substituicoes
@@ -336,11 +420,32 @@ async def test_primary_and_fallback_models_share_deterministic_result(
     ).generate_from_legacy(payload)
     assert a.decision_support == b.decision_support
     assert a.oneshift_scores == b.oneshift_scores
-    assert a.viability_score == b.viability_score == 970
+    assert a.viability_score == b.viability_score == 950
     assert "decision_instructions" in fallback.prompt
     assert "decision_workloads" not in fallback.prompt
     # O modelo não devolve o decision_support: o backend impõe (saída cortada em fatura real)
     assert "decision_support inteiro" in fallback.prompt
+
+
+@pytest.mark.asyncio
+async def test_pipeline_prompt_hides_private_topology_but_score_uses_it(decision_payload):
+    class Client:
+        prompt = ""
+
+        async def generate(self, prompt, response_model):
+            self.prompt = prompt
+            return response_model(viability_score=999)
+
+    decision_payload["topologia"]["detalhe"]["private_network"] = "PRIVATE-NETWORK-SENTINEL"
+    client = Client()
+    payload = prepare_decision_payload(decision_payload)
+    result = await LLMOrchestrator(client).generate_report(
+        context=None, source_provider="aws", billing_period="2026-03", total_spend=1000,
+        currency="USD", pools_json="{}", payload=payload,
+    )
+    assert result.decision_support == build_decision_support(payload)
+    assert result.decision_support.score.axes[1].factors[3].coverage == 1
+    assert "PRIVATE-NETWORK-SENTINEL" not in client.prompt
 
 
 def test_legacy_results_remain_readable():
@@ -360,7 +465,8 @@ def test_raw_metadata_does_not_inherit_default_false(decision_payload):
 def test_inferred_service_mapping_is_not_confirmed_compatibility(decision_payload):
     decision_payload["decision_workloads"][0]["type_source"] = "inferido"
     result = build_decision_support(decision_payload)
-    assert result.score.axes[1].value is None
+    assert result.score.status == "not_scored"
+    assert result.score.axes[1].factors[0].value is None
     assert result.workload_strategies[0].strategy is None
 
 
@@ -410,6 +516,8 @@ async def test_real_pipeline_persists_authoritative_snapshot_and_scores(
     service = BillingItemSummary(
         service_name="Storage",
         provider="aws",
+        service_type="object",
+        type_source="curado",
         total_cost=Decimal(1000),
         migration_metadata=metadata,
         migration_expectation={"requer_refatoracao": False, "lock_in": "low"},
@@ -451,8 +559,8 @@ async def test_real_pipeline_persists_authoritative_snapshot_and_scores(
     await pipeline.execute(job, decision_context=decision_payload["decision_context"])
     assert job.status == "COMPLETED", job.error
     saved = job.ai_structured_output
-    assert saved["decision_support"]["score"]["value"] == 96.5
-    assert saved["oneshift_scores"]["overall_score"] == 97
+    assert saved["decision_support"]["score"]["value"] == 94.7
+    assert saved["oneshift_scores"]["overall_score"] == 95
     assert saved["decision_support"] == job.llm_input_payload["decision_support"]
     assert job.llm_input_payload["decision_context"] == decision_payload["decision_context"]
-    assert "96.5/100" in job.llm_output
+    assert "94.7/100" in job.llm_output

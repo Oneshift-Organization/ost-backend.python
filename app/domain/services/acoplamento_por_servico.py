@@ -43,6 +43,7 @@ from app.domain.services.migration_strategy import normalized, technical_evidenc
 from app.domain.services.perfil_de_familia import perfil
 from app.domain.services.service_identity import is_financial_component
 from app.domain.services.sku_normalization import normalize_provider
+from app.domain.services.technical_assessment import assess
 
 VERSAO = "acoplamento-v1"
 
@@ -159,9 +160,11 @@ def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPor
     topologia = dados.get("topologia")
     com_inventario = isinstance(topologia, Mapping)
     por_servico = _dependencias_do_inventario(topologia)
+    policy_v4 = (dados.get("decision_support") or {}).get("policy_version") == "score-7rs-v4"
 
     linhas = [
-        _linha(w, cenarios, custo_atual, por_servico) for w in all_workloads(dados) if _listado(w)
+        _linha(w, cenarios, custo_atual, por_servico, policy_v4=policy_v4)
+        for w in all_workloads(dados) if _listado(w)
     ]
     pools = tuple(_pool(p, origem) for p in dados.get("pools_computacao") or [])
     linhas, sem_servico = _anexar_pools(linhas, pools)
@@ -209,6 +212,8 @@ def _linha(
     cenarios: Sequence[str],
     custo_atual: Decimal | None,
     por_servico: Mapping[str, Any] | None,
+    *,
+    policy_v4: bool = False,
 ) -> AcoplamentoDeServico:
     nome = str(workload.get("name") or "Serviço não identificado")
     categoria = normalized(workload.get("category"))
@@ -228,6 +233,9 @@ def _linha(
         for provedor in cenarios:
             alvo = alvos.get(provedor)
             refatora, lock = technical_evidence(workload, alvo) if alvo else (None, None)
+            if policy_v4:
+                evidence = assess(workload, provedor, {})["evidence"]
+                refatora, lock = evidence["requires_refactoring"], evidence["lock_in"]
             por_destino[provedor] = lock if lock in _ORDEM else None
             refatoracao[provedor] = refatora
             equivalentes[provedor] = (

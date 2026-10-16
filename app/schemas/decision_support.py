@@ -7,7 +7,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
+from app.schemas.corporate_benefits import CorporateBenefits
+
 Provider = Literal["aws", "azure", "gcp", "oci"]
+DECISION_POLICY_VERSION = "score-7rs-v4"
 Strategy = Literal["retain", "retire", "rehost", "relocate", "repurchase", "replatform", "refactor"]
 
 
@@ -71,6 +74,7 @@ class ScoreFactor(BaseModel):
     contribution: float = Field(ge=0, le=100)
     rule: str
     evidence: list[dict[str, Any]] = Field(default_factory=list)
+    provisional: bool = False
 
 
 class ScoreAxis(BaseModel):
@@ -95,6 +99,8 @@ class ScenarioScore(BaseModel):
     eligible: bool
     blockers: list[str] = Field(default_factory=list)
     axes: list[ScoreAxis]
+    assessment_method: Literal["conservative_bound", "evidence_normalized"] = "conservative_bound"
+    missing_information: list[str] = Field(default_factory=list)
 
 
 class WorkloadStrategy(BaseModel):
@@ -119,7 +125,9 @@ class WorkloadStrategy(BaseModel):
 
 class DecisionSupport(BaseModel):
     contract_version: Literal["oneshift-decision-v1"] = "oneshift-decision-v1"
-    policy_version: Literal["score-7rs-v1", "score-7rs-v2", "score-7rs-v3"] = "score-7rs-v3"
+    policy_version: Literal["score-7rs-v1", "score-7rs-v2", "score-7rs-v3", "score-7rs-v4"] = (
+        DECISION_POLICY_VERSION
+    )
     scale: Literal["0-100"] = "0-100"
     source: Literal["backend_rules"] = "backend_rules"
     input_fingerprint: str
@@ -132,3 +140,4 @@ class DecisionSupport(BaseModel):
     confidence: str
     limitations: list[str] = Field(default_factory=list)
     legacy_score_semantics: str = "lower_bound_when_partial; zero_when_not_scored"
+    corporate_benefits: CorporateBenefits | None = None

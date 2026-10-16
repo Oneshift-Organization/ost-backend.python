@@ -737,6 +737,7 @@ class RunAnalysisPipelineUseCase:
                     converter=conversor_da_analise(ctx),
                 )
 
+            llm_input = prepare_decision_payload(llm_input)
             ui_report = await self._orchestrator.generate_report(
                 context=ctx,
                 source_provider=ctx.source_provider,

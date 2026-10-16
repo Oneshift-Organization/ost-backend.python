@@ -5,6 +5,17 @@ ele depende de recursos exclusivos da nuvem atual. Estas rotas entregam essa
 visão pronta: **uma linha por serviço**, com o nível que o score usa e, à parte,
 as hipóteses que ele não usa.
 
+Na política `score-7rs-v4`, lock-in continua no eixo técnico, junto com adaptação,
+compatibilidade funcional e dependências. A dimensão `dependencias` do inventário
+pontua separadamente, somente na fração correlacionada. Sem inventário, permanece
+desconhecida. Hipóteses de esforço por classe curada são explicitadas no detalhamento
+do score e não promovidas a fatos de acoplamento nem a estratégias confirmadas.
+O score pode avaliar conservadoramente alternativas de mesma capacidade; esta
+rota usa a mesma evidência em resultados v4, mas continua sem escolher um serviço
+de destino quando há múltiplas alternativas. Resultados anteriores mantêm a
+interpretação antiga (destinos ambíguos sem classificação).
+Consultar o ledger de `decision_support` para as regras e evidências de cada nota.
+
 > Plano e decisões: [`PLANO_LOCKIN_INVENTARIO.md`](../../PLANO_LOCKIN_INVENTARIO.md).
 > Convenções gerais: [`api-conventions.md`](../api-conventions.md).
 

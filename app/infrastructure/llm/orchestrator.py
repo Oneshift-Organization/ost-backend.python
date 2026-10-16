@@ -85,10 +85,9 @@ class LLMOrchestrator:
 
         # O detalhe da topologia (rede, regras, posicionamento) é para o
         # Terraform: não vai ao modelo, nem ao log do que foi enviado a ele.
-        context_payload = compactar_topologia(context_payload)
         log_llm_input_payload(
             "pipeline",
-            context_payload,
+            compactar_topologia(context_payload),
         )
 
         return await self._generate(context_payload)
@@ -102,7 +101,7 @@ class LLMOrchestrator:
             legacy_payload = prepare_decision_payload(legacy_payload)
         log_llm_input_payload(
             "legacy",
-            legacy_payload,
+            compactar_topologia(legacy_payload),
         )
 
         return await self._generate(legacy_payload)
@@ -267,6 +266,8 @@ def _build_prompt(
     billing_data: dict,
     mcp_bundle: MCPPromptBundle | None = None,
 ) -> str:
+    # Keep full topology for backend authority, never send its private detail.
+    billing_data = compactar_topologia(billing_data)
     if "decision_support" in billing_data:
         # Full evidence stays persisted for audit. Send only the decision and
         # compact ledger to the model, not repeated catalog data per factor.
@@ -323,6 +324,10 @@ def _compact_decision_payload(billing_data: dict) -> dict:
     payload["decision_instructions"] = (
         "decision_support é calculado pelo backend. Não invente ou recalcule scores ou 7 Rs. "
         "Explique a seleção e as pendências. value=null significa nota final indisponível; "
+        "Na política v4: financeiro 50%, técnico 40%, cobertura 10%. "
+        "value em status partial é nota preliminar normalizada, pode subir ou cair. "
+        "Não substitua value por lower_bound; sem cobertura mínima não há nota geral. "
+        "Lock-in e dependências pertencem ao técnico; benefícios não pontuam. "
         "lower_bound/upper_bound são limites por dados ausentes, não confiança estatística. "
         "Estratégias candidate exigem validação. Não prometa migração concluída nem créditos. "
         "Use selected_provider e selection_reason; a política determinística prevalece sobre "

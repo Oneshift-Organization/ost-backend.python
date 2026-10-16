@@ -89,18 +89,28 @@ def impose_decision(response: AnalysisV2Response, payload: dict) -> AnalysisV2Re
         providers.append(
             pc.model_copy(
                 update={
-                    **{f"{key}_score": _legacy_int(axis.lower_bound) for key, axis in axes.items()},
-                    "overall_score": _legacy_int(score.lower_bound),
+                    **{
+                        f"{key}_score": _legacy_int(axis.value or 0)
+                        for key, axis in axes.items()
+                        if key in {"financial", "technical"}
+                    },
+                    "enterprise_score": 0,
+                    "overall_score": _legacy_int(score.value or 0),
                 }
             )
         )
     selected = decision.score
     numeric = {f"{key}_score": 0 for key in ("financial", "technical", "enterprise", "overall")}
     if selected:
-        numeric.update({f"{a.id}_score": _legacy_int(a.lower_bound) for a in selected.axes})
-        numeric["overall_score"] = _legacy_int(selected.lower_bound)
-    # Legacy integers remain parseable. New clients MUST use status/value/bounds;
-    # the lower bound is NOT an imputed value for missing evidence.
+        numeric.update(
+            {
+                f"{a.id}_score": _legacy_int(a.value or 0)
+                for a in selected.axes
+                if a.id in {"financial", "technical"}
+            }
+        )
+        numeric["overall_score"] = _legacy_int(selected.value or 0)
+    # Legacy integers remain parseable; new clients distinguish zero from missing.
     equivalents = project_equivalences(prepared)
     update = {
         "oneshift_scores": response.oneshift_scores.model_copy(update=numeric),

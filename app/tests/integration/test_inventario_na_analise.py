@@ -2,8 +2,8 @@
 
 Três garantias:
 
-- **Neutralidade:** com e sem inventário o payload é o mesmo fora da chave
-  `topologia` — custo, economia e recomendação não mudam.
+- **Neutralidade financeira:** inventário não altera custos nem economia.
+  Na política v4, suas dependências alimentam o score técnico e a cobertura.
 - **Validação antes de tudo:** inventário de outro usuário, não processado ou
   de outra nuvem é recusado antes de criar (ou reaproveitar) o job.
 - **Congelamento:** a análise grava a topologia com o detalhe que o Terraform
@@ -80,7 +80,7 @@ async def _apagar_analises(rid: UUID) -> None:
 
 
 def _sem_meta(payload: dict) -> dict:
-    return {k: v for k, v in payload.items() if k not in ("_meta", "topologia")}
+    return {k: v for k, v in payload.items() if k not in ("_meta", "topologia", "decision_support")}
 
 
 async def test_payload_e_neutro_e_o_agente_recebe_a_topologia_compacta(
@@ -95,6 +95,20 @@ async def test_payload_e_neutro_e_o_agente_recebe_a_topologia_compacta(
             await _apagar_inventario(iid)
     assert "topologia" not in sem
     assert _sem_meta(com) == _sem_meta(sem)
+    antes, depois = sem["decision_support"], com["decision_support"]
+    assert antes["policy_version"] == depois["policy_version"] == "score-7rs-v4"
+    assert antes["input_fingerprint"] != depois["input_fingerprint"]
+    assert antes["workload_strategies"] == depois["workload_strategies"]
+    cenarios_antes = {c["provider"]: c for c in antes["provider_scores"]}
+    assert set(cenarios_antes) == {c["provider"] for c in depois["provider_scores"]}
+    for cenario in depois["provider_scores"]:
+        eixos_antes = {a["id"]: a for a in cenarios_antes[cenario["provider"]]["axes"]}
+        eixos_depois = {a["id"]: a for a in cenario["axes"]}
+        assert eixos_antes["financial"] == eixos_depois["financial"]
+        fatores_antes = {f["id"]: f for f in eixos_antes["technical"]["factors"]}
+        fatores_depois = {f["id"]: f for f in eixos_depois["technical"]["factors"]}
+        assert fatores_antes["dependencies"]["coverage"] == 0
+        assert fatores_depois["dependencies"]["coverage"] > 0
     topologia = com["topologia"]
     assert topologia["inventario_id"] == str(iid)
     assert "detalhe" not in topologia  # a superfície do agente é compacta

@@ -1,6 +1,7 @@
 """Deterministic score ledger. Missing evidence forms bounds, never an invented grade.
 
-Policy v3: financial 50%, technical 50%. Governance declarations only block a
+Policy v4: financial 50%, technical 40%, evidence coverage 10%.
+Governance declarations only block a
 destination; they are not a score axis. Bounds are arithmetic
 limits from unknown factors, NOT statistical confidence intervals. No I/O/LLM.
 """
@@ -12,13 +13,15 @@ import json
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
+from app.domain.services.corporate_benefits import build_corporate_benefits
 from app.domain.services.migration_strategy import (
     classify_workload_strategy,
     normalized,
-    technical_evidence,
 )
 from app.domain.services.service_identity import is_financial_component
+from app.domain.services.technical_assessment import CURATED, assess, fraction, inventory_services
 from app.schemas.decision_support import (
+    DECISION_POLICY_VERSION,
     DecisionContext,
     DecisionSupport,
     ScenarioScore,
@@ -30,6 +33,7 @@ _ZERO = Decimal(0)
 _ONE = Decimal(1)
 _HUNDRED = Decimal(100)
 _MIN_COVERAGE = Decimal("0.5")
+_MIN_TECHNICAL_FACTORS = 2
 _NON_WORKLOAD = frozenset(
     {
         "tax",
@@ -46,7 +50,6 @@ _NON_WORKLOAD = frozenset(
         "nao_classificado",
     }
 )
-_LOCK_SCORE = {"low": 100, "medium": 50, "high": 0}
 
 
 def number(value: object) -> Decimal | None:
@@ -107,7 +110,7 @@ def decision_workloads(payload: dict) -> list[dict]:
 
 
 def unique_targets(workload: dict) -> dict[str, dict]:
-    """The one mapping per provider the technical axis reads; ambiguous ones drop."""
+    """Legacy per-destination mapping; ambiguous targets cannot select a service."""
     grouped: dict[str, list[dict]] = {}
     for target in workload.get("targets") or []:
         key = normalized(target.get("provider"))
@@ -125,22 +128,25 @@ def _factor(
     samples: list[tuple[Decimal, Decimal | None, dict]],
 ) -> ScoreFactor:
     total = sum((w for w, _, _ in samples), _ZERO)
-    known = sum((w for w, v, _ in samples if v is not None), _ZERO)
+    known = sum((w * fraction(e.get("coverage", 1)) for w, v, e in samples if v is not None), _ZERO)
     coverage = known / total if total > 0 else _ZERO
-    lower = sum((w * v for w, v, _ in samples if v is not None), _ZERO)
+    lower = sum(
+        (w * v * fraction(e.get("coverage", 1)) for w, v, e in samples if v is not None), _ZERO
+    )
     lower = lower / total if total > 0 else _ZERO
     upper = lower + _HUNDRED * (_ONE - coverage)
     return ScoreFactor(
         id=factor_id,
         label=label,
         weight=float(weight),
-        value=rounded(lower) if coverage == 1 else None,
+        value=rounded(lower / coverage) if coverage else None,
         coverage=float(coverage),
         lower_bound=rounded(lower),
         upper_bound=rounded(upper),
         contribution=rounded(lower * Decimal(weight)),
         rule=rule,
         evidence=[entry for _, _, entry in samples],
+        provisional=any(e.get("hypothesis") for _, v, e in samples if v is not None),
     )
 
 
@@ -148,16 +154,34 @@ def _axis(axis_id: str, label: str, weight: str, factors: list[ScoreFactor]) -> 
     lower = sum((Decimal(str(f.lower_bound)) * Decimal(str(f.weight)) for f in factors), _ZERO)
     upper = sum((Decimal(str(f.upper_bound)) * Decimal(str(f.weight)) for f in factors), _ZERO)
     coverage = sum((Decimal(str(f.coverage)) * Decimal(str(f.weight)) for f in factors), _ZERO)
-    complete = all(f.value is not None for f in factors)
+    observed = sum(
+        (
+            Decimal(str(f.value or 0)) * Decimal(str(f.weight)) * Decimal(str(f.coverage))
+            for f in factors
+        ),
+        _ZERO,
+    )
+    value = observed / coverage if coverage else None
+    for factor in factors:
+        factor.contribution = (
+            rounded(
+                Decimal(str(factor.value or 0))
+                * Decimal(str(factor.weight))
+                * Decimal(str(factor.coverage))
+                / coverage
+            )
+            if coverage
+            else 0
+        )
     return ScoreAxis(
         id=axis_id,
         label=label,
         weight=float(weight),
-        value=rounded(lower) if complete else None,
+        value=rounded(value) if value is not None else None,
         coverage=float(coverage),
         lower_bound=rounded(lower),
         upper_bound=rounded(upper),
-        contribution=rounded(lower * Decimal(weight)),
+        contribution=rounded((value or _ZERO) * Decimal(weight)),
         factors=factors,
     )
 
@@ -167,8 +191,6 @@ def _financial(row: dict, current: Decimal | None) -> ScoreAxis:
     delta = None
     if current is not None and current > 0 and saving is not None:
         delta = max(_ZERO, min(_HUNDRED, Decimal(50) + _HUNDRED * saving / current))
-    coverage = number(row.get("cobertura"))
-    coverage = coverage if coverage is not None and 0 <= coverage <= 1 else None
     return _axis(
         "financial",
         "Financeiro",
@@ -177,7 +199,7 @@ def _financial(row: dict, current: Decimal | None) -> ScoreAxis:
             _factor(
                 "savings",
                 "Economia recorrente",
-                "0.7",
+                "1",
                 "clamp(50 + 100 * economia/custo, 0, 100)",
                 [
                     (
@@ -191,81 +213,144 @@ def _financial(row: dict, current: Decimal | None) -> ScoreAxis:
                     ),
                 ],
             ),
-            _factor(
-                "price_coverage",
-                "Cobertura da comparação de custos",
-                "0.3",
-                "100 * cobertura",
-                [
-                    (
-                        _ONE,
-                        coverage * _HUNDRED if coverage is not None else None,
-                        {"source": "resumo_executivo.cobertura", "value": str(coverage)},
-                    ),
-                ],
-            ),
         ],
     )
 
 
-def _technical(workloads: list[dict], provider: str) -> ScoreAxis:
-    refactors: list = []
-    locks: list = []
+def _technical(workloads: list[dict], provider: str, inventory: dict) -> ScoreAxis:
+    samples: dict[str, list] = {
+        k: [] for k in ("compatibility", "refactoring", "lock_in", "dependencies")
+    }
     for workload in workloads:
-        target = unique_targets(workload).get(provider)
-        refactor, lock = technical_evidence(workload, target) if target else (None, None)
+        assessment = assess(workload, provider, inventory)
         cost = number(workload.get("cost")) or _ZERO
-        evidence = {
-            "workload": workload.get("name"),
-            "cost_weight": str(cost),
-            "source": workload.get("evidence_source", "catalog_snapshot"),
-        }
-        refactors.append(
-            (
-                cost,
-                (Decimal(30) if refactor else _HUNDRED) if refactor is not None else None,
-                {**evidence, "requires_refactoring": refactor},
+        for key, entries in samples.items():
+            value, coverage, hypothesis = assessment[key]
+            entries.append(
+                (
+                    cost,
+                    number(value),
+                    {
+                        **assessment["evidence"],
+                        "cost_weight": str(cost),
+                        "coverage": str(coverage),
+                        "hypothesis": hypothesis,
+                        "assessed_value": value,
+                    },
+                )
             )
-        )
-        locks.append(
-            (
-                cost,
-                Decimal(_LOCK_SCORE[lock]) if lock in _LOCK_SCORE else None,
-                {**evidence, "lock_in": lock},
-            )
-        )
+    definitions = (
+        (
+            "compatibility",
+            "Compatibilidade funcional",
+            "0.4",
+            "mesma capacidade curada: 100; não comprova compatibilidade da aplicação",
+        ),
+        (
+            "refactoring",
+            "Esforço de adaptação",
+            "0.3",
+            "metadado: refatorar 30, dispensado 100; "
+            "hipótese curada: rehost 80, replatform 60, refactor 30",
+        ),
+        (
+            "lock_in",
+            "Portabilidade",
+            "0.2",
+            "lock-in baixo: 100; médio: 50; alto: 0; pior alternativa conhecida",
+        ),
+        (
+            "dependencies",
+            "Dependências do inventário",
+            "0.1",
+            "acoplamento baixo: 100; médio: 50; alto: 0, somente na fração correlacionada",
+        ),
+    )
     return _axis(
         "technical",
         "Técnico",
-        "0.5",
+        "0.4",
+        [
+            _factor(key, label, weight, rule, samples[key])
+            for key, label, weight, rule in definitions
+        ],
+    )
+
+
+def _identified_coverage(payload: dict) -> Decimal:
+    scope = [
+        w
+        for w in all_workloads(payload)
+        if not is_financial_component(str(w.get("name") or ""))
+        and normalized(w.get("category")) not in (_NON_WORKLOAD - UNCLASSIFIED)
+        and (number(w.get("cost")) or _ZERO) > 0
+    ]
+    total = sum((number(w.get("cost")) or _ZERO for w in scope), _ZERO)
+    identified = sum(
+        (
+            number(w.get("cost")) or _ZERO
+            for w in scope
+            if w.get("service_type") and w.get("type_source") in CURATED
+        ),
+        _ZERO,
+    )
+    return identified / total if total else _ZERO
+
+
+def _coverage_axis(row: dict, identified: Decimal, technical: ScoreAxis) -> ScoreAxis:
+    values = (
+        ("identification", "Identificação dos serviços", identified),
+        ("price_coverage", "Cobertura de preços", fraction(row.get("cobertura"))),
+        ("technical_coverage", "Evidência técnica", Decimal(str(technical.coverage))),
+    )
+    return _axis(
+        "coverage",
+        "Cobertura da análise",
+        "0.1",
         [
             _factor(
-                "refactoring",
-                "Alteração da aplicação",
-                "0.6",
-                "refatoração: 30; sem: 100",
-                refactors,
-            ),
-            _factor(
-                "lock_in",
-                "Portabilidade do catálogo",
-                "0.4",
-                "lock-in baixo: 100; médio: 50; alto: 0",
-                locks,
-            ),
+                key,
+                label,
+                weight,
+                "100 * fração coberta; ausência de evidência: 0%",
+                [(_ONE, value * _HUNDRED, {"source": key, "value": str(value)})],
+            )
+            for (key, label, value), weight in zip(values, ("0.3", "0.4", "0.3"), strict=True)
         ],
     )
 
 
 def _scenario(
-    row: dict, current: Decimal | None, workloads: list[dict], evidence: dict
+    row: dict,
+    current: Decimal | None,
+    workloads: list[dict],
+    evidence: dict,
+    *,
+    inventory: dict,
+    identified: Decimal,
 ) -> ScenarioScore:
     provider = normalized(row.get("provedor"))
-    axes = [_financial(row, current), _technical(workloads, provider)]
+    technical = _technical(workloads, provider, inventory)
+    axes = [_financial(row, current), technical, _coverage_axis(row, identified, technical)]
     lower = sum((Decimal(str(a.lower_bound)) * Decimal(str(a.weight)) for a in axes), _ZERO)
     upper = sum((Decimal(str(a.upper_bound)) * Decimal(str(a.weight)) for a in axes), _ZERO)
-    coverage = sum((Decimal(str(a.coverage)) * Decimal(str(a.weight)) for a in axes), _ZERO)
-    complete = all(a.value is not None for a in axes)
+    coverage = Decimal(str(axes[2].value or 0)) / _HUNDRED
+    enough = (
+        identified >= _MIN_COVERAGE
+        and technical.coverage >= float(_MIN_COVERAGE)
+        and sum(f.coverage >= float(_MIN_COVERAGE) for f in technical.factors)
+        >= _MIN_TECHNICAL_FACTORS
+        and fraction(row.get("cobertura")) >= _MIN_COVERAGE
+        and axes[0].value is not None
+    )
+    complete = (
+        enough
+        and identified == 1
+        and fraction(row.get("cobertura")) == 1
+        and technical.coverage == 1
+        and not any(f.provisional for f in technical.factors)
+    )
+    value = sum((Decimal(str(a.contribution)) for a in axes), _ZERO) if enough else None
     blockers = [
         f"{key}: requisito obrigatório não atendido"
         for key in ("region_approved", "compliance_approved")
@@ -279,12 +364,19 @@ def _scenario(
         blockers.append("Cobertura de preços inferior a 50% ou desconhecida.")
     return ScenarioScore(
         provider=provider,
-        status="complete" if complete else ("partial" if coverage else "not_scored"),
-        value=rounded(lower) if complete else None,
+        status="complete" if complete else ("partial" if enough else "not_scored"),
+        value=rounded(value) if value is not None else None,
         lower_bound=rounded(lower),
         upper_bound=rounded(upper),
         coverage=float(coverage),
         axes=axes,
+        assessment_method="evidence_normalized",
+        missing_information=[]
+        if enough
+        else [
+            "Score geral requer ≥50% de identificação, preços e evidência técnica, "
+            "além de dois critérios técnicos cobrindo ≥50% do custo cada."
+        ],
         eligible=not blockers,
         blockers=blockers,
     )
@@ -297,6 +389,8 @@ def build_decision_support(payload: dict) -> DecisionSupport:
     resumo = payload.get("resumo_executivo") or {}
     rows = _canonical(resumo.get("por_provedor") or [])
     current = number(resumo.get("custo_mensal_atual"))
+    inventory = inventory_services(payload)
+    identified = _identified_coverage(payload)
     governance = {g.provider: g.model_dump(exclude_none=True) for g in context.governance}
     declarations = {
         (e.provider, normalized(e.workload)): e.model_dump(exclude_none=True)
@@ -307,7 +401,14 @@ def build_decision_support(payload: dict) -> DecisionSupport:
     known_names = {normalized(w.get("name")) for w in workloads}
     for row in rows:
         provider = normalized(row.get("provedor"))
-        score = _scenario(row, current, workloads, governance.get(provider, {}))
+        score = _scenario(
+            row,
+            current,
+            workloads,
+            governance.get(provider, {}),
+            inventory=inventory,
+            identified=identified,
+        )
         for declared_provider, declared_name in sorted(declarations):
             if declared_provider == provider and declared_name not in known_names:
                 score.blockers.append(
@@ -363,7 +464,7 @@ def build_decision_support(payload: dict) -> DecisionSupport:
     )
     # Hash only decision inputs, not timestamps, UUIDs, narrative or logging metadata.
     snapshot = {
-        "policy": "score-7rs-v3",
+        "policy": DECISION_POLICY_VERSION,
         "workloads": workloads,
         "rows": rows,
         "current": str(current),
@@ -371,6 +472,8 @@ def build_decision_support(payload: dict) -> DecisionSupport:
         "source": normalized(payload.get("provedor_origem") or payload.get("source_provider")),
         "currency": payload.get("moeda") or payload.get("currency"),
         "confidence": confidence,
+        "inventory_services": inventory,
+        "identified_coverage": str(identified),
     }
     digest = hashlib.sha256(
         json.dumps(
@@ -378,6 +481,7 @@ def build_decision_support(payload: dict) -> DecisionSupport:
         ).encode()
     ).hexdigest()
     return DecisionSupport(
+        corporate_benefits=build_corporate_benefits(),
         input_fingerprint=digest,
         selected_provider=selected.provider if selected else None,
         selection_reason=reason,
@@ -387,11 +491,15 @@ def build_decision_support(payload: dict) -> DecisionSupport:
         strategy_summary=summary,
         confidence=confidence,
         limitations=[
-            "Política de regras v3 (50/50), não modelo treinado nem probabilidade de sucesso.",
+            "Política de regras v4 (50/40/10), não modelo treinado nem probabilidade de sucesso.",
+            "Financeiro 50%, técnico 40%, cobertura da análise 10%; benefícios não pontuam.",
+            "Nota técnica normalizada pela evidência disponível; hipóteses são preliminares. "
+            "Nota geral exige cobertura mínima, não é autorização para migrar.",
             "Limites representam fatores desconhecidos, não intervalo estatístico.",
             "Billing não comprova dependências, topologia, compliance ou autorização para migrar.",
             "Economia recorrente não inclui todo o investimento de migração "
             "ou créditos não comprovados.",
             "7 Rs do catálogo são candidatos por componente; declarações são do responsável.",
         ],
+        legacy_score_semantics="normalized_value_when_available; zero_when_not_scored",
     )

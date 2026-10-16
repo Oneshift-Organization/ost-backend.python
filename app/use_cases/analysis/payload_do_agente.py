@@ -24,6 +24,7 @@ from app.domain.entities.billing_report import BillingReport, JobStatus
 from app.domain.repositories.i_billing_report_repo import IBillingReportRepository
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
 from app.domain.services.correspondencia_inventario import SEM_CORRESPONDENCIA
+from app.use_cases.analysis.decision_support import prepare_decision_payload
 from app.use_cases.analysis.run_analysis_pipeline import (
     build_pipeline_llm_input_payload,
     conversor_da_analise,
@@ -187,6 +188,7 @@ class MontarPayloadDoAgenteUseCase:
                 ctx=ctx,
                 converter=conversor_da_analise(ctx),
             )
+        payload = prepare_decision_payload(payload)
         return PayloadDoAgente(payload=payload, pools_sem_equivalente=list(sem_equivalente))
 
     async def execute(
