@@ -88,9 +88,7 @@ def mapear_verdade(
         verdade[f"provider_comparison.{i}.estimated_monthly_savings"] = float(
             real["economia_mensal"]
         )
-        verdade[f"provider_comparison.{i}.confidence_level"] = str(
-            real.get("confianca", "low")
-        )
+        verdade[f"provider_comparison.{i}.confidence_level"] = str(real.get("confianca", "low"))
 
     melhor = do_backend.get(str(recomendado).lower()) if recomendado else None
     atual = float(resumo.get("custo_mensal_atual") or 0.0)
@@ -227,6 +225,53 @@ def _derivar_payback(
     return ResultadoAutoridade(corrigida, substituicoes)
 
 
+_NAO_AVALIADO = "provedor_nao_avaliado"
+# Texto que o agente pode dizer de um provedor; nota e custo dele não passam
+_TEXTO_DA_COMPARACAO = ("migration_complexity", "portability", "strengths", "weaknesses")
+
+
+def provedores_nao_avaliados(
+    payload_backend: dict[str, Any], resposta_agente: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Provedor que o agente comparou e o backend não avaliou (lote v4, V4.2).
+
+    `impose_decision` tira da `provider_comparison` todo provedor sem score do
+    backend: o que o agente disse dele sumia em silêncio. Vira sugestão
+    informativa, com o texto do agente e sem nenhum número dele."""
+    decisao = payload_backend.get("decision_support")
+    if not isinstance(decisao, dict):
+        return []
+    avaliados = {
+        str(s.get("provider", "")).lower()
+        for s in decisao.get("provider_scores") or []
+        if isinstance(s, dict)
+    }
+    origem = str(payload_backend.get("provedor_origem") or "").lower()
+    sugestoes: list[dict[str, Any]] = []
+    vistos: set[str] = set()
+    for item in resposta_agente.get("provider_comparison") or []:
+        if not isinstance(item, dict):
+            continue
+        provedor = str(item.get("provider") or "").strip()
+        chave = provedor.lower()
+        if not chave or chave in avaliados or chave == origem or chave in vistos:
+            continue
+        vistos.add(chave)
+        sugestoes.append(
+            {
+                "tipo": _NAO_AVALIADO,
+                "titulo": f"{provedor.upper()}: comparado pelo agente, sem avaliação do backend",
+                "detalhe": "O backend não cotou nem pontuou este provedor; o que segue é só "
+                "o que o agente disse.",
+                "provedor": chave,
+                "o_que_o_agente_disse": {
+                    k: item[k] for k in _TEXTO_DA_COMPARACAO if item.get(k) not in (None, "", [])
+                },
+            }
+        )
+    return sugestoes
+
+
 def receber_analise_do_agente(
     payload_backend: dict[str, Any],
     resposta_agente: dict[str, Any],
@@ -238,26 +283,30 @@ def receber_analise_do_agente(
 
     if "decision_support" in payload_backend:
         finalized = impose_decision(
-            AnalysisNarrativeDraft.model_validate(autoridade.resposta), payload_backend,
+            AnalysisNarrativeDraft.model_validate(autoridade.resposta),
+            payload_backend,
         )
         imposed = AnalysisV2Response.model_validate(finalized.model_dump()).model_dump(mode="json")
         # Preserve other agent-surface fields (payback, provenance, etc.).
         corrected = {**autoridade.resposta, **imposed}
-        overrides = tuple(Substituicao(key, autoridade.resposta.get(key), value)
-                          for key, value in imposed.items()
-                          if autoridade.resposta.get(key) != value)
+        overrides = tuple(
+            Substituicao(key, autoridade.resposta.get(key), value)
+            for key, value in imposed.items()
+            if autoridade.resposta.get(key) != value
+        )
         autoridade = ResultadoAutoridade(corrected, autoridade.substituicoes + overrides)
 
     autoridade = _derivar_payback(autoridade, payload_backend)
 
     conf_inicial = str(
         autoridade.resposta.get("analysis_confidence")
-        or (payload_backend.get("premissas") or {})
-        .get("confianca_analise", {})
-        .get("nivel")
+        or (payload_backend.get("premissas") or {}).get("confianca_analise", {}).get("nivel")
         or "low"
     )
-    processadas, conf_final = processar_sugestoes(sugestoes or [], conf_inicial)
+    processadas, conf_final = processar_sugestoes(
+        [*(sugestoes or []), *provedores_nao_avaliados(payload_backend, resposta_agente)],
+        conf_inicial,
+    )
 
     # As do backend vêm primeiro e **já processadas**: o efeito delas foi
     # aplicado em `build_migration_context`, e `conf_inicial` já sai de lá
