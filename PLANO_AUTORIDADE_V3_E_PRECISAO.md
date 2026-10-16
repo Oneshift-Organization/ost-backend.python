@@ -15,7 +15,27 @@ cada dia sem ganho. Por isso, os itens abaixo são implementados em branches,
 validados, e entram na develop **juntos**, depois que os testes conjuntos com a
 v2 passarem.
 
-## 2. Lote da autoridade v3
+## 2. Lote da autoridade v3 (entregue como v4 em 16/10/2026)
+
+> **Entregue como `agent-authority-v4`:** o PR #32 (score normalizado) já tinha
+> usado a v3. O usuário decidiu soltar o lote agora, sem esperar o MCP, porque o
+> #32 já força a nova preparação de snapshots. Itens e medição no §2.1; nota ao
+> MCP em `MCP.PLAN/13-NOVIDADES-16-10-E-LOTE-V4.md`.
+
+### 2.1 O que entrou, o que ficou de fora
+
+| item | situação | efeito medido nos seis relatórios |
+|---|---|---|
+| V4.1 Contestação verificável | feito | não muda número; muda o rótulo de confiança quando o agente contesta. Pedidos de sync (`pedidos_de_sync`, `sync_prices --pedidos`). `preco_sugerido` opcional vira observação do agente no ciclo de vida, sem reviver o preço |
+| V4.2 Provedor não avaliado | feito | sugestão `provedor_nao_avaliado` com o texto do agente e sem os números dele |
+| V4.3 Classificação | feito, menos o que o fix A já cobriu (Filestore e nomes da OCI) | reserva de RDS e ElastiCache recotada como banco; MSK ao custo atual e no DE-PARA (`stream_ingestion` com a OCI Streaming); SKU "Storage" do Source Repository vai para objeto. AWS Cost Explorer: OCI +801/mês, Azure −275. CUR mock: OCI −338. Os outros iguais |
+| V4.4 Herança de classe | **fora** | o score v4 do #32 lê o lock-in da metadata do catálogo e criou hipótese de classe com regra própria (rehost 80, replatform 60). Herdar classe mudaria essa hipótese e a estratégia 7R: combinar com o autor do #32 |
+| V4.5 Bloco C do acoplamento | **fora** | o #32 já pôs a dependência do inventário no eixo técnico (10%) e decidiu explicitamente não promover a exclusividade a lock-in. O V4.5 faria o contrário: decisão de produto |
+| V4.6 Pool coberto por compromisso | feito | pool que paga menos de 60% do próprio sob demanda num bill com compromisso de compute sai da diferença pool a pool, com o motivo. AWS Cost Explorer: C7G (88%), R7G, C8G, T3A, T4G, M5A, T2. Total igual |
+| V4.7 Confiança pelo custo atual | feito (entrou no lote a pedido do usuário) | Azure mock baixa → média (0,6077); GCP real e BigQuery média; OCI média; AWS Cost Explorer baixa (0,4781); CUR mock média → baixa (0,5504). O banco gerenciado só tem taxa de referência e agora pesa pelo custo real |
+
+Nenhum item mudou decisão. Gates de integração: 183 passaram no banco igual ao do
+CI.
 
 | # | item | o que muda | origem |
 |---|---|---|---|
