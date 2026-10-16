@@ -19,19 +19,23 @@ Pacote de teste para o dev: `~/Downloads/oneshift-testes-inventario-2026-10-14/`
 (fatura + inventário certo, de outra conta e parcial, por nuvem; resultado
 esperado no `LEIA-ME.md`, validado contra a API local).
 
-## Antes do Terraform — checklist (16/10)
+## Antes do Terraform — checklist (atualizado em 16/10, noite)
 
 O que falta para começar o T0, por dono. ✅ feito · ⏳ em aberto.
+
+**Resumo:** nada bloqueia o T0 a T4. O ambiente está pronto; o T5 espera a decisão
+2.1 e o T7 a 2.2. O T0 roda local: a imagem `hashicorp/terraform:1.9.8` já está no
+podman (a máquina não tem o binário).
 
 **Ambiente de develop (infra / usuário)**
 
 | # | item | estado |
 |---|---|---|
 | A1 | Migrations, regras, preços, FX no dev (1.1) | ✅ 15/10: alembic no head, 147 regras, preços AWS/OCI/Azure, 8 taxas |
-| A2 | Preços GCP no dev: falta `GCP_BILLING_API_KEY` no cluster (hoje 28 preços) | ⏳ |
-| A3 | Refazer o sync `categories-live` (falhou com 429) | ⏳ |
-| A4 | Flag `AGENT_SNAPSHOT_ENABLED=true` no dev (1.2); `INVENTORY_ENABLED` já está ligado | ⏳ confirmar |
-| A5 | Deploy das imagens da develop (back `60f309d`, front `5099761`) | ⏳ |
+| A2 | Preços GCP no dev: `GCP_BILLING_API_KEY` no cluster (infra #10) | ✅ 16/10: 722 preços oficiais (eram 24) |
+| A3 | Refazer o sync `categories-live` (falhou com 429) | ✅ 16/10: 42 categorias |
+| A4 | Flag `AGENT_SNAPSHOT_ENABLED=true` no dev (1.2); `INVENTORY_ENABLED` já está ligado | ✅ 16/10: `POST /v1/agent/snapshots` responde 401 sem token, não mais 404 |
+| A5 | Deploy das imagens da develop | ✅ back: automático (push → GHCR → Flux), develop em `19aba2d`. ⏳ front: confirmar onde é publicado (não roda no namespace `develop`) |
 
 **Validação (usuário)**
 
@@ -39,7 +43,7 @@ O que falta para começar o T0, por dono. ✅ feito · ⏳ em aberto.
 |---|---|---|
 | V1 | Cenários de entrada na tela: reenviar `inventario-aws.json` da kitconta, refazer a análise e seguir o roteiro do PLANO_CENARIOS_DE_ENTRADA §6 | ⏳ |
 | V2 | Teste do pacote de 14 pares no dev (1.3) | ⏳ |
-| V3 | Encaminhar ao MCP as notas `MCP.PLAN/10`, `/11` e `/12` (1.5) | ⏳ confirmar |
+| V3 | Encaminhar ao MCP as notas `MCP.PLAN/10` a `/13` (1.5; a 13 é a autoridade v4) | ⏳ confirmar |
 
 **Decisões (usuário)** — detalhe e recomendação em §2
 
@@ -51,11 +55,14 @@ O que falta para começar o T0, por dono. ✅ feito · ⏳ em aberto.
 | D4 | 2.3–2.8 e 2.10 | não bloqueiam o T0 |
 | D5 | Aplicações de dentro do Kubernetes: opção A ou B (PLANO_CENARIOS_DE_ENTRADA §9) | — |
 
-**MCP** — §3: 3.1 idempotência, 3.2 testes conjuntos (depende de A4), 3.3 contrato
-`agent-snapshot-v2`, 3.4 `X-OST-User-Token`, 3.5 tratar `INVENTARIO_NAO_CORRESPONDE`.
+**MCP** — §3: 3.1 idempotência, 3.2 testes conjuntos (**desbloqueada**: A4 feito),
+3.3 contrato `agent-snapshot-v2`, 3.4 `X-OST-User-Token`, 3.5 tratar
+`INVENTARIO_NAO_CORRESPONDE`.
 
-**Nós (back/front)** — nada em aberto que bloqueie o T0. O lote da autoridade v3
-(3.6) espera 3.2.
+**Nós (back/front)** — nada em aberto que bloqueie o T0. O lote da autoridade (3.6)
+saiu como v4 em 16/10, sem esperar o 3.2 (decisão do usuário). O T4 continua
+necessário: a regra `*filestore*` de `seed_classification_rules.py` ainda manda o
+Filestore para `storage_hdd`, e o gerador faz disco dele.
 
 ## 1. Fechar hoje
 
