@@ -15,8 +15,13 @@ invariantes têm teste.
 
 - O inventário é **opcional e aditivo**. Sem inventário, billing, análise e
   Terraform produzem exatamente o que produzem hoje.
-- Com inventário, a análise **não muda custo, economia nem recomendação**
-  (RI14). O inventário acrescenta estrutura, risco e fatos medidos para o
+- Com inventário, a análise **não muda custo nem economia** (RI14).
+  Desde a política `score-7rs-v4`, dependências medidas participam do score
+  técnico e da cobertura, podendo afetar a seleção por score entre cenários
+  completos. As menções abaixo à neutralidade integral de `decision_support`
+  descrevem a política v1 original; a regra atual está em
+  [`docs/decision-support.md`](docs/decision-support.md).
+  O inventário também acrescenta estrutura, risco e fatos medidos para o
   Terraform. Cotar recurso a recurso a partir do inventário é outro plano.
 - A plataforma **não recebe, não guarda e não usa credencial de nuvem** nesta
   entrega (decisão D1).
