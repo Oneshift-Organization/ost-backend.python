@@ -116,3 +116,28 @@ async def test_find_filtra_por_regiao(repo: _Repo) -> None:
     await s.flush()
     pontos = await r.find(provider=_PROVEDOR, service_type="virtual_server", region="sa-east-1")
     assert [p.sku_key for p in pontos] == ["a"]
+
+
+async def test_coleta_cortada_nao_tira_nada_da_cotacao(repo: _Repo) -> None:
+    """Guarda contra lista parcial (PLANO_CICLO_DE_VIDA_DO_PRECO §11)."""
+    r, s = repo
+    completa = [_ponto(f"vm-{i}", "us-central1") for i in range(12)]
+    await r.substituir(completa)
+
+    # Volta com 3 de 12, sem erro: parece página cortada
+    _, removidos = await r.substituir(completa[:3])
+    assert removidos == 0
+
+    # Volta com 11 de 12: um SKU saiu de verdade
+    _, removidos = await r.substituir(completa[:11])
+    assert removidos == 1
+    ausentes = (
+        await s.execute(
+            text(
+                "select sku_key from cloud_price_points "
+                "where provider = :p and ausente_desde is not null"
+            ),
+            {"p": _PROVEDOR},
+        )
+    ).scalars().all()
+    assert ausentes == ["vm-11"]

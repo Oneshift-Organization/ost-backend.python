@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.cloud_price_point import CloudPricePoint
+from app.domain.services.guarda_de_coleta import coleta_parcial
 from app.infrastructure.database.models.cloud_price_point import CloudPricePointModel
 
 
@@ -33,6 +35,7 @@ def _to_entity(row: CloudPricePointModel) -> CloudPricePoint:
 
 # Só o preço que a última coleta ainda trouxe entra na cotação
 _VIGENTE = CloudPricePointModel.ausente_desde.is_(None)
+logger = logging.getLogger(__name__)
 
 
 class PgCloudPricePointRepository:
@@ -90,20 +93,48 @@ class PgCloudPricePointRepository:
         result = await self._session.execute(stmt)
         return sorted(row[0] for row in result.all())
 
+    async def _vigentes(self, provider: str, region: str, service_type: str, source: str) -> int:
+        total = await self._session.scalar(
+            select(func.count())
+            .select_from(CloudPricePointModel)
+            .where(
+                CloudPricePointModel.provider == provider,
+                CloudPricePointModel.region == region,
+                CloudPricePointModel.service_type == service_type,
+                CloudPricePointModel.source == source,
+                _VIGENTE,
+            )
+        )
+        return int(total or 0)
+
     async def substituir(self, points: list[CloudPricePoint]) -> tuple[int, int]:
         if not points:
             return (0, 0)
-        gravados, _ = await self.bulk_upsert(points)
         conjuntos: dict[tuple[str, str, str, str], set[str]] = {}
         for p in points:
             chave = (p.provider.lower(), p.region, p.service_type, p.source)
             conjuntos.setdefault(chave, set()).add(p.sku_key)
+        vigentes = {chave: await self._vigentes(*chave) for chave in conjuntos}
+        gravados, _ = await self.bulk_upsert(points)
         # O que a coleta deixou de trazer fica, marcado como ausente: envelhece no
         # ciclo de vida até ADUBO e segue de referência, mas sai da cotação
-        # (PLANO_CICLO_DE_VIDA_DO_PRECO §6, decisão 4)
+        # (PLANO_CICLO_DE_VIDA_DO_PRECO §6, decisão 4). Coleta que parece cortada
+        # não marca nada (domain/services/guarda_de_coleta).
         ausentes = 0
         agora = datetime.now(UTC)
         for (provider, region, service_type, source), chaves in conjuntos.items():
+            antes = vigentes[(provider, region, service_type, source)]
+            if coleta_parcial(antes, len(chaves)):
+                logger.warning(
+                    "coleta parcial: %s %s %s (%s) trouxe %d de %d; ausência não marcada",
+                    provider,
+                    region,
+                    service_type,
+                    source,
+                    len(chaves),
+                    antes,
+                )
+                continue
             result = await self._session.execute(
                 update(CloudPricePointModel)
                 .where(
