@@ -77,6 +77,7 @@ from app.domain.services.service_identity import (
     service_key,
     service_type_hint,
 )
+from app.domain.services.servico_pelo_uso import servico_pelo_uso
 from app.services.billing_aggregator import BillingAggregator
 from app.use_cases.analysis.leitura_completa import listar_todos
 
@@ -146,7 +147,9 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         "Amazon Simple Email Service": "Amazon SES",
         "Amazon Simple Queue Service": "Amazon Simple Queue Service (SQS)",
         "AWS Key Management Service": "AWS Key Management Service (KMS)",
-        "Amazon Elastic Container Service for Kubernetes": "Amazon Elastic Kubernetes Service (EKS)",
+        "Amazon Elastic Container Service for Kubernetes": (
+            "Amazon Elastic Kubernetes Service (EKS)"
+        ),
         "Amazon Elastic Container Registry": "Amazon Elastic Container Registry (ECR)",
         "Amazon Elastic File System": "Amazon Elastic File System (EFS)",
     },
@@ -530,6 +533,19 @@ class BuildMigrationContextUseCase:
             hint = service_type_hint(source_provider, raw["service_name"])
             if hint and comp is None:
                 category_name, service_type = hint
+            pelo_uso = None
+            if comp is None and hint is None:
+                # Nome que a fatura dá a mais de um serviço ("Storage", "Networking"):
+                # o uso das linhas escolhe a entrada do DE-PARA (servico_pelo_uso)
+                pelo_uso = servico_pelo_uso(
+                    source_provider,
+                    raw["service_name"],
+                    ((i.usage_type, i.cost) for i in raw["items"]),
+                )
+                if pelo_uso is not None:
+                    comp = _match(pelo_uso[0], raw.get("service_type"))
+                    if comp is not None:
+                        category_name, service_type = comp.category, comp.service_type
 
             # Missing quantities occur in aggregate exports too. Only explicit
             # financial identities/categories suppress functional equivalents.
@@ -569,7 +585,9 @@ class BuildMigrationContextUseCase:
                 equivalents=equivs,
                 migration_expectation=expectation.as_dict() if expectation else None,
                 type_source=(
-                    "curado" if comp is not None else ("catalog_alias" if hint else "inferido")
+                    "catalog_alias"
+                    if hint or (pelo_uso is not None and comp is not None)
+                    else ("curado" if comp is not None else "inferido")
                 ),
                 migration_metadata=svc_meta.metadata if svc_meta and not sem_uso else None,
             )
