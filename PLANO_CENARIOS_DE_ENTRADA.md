@@ -307,3 +307,27 @@ domínio não conhece tag de provedor.
 do Terraform igual (suíte inteira verde). Em conta com AKS, os pools dos nós passam a
 casar com o VMSS (o ID de instância da fatura cai no pai) e podem ganhar posicionamento
 no pacote do Terraform.
+
+## 13. O que ficou sem correção, e por quê (16/10/2026)
+
+A rodada de correções gerais teve três entregas, cada uma com a análise de impacto no
+lugar dela:
+
+- §11.2, nome ambíguo pelo uso;
+- §12, Kubernetes e componentes na Azure e no GCP;
+- PLANO_AUTORIDADE_V3_E_PRECISAO §3 (P1b), série B da Azure pela base de CPU.
+
+O resto não é ajuste de código.
+
+| assunto | por que não foi corrigido agora | caminho |
+|---|---|---|
+| Cotação de balanceador, NAT, segredo, DNS, CDN e plano de controle do Kubernetes | O DE-PARA diz o que equivale; o preço precisa de tabela por serviço e por nuvem. Hoje só pools de compute e as categorias (disco, objeto, egress, banco) têm preço; `cloud_services_metadata` tem 40 linhas e o balanceador só para AWS e OCI | Bloco novo: preço oficial por serviço (API de preço de cada nuvem), sync em dev e prod |
+| Serviço fora do DE-PARA (MSK, "Bandwidth" da Azure) | O DE-PARA é a tabela curada e autoritativa (`seed_from_csv`); linha inventada viraria equivalência sem curadoria | Propor as linhas para quem cura a tabela |
+| Nome de fatura que é mistura de verdade ("Networking" do GCP, "NETWORK" da OCI) | Sem alvo com 60% do custo, qualquer tipo escolhido estaria errado para parte do dinheiro | Fica sem tipo, por desenho |
+| Padrões da Azure e do GCP (rede `default`, regras padrão) | Ao contrário da AWS, costumam estar em uso; tirar quebraria a topologia | Fica, por desenho |
+| Cada repositório do ACR e cada segredo do Key Vault | O Resource Graph lista o registro e o cofre, não o conteúdo | As prováveis aplicações do AKS vêm das tags de Service e de volume |
+| OKE (Kubernetes da OCI) | A OCI entra pelo formato canônico, porque a busca de recursos dela não traz anexos nem regras. OKE funciona se quem gera o arquivo declarar cluster, nós (`membro_de`) e as marcas | Leitor do export nativo da OCI, se o coletor do agente não cobrir |
+| Kubernetes opção B (export do `kubectl`) | Arquivo novo, tela de envio e leitor | Evolução, decisão de produto |
+| Regras de Azure e GCP validadas em conta real | Não há conta real dessas nuvens | Validar na primeira conta que chegar |
+| Linha de Savings Plan e reserva | É linha financeira, sem recurso | Por desenho: o compromisso sai junto com os pools (PLANO_EMPACOTAMENTO) |
+| Confiança que cai quando o compute oficial fica mais barato | A métrica pesa pelo valor cotado. Trocar para o custo atual muda o significado de `custo_total_cotado` no payload do agente | Decisão de contrato, para o lote v3 |
