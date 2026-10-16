@@ -239,8 +239,8 @@ versão de autoridade.
 
 ## 4. Dependências
 
-- O lote v3 espera os **testes conjuntos com o MCP na v2** (que dependem de a
-  infra ligar o snapshot no dev).
+- O lote saiu como v4 em 16/10, sem esperar os testes conjuntos com o MCP
+  (decisão do usuário).
 - P1 não depende de ninguém; P2 depende da escolha da fonte.
 - Nada aqui toca o Terraform, exceto o efeito do V3.3 no disco fantasma, que
   vai junto com a sprint de Terraform.
