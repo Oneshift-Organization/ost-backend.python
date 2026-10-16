@@ -27,6 +27,21 @@ O que falta para começar o T0, por dono. ✅ feito · ⏳ em aberto.
 2.1 e o T7 a 2.2. O T0 roda local: a imagem `hashicorp/terraform:1.9.8` já está no
 podman (a máquina não tem o binário).
 
+**Ordem combinada em 16/10 (noite):**
+1. Correções de precisão: instância mínima do Cloud Run, guarda contra lista parcial
+   no sync, preço de segredo, CDN e plano de controle do Kubernetes.
+2. Curadoria aprovada: os 26 serviços e o Oracle (`PLANO_SCORE_V5_LOCKIN` §8), mais a
+   linha "Bandwidth" da Azure no DE-PARA.
+3. T0 com o C2.
+4. **Próxima etapa: o Terraform** (T1 a T4).
+
+O PR #31 (develop → main) foi **fechado** em 16/10 a pedido do usuário: a promoção para
+a main saiu de pauta. A segurança (2.9) foi para as melhorias (§7).
+
+Pendências de terceiros, uma nota por responsável:
+- MCP e autor do PR #32 (a mesma pessoa): `MCP.PLAN/14-PENDENCIAS-COM-VOCES-16-10.md`;
+- Luiz, dono do `build-push.yml`: `INFRA.PLAN/01-CI-IMAGEM-SO-COM-TESTES-VERDES.md`.
+
 **Ambiente de develop (infra / usuário)**
 
 | # | item | estado |
@@ -45,12 +60,12 @@ podman (a máquina não tem o binário).
 | V2 | Teste do pacote de 14 pares no dev (1.3) | ⏳ |
 | V3 | Encaminhar ao MCP as notas `MCP.PLAN/10` a `/13` (1.5; a 13 é a autoridade v4) | ⏳ confirmar |
 
-**CI (dono do workflow)**
+**CI**
 
 | # | item | estado |
 |---|---|---|
-| C1 | O build e o deploy do develop não esperam os testes: `build-push.yml` e `tests.yml` rodam em paralelo, sem `needs` (item 21 de 12/10). Um teste vermelho não impede a imagem de subir | ⏳ |
-| C2 | Passo que instala o binário do Terraform e o cache dos providers (T0 na CI) | ⏳ |
+| C1 | O build e o deploy do develop não esperam os testes: `build-push.yml` e `tests.yml` rodam em paralelo, sem `needs` (item 21 de 12/10). Um teste vermelho não impede a imagem de subir. **Do Luiz** (o `build-push.yml` é dele e também publica a main); proposta pronta em `INFRA.PLAN/01` | ⏳ |
+| C2 | Passo que instala o binário do Terraform e o cache dos providers (T0 na CI). **Nosso**: o `tests.yml` é mantido pelo backend | ⏳ junto com o T0 |
 
 **Decisões (usuário)** — detalhe e recomendação em §2
 
@@ -58,8 +73,8 @@ podman (a máquina não tem o binário).
 |---|---|---|
 | D1 | 2.1 plano de migração salvo | T5 |
 | D2 | 2.2 envio do agente gera Terraform? | T7 |
-| D3 | 2.9 revogar a chave GCP das branches órfãs e trocar tokens | — (segurança, fazer já) |
-| D4 | 2.3–2.8 e 2.10 | não bloqueiam o T0 |
+| D3 | 2.9 revogar a chave GCP das branches órfãs e trocar tokens | — (movida para as melhorias, §7) |
+| D4 | 2.3–2.8 | não bloqueiam o T0 |
 | D5 | Aplicações de dentro do Kubernetes: opção A ou B (PLANO_CENARIOS_DE_ENTRADA §9) | — |
 
 **MCP** — §3: 3.1 idempotência, 3.2 testes conjuntos (**desbloqueada**: A4 feito),
@@ -95,19 +110,19 @@ Com a recomendação; nenhuma bloqueia o início da sprint, exceto a 2.1 para o 
 | 2.6 | Anexar inventário refaz a análise inteira (LLM de novo) | aceitar por ora; reavaliar se o custo pesar | — |
 | 2.7 | Fonte do `perf_coef` | tabela curada das publicações oficiais (opção 1 do P2) | P2 |
 | 2.8 | Termos de uso para o ciclo de vida do preço (billing de um cliente alimenta a base de todos?) | levar ao jurídico antes da P3.3 | P3.3 |
-| 2.9 | Segurança: revogar a chave GCP das branches órfãs; trocar `MCP_TOKEN`, token do inspector e `GCP_BILLING_API_KEY` | fazer já, numa janela combinada com o MCP | — |
-| 2.10 | Quando promover develop → main | depois do teste em dev (1.3) e dos 24 testes de Terraform rodando (T0) | — |
+| 2.9 | Segurança: revogar a chave GCP das branches órfãs; trocar `MCP_TOKEN`, token do inspector e `GCP_BILLING_API_KEY` | movida para as melhorias (§7) em 16/10 | — |
+| 2.10 | Quando promover develop → main | **fora de pauta**: o PR #31 foi fechado em 16/10 a pedido do usuário | — |
 
 ## 3. MCP e agente
 
 | # | pendência | de quem | estado |
 |---|---|---|---|
 | 3.1 | Confirmar a idempotência pelo conteúdo e a lista com resumo do contrato de snapshot | MCP | aberta desde 12/10 |
-| 3.2 | Testes conjuntos com a autoridade v2 | MCP + nós | **bloqueada** por 1.1/1.2 (snapshot desligado no dev) |
+| 3.2 | Testes conjuntos (a autoridade no dev é a v4) | MCP + nós | **desbloqueada** em 16/10: snapshot ligado no dev (A4) |
 | 3.3 | `decision_support` compacto (crítico): a parte pura (K1) está pronta e não exposta; falta o aceite do contrato `agent-snapshot-v2` opcional ([`PLANO_DECISION_SUPPORT_COMPACTO`](PLANO_DECISION_SUPPORT_COMPACTO.md)) | MCP aceita → nós expomos a rota | aguarda MCP |
 | 3.4 | Cliente do agente enviar `X-OST-User-Token` | quem hospeda o agente | aberta |
 | 3.5 | Novo 422 `INVENTARIO_NAO_CORRESPONDE` na preparação de snapshot com inventário de outra conta | MCP trata o código | nota 12 |
-| 3.6 | Lote da autoridade v3 (contestação verificável, classificação, bloco C com o nível refeito pelo inventário) | nós | espera 3.2 |
+| 3.6 | Lote da autoridade v3 (contestação verificável, classificação, bloco C com o nível refeito pelo inventário) | nós | ✅ saiu como v4 em 16/10, sem esperar o 3.2 (decisão do usuário); V4.4 e V4.5 divididos com o autor do #32 (`PLANO_SCORE_V5_LOCKIN`) |
 
 ## 4. Sprint de Terraform
 
@@ -182,9 +197,10 @@ Só se 2.2 mudar.
 
 ## 5. Depois da sprint
 
-- Fila de precisão: P1 custos auxiliares por zona, P1b burstable na origem, P2
-  `perf_coef`, **P3 ciclo de vida do preço** ([`PLANO_CICLO_DE_VIDA_DO_PRECO`](PLANO_CICLO_DE_VIDA_DO_PRECO.md)).
-- Lote da autoridade v3, depois dos testes conjuntos (3.2).
+- Fila de precisão: P1 custos auxiliares por zona e P1b burstable na origem ✅ (16/10);
+  P2 `perf_coef` espera a decisão 2.7; **P3 ciclo de vida do preço**: P3.0 a P3.2 ✅,
+  a fatura como fonte espera o ok da etapa A ([`PLANO_CICLO_DE_VIDA_DO_PRECO`](PLANO_CICLO_DE_VIDA_DO_PRECO.md)).
+- ✅ Lote da autoridade: saiu como v4 em 16/10.
 - Pendências da tela Dependências: mensagem própria para fatura sem ID de recurso
   já entrou; falta "migrar só o serviço" (modo parcial, E6) se o usuário quiser.
 - ✅ **Fatura AWS no formato certo** — feito em 15–16/10: guia do CUR 2.0 e recusa no
@@ -211,3 +227,10 @@ Só se 2.2 mudar.
   o motivo.
 - **Escopo do T5** depende de 2.1: sem decisão, começa pela escolha no corpo e
   migra para o plano salvo depois.
+
+## 7. Melhorias (sem data)
+
+| # | melhoria | de quem | observação |
+|---|---|---|---|
+| M1 | **Segurança (era a decisão 2.9):** revogar a chave da service account do GCP (`oneshift-catalogsync`) commitada nas branches órfãs `dev/feat/billing-refactor-prep` e `feat/sku-accuracy-impl`; trocar `MCP_TOKEN`, o token do inspector e a `GCP_BILLING_API_KEY` | usuário (console do GCP e segredos do cluster), numa janela combinada com o MCP | apagar as branches não resolve: o objeto continua alcançável no GitHub. Depois da revogação, limpar o histórico só se ainda interessar |
+| M2 | Recálculo diário agendado: CronJob no infra rodando o sync de preços e o câmbio | nós preparamos o PR no infra; o merge é do usuário | [`PLANO_CICLO_DE_VIDA_DO_PRECO`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) §11 |

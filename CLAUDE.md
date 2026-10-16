@@ -174,7 +174,8 @@ existe").
   da premissa — [`PLANO_PRECO_REGIONAL.md`](PLANO_PRECO_REGIONAL.md)).
   Compute cotado pela capacidade-hora medida, com o compromisso de compute
   saindo da origem junto com os pools ([`PLANO_EMPACOTAMENTO.md`](PLANO_EMPACOTAMENTO.md)).
-  Pendente: `perf_coef`, custos auxiliares por zona, burstable na origem, payback na tela.
+  Custos auxiliares por zona e burstable na origem feitos em 16/10. Pendente: `perf_coef`
+  (espera a fonte, decisão 2.7) e payback na tela (falta a fonte do custo da migração).
 - **O backend manda no número; a IA narra.** `use_cases/analysis/backend_authority.py`
   sobrescreve custo, economia e provedor recomendado da resposta do LLM com o
   cálculo determinístico de `resumo_executivo`. O qualitativo do modelo é
