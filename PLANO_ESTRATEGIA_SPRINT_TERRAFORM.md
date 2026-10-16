@@ -28,11 +28,12 @@ O que falta para começar o T0, por dono. ✅ feito · ⏳ em aberto.
 podman (a máquina não tem o binário).
 
 **Ordem combinada em 16/10 (noite):**
-1. Correções de precisão: instância mínima do Cloud Run, guarda contra lista parcial
-   no sync, preço de segredo, CDN e plano de controle do Kubernetes.
-2. Curadoria aprovada: os 26 serviços e o Oracle (`PLANO_SCORE_V5_LOCKIN` §8), mais a
-   linha "Bandwidth" da Azure no DE-PARA.
-3. T0 com o C2.
+1. ✅ Correções de precisão (`8547faf`, `56efc16`): instância mínima do Cloud Run, guarda
+   contra lista parcial no sync, preço de segredo, CDN e plano de controle do Kubernetes
+   (PLANO_PRECO_NAO_COMPUTE §6).
+2. ✅ Curadoria aprovada (`b09b3ba`): os 26 serviços e o Oracle (`PLANO_SCORE_V5_LOCKIN`
+   §8.1), mais a linha "Bandwidth" da Azure no DE-PARA.
+3. ✅ T0 com o C2 (`35a3888`): os 24 testes de Terraform passam local; a CI instala o binário.
 4. **Próxima etapa: o Terraform** (T1 a T4).
 
 O PR #31 (develop → main) foi **fechado** em 16/10 a pedido do usuário: a promoção para
