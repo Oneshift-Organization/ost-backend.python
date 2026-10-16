@@ -149,16 +149,49 @@ T3A, T4G e T2 do bill AWS saem 3–6x no GCP: a vCPU burstable tem base de
 20–40% e é cotada como vCPU cheia (`PLANO_EMPACOTAMENTO` §5.2).
 
 **Feito (16/10):** `Perfil.base_cpu` (família T da AWS por tamanho, 40% sem
-tamanho; núcleo compartilhado do GCP; série B da Azure fica sem base porque varia
-por SKU). No packer, origem burstable: destino sem crédito recebe vCPU × base,
-destino burstable recebe a nominal, vence o mais barato; a memória não muda.
-Premissa `burstable_pela_base` lista os pools.
+tamanho; núcleo compartilhado do GCP; série B da Azure, abaixo). No packer, origem
+burstable: destino sem crédito recebe vCPU × base, destino burstable recebe a
+nominal, vence o mais barato; a memória não muda. Premissa `burstable_pela_base`
+lista os pools.
 
 | relatório | decisão | confiança | economia antes → depois (US$/mês) |
 |---|---|---|---|
 | AWS Cost Explorer (real) | OCI = OCI | medium = medium | OCI 40.419,93 → 41.192,50 · Azure −8.628,91 → −8.006,72 · GCP −16.886,13 → −15.307,92 |
 | AWS CUR (mock) | OCI = OCI | medium = medium | OCI 37.352,99 → 38.357,15 · Azure −10.168,77 → −8.957,11 · GCP −20.230,12 → −17.575,37 |
-| GCP Cost Table, GCP BigQuery, Azure, OCI (mocks e real) | iguais | iguais | iguais (sem família burstable na origem) |
+| GCP Cost Table, GCP BigQuery, OCI (mocks e real) | iguais | iguais | iguais (sem família burstable na origem) |
+| Azure (mock) | iguais | iguais | iguais (o pool `BMS` é burstable, mas a série B ainda não tinha base) |
+
+**Série B da Azure (correção C):** a base vem da documentação de tamanhos Bv1 e
+Bsv2, que desde 2024 dá a base da VM na escala 0–100%, ou seja, a fração de cada
+vCPU. Bv1 por tamanho (B1ls 5%, B1s 10%, B1ms e B2s 20%, B2ms 30%, B4ms 22,5%,
+B8ms a B20ms 17%); pool só da família usa a maior base dela (`BLS` 5%, `BS` 20%,
+`BMS` 30%). Bsv2, Basv2 e Bpsv2 pela letra do tamanho: `ts` 20%, `ls` 30%, `s` 40%.
+Série B de versão sem tabela (uma v3 futura) fica sem base e não reduz.
+
+Análise de impacto: muda só o bill da Azure com série B cotado em destino sem
+burstable; nada lê `base_cpu` além do packer e da premissa. O risco é reduzir
+demais, e por isso a família sem tamanho usa a maior base dela e a versão
+desconhecida não reduz.
+
+| relatório | decisão | confiança | economia antes → depois (US$/mês) |
+|---|---|---|---|
+| Azure (mock) | OCI = OCI | medium → low | OCI 4.116,34 → 4.153,54 · AWS 378,77 → 469,39 · GCP −4,83 → 98,21 |
+| os outros cinco | iguais | iguais | iguais |
+
+O pool `BMS/brazilsouth` (8,15 vCPU, 32,6 GiB) saía em AWS `t3a.2xlarge`
+(US$ 359,95), GCP `e2-standard-8` (316,56) e OCI `E3.Flex.4c32g` (110,11); pela
+base de 30% sai em `r5a.xlarge` (269,33), `e2-highmem-4` (213,52) e
+`E3.Flex.2c32g` (72,91).
+
+A confiança caiu de propósito da regra, não por erro: ela mede a fração do valor
+**cotado** que vem de preço oficial. O compute (oficial) ficou US$ 230,86 mais
+barato e as categorias (taxa `reference`) não mudaram, então a fração oficial foi
+de 0,6052 para 0,5991, abaixo do limiar de 0,60. O número final passou a depender
+um pouco mais das taxas de referência, e é isso que a métrica diz. O que sobe essa
+confiança é cotar as categorias com preço oficial (preço de serviços não-compute,
+proposto como próximo bloco). Medir pela fração do custo **atual** coberto por preço
+oficial deixaria o rótulo estável, mas muda o significado de `custo_total_cotado`
+no payload do agente: é decisão de contrato, para o lote v3, se for o caso.
 
 ### P2 `perf_coef` (desempenho por vCPU entre gerações)
 

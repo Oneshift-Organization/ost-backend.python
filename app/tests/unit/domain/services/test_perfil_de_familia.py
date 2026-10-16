@@ -70,7 +70,18 @@ def test_perfil(provedor: str, nome: str, arquitetura: Arquitetura, burstable: b
         ("aws", "T3A", "0.40"),  # família sem tamanho: a maior base usual
         ("gcp", "e2-medium", "0.50"),
         ("aws", "m7g.large", None),
-        ("azure", "Standard_B2s", None),  # base da série B varia por SKU: não reduz
+        ("azure", "Standard_B2s", "0.20"),
+        ("azure", "Standard_B4ms", "0.225"),
+        ("azure", "Standard_B16ms", "0.17"),
+        ("azure", "BMS", "0.30"),  # família sem tamanho: a maior base dela
+        ("azure", "BLS", "0.05"),
+        ("azure", "Standard_B2ts_v2", "0.20"),
+        ("azure", "Standard_B4ls_v2", "0.30"),
+        ("azure", "Standard_B2pls_v2", "0.30"),  # Ampere, mesma tabela
+        ("azure", "BSV2", "0.40"),
+        ("azure", "BLSV2", "0.30"),  # v2: não é a BLS da v1
+        ("azure", "Standard_B2s_v3", None),  # versão sem tabela: não reduz
+        ("azure", "Standard_D4s_v5", None),
     ],
 )
 def test_base_de_cpu_do_burstable(provedor: str, nome: str, base: str | None) -> None:
