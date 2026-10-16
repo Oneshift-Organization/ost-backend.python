@@ -57,12 +57,21 @@ async def test_compromisso_de_compute_sai_da_origem_com_os_pools(
     # ComputeSP:3yrNoUpfront (8.184,00) + EC2SP:r7g (1.897,65); a reserva de RDS
     # e de ElastiCache fica de fora.
     assert compromisso["valor"] == pytest.approx(10081.65, abs=0.05)
-    assert set(compromisso["por_provedor"]) == {"azure", "gcp", "oci"}
+    # O crédito vai para cada destino que cotou pool, e só para ele. Quais destinos
+    # cotam depende dos preços do ambiente: o CI só tem o catálogo seed, sem Azure.
+    cotaram = {
+        e["provedor"].lower()
+        for pool in payload["pools_computacao"]
+        for e in pool.get("equivalentes") or []
+        if (e.get("financeiro") or {}).get("custo_mensal_estimado") is not None
+    }
+    assert cotaram
+    assert set(compromisso["por_provedor"]) == cotaram
 
     atual = Decimal(str(payload["resumo_executivo"]["custo_mensal_atual"]))
     for linha in reconcile_pricing(project_equivalences(payload), payload):
         assert linha["status"] == "reconciled", linha
-        credito = compromisso["por_provedor"][linha["provider"]]
+        credito = compromisso["por_provedor"].get(linha["provider"], 0)
         # O compromisso entrou no custo coberto, não no saldo mantido.
         saldo = Decimal(str(linha["unchanged_source_balance"]))
         coberto = Decimal(str(linha["source_covered"]))
