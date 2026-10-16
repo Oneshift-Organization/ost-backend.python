@@ -365,6 +365,10 @@ class UnidadeNoPlanoOut(BaseModel):
         description=f"os {RECURSOS_POR_UNIDADE} recursos mais caros; a planilha tem todos"
     )
     recursos_total: int
+    clusters: list[ClusterDaAplicacaoOut] = Field(
+        default_factory=list,
+        description="prováveis aplicações dentro do cluster da unidade (indício: migram com ele)",
+    )
 
 
 def _composicao(r: PlanoCotado) -> tuple[list[GrupoNoPlanoOut], list[UnidadeNoPlanoOut], int]:
@@ -424,6 +428,20 @@ def _composicao(r: PlanoCotado) -> tuple[list[GrupoNoPlanoOut], list[UnidadeNoPl
                     ]
                 ],
                 recursos_total=len(recursos),
+                clusters=(
+                    [
+                        ClusterDaAplicacaoOut(
+                            cluster=k.cluster,
+                            cargas=[
+                                CargaNoClusterOut(nome=x.nome, fontes=list(x.fontes))
+                                for x in k.cargas
+                            ],
+                            namespaces=list(k.namespaces),
+                        )
+                    ]
+                    if (k := ctx.cargas_no_cluster.get(u)) is not None and k.cargas
+                    else []
+                ),
             )
         )
     ordem_do_bloco = {"pre": 0, "principal": 1, "pos": 2}
