@@ -44,6 +44,31 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol
 
+from app.domain.services.azure_shape import familia_vm
+from app.domain.services.sku_matcher import extract_family
+
+# Pool que paga menos de 60% do próprio preço sob demanda: o compromisso cobre parte
+# das horas dele (V4.6). Abaixo disso, a diferença pode ser só região ou desconto.
+LIMIAR_DE_COBERTURA = Decimal("0.4")
+
+
+def familia_do_ponto(provedor: str, sku: str) -> str | None:
+    """Família de um ponto de preço como os pools da fatura a nomeiam (C7G, E2, E4, DSV5)."""
+    if provedor.lower() == "azure":
+        return familia_vm(sku)
+    return extract_family(sku)
+
+
+def cobertura_estimada(custo_vcpu_hora: Decimal, sob_demanda_vcpu_hora: Decimal) -> Decimal | None:
+    """Quanto do preço sob demanda o pool não pagou na própria linha (0 a 1).
+
+    É o caso do C7G da AWS real: 0,004 a 0,018 por vCPU-hora contra 0,036 a 0,054 sob
+    demanda, porque o Savings Plan paga o resto na linha dele. None sem preço de
+    referência."""
+    if sob_demanda_vcpu_hora <= 0 or custo_vcpu_hora < 0:
+        return None
+    return max(Decimal(0), Decimal(1) - custo_vcpu_hora / sob_demanda_vcpu_hora)
+
 
 class _PoolLike(Protocol):
     """O mínimo que precisamos de um pool, para não acoplar ao tipo concreto."""
@@ -108,18 +133,12 @@ def avaliar_cobertura(
     """
     sem_custo = tuple(
         sorted(
-            chave
-            for chave, (vcpus, custo) in pools_por_chave.items()
-            if vcpus > 0 and custo <= 0
+            chave for chave, (vcpus, custo) in pools_por_chave.items() if vcpus > 0 and custo <= 0
         )
     )
     return CoberturaPorCompromisso(
         pools=sem_custo,
-        vcpus_sem_custo=sum(
-            (pools_por_chave[c][0] for c in sem_custo), Decimal("0")
-        ),
-        vcpus_total=sum(
-            (v for v, _ in pools_por_chave.values()), Decimal("0")
-        ),
+        vcpus_sem_custo=sum((pools_por_chave[c][0] for c in sem_custo), Decimal("0")),
+        vcpus_total=sum((v for v, _ in pools_por_chave.values()), Decimal("0")),
         compromisso=compromisso,
     )

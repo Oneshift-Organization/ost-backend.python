@@ -65,7 +65,9 @@ def _sources(payload: dict) -> list[dict]:
                 # O que o destino exigir a mais continua valendo: `technical_evidence`
                 # fica com a pior restrição dos dois lados.
                 "source_metadata": {"requires_refactoring": False, "vendor_lock_in_level": "low"},
-                "commitment": pool.get("custo_coberto_por_compromisso") is True,
+                # Custo zero, ou parte das horas paga pelo compromisso (V4.6)
+                "commitment": pool.get("custo_coberto_por_compromisso") is True
+                or pool.get("coberto_por_compromisso_estimado") is not None,
                 "cost": sum(
                     float(pool.get(k) or (pool.get("custos") or {}).get(k) or 0)
                     for k in ("custo_computacao", "custo_licenca_so")
@@ -149,15 +151,30 @@ def _row(source: dict, target: dict, provider: str) -> CrossCloudEquivalent:
     )
 
 
+_RAZAO_DO_METODO = {
+    "category_rate_ratio": (
+        "Estimativa por razão de tarifas da categoria; validar consumo, região e descontos."
+    ),
+    "quantidade_medida": (
+        "Quantidade medida na fatura vezes a tarifa do destino; validar descontos e região."
+    ),
+}
+
+
 def _pricing_reason(source: dict, name: str | None, financials: dict) -> str:
     if not name:
         return "Mapeamento ausente: validar serviço de destino antes de cotar."
-    if financials.get("pricing_method") == "category_rate_ratio":
-        return "Estimativa por razão de tarifas da categoria; validar consumo, região e descontos."
-    if financials.get("pricing_method") == "quantidade_medida":
-        return "Quantidade medida na fatura vezes a tarifa do destino; validar descontos e região."
+    if source.get("commitment") and financials:
+        return (
+            "Pool coberto por compromisso na origem (Savings Plan, reserva, CUD ou spot): a "
+            "diferença pool a pool não é comparável. O total do cenário já tira o "
+            "compromisso junto com os pools."
+        )
     if financials:
-        return "Estimativa de capacidade; confirmar arquitetura, região e condições comerciais."
+        return _RAZAO_DO_METODO.get(
+            str(financials.get("pricing_method")),
+            "Estimativa de capacidade; confirmar arquitetura, região e condições comerciais.",
+        )
     if source.get("type_source") == "inferido":
         return "Classificação inferida: confirmar tipo de serviço e dimensionamento."
     return "Sem tarifa ou consumo compatível neste escopo. Consultar também os custos agregados."

@@ -118,6 +118,7 @@ def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
         # conclui que migrar o pool ADICIONA o custo inteiro.
         if fp.capacity.vcpus > 0 and fp.monthly_cost <= 0:
             entry["custo_coberto_por_compromisso"] = True
+        entry.update(_compromisso_estimado(fp, ctx))
         entry.update(_inventario_do_pool(fp, ctx))
         out.append(entry)
 
@@ -134,6 +135,15 @@ _NOMES_ARMAZENAMENTO = {
     "object_storage": "armazenamento_objetos",
     "snapshots": "snapshots",
 }
+
+
+def _compromisso_estimado(fp: Any, ctx: Any) -> dict[str, object]:
+    """V4.6: o compromisso de compute pagou parte das horas do pool (fração do preço
+    sob demanda da origem). A comparação pool a pool não vale para ele."""
+    fracao = (getattr(ctx, "coberto_por_compromisso_estimado", None) or {}).get(
+        fp.pool_key.as_str()
+    )
+    return {"coberto_por_compromisso_estimado": float(fracao)} if fracao is not None else {}
 
 
 def _inventario_do_pool(fp, ctx) -> dict[str, object]:

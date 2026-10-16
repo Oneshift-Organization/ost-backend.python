@@ -25,7 +25,9 @@ CONTRACT_VERSION = "agent-snapshot-v1"
 
 # As regras que o envio aplica sobre o snapshot. Suba quando a mesma entrada
 # passar a produzir outra análise corrigida.
-AUTHORITY_VERSION = "agent-authority-v3"
+# v4: lote da autoridade (PLANO_AUTORIDADE_V3_E_PRECISAO §2, renomeado v4 porque o
+# PR #32 já usou a v3 para o score normalizado)
+AUTHORITY_VERSION = "agent-authority-v4"
 
 
 def politica_de_decisao_atual() -> str:

@@ -115,8 +115,9 @@ sem benefício após o prazo. Não tratar oferta potencial como economia permane
 O novo eixo usa `id=coverage`; `enterprise` continua significando governança
 em históricos. `enterprise_score` legado fica em zero nas novas respostas (não
 participa da fórmula); consumidores devem ler os eixos de `decision_support`.
-O contrato de snapshot usa `agent-authority-v3`: envios novos sobre snapshots
-de política/autoridade anterior são recusados por versão. Repetições já gravadas
+O contrato de snapshot usa `agent-authority-v4` (o lote da autoridade,
+`PLANO_AUTORIDADE_V3_E_PRECISAO` §2; a v3 foi a do score normalizado): envios novos
+sobre snapshots de política/autoridade anterior são recusados por versão. Repetições já gravadas
 mantêm a idempotência existente. Nenhuma allowlist ou flag de envio é liberada.
 
 ## Seleção e bloqueios

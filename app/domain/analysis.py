@@ -152,6 +152,8 @@ class MigrationContext:
     analysis_currency: str = "USD"
     # Ledger de premissas: fx aplicado, fonte de preços, janela, cobertura.
     premissas: dict[str, Any] = field(default_factory=dict)
+    # Pool → fração do preço sob demanda que o compromisso pagou (V4.6)
+    coberto_por_compromisso_estimado: dict[str, Decimal] = field(default_factory=dict)
     # Roll-up por provedor + recomendação (backend calcula, LLM narra).
     resumo_executivo: dict[str, Any] = field(default_factory=dict)
     # Fatos medidos de export detalhado (armazenamento, bancos). None no
