@@ -65,8 +65,7 @@ def _por_destino_igual_ao_score(payload: dict[str, Any]) -> None:
     comparados = 0
     for cenario in decisao.provider_scores:
         tecnico = next(a for a in cenario.axes if a.id == "technical")
-        corporativo = next(a for a in cenario.axes if a.id == "technical")
-        lock = next(f for f in corporativo.factors if f.id == "lock_in")
+        lock = next(f for f in tecnico.factors if f.id == "lock_in")
         for amostra in lock.evidence:
             assert visao[amostra["workload"]].por_destino[cenario.provider] == amostra["lock_in"]
             comparados += 1

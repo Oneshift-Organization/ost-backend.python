@@ -11,7 +11,9 @@ pontua separadamente, somente na fração correlacionada. Sem inventário, perma
 desconhecida. Hipóteses de esforço por classe curada são explicitadas no detalhamento
 do score e não promovidas a fatos de acoplamento nem a estratégias confirmadas.
 O score pode avaliar conservadoramente alternativas de mesma capacidade; esta
-rota continua sem escolher um serviço de destino quando há múltiplas alternativas.
+rota usa a mesma evidência em resultados v4, mas continua sem escolher um serviço
+de destino quando há múltiplas alternativas. Resultados anteriores mantêm a
+interpretação antiga (destinos ambíguos sem classificação).
 Consultar o ledger de `decision_support` para as regras e evidências de cada nota.
 
 > Plano e decisões: [`PLANO_LOCKIN_INVENTARIO.md`](../../PLANO_LOCKIN_INVENTARIO.md).

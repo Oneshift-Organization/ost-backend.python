@@ -144,12 +144,26 @@ def test_por_destino_bate_com_a_evidencia_do_score() -> None:
     decisao = build_decision_support(payload)
     comparados = 0
     for cenario in decisao.provider_scores:
-        corporativo = next(a for a in cenario.axes if a.id == "technical")
-        lock = next(f for f in corporativo.factors if f.id == "lock_in")
+        tecnico = next(a for a in cenario.axes if a.id == "technical")
+        lock = next(f for f in tecnico.factors if f.id == "lock_in")
         for amostra in lock.evidence:
             assert visao[amostra["workload"]].por_destino[cenario.provider] == amostra["lock_in"]
             comparados += 1
     assert comparados == 3 * 4
+
+
+def test_v4_alternatives_match_score_without_choosing_service_or_changing_history() -> None:
+    payload = _payload()
+    workload = payload["decision_workloads"][0]
+    for target in workload["targets"]:
+        target["service_type"] = workload["service_type"]
+    before = _por_nome(montar_acoplamento_por_servico(payload))["AmazonRDS"]
+    assert before.por_destino["azure"] is None
+    payload["decision_support"] = build_decision_support(payload).model_dump(mode="json")
+    after = _por_nome(montar_acoplamento_por_servico(payload))["AmazonRDS"]
+    assert after.por_destino["azure"] == "medium"
+    assert after.equivalente_por_destino["azure"] is None
+    assert after.refatoracao_por_destino["azure"] is None
 
 
 def test_adaptacao_e_equivalente_por_destino_sao_os_do_score() -> None:
