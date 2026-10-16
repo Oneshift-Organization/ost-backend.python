@@ -234,10 +234,14 @@ def test_tipo_inferido_e_declarado(aws_context) -> None:
     assim que object storage virou block storage); quem lê precisa saber."""
     payload, _ = build_pipeline_llm_input_payload(aws_context)
     por_nome = {s["nome"]: s for s in payload["servicos"]}
-    # MSK não está no catálogo curado: o tipo é inferência.
-    msk = por_nome.get("Amazon Managed Streaming for Apache Kafka")
-    assert msk is not None
-    assert msk.get("tipo_fonte") == "inferido"
+    # Kiro não está no catálogo curado: o tipo é inferência.
+    kiro = por_nome.get("Kiro")
+    assert kiro is not None
+    assert kiro.get("tipo_fonte") == "inferido"
+    # O MSK era o exemplo até o lote v4 (V4.3): agora está no DE-PARA, curado
+    msk = por_nome["Amazon Managed Streaming for Apache Kafka"]
+    assert "tipo_fonte" not in msk
+    assert msk["tipo"] == "stream_ingestion"
     # Serviço casado no catálogo NÃO carrega a marca (o caso normal fica limpo).
     assert "tipo_fonte" not in por_nome["AmazonS3"]
     # E a fração vai para o ledger, auditável.

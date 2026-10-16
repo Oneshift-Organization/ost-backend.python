@@ -132,6 +132,9 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         # (`AWSLambda`, `AmazonRoute53`) já casam pela normalização. Sem estes, o AWSELB
         # de uma conta real saía "tipo inferido" e sem equivalente em nenhum destino.
         "AWSELB": "Elastic Load Balancing",
+        # MSK: Kafka gerenciado, no tipo de streaming do DE-PARA (lote v4, V4.3)
+        "AmazonMSK": "Amazon MSK",
+        "Amazon Managed Streaming for Apache Kafka": "Amazon MSK",
         "AWSQueueService": "Amazon Simple Queue Service (SQS)",
         "AWSKMS": "AWS Key Management Service (KMS)",
         "awskms": "AWS Key Management Service (KMS)",

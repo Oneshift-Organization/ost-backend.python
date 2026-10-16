@@ -468,6 +468,8 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,analytics,stream_ingestion,aws,Amazon Kinesis Data Streams,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,analytics,stream_ingestion,azure,Azure Event Hubs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,analytics,stream_ingestion,gcp,Pub/Sub,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_ingestion,aws,Amazon MSK,2026-10-16T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_ingestion,oci,OCI Streaming,2026-10-16T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/Streaming/Concepts/streamingoverview.htm
 ,analytics,messaging,aws,Amazon Kinesis Data Streams,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,analytics,messaging,aws,Amazon MQ,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,analytics,messaging,azure,Azure Service Bus Messaging,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
