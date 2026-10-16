@@ -284,7 +284,10 @@ igual, não casa.
 - **Recálculo diário agendado:** CronJob no infra rodando o sync de preços, que já
   recalcula ao final. Hoje o recálculo só roda quando alguém roda o sync. Sem
   agendamento, o rótulo de um preço que ninguém reconfirma fica parado.
-- **Guarda contra lista parcial no sync:** se uma fonte devolver menos itens sem erro, o
-  SKU que faltou fica `ausente_desde` e sai da cotação na hora (antes era apagado). Não
-  perde dado, mas a cobertura cai até o próximo sync. Recusar a substituição quando a
-  coleta nova tiver bem menos itens que a anterior (PLANO_PRECO_REGIONAL, risco do R3).
+- ✅ **Guarda contra lista parcial no sync (feito em 16/10):** se uma fonte devolvia menos
+  itens sem erro, o SKU que faltou ficava `ausente_desde` e saía da cotação na hora; a
+  cobertura caía até o próximo sync. Agora (`domain/services/guarda_de_coleta.py`):
+  - conjunto (provedor, região, tipo, fonte) com 10 ou mais itens vigentes que volta com
+    menos da metade não marca ausência;
+  - os preços que vieram são gravados, e o sync registra um aviso no log;
+  - conjunto menor pode encolher de verdade e segue como antes.
