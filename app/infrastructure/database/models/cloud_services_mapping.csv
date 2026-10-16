@@ -199,6 +199,10 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,networking,dns,azure,Azure DNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,dns,gcp,Cloud DNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,dns,oci,Oracle DNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,data_transfer,aws,AWS Data Transfer,2026-10-16T00:00:00+00:00,https://aws.amazon.com/ec2/pricing/on-demand/#Data_Transfer
+,networking,data_transfer,azure,Bandwidth,2026-10-16T00:00:00+00:00,https://azure.microsoft.com/pricing/details/bandwidth/
+,networking,data_transfer,gcp,Network Service Tiers,2026-10-16T00:00:00+00:00,https://cloud.google.com/vpc/network-pricing
+,networking,data_transfer,oci,OCI Outbound Data Transfer,2026-10-16T00:00:00+00:00,https://www.oracle.com/cloud/networking/pricing/
 ,networking,global_traffic_management,aws,AWS Global Accelerator,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,networking,global_traffic_management,aws,Amazon Route 53 Traffic Flow,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,networking,global_traffic_management,azure,Azure Traffic Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/

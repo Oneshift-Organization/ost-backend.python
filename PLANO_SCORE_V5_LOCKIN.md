@@ -88,7 +88,7 @@ Branch `feat/score-v5-lockin` a partir da develop; PR para a develop (nunca para
 | Nomes da metadata curada alinhados ao DE-PARA (10 de 40 não chegavam à análise, nem na origem nem no destino); o seed sincroniza banco já semeado | feito, `990bed9` |
 | Regra pura `lock_in_efetivo` (27 testes) | feito, `16e82b2` |
 | Classe só quando os curados concordam; a tela sem "migra junto" no nível sugerido | feito, `8eabbe2` |
-| Curadoria dos tipos sem nota (§8) | aguarda aprovação do produto |
+| Curadoria dos tipos sem nota (§8) e a transferência de dados ("Bandwidth" da Azure) no DE-PARA | **feito**: aprovada em 16/10, no seed; efeito no §8.1 |
 | Rótulos `inventario` e `classe` na tela (front) | depois do S5 |
 | Antes e depois nos seis relatórios e nos mocks com inventário; nota ao MCP (autoridade v5) | depois do seu merge |
 
@@ -117,10 +117,10 @@ Com inventário (medido em 16/10, sem LLM):
 - BigQuery (mock) + Asset Inventory e Cost Explorer (real) + inventário AWS: nenhum
   recurso exclusivo achado.
 
-## 8. Anexo: curadoria pendente (decisão do produto, não do PR)
+## 8. Anexo: curadoria (aprovada em 16/10)
 
-Serviços dos seis relatórios sem lock-in curado, com o valor sugerido. Vão para
-`seed_service_metadata.py` com o nome do DE-PARA depois da aprovação.
+Serviços dos seis relatórios que estavam sem lock-in curado, com o valor aprovado em
+16/10. Estão em `seed_service_metadata.py` com o nome do DE-PARA.
 
 | serviço (nome do DE-PARA) | tipo | custo/mês no relatório | lock-in | refatoração | por quê |
 |---|---|---|---|---|---|
@@ -163,3 +163,54 @@ para esse médio. Hoje isso alcançaria o Azure SQL Database (alto no catálogo)
 produto quiser o alto para PaaS, o caminho é uma regra de exclusividade própria (tipo
 nativo do Azure SQL ou do Autonomous = alto), não deixar o catálogo e o inventário
 discordarem.
+
+### 8.1 Aprovada e aplicada (16/10)
+
+O usuário aprovou a tabela, a troca do Oracle e a linha "Bandwidth" da Azure no DE-PARA.
+
+- **Seed da metadata:**
+  - as 25 linhas da tabela, com o motivo em `notes`;
+  - o "Oracle Autonomous Database" é renomeado para "Oracle Database Cloud Service",
+    com nota média (`RENOMEADOS`, que também corrige banco já semeado).
+- **DE-PARA:** um tipo novo, `data_transfer`, com uma linha por nuvem:
+  - AWS Data Transfer;
+  - Bandwidth (Azure);
+  - Network Service Tiers (GCP);
+  - OCI Outbound Data Transfer.
+
+  As quatro têm lock-in baixo, sem refatoração: tráfego cobrado por GB, sem dado a
+  migrar. A cotação não muda: as linhas dessas faturas já são cotadas pela categoria
+  de rede.
+- **Para o develop:** rodar no pod, nesta ordem, `seed_service_metadata` e depois
+  `seed_from_csv`.
+
+Efeito nos seis relatórios, sem LLM:
+
+| relatório | serviços sem nível na origem | nota do escolhido (OCI) | o que mais mudou |
+|---|---|---|---|
+| AWS Cost Explorer (real) | 13 → 0 de 24 | 87,50 → 89,78 | lock-in de Azure e GCP com cobertura 100% |
+| GCP Cost Table (real) | 9 → 1 de 14 (Networking, mistura por desenho) | 90,68 → 93,92 | — |
+| GCP BigQuery (mock) | 9 → 1 de 14 | 93,43 → 95,69 | — |
+| AWS CUR (mock) | 13 → 0 de 24 | 85,21 → 87,81 | — |
+| Azure (mock) | 2 → 0 de 5 | 92,42 → 95,61 | — |
+| OCI São Paulo (mock) | 3 → 1 de 6 (NETWORK, mistura por desenho) | sem escolhido (igual) | lock-in da Azure 57,43 → 38,45: o DATABASE (Oracle, médio) contra o Azure SQL (alto) vale o pior dos dois |
+
+O que não mudou:
+- o provedor escolhido;
+- o custo e a economia (`medir`, idêntico);
+- as análises antigas, porque o payload é congelado.
+
+**Por que a OCI sobe como destino:** o "Oracle Cloud Infrastructure Compute" ganhou nota.
+Antes, o par EC2 → OCI caía na hipótese preliminar ("rehost"). Agora segue a regra do
+catálogo, como Azure e GCP: o EC2 é médio, então "replatform".
+
+**7R por serviço:**
+- serviços que eram "a confirmar" ganharam estratégia (25 pares no bill AWS):
+  - "refactor": SQS, KMS, Translate, Comprehend;
+  - "replatform": WAF, Config, Secrets Manager, Security Hub;
+  - "rehost": MSK, Directory Service, Cost Explorer;
+- o compute com destino OCI passou de "rehost" para "replatform".
+
+**Gate ajustado:** `test_classe_nao_e_inventada_sem_exemplo` usava o AWS WAF como
+exemplo de tipo sem curado. Agora confere o invariante em todos os serviços dos dois
+bills: classe só aparece em tipo com exemplo curado.
