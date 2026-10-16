@@ -203,6 +203,32 @@ Os gates de integração **pulam graciosamente** sem Postgres ou sem seed,
 declarando o motivo. No CI (`.github/workflows/tests.yml`) um skip é tratado
 como **falha de ambiente** — skip silencioso esconderia a rede de segurança caída.
 
+### Testes de Terraform (`validate` e `fmt`)
+
+Os 24 testes que rodam o binário (20 unitários e 4 de integração com os mocks) pulam
+sem `terraform` no PATH e sem `TF_PLUGIN_CACHE_DIR`. No CI o binário vem da
+`hashicorp/setup-terraform` (1.9.8), com cache dos providers. Na máquina sem o binário,
+um script `terraform` no PATH que roda a imagem do podman faz o mesmo papel:
+
+```bash
+mkdir -p ~/.local/tf/bin ~/.local/tf/cache
+cat > ~/.local/tf/bin/terraform <<'SH'
+#!/bin/sh
+# Monta o diretório de trabalho, o TMPDIR (os testes passam caminho absoluto) e o
+# cache no mesmo caminho. O TMPDIR não entra no container: o socket do handshake do
+# provider não cabe em caminho longo (limite de 108 caracteres).
+exec podman run --rm -i --network host --security-opt label=disable \
+  -v "$PWD:$PWD" -w "$PWD" \
+  -v "${TMPDIR:-/tmp}:${TMPDIR:-/tmp}" \
+  -v "$TF_PLUGIN_CACHE_DIR:$TF_PLUGIN_CACHE_DIR" -e TF_PLUGIN_CACHE_DIR \
+  docker.io/hashicorp/terraform:1.9.8 "$@"
+SH
+chmod +x ~/.local/tf/bin/terraform
+PATH=~/.local/tf/bin:$PATH TF_PLUGIN_CACHE_DIR=~/.local/tf/cache pytest -k terraform
+```
+
+A primeira rodada baixa os providers do Google, AWS, Azure e OCI para o cache.
+
 Qualidade do request enviado ao agente (DE-PARA por custo, divergência vs
 catálogo curado, cobertura de expectativa de migração):
 

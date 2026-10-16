@@ -65,7 +65,7 @@ Pendências de terceiros, uma nota por responsável:
 | # | item | estado |
 |---|---|---|
 | C1 | O build e o deploy do develop não esperam os testes: `build-push.yml` e `tests.yml` rodam em paralelo, sem `needs` (item 21 de 12/10). Um teste vermelho não impede a imagem de subir. **Do Luiz** (o `build-push.yml` é dele e também publica a main); proposta pronta em `INFRA.PLAN/01` | ⏳ |
-| C2 | Passo que instala o binário do Terraform e o cache dos providers (T0 na CI). **Nosso**: o `tests.yml` é mantido pelo backend | ⏳ junto com o T0 |
+| C2 | Passo que instala o binário do Terraform e o cache dos providers (T0 na CI). **Nosso**: o `tests.yml` é mantido pelo backend | ✅ 16/10: `hashicorp/setup-terraform` 1.9.8 e cache dos providers nos dois jobs |
 
 **Decisões (usuário)** — detalhe e recomendação em §2
 
@@ -129,7 +129,12 @@ Com a recomendação; nenhuma bloqueia o início da sprint, exceto a 2.1 para o 
 Ordem pensada para ter base verde antes de mexer no gerador, e o que o usuário
 vê primeiro (aviso e escopo) antes do opcional.
 
-### T0 — Base verde (antes de tudo)
+### T0 — Base verde (antes de tudo) — ✅ feito em 16/10
+
+> Local, com o binário 1.9.8 do podman (`docs/dev-setup.md`, "Testes de Terraform"):
+> os 24 testes passaram sem nenhuma correção no gerador. Foram 20 unitários, com 0 pulado
+> em 2010, e 4 de integração, com os pacotes dos quatro mocks validados. Na CI, pelo C2.
+> Próxima etapa: T1 a T4.
 
 Os 24 testes de `validate`/`fmt` nunca rodaram: nem a máquina local nem a CI têm
 o binário do Terraform.

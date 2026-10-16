@@ -9,6 +9,8 @@ jobs:
   quality:
     name: Lint + testes unitários
     runs-on: ubuntu-latest
+    env:
+      TF_PLUGIN_CACHE_DIR: /home/runner/.terraform.d/plugin-cache
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +33,27 @@ jobs:
       - name: Ruff (informativo — dívida a queimar)
         continue-on-error: true
         run: ruff check app/infrastructure app/api app/use_cases scripts
+
+      - name: Terraform (validate e fmt dos pacotes gerados)
+        # Os testes de `validate`/`fmt` pulam sem o binário (T0 do
+        # PLANO_ESTRATEGIA_SPRINT_TERRAFORM). Sem o wrapper da action: os testes leem
+        # o stdout do `validate -json`.
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Cache dos providers do Terraform
+        # Google, AWS, Azure e OCI somam perto de 1 GB por execução sem cache. As
+        # versões vêm dos renderers (`~> 5.0` etc.), daí a chave.
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.terraform.d/plugin-cache
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles('app/infrastructure/terraform/renderers/*.py') }}
+          restore-keys: tf-plugins-${{ runner.os }}-
+
+      - name: Diretório do cache de providers
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
       - name: Testes unitários
         # Integração é exercida no job abaixo (precisa de Postgres).
@@ -61,6 +84,7 @@ jobs:
       AUTH_ENABLED: "false"
       # `scripts/` importa `app.*`; sem isto o seed falha com ModuleNotFoundError.
       PYTHONPATH: .
+      TF_PLUGIN_CACHE_DIR: /home/runner/.terraform.d/plugin-cache
 
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +110,7 @@ jobs:
         # ORDEM IMPORTA: `seed_service_metadata` também grava em
         # `cloud_services_comparation`, mas a partir de uma lista inline de 120
         # tuplas com tipos GROSSEIROS (`relational`). A fonte autoritativa é
-        # `cloud_services_mapping.csv` (816 linhas, tipos finos como
+        # `cloud_services_mapping.csv` (822 linhas, tipos finos como
         # `managed_relational_database`), carregada por `seed_from_csv`, que
         # limpa e recarrega a tabela. Por isso ele vem POR ÚLTIMO — com a ordem
         # invertida, um ambiente novo (inclusive produção) fica com o tipo
@@ -100,6 +124,27 @@ jobs:
 
       - name: Taxas de categoria (referência, sem rede)
         run: python scripts/sync_prices.py --providers categories
+
+      - name: Terraform (validate e fmt dos pacotes gerados)
+        # Os testes de `validate`/`fmt` pulam sem o binário (T0 do
+        # PLANO_ESTRATEGIA_SPRINT_TERRAFORM). Sem o wrapper da action: os testes leem
+        # o stdout do `validate -json`.
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Cache dos providers do Terraform
+        # Google, AWS, Azure e OCI somam perto de 1 GB por execução sem cache. As
+        # versões vêm dos renderers (`~> 5.0` etc.), daí a chave.
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.terraform.d/plugin-cache
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles('app/infrastructure/terraform/renderers/*.py') }}
+          restore-keys: tf-plugins-${{ runner.os }}-
+
+      - name: Diretório do cache de providers
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
       - name: Gates
         # Um skip silencioso esconderia a rede de segurança caída: o conftest
