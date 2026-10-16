@@ -109,6 +109,14 @@ Sem inventário, a classe unânime entra como hipótese em:
 Na AWS nada muda: os 13 serviços sem nota não têm classe. Se a curadoria do §8 entrar
 antes, a maior parte disso vira fato.
 
+Com inventário (medido em 16/10, sem LLM):
+- CUR (mock) + AWS Config: nada muda. RDS: Aurora dá médio, igual ao catálogo.
+  ElastiCache: Redis aberto, mas cobertura de 76%, abaixo dos 90%.
+- OCI (mock) + inventário: o DATABASE (US$ 1.000) passa de desconhecido para médio
+  (Oracle, cobertura 100%).
+- BigQuery (mock) + Asset Inventory e Cost Explorer (real) + inventário AWS: nenhum
+  recurso exclusivo achado.
+
 ## 8. Anexo: curadoria pendente (decisão do produto, não do PR)
 
 Serviços dos seis relatórios sem lock-in curado, com o valor sugerido. Vão para
@@ -141,11 +149,17 @@ Serviços dos seis relatórios sem lock-in curado, com o valor sugerido. Vão pa
 | Azure Database for MySQL | managed_relational_database | — | médio | sim | idem |
 | Oracle Cloud Infrastructure Compute | virtual_server | OCI 1.725 | médio | não | como EC2, VMs da Azure e Compute Engine |
 | MySQL Database Service | managed_relational_database | — | médio | sim | como o RDS |
-| Oracle Database Cloud Service | managed_relational_database | OCI 1.000 | alto | sim | ver a pergunta abaixo |
+| Oracle Database Cloud Service | managed_relational_database | OCI 1.000 | médio | sim | motor Oracle: licença e edição limitam o destino, mas ele roda na Azure, no GCP e na AWS (Oracle Database@). Coerente com a regra de exclusividade do inventário. Ver a pergunta abaixo |
 
 **Pergunta do Oracle.** O DATABASE da OCI com uso Autonomous cai em "Oracle Database
 Cloud Service" (`servico_pelo_uso`), que não tem nota. A metadata já curada "Oracle
 Autonomous Database" (alto) não tem linha no DE-PARA e nunca chega à análise. A
-sugestão é renomear essa metadata para "Oracle Database Cloud Service" e manter alto.
-Se essa linha também receber Base Database (Oracle comum), alto exagera; aí o certo é
-separar a linha no DE-PARA.
+sugestão é trocar aquela metadata por esta linha, com médio.
+
+**Coerência entre o catálogo e o inventário.** A regra de exclusividade
+(`topologia/exclusividade.py`) dá médio a Oracle e a SQL Server, pela licença. Com
+inventário cobrindo 90% do custo por ID, a regra do lote v4 desce um "alto" do catálogo
+para esse médio. Hoje isso alcançaria o Azure SQL Database (alto no catálogo). Se o
+produto quiser o alto para PaaS, o caminho é uma regra de exclusividade própria (tipo
+nativo do Azure SQL ou do Autonomous = alto), não deixar o catálogo e o inventário
+discordarem.
