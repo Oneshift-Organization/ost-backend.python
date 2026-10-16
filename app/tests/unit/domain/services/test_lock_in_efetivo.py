@@ -116,3 +116,9 @@ def test_payload_antigo_sem_source_metadata_usa_a_expectativa_curada() -> None:
 def test_tipo_inferido_nao_tem_evidencia() -> None:
     w = _workload(type_source="inferido", source_metadata={"vendor_lock_in_level": "low"})
     assert lock_in_da_origem(w, {"exclusividade": _DYNAMO}).nivel is None
+
+
+def test_tela_aceita_a_hipotese_do_tipo_inferido() -> None:
+    w = _workload(type_source="inferido", source_metadata={}, migration={})
+    resultado = lock_in_da_origem(w, {"exclusividade": _DYNAMO}, aceitar_tipo_inferido=True)
+    assert (resultado.nivel, resultado.fonte) == ("high", INVENTARIO)

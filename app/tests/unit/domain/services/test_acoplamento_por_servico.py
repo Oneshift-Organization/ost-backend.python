@@ -284,7 +284,7 @@ def test_gasto_sem_categoria_aparece_fora_do_score() -> None:
     assert (r.reconciliacao.fora_do_escopo, r.reconciliacao.status) == (Decimal("40"), "fecha")
 
 
-def test_inventario_preenche_nivel_vazio_e_dependencia_sobe() -> None:
+def test_inventario_preenche_nivel_vazio_e_migra_junto_nao_sobe() -> None:
     payload = _payload()
     payload["topologia"] = {
         "detalhe": {
@@ -321,8 +321,65 @@ def test_inventario_preenche_nivel_vazio_e_dependencia_sobe() -> None:
     # EKS: nível vazio; exclusividade alta do inventário vence a classe (baixa).
     assert eks.nivel_sugerido == "high"
     assert {s.fonte for s in eks.sugestoes} == {"classe", "inventario"}
-    # RDS: catálogo médio; a dependência alta sobe, o motor aberto só informa.
-    assert (rds.nivel, rds.nivel_sugerido) == ("medium", "high")
+    # RDS: catálogo médio. "Migra junto" é dependência entre serviços, não da nuvem:
+    # não sobe o nível (lote v4, decisão de 14/10). O motor aberto não desce sem
+    # cobertura. As duas evidências ficam listadas.
+    assert (rds.nivel, rds.nivel_sugerido) == ("medium", None)
     assert [s.fonte for s in rds.sugestoes] == ["inventario", "dependencias"]
     assert r.resumo.migram_em_grupo == 1
     assert servicos["AmazonS3"].dependencias is None
+
+
+def _com_rds(exclusividade: dict[str, Any], cobertura: float, **resumo: Any) -> dict[str, Any]:
+    payload = _payload()
+    payload["topologia"] = {
+        "resumo": {"cobertura": resumo},
+        "detalhe": {
+            "servicos": {
+                "AmazonRDS": {
+                    "nivel": "low",
+                    "motivo": "sozinho",
+                    "cobertura": cobertura,
+                    "exclusividade": exclusividade,
+                }
+            }
+        },
+    }
+    return payload
+
+
+_POSTGRES = {"nivel": "low", "motivo": "PostgreSQL: motor aberto.", "fracao": 1.0}
+
+
+def test_motor_aberto_com_cobertura_alta_sugere_descer() -> None:
+    rds = _por_nome(montar_acoplamento_por_servico(_com_rds(_POSTGRES, 0.95)))["AmazonRDS"]
+    assert (rds.nivel, rds.nivel_sugerido) == ("medium", "low")
+
+
+def test_inventario_estimado_nao_desce() -> None:
+    payload = _com_rds(_POSTGRES, 0.95, custo_estimado=120.0)
+    rds = _por_nome(montar_acoplamento_por_servico(payload))["AmazonRDS"]
+    assert (rds.nivel, rds.nivel_sugerido) == ("medium", None)
+
+
+def test_recurso_proprietario_sobe_mesmo_com_pouca_cobertura() -> None:
+    dynamo = {"nivel": "high", "motivo": "DynamoDB: API própria.", "fracao": 0.1}
+    rds = _por_nome(montar_acoplamento_por_servico(_com_rds(dynamo, 0.1)))["AmazonRDS"]
+    assert (rds.nivel, rds.nivel_sugerido) == ("medium", "high")
+
+
+def test_classe_mista_nao_sugere_e_pede_curadoria() -> None:
+    payload = _payload()
+    payload["decision_workloads"].append(
+        {
+            **_workload("Azure Database for PostgreSQL", 80),
+            "migration": {
+                "classe_migracao": "refactor",
+                "fonte": "classe",
+                "lock_in_faixa": ["medium", "high"],
+            },
+        }
+    )
+    pg = _por_nome(montar_acoplamento_por_servico(payload))["Azure Database for PostgreSQL"]
+    assert (pg.nivel, pg.nivel_sugerido, pg.sugestoes) == (None, None, ())
+    assert "de médio a alto" in pg.alertas[-1]

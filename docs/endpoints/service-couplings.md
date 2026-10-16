@@ -123,7 +123,7 @@ ganha a dimensão de dependência:
 ```jsonc
 {
   "nome": "DATABASE", "custo": 999.94, "entra_no_score": false,
-  "nivel": null, "nivel_sugerido": "high",
+  "nivel": null, "nivel_sugerido": "medium",
   "sugestoes": [
     {"nivel": "medium", "fonte": "inventario",
      "motivo": "Oracle: migra, mas licença e edição mudam a conta e limitam o destino."},
@@ -155,6 +155,10 @@ ganha a dimensão de dependência:
 }
 ```
 
+O `nivel_sugerido` é o da exclusividade (Oracle, médio). O "migra junto" alto fica
+listado, mas é dependência entre serviços, não da nuvem: não entra no nível (lote
+v4, decisão de 14/10).
+
 Um serviço só com hipótese (bill GCP de referência):
 
 ```jsonc
@@ -181,9 +185,10 @@ Um serviço só com hipótese (bill GCP de referência):
 | `equivalente_por_destino` | o serviço equivalente em cada cenário, o mesmo alvo que o score avalia. `null` sem mapeamento único |
 | `refatoracao_por_destino` | se a migração para aquele destino exige refatorar a aplicação: `true` quando a origem ou o destino exige; `false` só quando os dois lados dizem que não; `null` quando falta um dos lados. É a evidência do fator `refactoring` do eixo técnico |
 | `classe_migracao` / `esforco` | do catálogo: a classe 7R de partida (`rehost`, `replatform`, `refactor`) e o esforço. `null` fora do score |
-| `sugestoes[]` | hipóteses que o score **não** usa, cada uma com `fonte` e `motivo`: `classe` (nota herdada do tipo de serviço), `arquitetura` (pool sem família da mesma arquitetura em algum destino), `inventario` (exclusividade pelos atributos dos recursos: motor do banco, tipo nativo; qualquer nível, inclusive baixo), `dependencias` (o inventário mostra que migra junto: médio; banco compartilhado ou grupo grande: alto; dependência baixa não vira sugestão) |
+| `sugestoes[]` | hipóteses que o score **não** usa, cada uma com `fonte` e `motivo`: `classe` (nota herdada do tipo de serviço, só quando os serviços curados do tipo concordam), `arquitetura` (pool sem família da mesma arquitetura em algum destino), `inventario` (exclusividade pelos atributos dos recursos: motor do banco, tipo nativo; qualquer nível, inclusive baixo), `dependencias` (o inventário mostra que migra junto: médio; banco compartilhado ou grupo grande: alto; dependência baixa não vira sugestão; fica listada, mas não entra no `nivel_sugerido`) |
 | `dependencias` | só com inventário: o que **migra junto** (mesma unidade, ou dependência forte de dados ou encaminhamento), o que precisa ir **antes** (`depende_de`, dependência de ordem), quantos serviços dependem deste, grupo e onda de migração (`ondas` vazio = grupo independente), custo do grupo, `cobertura` (fração do custo do serviço com recurso no inventário), regiões e `exclusividade` (o maior nível que as regras deram aos recursos do serviço, com motivo, fração do custo e até 5 recursos; regras em `domain/services/topologia/exclusividade.py`). `null` sem inventário, ou quando nenhum recurso do serviço foi achado nele (billing sem `resource_id`, como o Cost Explorer agregado) |
-| `nivel_sugerido` | a maior sugestão, só quando subiria o `nivel` ou preencheria o vazio |
+| `nivel_sugerido` | o nível que a evidência além do catálogo daria, só quando difere do `nivel`. Inventário e classe pela regra do lote v4 ([`lock_in_efetivo.py`](../../app/domain/services/lock_in_efetivo.py)): o recurso proprietário sobe ou preenche; descer, ou afirmar baixo sem catálogo, exige 90% do custo do serviço visto no inventário e correlação por ID; a classe só vale sem catálogo e sem inventário. A arquitetura só sobe ou preenche. "Migra junto" não conta |
+| `alertas[]` | também avisa quando os serviços curados do tipo discordam do lock-in ("de médio a alto"): a nota do serviço depende de curadoria |
 | `pools[]` | os pools de compute, dentro do serviço de máquinas virtuais onde está o custo deles. `regiao: null` quando o billing não informa (antes aparecia como `global`) |
 | `pools_sem_servico[]` | pools sem um serviço curado de máquinas virtuais para ancorar; não se inventa dono |
 | `resumo` | os contadores da tela. `low + medium + high + a_confirmar = servicos`; `migram_em_grupo` (com `migra_junto_com`) e `fora_do_score` |

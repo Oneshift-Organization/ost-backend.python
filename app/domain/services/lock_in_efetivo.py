@@ -114,6 +114,8 @@ def _inventario_vale(catalogo: str | None, inventario: str, *, prova_de_ausencia
 def lock_in_da_origem(
     workload: Mapping[str, Any],
     inventario: Mapping[str, Any] | None = None,
+    *,
+    aceitar_tipo_inferido: bool = False,
 ) -> LockInEfetivo:
     """Lê do snapshot o que `lock_in_efetivo` precisa.
 
@@ -124,9 +126,10 @@ def lock_in_da_origem(
       `cobertura`) e `cost_estimated`, como `technical_assessment.inventory_services`
       a monta. O `nivel` da entrada é o "migra junto" e não é lido aqui.
 
-    Tipo inferido não tem evidência técnica, como em `technical_evidence`.
+    Tipo inferido não tem evidência técnica, como em `technical_evidence`. A tela de
+    acoplamento ainda mostra a hipótese dele (`aceitar_tipo_inferido`); o score não.
     """
-    if workload.get("type_source") == "inferido":
+    if workload.get("type_source") == "inferido" and not aceitar_tipo_inferido:
         return LockInEfetivo(None, None, False, "Tipo de serviço inferido, não confirmado.")
     migracao = workload.get("migration") or {}
     da_classe = migracao.get("fonte") == CLASSE

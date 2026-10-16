@@ -85,15 +85,32 @@ def test_aprende_padrao_do_tipo_a_partir_dos_curados() -> None:
 
 
 def test_agregacao_e_conservadora() -> None:
-    """Se QUALQUER exemplo do tipo exige reescrita, o tipo vira refactor, e o
-    lock-in é o maior observado. Errar para o lado difícil não gera promessa de
-    economia fácil."""
+    """Se QUALQUER exemplo do tipo exige reescrita, o tipo vira refactor. Errar para
+    o lado difícil não gera promessa de economia fácil."""
     defaults = learn_class_defaults([
         ("data_warehouse", {"requires_refactoring": False, "vendor_lock_in_level": "low"}),
-        ("data_warehouse", {"requires_refactoring": True, "vendor_lock_in_level": "high"}),
+        ("data_warehouse", {"requires_refactoring": True, "vendor_lock_in_level": "low"}),
     ])
     assert defaults["data_warehouse"].classe == "refactor"
-    assert defaults["data_warehouse"].lock_in == "high"
+    assert defaults["data_warehouse"].lock_in == "low"
+
+
+def test_classe_mista_nao_afirma_lock_in() -> None:
+    """Lote v4, V4.4: RDS e Cloud SQL médios, Azure SQL alto. O maior dava "alto" a
+    qualquer banco relacional sem curadoria, inclusive PostgreSQL. A classe segue
+    conservadora (sai do maior), mas a nota fica para a curadoria."""
+    relacional = {"requires_refactoring": False}
+    defaults = learn_class_defaults([
+        ("managed_relational_database", {**relacional, "vendor_lock_in_level": "medium"}),
+        ("managed_relational_database", {**relacional, "vendor_lock_in_level": "high"}),
+        ("managed_relational_database", {**relacional, "vendor_lock_in_level": "medium"}),
+    ])
+    misto = defaults["managed_relational_database"]
+    assert misto.classe == "replatform"
+    assert misto.lock_in is None
+    assert misto.lock_in_faixa == ("medium", "high")
+    assert misto.as_dict()["lock_in_faixa"] == ["medium", "high"]
+    assert "lock_in" not in misto.as_dict()
 
 
 def test_tipo_sem_exemplo_curado_nao_e_inventado() -> None:
