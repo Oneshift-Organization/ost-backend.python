@@ -185,6 +185,38 @@ Exemplos (AWS Cost Explorer, origem → Azure / GCP / OCI):
 | processamento | 541,04 | 404,08 | 646,54 | 17,96 |
 | rede sem cotação (`network_other`) | 797,70 | custo atual | custo atual | custo atual |
 
+### R2 — o preço chega ao serviço (16/10)
+
+O payload leva `custos_auxiliares.por_servico`: o custo de cada serviço da fatura em
+cada categoria. `equivalence_pricing` reparte a cotação de cada categoria pela parte
+de cada serviço. Ganha preço o serviço identificado (curado ou por apelido) com ao
+menos uma parte cotada no destino. A parte sem tarifa lá, ou fora das categorias,
+fica ao custo atual, como no total do cenário, e a evidência diz isso
+(`partes`, "Mantido ao custo atual"). O resto de cada categoria segue na linha
+agregada. Snapshot antigo, sem `por_servico`, segue o caminho de antes.
+
+| relatório | serviços com preço | linhas agregadas | conciliação |
+|---|---|---|---|
+| AWS Cost Explorer (real) | 0 → 11 de 39 | 27 → 21 | fecha nos 3 destinos |
+| GCP Cost Table (real) | 0 → 7 de 20 | 29 → 23 | fecha |
+| GCP BigQuery (mock) | 0 → 8 de 20 | 29 → 15 | fecha |
+| AWS CUR (mock) | 0 → 6 de 39 | 35 → 21 | fecha |
+| Azure (mock) | 1 → 2 de 4 | 12 → 3 | fecha |
+| OCI (mock) | 3 → 4 de 5 | 6 → 3 | fecha |
+
+O AWSELB do AWS Cost Explorer (origem US$ 2.194,26) passa a mostrar o custo no
+destino: Azure 2.059,89, GCP 2.689,09, OCI 296,36. Antes, o detalhe dizia "Sem
+tarifa ou consumo compatível". O resumo executivo não muda: só a distribuição das
+linhas.
+
+**Análise de impacto do R2:**
+- muda só a projeção (`cross_cloud_equivalents`, `decision_support`), não o número
+  do cenário;
+- a conciliação fecha por construção: a parte mantida entra igual no coberto e no
+  cotado;
+- a trava de autoridade teve o hash da v3 trocado sem subir a versão, porque o
+  caminho antigo é o mesmo.
+
 **Para o dev:** depois do deploy, rodar no pod
 `python - --providers categories,categories-live < scripts/sync_prices.py`. A
 referência traz os zeros da OCI; a oficial traz as taxas por região.

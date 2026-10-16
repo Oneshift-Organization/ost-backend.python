@@ -58,11 +58,14 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 _HASH_POR_VERSAO = {
     # v3: score normalizado 50/40/10 e benefícios informativos sem efeito financeiro.
     # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE):
-    # `equivalence_pricing._CATEGORIES` ganhou as categorias de rede por tipo, que só
-    # existem em `custos_auxiliares` de payload preparado depois da mudança. Snapshot
-    # antigo não tem as chaves e anexa os mesmos preços.
+    # - `equivalence_pricing._CATEGORIES` ganhou as categorias de rede por tipo;
+    # - o preço da categoria vai ao serviço pela parte dele quando o payload traz
+    #   `custos_auxiliares.por_servico` (R2).
+    # As duas coisas só existem em payload preparado depois da mudança. Snapshot
+    # antigo segue o caminho de antes e anexa os mesmos preços
+    # (test_pricing_strategy_regressions.py).
     "agent-authority-v3": (
-        "73c1b46fe83bba410d12014a7bcb581d84a38889a7089bef86e8e75afc33473e"
+        "721ecdebea3390c7447993077f89ec9e365dd64c8e66913dc5a3f0b5d58a33ee"
     ),
     "agent-authority-v1": "1d3e1f935092a2260a5c740b8b1b94c2ec9319faffa5eaf078a31d7bcea4d8c6",
     # v2: payback.meses derivado da premissa do agente (PLANO_PRECO_REGIONAL D11).
