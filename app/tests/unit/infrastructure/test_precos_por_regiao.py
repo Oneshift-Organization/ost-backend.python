@@ -7,6 +7,7 @@ Sem rede. Os recortes têm o formato e os valores das respostas reais de
 from __future__ import annotations
 
 import importlib.util
+import urllib.parse
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -165,8 +166,61 @@ def _com_entre_zonas(dados: dict[str, Any], prefixo: str) -> dict[str, Any]:
     return dados
 
 
+def _por_uso(prefixo: str, regiao: str) -> dict[str, dict[str, Any]]:
+    """EKS, Secrets Manager e KMS da região (R4), com iscas de mesmo fim."""
+    return {
+        "AmazonEKS": _bulk(
+            {
+                "pc": {"usagetype": f"{prefixo}AmazonEKS-Hours:perCluster"},
+                "ext": {"usagetype": f"{prefixo}AmazonEKS-Hours:extendedSupport"},
+                "out": {"usagetype": f"{prefixo}AmazonEKS-Local-Outposts-Hours:perCluster"},
+            },
+            {"pc": [("0", "0.10")], "ext": [("0", "0.50")], "out": [("0", "0.05")]},
+        ),
+        "AWSSecretsManager": _bulk(
+            {
+                "s": {"usagetype": f"{prefixo}AWSSecretsManager-Secrets"},
+                "api": {"usagetype": f"{prefixo}AWSSecretsManagerAPIRequest"},
+            },
+            {"s": [("0", "0.40")], "api": [("0", "0.0000050000")]},
+        ),
+        # O KMS escreve a região por extenso
+        "awskms": _bulk(
+            {
+                "k": {"usagetype": f"{regiao}-KMS-Keys"},
+                "r": {"usagetype": f"{regiao}-KMS-Requests"},
+                "a": {"usagetype": f"{regiao}-KMS-Requests-Asymmetric"},
+            },
+            {"k": [("0", "1")], "r": [("0", "0.0000030000")], "a": [("0", "0.0000150000")]},
+        ),
+    }
+
+
+# A CloudFront tem um arquivo só, com a borda no prefixo
+_CLOUDFRONT = _bulk(
+    {
+        "us": {"usagetype": "US-DataTransfer-Out-Bytes"},
+        "usr": {"usagetype": "US-Requests-Tier2-HTTPS"},
+        "sa": {"usagetype": "SA-DataTransfer-Out-Bytes"},
+        "sar": {"usagetype": "SA-Requests-Tier2-HTTPS"},
+    },
+    {
+        "us": [("10240", "0.080"), ("0", "0.085")],
+        "usr": [("0", "0.0000010000")],
+        "sa": [("0", "0.110")],
+        "sar": [("0", "0.0000022000")],
+    },
+)
+
+
 def test_aws_categorias_por_regiao(monkeypatch: pytest.MonkeyPatch) -> None:
     respostas = {
+        crc._AWS_CLOUDFRONT: _CLOUDFRONT,
+        **{
+            crc._AWS_BULK.format(servico=servico, regiao=regiao): dados
+            for prefixo, regiao in (("SAE1-", "sa-east-1"), ("USE1-", "us-east-1"))
+            for servico, dados in _por_uso(prefixo, regiao).items()
+        },
         crc._AWS_EBS: _EBS,
         crc._AWS_BULK.format(servico="AmazonS3", regiao="sa-east-1"): _s3("SAE1", "0.0405"),
         crc._AWS_BULK.format(servico="AmazonS3", regiao="us-east-1"): _s3("USE1", "0.023"),
@@ -205,6 +259,21 @@ def test_aws_categorias_por_regiao(monkeypatch: pytest.MonkeyPatch) -> None:
         ("aws", "public_ip", "us-east-1"): Decimal("0.005"),
         ("aws", "vpn", "us-east-1"): Decimal("0.05"),
         ("aws", "inter_zone_transfer", "us-east-1"): Decimal("0.01"),
+        # R4: plano de controle, segredos, chaves e CDN; requisição em 10 mil
+        ("aws", "gke_control_plane", "sa-east-1"): Decimal("0.10"),
+        ("aws", "secrets", "sa-east-1"): Decimal("0.40"),
+        ("aws", "secrets_operations", "sa-east-1"): Decimal("0.05"),
+        ("aws", "key_management", "sa-east-1"): Decimal("1"),
+        ("aws", "key_management_operations", "sa-east-1"): Decimal("0.03"),
+        ("aws", "cdn", "sa-east-1"): Decimal("0.110"),
+        ("aws", "cdn_requests", "sa-east-1"): Decimal("0.022"),
+        ("aws", "gke_control_plane", "us-east-1"): Decimal("0.10"),
+        ("aws", "secrets", "us-east-1"): Decimal("0.40"),
+        ("aws", "secrets_operations", "us-east-1"): Decimal("0.05"),
+        ("aws", "key_management", "us-east-1"): Decimal("1"),
+        ("aws", "key_management_operations", "us-east-1"): Decimal("0.03"),
+        ("aws", "cdn", "us-east-1"): Decimal("0.085"),
+        ("aws", "cdn_requests", "us-east-1"): Decimal("0.01"),
     }
 
 
@@ -637,3 +706,120 @@ def test_oci_balanceador_e_banda_convertida(monkeypatch: pytest.MonkeyPatch) -> 
         # US$ 0,0001 por Mbps-hora; 1 Mbps-hora = 0,45 GB
         ("oci", "load_balancer_data", "sa-saopaulo-1"): Decimal("0.00022222"),
     }
+
+
+# ── R4: plano de controle, segredos, chaves e CDN (PLANO_PRECO_NAO_COMPUTE §6) ─────
+
+
+def test_gcp_por_uso_da_regiao() -> None:
+    por_uso = {
+        crc._GCP_KUBERNETES: [
+            _gcp_sku("Zonal Kubernetes Clusters", ["global"], 0.1),
+            _gcp_sku("Extended Period Kubernetes Clusters", ["global"], 0.5),
+        ],
+        # Faixa gratuita antes da paga: vale a paga
+        crc._GCP_SERVICO_DE_SEGREDOS: [
+            _gcp_sku("Secret version replica storage", ["southamerica-east1"], 0.0, 0.06),
+            _gcp_sku("Secret access operations", ["southamerica-east1"], 0.0, 0.000003),
+        ],
+        crc._GCP_KMS: [
+            _gcp_sku("Active software symmetric key versions", ["southamerica-east1"], 0.06),
+            _gcp_sku(
+                "Cryptographic operations with a software symmetric key",
+                ["southamerica-east1"],
+                0.000003,
+            ),
+            _gcp_sku("Active HSM symmetric key versions", ["southamerica-east1"], 1.0),
+        ],
+    }
+    rede = [
+        _gcp_sku(
+            "Networking Cloud CDN Traffic Cache Data Transfer to Latin America", ["global"], 0.09
+        ),
+        _gcp_sku(
+            "Networking Cloud CDN Traffic Cache Data Transfer to North America", ["global"], 0.08
+        ),
+        _gcp_sku("Networking Cloud Cdn Cache Lookups", ["global"], 0.00000075),
+    ]
+    taxas = {
+        (c, u): p for c, u, _, p in crc._gcp_por_uso_da_regiao(por_uso, rede, "southamerica-east1")
+    }
+    assert taxas == {
+        ("gke_control_plane", "hour"): Decimal("0.1"),
+        ("secrets", "month"): Decimal("0.06"),
+        ("secrets_operations", "10k"): Decimal("0.03"),
+        ("key_management", "month"): Decimal("0.06"),
+        ("key_management_operations", "10k"): Decimal("0.03"),
+        # Quem a CDN de São Paulo atende está na América Latina
+        ("cdn", "gb"): Decimal("0.09"),
+        ("cdn_requests", "10k"): Decimal("0.0075"),
+    }
+
+
+def test_gcp_sem_o_servico_fica_na_referencia() -> None:
+    taxas = {(c, u): p for c, u, _, p in crc._gcp_por_uso_da_regiao({}, [], "us-central1")}
+    assert set(taxas.values()) == {None}
+
+
+def test_azure_plano_de_controle_operacoes_e_front_door(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _item(medidor: str, unidade: str, preco: float, **extra: Any) -> dict[str, Any]:
+        return {"meterName": medidor, "unitOfMeasure": unidade, "retailPrice": preco, **extra}
+
+    def _resposta(url: str, timeout: float) -> dict[str, Any]:
+        texto = urllib.parse.unquote_plus(url)
+        if "Azure Kubernetes Service" in texto:
+            itens = [
+                _item("Standard Uptime SLA", "1 Hour", 0.1),
+                _item("Standard Long Term Support", "1 Hour", 0.6),
+            ]
+            return {"Items": [{"serviceName": "Azure Kubernetes Service", **i} for i in itens]}
+        if "Key Vault" in texto:
+            itens = [
+                _item("Operations", "10K", 0.03),
+                _item("Advanced Key Operations", "10K", 0.15),
+            ]
+            return {"Items": [{"serviceName": "Key Vault", **i} for i in itens]}
+        if "Front Door" in texto and "Zone 3" in texto:
+            novo = {"productName": "Azure Front Door", "tierMinimumUnits": 0.0}
+            return {
+                "Items": [
+                    _item("Standard Data Transfer Out", "1 GB", 0.1, **novo),
+                    _item("Standard Requests", "10K", 0.009, **novo),
+                    # A faixa de volume e o produto clássico não entram
+                    _item(
+                        "Standard Data Transfer Out",
+                        "1 GB",
+                        0.05,
+                        productName="Azure Front Door",
+                        tierMinimumUnits=10000.0,
+                    ),
+                    _item(
+                        "Standard Data Transfer Out",
+                        "1 GB",
+                        0.25,
+                        productName="Azure Front Door Service",
+                        tierMinimumUnits=0.0,
+                    ),
+                ]
+            }
+        return {"Items": []}
+
+    monkeypatch.setattr(crc, "_get", _resposta)
+    taxas = _por_chave(crc.fetch_azure_category_rates("brazilsouth", rede_global=()))
+    assert taxas == {
+        ("azure", "gke_control_plane", "brazilsouth"): Decimal("0.1"),
+        ("azure", "secrets_operations", "brazilsouth"): Decimal("0.03"),
+        ("azure", "key_management_operations", "brazilsouth"): Decimal("0.03"),
+        ("azure", "cdn", "brazilsouth"): Decimal("0.1"),
+        ("azure", "cdn_requests", "brazilsouth"): Decimal("0.009"),
+    }
+
+
+def test_oci_plano_de_controle_enhanced(monkeypatch: pytest.MonkeyPatch) -> None:
+    itens = [
+        _oci("OCI Kubernetes Engine - Enhanced Cluster", 0.1),
+        _oci("OCI Kubernetes Engine - Virtual Node", 0.015),
+    ]
+    monkeypatch.setattr(crc, "_get", lambda url, timeout: {"items": itens})
+    taxas = _por_chave(crc.fetch_oci_category_rates(["sa-saopaulo-1"]))
+    assert taxas == {("oci", "gke_control_plane", "sa-saopaulo-1"): Decimal("0.1")}

@@ -98,6 +98,9 @@ class AuxiliaryCosts:
     nat_gateway_data: Decimal = Decimal("0")
     public_ip: Decimal = Decimal("0")
     vpn: Decimal = Decimal("0")
+    # CDN (R4): tráfego entregue pela borda e requisições, cotados pela quantidade
+    cdn: Decimal = Decimal("0")
+    cdn_requests: Decimal = Decimal("0")
     network_other: Decimal = Decimal("0")
     database: Decimal = Decimal("0")
     # Custo de linhas com papel de compute (core/ram) que NÃO contribuíram
@@ -123,6 +126,17 @@ class AuxiliaryCosts:
     # Categoria → serviço da fatura → custo. Reparte a cotação da categoria entre os
     # serviços (o detalhe do AWSELB com o preço das linhas dele, PLANO_PRECO_NAO_COMPUTE R2)
     por_servico: Mapping[str, Mapping[str, Decimal]] = field(default_factory=dict)
+    # Plano de controle, segredos, chaves e serverless separados pelo uso
+    # (domain/services/categoria_por_uso), exceto a hora do cluster, que fica em
+    # `gke_control_plane`: categoria → custo. Entra na conservação.
+    por_uso: Mapping[str, Decimal] = field(default_factory=dict)
+
+    def custo(self, categoria: str) -> Decimal:
+        """Custo de uma categoria, seja campo próprio ou separada pelo uso."""
+        if categoria in self.por_uso:
+            return self.por_uso[categoria]
+        valor = getattr(self, categoria, None)
+        return valor if isinstance(valor, Decimal) else Decimal("0")
 
     @property
     def any_positive(self) -> bool:
@@ -140,9 +154,12 @@ class AuxiliaryCosts:
                 self.nat_gateway_data > 0,
                 self.public_ip > 0,
                 self.vpn > 0,
+                self.cdn > 0,
+                self.cdn_requests > 0,
                 self.network_other > 0,
                 self.database > 0,
                 self.commitment > 0,
                 self.orphan > 0,
+                any(custo > 0 for custo in self.por_uso.values()),
             )
         )

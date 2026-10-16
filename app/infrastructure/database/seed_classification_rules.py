@@ -85,11 +85,16 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     # descer daqui não muda resultado nenhum.
     ("*licensing*", "glob", "os_license", None, "medium", 69),
     # ── Cloud Run / serverless (second-billed, NOT in VM capacity pools) ──
-    ("*services min instance*", "glob", "network_egress", None, "medium", 64),
-    ("*cloud run*", "glob", "network_egress", None, "medium", 65),
-    # ── Cloud Run / request-based compute (serverless — keep out of pools) ──
-    ("*min instance cpu*", "glob", "unclassified", None, "low", 66),
-    ("*min instance memory*", "glob", "unclassified", None, "low", 67),
+    # Computação serverless, ao custo atual (PLANO_PRECO_NAO_COMPUTE R4). Era
+    # `network_egress`, para ficar fora dos pools, e a CPU e a memória do Cloud Run
+    # apareciam como rede. O tráfego do Cloud Run casa antes (`*data transfer*`, 32)
+    # e continua rede. A agregação corrige as faturas já processadas.
+    ("*services min instance*", "glob", "serverless", None, "medium", 64),
+    ("*cloud run*", "glob", "serverless", None, "medium", 65),
+    ("*min instance cpu*", "glob", "serverless", None, "low", 66),
+    ("*min instance memory*", "glob", "serverless", None, "low", 67),
+    ("services cpu (*", "glob", "serverless", None, "medium", 78),
+    ("services memory (*", "glob", "serverless", None, "medium", 79),
     # ── Generic compute (family extracted by the matcher) ──
     ("*instance core running in*", "glob", "core", None, "high", 70),
     ("*instance ram running in*", "glob", "ram", None, "high", 71),

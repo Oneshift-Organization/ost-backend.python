@@ -89,6 +89,42 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("azure", "inter_zone_transfer", "gb", "0.01"),
     ("gcp", "inter_zone_transfer", "gb", "0.01"),
     ("oci", "inter_zone_transfer", "gb", "0"),
+    # R4 (PLANO_PRECO_NAO_COMPUTE §6), conferidos nas APIs oficiais em 16/10/2026: AWS
+    # offer files (AmazonEKS, AWSSecretsManager, awskms, AmazonCloudFront), Azure Retail
+    # Prices, catálogo do GCP, OCI cetools. Primeira faixa, América do Norte e Europa.
+    # Plano de controle por cluster-hora: EKS, GKE, AKS Standard (com SLA), OKE Enhanced
+    ("aws", "gke_control_plane", "hour", "0.10"),
+    ("azure", "gke_control_plane", "hour", "0.10"),
+    ("gcp", "gke_control_plane", "hour", "0.10"),
+    ("oci", "gke_control_plane", "hour", "0.10"),
+    # Segredo por mês. Azure cobra só a operação; a OCI não cobra segredo
+    ("aws", "secrets", "month", "0.40"),
+    ("azure", "secrets", "month", "0"),
+    ("gcp", "secrets", "month", "0.06"),
+    ("oci", "secrets", "month", "0"),
+    ("aws", "secrets_operations", "10k", "0.05"),
+    ("azure", "secrets_operations", "10k", "0.03"),
+    ("gcp", "secrets_operations", "10k", "0.03"),
+    ("oci", "secrets_operations", "10k", "0"),
+    # Chave por mês, a proteção padrão de cada um: KMS da AWS (HSM), software no GCP e
+    # na Azure (Key Vault Standard: só operação), HSM na OCI (20 versões grátis; acima,
+    # US$ 0,5334)
+    ("aws", "key_management", "month", "1.00"),
+    ("azure", "key_management", "month", "0"),
+    ("gcp", "key_management", "month", "0.06"),
+    ("oci", "key_management", "month", "0"),
+    ("aws", "key_management_operations", "10k", "0.03"),
+    ("azure", "key_management_operations", "10k", "0.03"),
+    ("gcp", "key_management_operations", "10k", "0.03"),
+    ("oci", "key_management_operations", "10k", "0"),
+    # CDN: CloudFront, Cloud CDN, Front Door Standard. A OCI não tem CDN própria: sem
+    # linha, fica sem cotação
+    ("aws", "cdn", "gb", "0.085"),
+    ("azure", "cdn", "gb", "0.0825"),
+    ("gcp", "cdn", "gb", "0.08"),
+    ("aws", "cdn_requests", "10k", "0.01"),
+    ("azure", "cdn_requests", "10k", "0.009"),
+    ("gcp", "cdn_requests", "10k", "0.0075"),
 )
 
 

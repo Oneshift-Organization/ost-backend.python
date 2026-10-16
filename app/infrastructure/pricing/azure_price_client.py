@@ -49,7 +49,7 @@ def _espera(tentativa: int, retry_after: str | None) -> float:
         return float(2**tentativa)
 
 
-def _get_json(url: str, *, timeout: float, retries: int = 6) -> dict[str, Any]:
+def get_json_com_espera(url: str, *, timeout: float, retries: int = 6) -> dict[str, Any]:
     """GET com User-Agent e backoff em 429, timeout e erro de conexão.
 
     Uma coleta de cinco regiões faz ~40 chamadas seguidas e a API responde 429
@@ -109,7 +109,7 @@ def fetch_azure_vm_prices(
     pages = 0
 
     while url and pages < max_pages:
-        payload = _get_json(url, timeout=timeout)
+        payload = get_json_com_espera(url, timeout=timeout)
         for item in payload.get("Items", []):
             if _excluded(item):
                 continue

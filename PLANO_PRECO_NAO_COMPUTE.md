@@ -220,3 +220,122 @@ linhas.
 **Para o dev:** depois do deploy, rodar no pod
 `python - --providers categories,categories-live < scripts/sync_prices.py`. A
 referência traz os zeros da OCI; a oficial traz as taxas por região.
+
+## 6. R4 — Cloud Run, plano de controle do Kubernetes, segredos, chaves e CDN (16/10, noite)
+
+Pedido do usuário: "Cloud Run: a instância mínima está classificada como rede" e
+"preço de segredo, CDN e plano de controle do Kubernetes, que hoje ficam ao custo
+atual". Correção geral, para as quatro nuvens.
+
+### 6.1 O que a medição mostrou
+
+| caso | onde cai hoje | efeito |
+|---|---|---|
+| CPU e memória do Cloud Run, inclusive a instância mínima, e as Cloud Run Functions (GCP real: R$ 8,5 mil/mês) | `network_egress`, pela regra `*cloud run*` e `*services min instance*`; desde o R1, em `rede_outros` | parece rede na tela e no payload; "Services CPU" (sem regra) cai em não classificado |
+| Plano de controle (EKS por cluster, cluster do GKE, Uptime SLA do AKS, cluster Enhanced do OKE) | `gke_control_plane`, ao custo atual | nunca é cotado; o suporte estendido (US$ 0,50/h) se mistura com a hora do cluster |
+| Segredos (Secrets Manager, Secret Manager, Key Vault) e chaves (KMS, Cloud KMS, Vault) | `unclassified`, `storage_hdd` (requisição do KMS e do Secrets Manager no bill antigo, "Secret version replica storage" do GCP pelo `*storage*`) | custo órfão, ou disco HDD que não existe |
+| CDN (CloudFront, Cloud CDN, Front Door) | egress de internet; requisição da CloudFront em não classificado | cotada como egress comum; requisição fora |
+
+### 6.2 O que muda
+
+- **Classificação na agregação** (`reclassificacao_por_uso`, como a V4.3): vale para
+  fatura já processada, sem reenriquecer, e vê o nome do serviço. É o que separa a
+  requisição da CloudFront (`US-Requests-Tier2-HTTPS`) da do S3.
+  - Cloud Run, Cloud Run Functions, Lambda (GB-segundo), Azure Functions e Container
+    Apps, OCI Functions: `serverless`.
+  - Secrets Manager, KMS, Secret Manager, Cloud KMS, Key Vault, Vault da OCI: `secrets`.
+  - Requisições da CloudFront e consultas ao cache do Cloud CDN: rede.
+- **Regras de SKU do GCP:** `*services min instance*` e `*cloud run*` deixam de ser
+  rede. A fatura nova já sai certa do enriquecimento.
+- **Categoria pelo uso** (`domain/services/categoria_por_uso.py`, irmão do
+  `rede_por_uso`): cada balde vira categorias com unidade, cotadas pela quantidade
+  medida.
+
+| categoria | unidade | AWS | GCP | Azure | OCI |
+|---|---|---|---|---|---|
+| plano de controle (`gke_control_plane`) | cluster-hora | 0,10 | 0,10 | 0,10 (Standard, com SLA) | 0,10 (Enhanced) |
+| segredo (`secrets`) | segredo-mês | 0,40 | 0,06 | 0 (só operação) | 0 |
+| operação de segredo (`secrets_operations`) | 10 mil | 0,05 | 0,03 | 0,03 | 0 |
+| chave (`key_management`) | chave-mês | 1,00 | 0,06 (software, o padrão) | 0 (software: só operação) | 0 (20 versões grátis; acima, 0,5334) |
+| operação de chave (`key_management_operations`) | 10 mil | 0,03 | 0,03 | 0,03 | 0 |
+| CDN (`cdn`, no balde de rede) | GB | 0,085 | 0,08 | 0,0825 (Front Door Standard) | sem CDN própria: ao custo atual |
+| requisição de CDN (`cdn_requests`) | 10 mil | 0,01 (HTTPS) | 0,0075 | 0,009 | — |
+
+Valores das APIs oficiais em 16/10/2026: AWS offer files (`AmazonEKS`, `AWSSecretsManager`,
+`awskms`, `AmazonCloudFront`), Azure Retail Prices, catálogo do GCP, OCI cetools. Primeira
+faixa, América do Norte e Europa.
+
+Ficam ao custo atual, declarados:
+- suporte estendido e LTS do Kubernetes, nós virtuais, plano provisionado;
+- rotação, renovação de certificado, cofre privado e HSM dedicado;
+- computação serverless. A cotação de Cloud Run contra Fargate, Container Apps e
+  Container Instances fica para depois: o modelo de cobrança (vCPU-segundo ativo e
+  ocioso) não se traduz um a um.
+
+### 6.3 Análise de impacto
+
+| quem consome | o que muda | risco | como fica coberto |
+|---|---|---|---|
+| `billing_aggregator` | os baldes `gke_control_plane`, `secrets` e `serverless` se dividem pelo uso; o resto vai para `AuxiliaryCosts.por_uso` | perder custo | conservação: `reconciliation` soma `por_uso`; teste com linha de cada tipo |
+| `AuxiliaryCosts` | campo novo `por_uso` (categoria → custo); `gke_control_plane` fica só com a hora do cluster | quem soma à mão esquecer o mapa | `any_positive` e `reconciliation` leem o mapa |
+| cotação das categorias | 7 categorias novas pela quantidade medida | mudar número onde havia plano de controle, segredo, chave ou CDN | medido nos seis relatórios |
+| payload (`custos_auxiliares`) | chaves novas: `kubernetes_outros`, `segredos`, `segredos_operacoes`, `chaves_kms`, `chaves_kms_operacoes`, `seguranca_outros`, `computacao_serverless`, `cdn`, `cdn_requisicoes`, e os `equivalentes_` de cada uma; `gke_plano_controle` ganha equivalentes | o agente somar errado | aditivo; a autoridade manda no número; nota ao MCP |
+| `equivalence_pricing` (trava da autoridade) | as chaves novas entram na tabela de categorias | mudar a análise corrigida de snapshot antigo | snapshot antigo não tem as chaves: o caminho é o mesmo. Troca o hash da v4, sem subir a versão, como no R2 |
+| Terraform (`_registrar_lacunas`) | o aviso de plano de controle olha também `kubernetes_outros`; serverless, segredo e CDN entram na lista do que não vira recurso | caracterização mudar | caracterização atualizada de propósito, se mudar |
+| confiança da análise | o custo que passa a ser cotado pesa pela taxa (referência) | rebaixar onde o número era oficial | as taxas são de referência conferidas; a V4.7 pesa pelo custo atual |
+| análises antigas | nada; o payload é congelado | — | — |
+
+### 6.4 Resultado (16/10, noite)
+
+**Feito:**
+- `categoria_por_uso` (plano de controle, segredos, chaves, serverless);
+- CDN no `rede_por_uso`;
+- correção na agregação (`reclassificacao_por_uso`) e regras de SKU do Cloud Run;
+- taxas oficiais no `categories-live`:
+  - plano de controle nas quatro nuvens;
+  - segredo, chave e CDN na AWS, no GCP e na Azure;
+  - a OCI não cobra segredo nem tem CDN, e fica com a referência.
+
+**Achado no caminho:** o `categories-live` caía no primeiro 429 da Azure, a mesma
+falha do A3 no develop. O cliente das categorias agora usa a espera da coleta de compute
+(`get_json_com_espera`). Na primeira rodada local já passou: 238 taxas.
+
+**Primeira medição: a confiança caiu.** Com as taxas novas só como referência, o Azure
+(mock) foi de média para baixa: a fração oficial foi de 0,6077 para 0,5942. O plano de
+controle do AKS (US$ 148,80) passou a ser cotado, mas com taxa de referência. Com as
+taxas oficiais, a confiança voltou a média. Por isso o sync oficial entrou no mesmo
+bloco.
+
+Seis relatórios, banco local com as taxas oficiais, economia em US$/mês. Antes: a develop
+com a curadoria de 16/10.
+
+| relatório | decisão | confiança | economia antes → depois | cobertura do escolhido |
+|---|---|---|---|---|
+| AWS Cost Explorer (real) | OCI = OCI | low = low | OCI 42.108,48 → 42.125,90 · Azure −8.249,85 → −8.232,56 · GCP −11.393,75 → −11.377,62 | 0,9023 → 0,9081 |
+| GCP Cost Table (real) | OCI = OCI | medium = medium | OCI 2.446,18 → 2.450,12 · AWS 472,04 → 470,26 · Azure 202,51 → 206,73 | 0,73 → 0,9648 |
+| GCP BigQuery (mock) | OCI = OCI | medium = medium | OCI 2.444,43 → 2.448,38 · AWS 462,51 → 460,74 · Azure 195,23 → 199,46 | 0,7297 → 0,9644 |
+| AWS CUR (mock) | OCI = OCI | low = low | OCI 37.931,17 → 37.948,67 · Azure −8.810,31 → −8.793,02 · GCP −13.990,01 → −13.973,87 | 0,9006 → 0,9064 |
+| Azure (mock) | OCI = OCI | medium = medium | iguais | 0,9778 → 1,0 |
+| OCI São Paulo (mock) | — | medium = medium | iguais | 1,0 = 1,0 |
+
+O que mudou, e por quê:
+- **Cobertura do GCP (0,73 → 0,96):** o plano de controle do GKE (zonal) e a instância
+  mínima do Cloud Run eram a maior parte do que ficava sem cotação.
+  - O plano de controle agora é cotado pela hora do cluster.
+  - O Cloud Run sai da rede e entra como computação serverless, ao custo atual.
+- **Economia:** muda pouco. A hora do cluster custa US$ 0,10 nas quatro nuvens. O efeito é
+  o crédito do GKE (faixa gratuita): ele abate a origem e não segue para o destino.
+- **Score:** sobe até 1 ponto no GCP, porque a cobertura das categorias cotadas
+  subiu; nos outros, centésimos.
+
+Ficam iguais:
+- a decisão;
+- a conservação do custo;
+- os testes de unidade (1978);
+- os gates de integração no banco igual ao do CI (186 passaram, 6 pulos permitidos).
+
+**Para o develop:** depois do deploy, rodar no pod:
+1. `seed_classification_rules`, para o Cloud Run de fatura nova;
+2. `python - --providers categories,categories-live < scripts/sync_prices.py`.
+
+Fatura já processada não precisa reenriquecer: a correção está na agregação.

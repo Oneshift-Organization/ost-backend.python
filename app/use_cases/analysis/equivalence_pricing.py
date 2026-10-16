@@ -22,6 +22,14 @@ _CATEGORIES = {
     "ip_publico": ("IP público", set()),
     "vpn": ("VPN", {"vpn_gateway"}),
     "banco_dados": ("Bancos de dados", {"relational_database", "managed_relational_database"}),
+    # R4: plano de controle, segredos, chaves e CDN, pela quantidade medida
+    "gke_plano_controle": ("Plano de controle do Kubernetes", {"managed_kubernetes"}),
+    "segredos": ("Segredos", {"secrets_management"}),
+    "segredos_operacoes": ("Operações de segredos", {"secrets_management"}),
+    "chaves": ("Chaves de criptografia", {"key_management"}),
+    "chaves_operacoes": ("Operações de chaves", {"key_management"}),
+    "cdn": ("CDN", {"content_delivery_network"}),
+    "cdn_requisicoes": ("Requisições da CDN", {"content_delivery_network"}),
 }
 
 

@@ -70,6 +70,7 @@ from app.domain.services.provider_consolidation import (
     weakest_confidence,
 )
 from app.domain.services.reconciliation import reconcile
+from app.domain.services.categoria_por_uso import UNIDADE as UNIDADE_POR_USO
 from app.domain.services.rede_por_uso import UNIDADE as UNIDADE_DA_REDE
 from app.domain.services.regioes import (
     ZONA_PADRAO,
@@ -877,6 +878,9 @@ class BuildMigrationContextUseCase:
                 "database": auxiliary.database,
                 # Rede por tipo, cotada pela quantidade medida (PLANO_PRECO_NAO_COMPUTE)
                 **{c: getattr(auxiliary, c) for c in UNIDADE_DA_REDE},
+                # Plano de controle, segredos e chaves, pela quantidade medida (R4)
+                "gke_control_plane": auxiliary.gke_control_plane,
+                **{c: v for c, v in auxiliary.por_uso.items() if c in UNIDADE_POR_USO},
             }
             for category, aux_cost in aux_by_category.items():
                 if aux_cost <= 0:
@@ -896,7 +900,7 @@ class BuildMigrationContextUseCase:
                 )
                 # Rede: a quantidade medida dispensa a taxa da origem. O preço efetivo
                 # (custo medido / quantidade) converte o custo das linhas sem quantidade.
-                unidade_medida = UNIDADE_DA_REDE.get(category)
+                unidade_medida = UNIDADE_DA_REDE.get(category) or UNIDADE_POR_USO.get(category)
                 quantidade_total = sum((p.quantidade for p in partes), Decimal("0"))
                 medido_total = convert(sum((p.custo_medido for p in partes), Decimal("0")), fx)
                 preco_efetivo = (
@@ -1033,7 +1037,8 @@ class BuildMigrationContextUseCase:
             Decimal("0"),
         )
         for category in category_equivalents:
-            analyzed += convert(getattr(auxiliary, category, Decimal("0")), fx) or Decimal("0")
+            custo_da_categoria = auxiliary.custo(category) if auxiliary else Decimal("0")
+            analyzed += convert(custo_da_categoria, fx) or Decimal("0")
         total_analysis = convert(total_spend, fx) or Decimal("0")
         cobertura_analise = float(analyzed / total_analysis) if total_analysis > 0 else 0.0
 
@@ -1110,7 +1115,8 @@ class BuildMigrationContextUseCase:
                 compromisso_por_provedor[provider] = parte
                 _tally[provider]["covered"] += parte
         for category, cat_equivs in category_equivalents.items():
-            src = convert(getattr(auxiliary, category, Decimal("0")), fx) or Decimal("0")
+            custo_da_categoria = auxiliary.custo(category) if auxiliary else Decimal("0")
+            src = convert(custo_da_categoria, fx) or Decimal("0")
             for ce in cat_equivs:
                 _add(
                     str(ce["provedor"]).lower(),

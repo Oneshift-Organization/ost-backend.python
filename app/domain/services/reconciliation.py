@@ -209,6 +209,7 @@ def _check_conservacao(
             auxiliary.database,
             auxiliary.commitment,
             auxiliary.orphan,
+            *auxiliary.por_uso.values(),
         ):
             aux_total += convert(bucket, fx) or Decimal("0")
 

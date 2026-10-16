@@ -44,7 +44,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Estratégia da sprint: fechamento do 13/10, decisões do usuário, pendências do MCP, sprint de Terraform em blocos (T0–T7) | [`PLANO_ESTRATEGIA_SPRINT_TERRAFORM.md`](PLANO_ESTRATEGIA_SPRINT_TERRAFORM.md) |
 | Lock-in pelo inventário e pela classe no score (V4.4 e V4.5): regra `lock_in_efetivo`, metadata curada pelo nome do DE-PARA, tarefas do `score-7rs-v5` para o autor do #32, curadoria pendente | [`PLANO_SCORE_V5_LOCKIN.md`](PLANO_SCORE_V5_LOCKIN.md) |
 | Ciclo de vida do preço (VIVO → ADUBO, duração de cada estado, agente não revive preço, revitalização por billing, quórum) — P3.0–P3.2 feitos | [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) |
-| Rede por tipo (balanceador, NAT, IP, VPN, tráfego entre zonas) cotada pela quantidade medida / destino grátis / taxas oficiais de rede | [`PLANO_PRECO_NAO_COMPUTE.md`](PLANO_PRECO_NAO_COMPUTE.md) |
+| Rede por tipo (balanceador, NAT, IP, VPN, tráfego entre zonas, CDN) cotada pela quantidade medida / destino grátis / taxas oficiais / plano de controle do Kubernetes, segredos e chaves (R4) / Cloud Run como serverless | [`PLANO_PRECO_NAO_COMPUTE.md`](PLANO_PRECO_NAO_COMPUTE.md) |
 | Cenários de entrada (Cost Explorer, fatura sem ID, CUR, com ou sem inventário) / custo estimado pelo tipo / diagnóstico de entrada da análise | [`PLANO_CENARIOS_DE_ENTRADA.md`](PLANO_CENARIOS_DE_ENTRADA.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
