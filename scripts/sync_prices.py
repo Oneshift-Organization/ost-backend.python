@@ -36,6 +36,7 @@ from app.infrastructure.pricing.category_rate_client import (
     fetch_gcp_category_rates,
     fetch_oci_category_rates,
 )
+from app.infrastructure.pricing.ciclo_de_vida import recalcular_ciclo_de_vida
 from app.infrastructure.pricing.gcp_price_client import fetch_gcp_compute_prices
 from app.infrastructure.pricing.oci_price_client import fetch_oci_compute_prices
 from app.infrastructure.repositories.pg_cloud_price_point_repo import (
@@ -130,6 +131,8 @@ async def main() -> None:
             await session.commit()
         linha = f"fetched={res.fetched} upserted={res.upserted} removed={res.removed}"
         print(f"{provider}: {linha}")  # noqa: T201
+    # Estado e score dos preços depois da coleta (PLANO_CICLO_DE_VIDA_DO_PRECO)
+    print(await recalcular_ciclo_de_vida())  # noqa: T201
     if falhas:
         raise SystemExit(f"falharam: {', '.join(falhas)}")
 

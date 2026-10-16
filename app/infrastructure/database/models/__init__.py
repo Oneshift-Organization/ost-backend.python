@@ -22,6 +22,11 @@ from app.infrastructure.database.models.inventory import (
     InventoryRelationModel,
     InventoryResourceModel,
 )
+from app.infrastructure.database.models.price_lifecycle import (
+    PriceLifecycleRuleModel,
+    PriceObservationModel,
+    PriceSourceWeightModel,
+)
 from app.infrastructure.database.models.service_ontology import ServiceOntologyModel
 from app.infrastructure.database.models.sku_classification_rules import (
     SkuClassificationRuleModel,
@@ -46,6 +51,9 @@ __all__ = [
     "InventoryModel",
     "InventoryRelationModel",
     "InventoryResourceModel",
+    "PriceLifecycleRuleModel",
+    "PriceObservationModel",
+    "PriceSourceWeightModel",
     "ServiceOntologyModel",
     "SkuClassificationRuleModel",
     "TerraformGenerationJobModel",

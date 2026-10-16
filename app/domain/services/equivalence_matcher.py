@@ -54,6 +54,9 @@ class FinancialEstimate:
     # preço oficial de outra região não é oficial para esta.
     price_region: str | None = None
     price_region_approximate: bool = False
+    # Ciclo de vida do preço (PLANO_CICLO_DE_VIDA_DO_PRECO): só rótulo, não muda número
+    price_lifecycle_state: str | None = None
+    price_lifecycle_score: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,9 @@ class _Candidatos:
     origem: str | None
     capturado_em: datetime | None
     regiao: RegiaoDePreco | None = None
+    # O pior ponto dos candidatos, como a captura mais antiga acima
+    estado: str | None = None
+    score: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -149,12 +155,16 @@ class EquivalenceMatcher:
             if points:
                 capturas = [p.captured_at for p in points if p.captured_at is not None]
                 fontes = {p.source for p in points if p.source}
+                com_score = [p for p in points if p.confianca_score is not None]
+                pior = min(com_score, key=lambda p: p.confianca_score or 0, default=None)
                 return _Candidatos(
                     [_pricepoint_to_sku(p) for p in points],
                     "reference" if escolha is not None and escolha.aproximada else "official",
                     sorted(fontes)[0] if fontes else None,
                     min(capturas) if capturas else None,
                     escolha,
+                    estado=pior.estado if pior else None,
+                    score=pior.confianca_score if pior else None,
                 )
         catalog = await self._sku_repo.find_equivalents(
             provider=provider, service_type=service_type, limit=_CANDIDATE_LIMIT
@@ -336,6 +346,8 @@ class EquivalenceMatcher:
                         price_captured_at=cands.capturado_em,
                         price_region=cands.regiao.regiao if cands.regiao else None,
                         price_region_approximate=bool(cands.regiao and cands.regiao.aproximada),
+                        price_lifecycle_state=cands.estado,
+                        price_lifecycle_score=cands.score,
                     ),
                     architecture_mismatch=arquitetura_diferente,
                 )

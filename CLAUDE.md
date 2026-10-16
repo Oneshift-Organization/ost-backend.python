@@ -42,7 +42,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Lote da autoridade v3 (contestação verificável, classificação, bloco C) e fila de precisão (custos por zona, `perf_coef`) | [`PLANO_AUTORIDADE_V3_E_PRECISAO.md`](PLANO_AUTORIDADE_V3_E_PRECISAO.md) |
 | Migrar uma aplicação ou um serviço com tudo que vai junto / rotas `applications` e `migration-plans` / custo do escopo / exportação / Terraform do escopo | [`PLANO_ESCOPO_DE_MIGRACAO.md`](PLANO_ESCOPO_DE_MIGRACAO.md) · [`docs/endpoints/migration-plans.md`](docs/endpoints/migration-plans.md) |
 | Estratégia da sprint: fechamento do 13/10, decisões do usuário, pendências do MCP, sprint de Terraform em blocos (T0–T7) | [`PLANO_ESTRATEGIA_SPRINT_TERRAFORM.md`](PLANO_ESTRATEGIA_SPRINT_TERRAFORM.md) |
-| Ciclo de vida do preço (VIVO → ADUBO, revitalização por billing, quórum) — P3 da fila de precisão | [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) |
+| Ciclo de vida do preço (VIVO → ADUBO, duração de cada estado, agente não revive preço, revitalização por billing, quórum) — P3.0–P3.2 feitos | [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) |
 | Rede por tipo (balanceador, NAT, IP, VPN, tráfego entre zonas) cotada pela quantidade medida / destino grátis / taxas oficiais de rede | [`PLANO_PRECO_NAO_COMPUTE.md`](PLANO_PRECO_NAO_COMPUTE.md) |
 | Cenários de entrada (Cost Explorer, fatura sem ID, CUR, com ou sem inventário) / custo estimado pelo tipo / diagnóstico de entrada da análise | [`PLANO_CENARIOS_DE_ENTRADA.md`](PLANO_CENARIOS_DE_ENTRADA.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |

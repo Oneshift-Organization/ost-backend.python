@@ -10,7 +10,7 @@ Reusa ``cloud_price_points``: ``service_type`` = categoria, ``unit`` = gb_month/
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 
 from app.domain.entities.cloud_price_point import CloudPricePoint
@@ -92,8 +92,24 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
+# Quando cada valor foi conferido na fonte oficial (o commit que o trouxe). É a data
+# de captura da referência: o ciclo de vida envelhece o valor a partir dela, não do
+# dia em que o seed rodou (PLANO_CICLO_DE_VIDA_DO_PRECO). Valor revisto = data nova.
+_CONFERIDO_EM: dict[tuple[str, str], date] = {
+    **{(p, c): date(2026, 7, 25) for p in ("aws", "gcp", "azure", "oci")
+       for c in ("storage_ssd", "storage_hdd", "network_egress", "database")},
+    **{(p, "object_storage"): date(2026, 9, 13) for p in ("aws", "gcp", "azure", "oci")},
+    ("gcp", "storage_ssd"): date(2026, 9, 27),
+}
+_REDE_CONFERIDA_EM = date(2026, 10, 16)
+
+
+def _conferido_em(provider: str, category: str) -> datetime:
+    dia = _CONFERIDO_EM.get((provider, category), _REDE_CONFERIDA_EM)
+    return datetime.combine(dia, time(), tzinfo=UTC)
+
+
 def category_rate_points() -> list[CloudPricePoint]:
-    now = datetime.now(UTC)
     return [
         CloudPricePoint(
             provider=provider,
@@ -108,7 +124,7 @@ def category_rate_points() -> list[CloudPricePoint]:
             ram_gib=None,
             source=_SOURCE,
             confidence="reference",
-            captured_at=now,
+            captured_at=_conferido_em(provider, category),
         )
         for provider, category, unit, rate in _RATES
     ]

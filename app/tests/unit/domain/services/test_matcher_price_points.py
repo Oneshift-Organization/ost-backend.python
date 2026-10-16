@@ -357,3 +357,40 @@ async def test_burstable_na_origem_e_dimensionado_pela_base_em_destino_sem_credi
         perfil_origem=perfil("aws", "m7g.xlarge"),
     )
     assert sustentada.sku_id == "m7g.xlarge"
+
+
+@pytest.mark.asyncio
+async def test_estado_do_ciclo_de_vida_chega_ao_financeiro() -> None:
+    # PLANO_CICLO_DE_VIDA_DO_PRECO: o pior ponto dos candidatos, como a captura mais antiga
+    vivo = replace(_point("0.20"), estado="vivo", confianca_score=Decimal("0.97"))
+    velho = replace(
+        _point("0.30"), sku_key="Standard_D4as_v5", estado="adubo", confianca_score=Decimal("0.2")
+    )
+    matcher = EquivalenceMatcher(_SkuRepo({}), _PriceRepo({"azure": [vivo, velho]}))
+    opts = await matcher.match_pool(
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        monthly_cost=Decimal("200"),
+        service_type="virtual_server",
+        target_providers=["azure"],
+    )
+    financeiro = opts[0].financials
+    assert financeiro is not None
+    assert (financeiro.price_lifecycle_state, financeiro.price_lifecycle_score) == (
+        "adubo",
+        Decimal("0.2"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_preco_sem_ciclo_calculado_nao_inventa_estado() -> None:
+    matcher = EquivalenceMatcher(_SkuRepo({}), _PriceRepo({"azure": [_point("0.20")]}))
+    opts = await matcher.match_pool(
+        vcpus=Decimal("4"),
+        ram_gib=Decimal("16"),
+        monthly_cost=Decimal("200"),
+        service_type="virtual_server",
+        target_providers=["azure"],
+    )
+    assert opts[0].financials is not None
+    assert opts[0].financials.price_lifecycle_state is None

@@ -25,6 +25,9 @@ def _to_entity(row: CloudPricePointModel) -> CloudPricePoint:
         source=row.source,
         confidence=row.confidence,
         captured_at=row.captured_at,
+        estado=row.estado,
+        confianca_score=row.confianca_score,
+        confirmado_em=row.confirmado_em,
     )
 
 
@@ -128,8 +131,16 @@ class PgCloudPricePointRepository:
             update_cols = {
                 c: stmt.excluded[c]
                 for c in (
-                    "service_name", "service_type", "price", "currency", "unit",
-                    "vcpus", "ram_gib", "source", "confidence", "captured_at",
+                    "service_name",
+                    "service_type",
+                    "price",
+                    "currency",
+                    "unit",
+                    "vcpus",
+                    "ram_gib",
+                    "source",
+                    "confidence",
+                    "captured_at",
                 )
             }
             stmt = stmt.on_conflict_do_update(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Index, Numeric, String, func
+from sqlalchemy import DateTime, Index, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base
@@ -29,7 +29,11 @@ class CloudPricePointModel(Base):
     captured_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # Ciclo de vida (PLANO_CICLO_DE_VIDA_DO_PRECO): recalculado depois de cada sync
+    estado: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    confianca_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
+    confirmado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ultima_fonte: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    versao: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1", default=1)
 
-    __table_args__ = (
-        Index("ix_price_points_provider_type", "provider", "service_type"),
-    )
+    __table_args__ = (Index("ix_price_points_provider_type", "provider", "service_type"),)

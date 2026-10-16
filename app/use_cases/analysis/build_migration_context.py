@@ -669,6 +669,8 @@ class BuildMigrationContextUseCase:
                             pricing_confidence=_f.pricing_confidence,
                             price_source=getattr(_f, "price_source", None),
                             price_captured_at=getattr(_f, "price_captured_at", None),
+                            price_lifecycle_state=getattr(_f, "price_lifecycle_state", None),
+                            price_lifecycle_score=getattr(_f, "price_lifecycle_score", None),
                         )
                     equiv_items.append(
                         EquivalentService(
@@ -787,6 +789,8 @@ class BuildMigrationContextUseCase:
                             price_captured_at=opt.financials.price_captured_at,
                             price_region=opt.financials.price_region,
                             price_region_approximate=opt.financials.price_region_approximate,
+                            price_lifecycle_state=opt.financials.price_lifecycle_state,
+                            price_lifecycle_score=opt.financials.price_lifecycle_score,
                         )
                     tm = None
                     if opt.technical_match is not None:
