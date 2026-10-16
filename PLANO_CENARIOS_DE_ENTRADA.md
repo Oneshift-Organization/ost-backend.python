@@ -256,3 +256,35 @@ Só quando o CUR mudaria o número de forma relevante (alerta amarelo, com o cam
 
 A conta kitconta (um recurso de cada tipo, 88% ligado, sem compromisso) não acende nada. Os
 números novos entram no payload só em análise nova; análise antiga fica sem esses avisos.
+
+## 11. Nome do serviço na fatura × DE-PARA (16/10/2026)
+
+### 11.1 Apelidos por nuvem
+
+Só a AWS tinha apelidos, e só para nomes do Cost Explorer. O AWSELB do CUR e da fatura
+detalhada, as categorias de medidor da Azure, a descrição de serviço do GCP e o código
+de serviço da OCI não casavam: o serviço saía "tipo inferido" e sem equivalente.
+
+**Impacto:** muda só a entrada do DE-PARA escolhida (tipo, categoria, equivalentes,
+expectativa de migração); a cotação vem de pools e categorias e não muda. Nome da carga
+igual (Dependências e Plano continuam casando com o inventário). Análise antiga não muda
+(payload congelado). Teste garante que todo apelido aponta para nome do CSV.
+
+### 11.2 Nome ambíguo resolvido pelo uso
+
+"Storage" (Azure), "Networking" (GCP), "DATABASE" e "NETWORK" (OCI) cobrem mais de um
+serviço. `domain/services/servico_pelo_uso.py`: o uso de cada linha decide, e só vale
+quando um alvo tem 60% ou mais do custo do serviço.
+
+**Impacto avaliado antes:** renomear a carga quebraria o cruzamento de Dependências e
+do Plano com o inventário (que usam o nome cru da fatura); por isso o nome fica e só a
+entrada do DE-PARA muda. Tipo identificado mexe no score de lock-in: medido.
+
+| fatura | custo com tipo inferido antes → depois dos apelidos → depois do uso |
+|---|---|
+| Azure (mock) | 86% → 33% → 5% (resta "Bandwidth", fora do DE-PARA) |
+| GCP Cost Table (real) | 54% → 30% → 30% ("Networking" mistura VPN, balanceador e IP sem dominante) |
+| OCI (mock) | 100% → 35% → 3% (resta "NETWORK", mistura) |
+| AWS CUR (mock) | 6% → 3% → 3% (MSK fora do DE-PARA; Savings Plan é financeiro) |
+
+Seis relatórios: mesmas decisões, economia e confiança.
