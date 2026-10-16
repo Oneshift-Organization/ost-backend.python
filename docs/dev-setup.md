@@ -106,6 +106,13 @@ PYTHONPATH=. python scripts/sync_prices.py --providers categories
 > grosseiro e o DE-PARA por serviço perde precisão. Isso foi descoberto pelos
 > gates de integração, não em revisão de código.
 
+> **A metadata curada (lock-in e refatoração) usa o nome do DE-PARA** e o
+> `seed_service_metadata` a sincroniza a cada execução: renomeia nome antigo,
+> atualiza nota e insere serviço novo, sem perder `docs_costs`. A tabela de
+> comparação ele só grava no banco vazio. Nome fora do DE-PARA nunca chega à
+> análise; `test_metadata_no_depara.py` barra isso (lote v4, V4.4). Mudou a
+> metadata? Rode o seed no ambiente; a análise nova já sai com a nota.
+
 > ⚠️ **Regra ou taxa mudou? Rode de novo e re-enriqueça.** A classificação é
 > gravada em `billing_enriched` na ingestão: re-seedar muda só os reports novos.
 > Para os existentes, `python scripts/re_enrich_report.py <report_id>`. Foi o

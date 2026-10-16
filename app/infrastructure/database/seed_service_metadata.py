@@ -1,11 +1,21 @@
 """Seed cloud_services_metadata and cloud_services_comparation tables.
 
 Run via: python -m app.infrastructure.database.seed_service_metadata
+
+A metadata curada (lock-in e refatoração) é sincronizada a cada execução: nome
+renomeado, linha nova e nota alterada chegam a um banco já semeado. A tabela de
+comparação só é gravada no banco vazio, porque o `seed_from_csv` (DE-PARA) a
+recarrega depois.
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database.models.cloud_services_comparation import (
     CloudServiceComparisonModel,
@@ -106,7 +116,25 @@ COMPARATION_SEED = [
     ("analytics", "data_warehouse", "oci", "Oracle Autonomous Data Warehouse"),
 ]
 
-# (provider, category, service_name, metadata)
+# Nomes antigos da metadata, que não existiam no DE-PARA (`cloud_services_mapping.csv`):
+# a nota curada nunca chegava à análise, nem na origem nem no destino. O seed
+# renomeia as linhas já gravadas para o nome do DE-PARA (lote v4, V4.4).
+RENOMEADOS: dict[tuple[str, str], str] = {
+    ("aws", "Amazon EBS"): "Amazon Elastic Block Store (EBS)",
+    ("aws", "Amazon EFS"): "Amazon Elastic File System (EFS)",
+    ("aws", "AWS IAM"): "AWS Identity and Access Management (IAM)",
+    ("azure", "Azure Virtual Machine"): "Azure Virtual Machines",
+    ("gcp", "Cloud Functions"): "Cloud Run functions",
+    ("gcp", "VPC Network"): "Virtual Private Cloud (VPC)",
+    ("oci", "Oracle Container Engine for Kubernetes (OKE)"): (
+        "Container Engine for Kubernetes (OKE)"
+    ),
+    ("oci", "Oracle Object Storage"): "Oracle Cloud Infrastructure Object Storage",
+    ("oci", "Oracle Block Volume"): "OCI Block Volumes",
+    ("oci", "Oracle Flexible Load Balancer"): "OCI Load Balancing",
+}
+
+# (provider, category, service_name, metadata). O nome é o do DE-PARA.
 METADATA_SEED = [
     # ─── AWS ─────────────────────────────────────────────
     ("aws", "compute", "Amazon EC2", {
@@ -138,14 +166,14 @@ METADATA_SEED = [
         "pricing_model": "per_gb_monthly",
         "price_per_gb_month_usd": 0.023,
     }),
-    ("aws", "storage", "Amazon EBS", {
+    ("aws", "storage", "Amazon Elastic Block Store (EBS)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
         "pricing_model": "per_gb_monthly",
         "price_per_gb_month_usd": 0.08,
     }),
-    ("aws", "storage", "Amazon EFS", {
+    ("aws", "storage", "Amazon Elastic File System (EFS)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
@@ -201,7 +229,7 @@ METADATA_SEED = [
         "pricing_model": "per_gb_transfer",
         "price_per_gb_usd": 0.085,
     }),
-    ("aws", "security", "AWS IAM", {
+    ("aws", "security", "AWS Identity and Access Management (IAM)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": True,
         "isolation_level": "shared",
@@ -223,7 +251,7 @@ METADATA_SEED = [
         "price_per_hour_usd": 0.25,
     }),
     # ─── Azure ───────────────────────────────────────────
-    ("azure", "compute", "Azure Virtual Machine", {
+    ("azure", "compute", "Azure Virtual Machines", {
         "vendor_lock_in_level": "medium",
         "requires_refactoring": False,
         "isolation_level": "shared",
@@ -286,7 +314,7 @@ METADATA_SEED = [
         "pricing_model": "on_demand_committed_sustained",
         "price_per_hour_usd": 0.082,
     }),
-    ("gcp", "compute", "Cloud Functions", {
+    ("gcp", "compute", "Cloud Run functions", {
         "vendor_lock_in_level": "medium",
         "requires_refactoring": True,
         "isolation_level": "shared",
@@ -321,7 +349,7 @@ METADATA_SEED = [
         "pricing_model": "instance_hourly_storage",
         "price_per_hour_usd": 0.048,
     }),
-    ("gcp", "networking", "VPC Network", {
+    ("gcp", "networking", "Virtual Private Cloud (VPC)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
@@ -349,21 +377,21 @@ METADATA_SEED = [
         "pricing_model": "per_execution_duration",
         "price_per_million_executions_usd": 0.15,
     }),
-    ("oci", "compute", "Oracle Container Engine for Kubernetes (OKE)", {
+    ("oci", "compute", "Container Engine for Kubernetes (OKE)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
         "pricing_model": "free_management",
         "notes": "No charge for cluster management; pay for worker nodes",
     }),
-    ("oci", "storage", "Oracle Object Storage", {
+    ("oci", "storage", "Oracle Cloud Infrastructure Object Storage", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
         "pricing_model": "per_gb_monthly",
         "price_per_gb_month_usd": 0.0225,
     }),
-    ("oci", "storage", "Oracle Block Volume", {
+    ("oci", "storage", "OCI Block Volumes", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
@@ -383,7 +411,7 @@ METADATA_SEED = [
         "isolation_level": "shared",
         "pricing_model": "free_included",
     }),
-    ("oci", "networking", "Oracle Flexible Load Balancer", {
+    ("oci", "networking", "OCI Load Balancing", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
@@ -393,18 +421,48 @@ METADATA_SEED = [
 ]
 
 
-async def seed() -> None:
-    sessionmaker = get_sessionmaker()
-    async with sessionmaker() as session:
-        existing = await session.execute(
-            __import__("sqlalchemy").select(CloudServiceMetadataModel).limit(1)
-        )
-        if existing.scalar_one_or_none() is not None:
-            print("Tables already seeded — skipping.")
-            return
+_Linha = tuple[str, str, str, dict[str, Any]]
 
-        # Insert metadata
-        for provider, category, service_name, metadata in METADATA_SEED:
+
+async def _renomear(session: AsyncSession, renomeados: Mapping[tuple[str, str], str]) -> None:
+    tabela = CloudServiceMetadataModel
+    for (provider, antigo), novo in renomeados.items():
+        ja_existe = await session.scalar(
+            select(tabela.id).where(tabela.provider == provider, tabela.service_name == novo)
+        )
+        filtro = (tabela.provider == provider, tabela.service_name == antigo)
+        if ja_existe is None:
+            await session.execute(update(tabela).where(*filtro).values(service_name=novo))
+        else:
+            await session.execute(delete(tabela).where(*filtro))
+
+
+async def sincronizar_metadata(
+    session: AsyncSession,
+    linhas: Sequence[_Linha] = tuple(METADATA_SEED),
+    renomeados: Mapping[tuple[str, str], str] = RENOMEADOS,
+) -> int:
+    """Renomeia, atualiza e insere a metadata curada; devolve quantas linhas são novas.
+
+    Atualizar preserva as colunas que o seed não escreve (`docs_costs`, `id`).
+    """
+    await _renomear(session, renomeados)
+    provedores = {provider for provider, *_ in linhas}
+    gravadas = {
+        (m.provider, m.service_name): m
+        for m in (
+            await session.execute(
+                select(CloudServiceMetadataModel).where(
+                    CloudServiceMetadataModel.provider.in_(provedores)
+                )
+            )
+        ).scalars()
+    }
+    novas = 0
+    for provider, category, service_name, metadata in linhas:
+        linha = gravadas.get((provider, service_name))
+        if linha is None:
+            novas += 1
             session.add(
                 CloudServiceMetadataModel(
                     provider=provider,
@@ -413,21 +471,32 @@ async def seed() -> None:
                     service_metadata=metadata,
                 )
             )
-        await session.flush()
+        else:
+            linha.category = category
+            linha.service_metadata = metadata
+    await session.flush()
+    return novas
 
-        # Insert comparation
-        for category, service_type, provider, service_name in COMPARATION_SEED:
-            session.add(
-                CloudServiceComparisonModel(
-                    category=category,
-                    service_type=service_type,
-                    provider=provider,
-                    service_name=service_name,
+
+async def seed() -> None:
+    sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
+        vazio = await session.scalar(select(CloudServiceMetadataModel.id).limit(1)) is None
+        novas = await sincronizar_metadata(session)
+        if vazio:
+            for category, service_type, provider, service_name in COMPARATION_SEED:
+                session.add(
+                    CloudServiceComparisonModel(
+                        category=category,
+                        service_type=service_type,
+                        provider=provider,
+                        service_name=service_name,
+                    )
                 )
-            )
         await session.commit()
 
-    print(f"Seeded {len(METADATA_SEED)} metadata rows, {len(COMPARATION_SEED)} comparation rows.")
+    comparacao = f", {len(COMPARATION_SEED)} comparation rows" if vazio else ""
+    print(f"Synced {len(METADATA_SEED)} metadata rows ({novas} new){comparacao}.")  # noqa: T201
 
 
 if __name__ == "__main__":
