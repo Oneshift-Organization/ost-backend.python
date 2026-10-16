@@ -29,6 +29,7 @@ from app.domain.entities.agent_snapshot import (
     marcador_do_inventario,
 )
 from app.domain.entities.billing_report import JobStatus
+from app.domain.repositories.i_acoes_de_preco_repo import IAcoesDePrecoRepository
 from app.domain.repositories.i_agent_snapshot_repo import (
     IAgentSnapshotRepository,
     IAgentSubmissionRepository,
@@ -61,12 +62,14 @@ class SubmeterAnaliseUseCase:
         relatorios: IBillingReportRepository,
         inventarios: IInventoryRepository,
         relogio: Callable[[], datetime] = agora,
+        acoes: IAcoesDePrecoRepository | None = None,
     ) -> None:
         self._snapshots = snapshots
         self._envios = envios
         self._relatorios = relatorios
         self._inventarios = inventarios
         self._relogio = relogio
+        self._acoes = acoes
 
     async def execute(
         self, user_id: UUID, snapshot_id: UUID, entrada: dict[str, Any]
@@ -115,6 +118,14 @@ class SubmeterAnaliseUseCase:
             campos_sobrescritos=len(resultado.autoridade.substituicoes),
         )
         await self._envios.gravar(envio)
+        # V4.1: o preço contestado que não se verificou vira pedido de sync, e o preço
+        # que o agente sugeriu fica no ciclo de vida, sem reviver nada
+        if self._acoes is not None and (
+            resultado.pedidos_de_sync or resultado.observacoes_do_agente
+        ):
+            await self._acoes.registrar_contestacoes(
+                resultado.pedidos_de_sync, resultado.observacoes_do_agente, snapshot.id
+            )
         return EnvioRegistrado(envio=envio, snapshot=snapshot, repetido=False)
 
     async def _exigir_atual(self, snapshot: AgentSnapshot) -> None:

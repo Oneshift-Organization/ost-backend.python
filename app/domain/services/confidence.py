@@ -88,6 +88,9 @@ class ConfiancaAnalise:
         """
         return {
             "nivel": self.nivel,
+            # Lote v4 (V4.7): a razão é sobre o custo ATUAL coberto (origem), não sobre o
+            # valor cotado no destino. Payload sem `base` é da regra anterior.
+            "base": "custo_atual",
             "razao_custo_confiavel": round(self.razao_confiavel, 4),
             "custo_com_preco_oficial": round(self.custo_confiavel, 2),
             "custo_total_cotado": round(self.custo_total, 2),
@@ -124,7 +127,12 @@ def rebaixar(nivel: str, degraus: int = 1) -> str:
 def avaliar_confianca(
     custos_por_confianca: dict[str, Decimal],
 ) -> ConfiancaAnalise:
-    """Calcula a confiança a partir do custo cotado agrupado por confiança.
+    """Calcula a confiança a partir do custo agrupado pela confiança do preço.
+
+    Desde o lote v4 (V4.7), o custo é o **atual**, da origem, que cada cotação
+    cobriu. Pesar pelo valor cotado no destino fazia a confiança cair quando o
+    compute oficial ficava mais barato e mais preciso (série B da Azure, rede por
+    tipo): a métrica punia a precisão.
 
     ``custos_por_confianca`` mapeia o rótulo de confiança do preço para o valor
     monetário cotado sob ele — por exemplo

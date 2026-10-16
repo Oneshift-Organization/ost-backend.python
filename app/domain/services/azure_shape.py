@@ -73,3 +73,18 @@ def parse_azure_shape(arm_sku_name: str | None) -> AzureShape | None:
         return None
     ram = vcpus * _FAMILY_RAM_PER_VCPU.get(family, _DEFAULT_RAM_PER_VCPU)
     return AzureShape(vcpus=vcpus, ram_gib=ram)
+
+
+# `Standard_D4s_v5` → `DSV5`: letra de família, recursos e versão, sem o tamanho
+_FAMILIA_VM = re.compile(r"^Standard_([A-Za-z]+)\d+(?:-\d+)?([a-z]*)(?:_v(\d+))?", re.IGNORECASE)
+
+
+def familia_vm(tamanho: str | None) -> str | None:
+    """Família de um tamanho de VM da Azure, como os pools da fatura a nomeiam."""
+    if not tamanho:
+        return None
+    m = _FAMILIA_VM.match(tamanho)
+    if not m:
+        return None
+    familia = (m.group(1) + (m.group(2) or "")).upper()
+    return f"{familia}V{m.group(3)}" if m.group(3) else familia

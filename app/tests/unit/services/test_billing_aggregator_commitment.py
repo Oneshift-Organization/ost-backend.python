@@ -131,7 +131,8 @@ async def test_cost_conservation_holds() -> None:
 @pytest.mark.asyncio
 async def test_compute_commitment_is_separated_from_database_reservations() -> None:
     """Do compromisso, só o que paga máquina virtual vai para `commitment_compute`
-    (PLANO_EMPACOTAMENTO, F2). Reserva de RDS continua só em `commitment`."""
+    (PLANO_EMPACOTAMENTO, F2). A reserva de RDS paga banco: desde o lote v4 (V4.3)
+    vai para a categoria de banco, recotada como banco, e nunca para o compute."""
     agg = BillingAggregator()
     res = await agg.aggregate(
         [
@@ -159,5 +160,6 @@ async def test_compute_commitment_is_separated_from_database_reservations() -> N
         ],
         "aws",
     )
-    assert res.auxiliary.commitment == Decimal("8829.44")
+    assert res.auxiliary.commitment == Decimal("8278.88")
     assert res.auxiliary.commitment_compute == Decimal("8278.88")
+    assert res.auxiliary.database == Decimal("550.56")

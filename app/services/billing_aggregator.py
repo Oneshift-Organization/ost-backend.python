@@ -23,6 +23,7 @@ from app.domain.entities.workload_pool import (
 from app.domain.services.azure_shape import parse_azure_shape
 from app.domain.services.compromisso_de_compute import paga_maquina_virtual
 from app.domain.services.instance_shape import parse_instance_shape
+from app.domain.services.reclassificacao_por_uso import reclassificar
 from app.domain.services.rede_por_uso import CATEGORIAS as _CATEGORIAS_DE_REDE
 from app.domain.services.rede_por_uso import EGRESS as _REDE
 from app.domain.services.rede_por_uso import quantidade_na_unidade, tipo_de_rede
@@ -185,7 +186,13 @@ class BillingAggregator:
 
         for item in items:
             cost = item.cost
-            component_type = item.component_type or "unclassified"
+            # Lote v4 (V4.3): reserva de banco, MSK e afins classificados errado
+            component_type = reclassificar(
+                item.provider,
+                item.service_name,
+                item.usage_type,
+                item.component_type or "unclassified",
+            )
             atributos = item.attributes or {}
             confidence_breakdown[item.mapping_confidence or "missing"] += cost
 

@@ -31,6 +31,7 @@ from typing import Any
 
 import pandas as pd
 
+from app.domain.services.azure_shape import familia_vm
 from app.domain.value_objects.charge_kind import ChargeKind
 from app.infrastructure.file_ingestion.base_parser import BaseParser
 from app.infrastructure.file_ingestion.consolidacao import Consolidador
@@ -80,9 +81,6 @@ _GIB_POR_TIER = {
 }
 
 # `Standard_D4s_v5` → família `DSV5` (letra de família + sufixos + geração).
-_FAMILIA_VM = re.compile(r"^Standard_([A-Za-z]+)\d+(?:-\d+)?([a-z]*)(?:_v(\d+))?", re.IGNORECASE)
-
-
 def _dec(valor: object) -> Decimal | None:
     if valor is None:
         return None
@@ -175,16 +173,6 @@ def _disco_em_gb(
     if gib is None:
         return unidade, quantidade
     return "gibibyte month", quantidade * gib
-
-
-def familia_vm(tamanho: str | None) -> str | None:
-    if not tamanho:
-        return None
-    m = _FAMILIA_VM.match(tamanho)
-    if not m:
-        return None
-    familia = (m.group(1) + (m.group(2) or "")).upper()
-    return f"{familia}V{m.group(3)}" if m.group(3) else familia
 
 
 class AzureParser(BaseParser):

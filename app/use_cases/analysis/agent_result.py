@@ -15,12 +15,20 @@ Ele vira sinal, não fonte.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.domain.services.authority import ResultadoAutoridade, Substituicao, aplicar_autoridade
 from app.domain.services.confidence import rebaixar
+from app.domain.services.contestacao import (
+    VERIFICADO,
+    ObservacaoDoAgente,
+    PedidoDeSync,
+    acoes_da_contestacao,
+    verificar_contestacao,
+)
 from app.domain.services.payback import calcular_payback
 from app.schemas.analysis_v2 import AnalysisNarrativeDraft, AnalysisV2Response
 from app.use_cases.analysis.decision_support import impose_decision
@@ -38,7 +46,7 @@ _EFEITO_INFO = "informativo"
 _ORIGEM_AGENTE = "agente"
 
 # Campos que o backend reescreve, descartando o que vier na entrada.
-_CARIMBADOS = frozenset({"efeito_backend", "origem"})
+_CARIMBADOS = frozenset({"efeito_backend", "origem", "verificacao"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +55,10 @@ class ResultadoRecepcao:
     sugestoes: list[dict[str, Any]]
     confianca_final: str
     autoridade: ResultadoAutoridade
+    # Para a rota gravar (V4.1): preço contestado a reconfirmar e o que o agente
+    # disse do preço, que o ciclo de vida guarda sem nunca reviver o preço
+    pedidos_de_sync: tuple[PedidoDeSync, ...] = ()
+    observacoes_do_agente: tuple[ObservacaoDoAgente, ...] = ()
 
 
 def mapear_verdade(
@@ -88,9 +100,7 @@ def mapear_verdade(
         verdade[f"provider_comparison.{i}.estimated_monthly_savings"] = float(
             real["economia_mensal"]
         )
-        verdade[f"provider_comparison.{i}.confidence_level"] = str(
-            real.get("confianca", "low")
-        )
+        verdade[f"provider_comparison.{i}.confidence_level"] = str(real.get("confianca", "low"))
 
     melhor = do_backend.get(str(recomendado).lower()) if recomendado else None
     atual = float(resumo.get("custo_mensal_atual") or 0.0)
@@ -113,6 +123,7 @@ def mapear_verdade(
 def processar_sugestoes(
     sugestoes: list[dict[str, Any]],
     confianca_inicial: str,
+    payload: Mapping[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
     """Preenche `efeito_backend` e devolve a confiança após as contestações.
 
@@ -125,6 +136,9 @@ def processar_sugestoes(
     por sugestão: dez contestações não tornam a análise dez vezes menos
     confiável, e permitir isso daria ao agente um jeito de zerar a confiança
     repetindo a mesma queixa.
+
+    Com o snapshot (`payload`), a contestação de preço é conferida (V4.1): contra
+    preço oficial, da região e vivo, não rebaixa (`verificado_mantido`).
     """
     processadas: list[dict[str, Any]] = []
     houve_contestacao_alta = False
@@ -133,11 +147,19 @@ def processar_sugestoes(
         tipo = str(s.get("tipo", ""))
         alta = str(s.get("severidade", "")).lower() == "alta"
         contesta = tipo in _CONTESTACOES and alta
+        efeito = _EFEITO_REBAIXOU if contesta else _EFEITO_INFO
+        verificacao: dict[str, Any] = {}
+        if tipo == "contestacao_preco" and payload is not None:
+            v = verificar_contestacao(s.get("referencia"), payload)
+            verificacao = {"verificacao": {"resultado": v.resultado, **v.evidencia}}
+            if v.resultado == VERIFICADO:
+                contesta, efeito = False, VERIFICADO
         houve_contestacao_alta = houve_contestacao_alta or contesta
         processadas.append(
             {
                 **{k: v for k, v in s.items() if k not in _CARIMBADOS},
-                "efeito_backend": _EFEITO_REBAIXOU if contesta else _EFEITO_INFO,
+                **verificacao,
+                "efeito_backend": efeito,
                 "origem": _ORIGEM_AGENTE,
             }
         )
@@ -227,6 +249,53 @@ def _derivar_payback(
     return ResultadoAutoridade(corrigida, substituicoes)
 
 
+_NAO_AVALIADO = "provedor_nao_avaliado"
+# Texto que o agente pode dizer de um provedor; nota e custo dele não passam
+_TEXTO_DA_COMPARACAO = ("migration_complexity", "portability", "strengths", "weaknesses")
+
+
+def provedores_nao_avaliados(
+    payload_backend: dict[str, Any], resposta_agente: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Provedor que o agente comparou e o backend não avaliou (lote v4, V4.2).
+
+    `impose_decision` tira da `provider_comparison` todo provedor sem score do
+    backend: o que o agente disse dele sumia em silêncio. Vira sugestão
+    informativa, com o texto do agente e sem nenhum número dele."""
+    decisao = payload_backend.get("decision_support")
+    if not isinstance(decisao, dict):
+        return []
+    avaliados = {
+        str(s.get("provider", "")).lower()
+        for s in decisao.get("provider_scores") or []
+        if isinstance(s, dict)
+    }
+    origem = str(payload_backend.get("provedor_origem") or "").lower()
+    sugestoes: list[dict[str, Any]] = []
+    vistos: set[str] = set()
+    for item in resposta_agente.get("provider_comparison") or []:
+        if not isinstance(item, dict):
+            continue
+        provedor = str(item.get("provider") or "").strip()
+        chave = provedor.lower()
+        if not chave or chave in avaliados or chave == origem or chave in vistos:
+            continue
+        vistos.add(chave)
+        sugestoes.append(
+            {
+                "tipo": _NAO_AVALIADO,
+                "titulo": f"{provedor.upper()}: comparado pelo agente, sem avaliação do backend",
+                "detalhe": "O backend não cotou nem pontuou este provedor; o que segue é só "
+                "o que o agente disse.",
+                "provedor": chave,
+                "o_que_o_agente_disse": {
+                    k: item[k] for k in _TEXTO_DA_COMPARACAO if item.get(k) not in (None, "", [])
+                },
+            }
+        )
+    return sugestoes
+
+
 def receber_analise_do_agente(
     payload_backend: dict[str, Any],
     resposta_agente: dict[str, Any],
@@ -238,26 +307,32 @@ def receber_analise_do_agente(
 
     if "decision_support" in payload_backend:
         finalized = impose_decision(
-            AnalysisNarrativeDraft.model_validate(autoridade.resposta), payload_backend,
+            AnalysisNarrativeDraft.model_validate(autoridade.resposta),
+            payload_backend,
         )
         imposed = AnalysisV2Response.model_validate(finalized.model_dump()).model_dump(mode="json")
         # Preserve other agent-surface fields (payback, provenance, etc.).
         corrected = {**autoridade.resposta, **imposed}
-        overrides = tuple(Substituicao(key, autoridade.resposta.get(key), value)
-                          for key, value in imposed.items()
-                          if autoridade.resposta.get(key) != value)
+        overrides = tuple(
+            Substituicao(key, autoridade.resposta.get(key), value)
+            for key, value in imposed.items()
+            if autoridade.resposta.get(key) != value
+        )
         autoridade = ResultadoAutoridade(corrected, autoridade.substituicoes + overrides)
 
     autoridade = _derivar_payback(autoridade, payload_backend)
 
     conf_inicial = str(
         autoridade.resposta.get("analysis_confidence")
-        or (payload_backend.get("premissas") or {})
-        .get("confianca_analise", {})
-        .get("nivel")
+        or (payload_backend.get("premissas") or {}).get("confianca_analise", {}).get("nivel")
         or "low"
     )
-    processadas, conf_final = processar_sugestoes(sugestoes or [], conf_inicial)
+    processadas, conf_final = processar_sugestoes(
+        [*(sugestoes or []), *provedores_nao_avaliados(payload_backend, resposta_agente)],
+        conf_inicial,
+        payload=payload_backend,
+    )
+    pedidos, observacoes = acoes_da_contestacao(sugestoes or [], payload_backend)
 
     # As do backend vêm primeiro e **já processadas**: o efeito delas foi
     # aplicado em `build_migration_context`, e `conf_inicial` já sai de lá
@@ -274,4 +349,6 @@ def receber_analise_do_agente(
         sugestoes=todas,
         confianca_final=conf_final,
         autoridade=autoridade,
+        pedidos_de_sync=tuple(pedidos),
+        observacoes_do_agente=tuple(observacoes),
     )

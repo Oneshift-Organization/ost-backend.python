@@ -164,7 +164,8 @@ def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPor
 
     linhas = [
         _linha(w, cenarios, custo_atual, por_servico, policy_v4=policy_v4)
-        for w in all_workloads(dados) if _listado(w)
+        for w in all_workloads(dados)
+        if _listado(w)
     ]
     pools = tuple(_pool(p, origem) for p in dados.get("pools_computacao") or [])
     linhas, sem_servico = _anexar_pools(linhas, pools)
@@ -387,7 +388,8 @@ def _pool(pool: Mapping[str, Any], origem: str | None) -> PoolDoServico:
         custo=custo,
         arquitetura=arquitetura,
         burstable=p.burstable if p else None,
-        coberto_por_compromisso=pool.get("custo_coberto_por_compromisso") is True,
+        coberto_por_compromisso=pool.get("custo_coberto_por_compromisso") is True
+        or pool.get("coberto_por_compromisso_estimado") is not None,
         destinos_sem_mesma_arquitetura=sem_par,
         sugestoes=sugestoes,
     )

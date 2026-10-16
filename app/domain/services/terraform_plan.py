@@ -307,7 +307,9 @@ def _derivar_compute(
         if idade is not None:
             base += f" Preço capturado há {idade} dias."
         base += _origem_medida(pool, familia, max(1, instancias), plano)
-        if pool.get("custo_coberto_por_compromisso"):
+        if pool.get("custo_coberto_por_compromisso") or pool.get(
+            "coberto_por_compromisso_estimado"
+        ):
             # O recurso está certo — a capacidade foi medida. O que não vale é a
             # comparação de custo contra ele.
             base += (

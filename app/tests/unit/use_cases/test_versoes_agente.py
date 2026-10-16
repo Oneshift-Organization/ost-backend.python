@@ -42,6 +42,7 @@ _ARQUIVOS_DA_AUTORIDADE = (
     "app/schemas/corporate_benefits.py",
     "app/domain/services/corporate_benefits.py",
     "app/domain/services/technical_assessment.py",
+    "app/domain/services/contestacao.py",
 )
 # Do `topologia_no_payload`, só o que roda no envio. O resto do arquivo monta o
 # payload na preparação, e mudança lá já gera snapshot novo pelo fingerprint.
@@ -56,6 +57,11 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 #   AUTHORITY_VERSION em `use_cases/agent/versoes.py` e registre o hash novo;
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
+    # v4: lote da autoridade (PLANO_AUTORIDADE_V3_E_PRECISAO §2). Atualizado a cada item
+    # do lote até a entrega; a versão sobe uma vez só.
+    "agent-authority-v4": (
+        "22655190fe03ba7d0f5cd86f5fbce1a08f9652fb6f723fd44de11c78d0e3ed5e"
+    ),
     # v3: score normalizado 50/40/10 e benefícios informativos sem efeito financeiro.
     # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE):
     # - `equivalence_pricing._CATEGORIES` ganhou as categorias de rede por tipo;

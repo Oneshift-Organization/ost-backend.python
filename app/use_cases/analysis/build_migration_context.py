@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -19,7 +20,7 @@ from app.domain.analysis import (
     TechnicalMatch,
     WorkloadSummary,
 )
-from app.domain.entities.workload_pool import AuxiliaryCosts, WorkloadPool
+from app.domain.entities.workload_pool import AuxiliaryCosts, FamilyPool, WorkloadPool
 from app.domain.interfaces.i_service_repositories import (
     IServiceComparisonRepository,
     IServiceMetadataRepository,
@@ -36,7 +37,12 @@ from app.domain.services.category_calculator import (
     estimate_by_cost_ratio,
     estimate_by_quantity,
 )
-from app.domain.services.cobertura_por_compromisso import avaliar_cobertura
+from app.domain.services.cobertura_por_compromisso import (
+    LIMIAR_DE_COBERTURA,
+    avaliar_cobertura,
+    cobertura_estimada,
+    familia_do_ponto,
+)
 from app.domain.services.confidence import avaliar_confianca
 from app.domain.services.currency import (
     ANALYSIS_CURRENCY,
@@ -126,6 +132,9 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         # (`AWSLambda`, `AmazonRoute53`) já casam pela normalização. Sem estes, o AWSELB
         # de uma conta real saía "tipo inferido" e sem equivalente em nenhum destino.
         "AWSELB": "Elastic Load Balancing",
+        # MSK: Kafka gerenciado, no tipo de streaming do DE-PARA (lote v4, V4.3)
+        "AmazonMSK": "Amazon MSK",
+        "Amazon Managed Streaming for Apache Kafka": "Amazon MSK",
         "AWSQueueService": "Amazon Simple Queue Service (SQS)",
         "AWSKMS": "AWS Key Management Service (KMS)",
         "awskms": "AWS Key Management Service (KMS)",
@@ -1027,9 +1036,9 @@ class BuildMigrationContextUseCase:
         # ── 9c. Consolidação por provedor (backend calcula, IA narra) ──
         # Cada provedor só reprecifica o que ELE cobre; o resto fica ao custo atual.
         _tally: dict[str, dict[str, Any]] = {}
-        # Custo cotado agrupado pelo rótulo de confiança do PREÇO. É o insumo da
-        # confiança da análise (domain/services/confidence.py): a pergunta que
-        # ele responde é "que fração do dinheiro cotado veio de preço oficial?".
+        # Custo atual (origem) agrupado pelo rótulo de confiança do PREÇO que o cotou.
+        # É o insumo da confiança da análise (domain/services/confidence.py): "que
+        # fração do custo atual foi cotada com preço oficial?" (lote v4, V4.7).
         _custo_por_confianca: dict[str, Decimal] = {}
 
         def _add(provider: str, analyzed_cost: Decimal, source_cost: Decimal, conf: str) -> None:
@@ -1040,9 +1049,10 @@ class BuildMigrationContextUseCase:
             acc["analyzed"] += analyzed_cost
             acc["covered"] += source_cost
             acc["confs"].append(conf)
-            _custo_por_confianca[conf] = (
-                _custo_por_confianca.get(conf, Decimal("0")) + analyzed_cost
-            )
+            # V4.7: pesa pelo custo ATUAL que a cotação cobre, não pelo valor cotado
+            # no destino. Senão uma cotação mais barata (e mais precisa) com preço
+            # oficial baixava a confiança da análise.
+            _custo_por_confianca[conf] = _custo_por_confianca.get(conf, Decimal("0")) + source_cost
 
         family_src = {
             fp.pool_key.as_str(): convert(fp.monthly_cost, fx) or Decimal("0")
@@ -1143,6 +1153,13 @@ class BuildMigrationContextUseCase:
             {fp.pool_key.as_str(): (fp.capacity.vcpus, fp.monthly_cost) for fp in family_pools},
             auxiliary.commitment if auxiliary is not None else Decimal("0"),
         )
+        # V4.6: pool que paga bem menos que o próprio preço sob demanda, num bill com
+        # compromisso de compute, tem parte das horas paga na linha do compromisso. A
+        # comparação pool a pool não vale para ele (o C7G saía a 7-8x); o total já tira
+        # o compromisso junto com os pools.
+        coberto_estimado = await self._cobertura_estimada(
+            source_provider, family_pools, auxiliary, fx
+        )
 
         premissas: dict[str, Any] = {
             "fx": as_ledger(fx),
@@ -1156,6 +1173,21 @@ class BuildMigrationContextUseCase:
             # nível vinha do LLM — um modelo opinando sobre a qualidade dos dados
             # que ele próprio recebeu.
             "confianca_analise": confianca.as_ledger(),
+            **(
+                {
+                    "compromisso_estimado_por_pool": {
+                        "pools": {k: float(v) for k, v in sorted(coberto_estimado.items())},
+                        "explicacao": (
+                            "Fração do preço sob demanda da própria origem que o pool não "
+                            "pagou na linha dele: o compromisso de compute cobriu parte das "
+                            "horas. A comparação pool a pool não vale para eles; o total do "
+                            "cenário já tira o compromisso junto com os pools."
+                        ),
+                    }
+                }
+                if coberto_estimado
+                else {}
+            ),
             # Sugestões que o backend levanta sozinho. Vão para a mesma lista de
             # tela que as do agente, com `origem: backend` — quem lê precisa
             # saber que existe uma dúvida, não quem a levantou.
@@ -1312,7 +1344,49 @@ class BuildMigrationContextUseCase:
             premissas=premissas,
             resumo_executivo=resumo_executivo,
             inventario=agg_result.inventario if agg_result is not None else None,
+            coberto_por_compromisso_estimado=coberto_estimado,
         )
+
+    async def _cobertura_estimada(
+        self,
+        provider: str,
+        family_pools: Sequence[FamilyPool],
+        auxiliary: AuxiliaryCosts | None,
+        fx: FxRate,
+    ) -> dict[str, Decimal]:
+        """Pool → fração do próprio preço sob demanda que o compromisso pagou (V4.6).
+
+        Só num bill com compromisso de compute, e só com preço oficial da família na
+        região do pool (a mediana por vCPU-hora). Sem isso, não diz nada."""
+        if self._price_repo is None or auxiliary is None or auxiliary.commitment_compute <= 0:
+            return {}
+        pontos_por_regiao: dict[str, list[Any]] = {}
+        resultado: dict[str, Decimal] = {}
+        for fp in family_pools:
+            vcpu_horas = fp.capacity.vcpus * fp.hours_window
+            custo = convert(fp.monthly_cost, fx) or Decimal("0")
+            regiao = fp.pool_key.region
+            if vcpu_horas <= 0 or custo <= 0 or not regiao or regiao == "global":
+                continue
+            if regiao not in pontos_por_regiao:
+                pontos_por_regiao[regiao] = await self._price_repo.find(
+                    provider=provider, service_type="virtual_server", region=regiao
+                )
+            familia = fp.pool_key.machine_family.upper()
+            taxas = sorted(
+                p.price / p.vcpus
+                for p in pontos_por_regiao[regiao]
+                if p.vcpus
+                and p.vcpus > 0
+                and p.price > 0
+                and (familia_do_ponto(provider, p.sku_key) or "").upper() == familia
+            )
+            if not taxas:
+                continue
+            fracao = cobertura_estimada(custo / vcpu_horas, taxas[len(taxas) // 2])
+            if fracao is not None and fracao >= LIMIAR_DE_COBERTURA:
+                resultado[fp.pool_key.as_str()] = fracao.quantize(Decimal("0.0001"))
+        return resultado
 
     async def _resolve_fx(self, source_currency: str) -> FxRate:
         """Taxa origem→moeda de análise: tabela primeiro, config como fallback."""
