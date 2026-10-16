@@ -54,6 +54,27 @@ _BASE_AWS_T = {
     "2xlarge": Decimal("0.40"),
 }
 _BASE_AWS_PADRAO = Decimal("0.40")
+# Série B da Azure (documentação de tamanhos Bv1 e Bsv2, escala 0-100% desde 2024:
+# a base da VM nessa escala é a fração de cada vCPU). Bv1 por tamanho; sem o tamanho
+# (pool da família), a maior base dela.
+_BASE_AZURE_V1 = {
+    "b1ls": Decimal("0.05"),
+    "b1s": Decimal("0.10"),
+    "b1ms": Decimal("0.20"),
+    "b2s": Decimal("0.20"),
+    "b2ms": Decimal("0.30"),
+    "b4ms": Decimal("0.225"),
+    "b8ms": Decimal("0.17"),
+    "b12ms": Decimal("0.17"),
+    "b16ms": Decimal("0.17"),
+    "b20ms": Decimal("0.17"),
+    "bls": Decimal("0.05"),
+    "bs": Decimal("0.20"),
+    "bms": Decimal("0.30"),
+}
+# Bsv2, Basv2 e Bpsv2 pela letra do tamanho: `ts` 20%, `ls` 30%, `s` 40%. A primeira
+# letra que aparece vale.
+_BASE_AZURE_V2 = (("t", Decimal("0.20")), ("l", Decimal("0.30")), ("", Decimal("0.40")))
 # Núcleo compartilhado do GCP: a fração da vCPU que a máquina tem garantida
 _BASE_GCP = {
     "e2-micro": Decimal("0.125"),
@@ -113,7 +134,23 @@ def _azure(nome: str) -> Perfil | None:
         return None
     # `p` nos recursos é Ampere (Dpsv5, Epsv5, Bpsv2). A série B é burstable.
     arm = "p" in recursos
-    return Perfil(Arquitetura.ARM if arm else Arquitetura.X86, burstable=serie.startswith("b"))
+    burstable = serie.startswith("b")
+    return Perfil(
+        Arquitetura.ARM if arm else Arquitetura.X86,
+        burstable=burstable,
+        base_cpu=_base_azure(nome, base, recursos) if burstable else None,
+    )
+
+
+def _base_azure(nome: str, base: str, recursos: str) -> Decimal | None:
+    """`nome` como veio (`standard_b2s_v2`, `bsv2`); `base` sem prefixo nem versão.
+    Versão sem tabela (uma série B nova): None, não reduz."""
+    versao = re.search(r"v(\d+)$", nome)
+    if versao is None:
+        return _BASE_AZURE_V1.get(base)
+    if versao.group(1) == "2":
+        return next(b for letra, b in _BASE_AZURE_V2 if letra in recursos)
+    return None
 
 
 def _oci(nome: str) -> Perfil | None:
