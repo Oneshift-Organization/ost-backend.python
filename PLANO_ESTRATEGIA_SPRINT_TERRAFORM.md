@@ -45,6 +45,13 @@ podman (a máquina não tem o binário).
 | V2 | Teste do pacote de 14 pares no dev (1.3) | ⏳ |
 | V3 | Encaminhar ao MCP as notas `MCP.PLAN/10` a `/13` (1.5; a 13 é a autoridade v4) | ⏳ confirmar |
 
+**CI (dono do workflow)**
+
+| # | item | estado |
+|---|---|---|
+| C1 | O build e o deploy do develop não esperam os testes: `build-push.yml` e `tests.yml` rodam em paralelo, sem `needs` (item 21 de 12/10). Um teste vermelho não impede a imagem de subir | ⏳ |
+| C2 | Passo que instala o binário do Terraform e o cache dos providers (T0 na CI) | ⏳ |
+
 **Decisões (usuário)** — detalhe e recomendação em §2
 
 | # | decisão | bloqueia |

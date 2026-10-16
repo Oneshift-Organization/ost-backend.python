@@ -11,11 +11,12 @@
 > | **E1** — rotas `applications` e `migration-plans` | ✅ feito, contrato em [`docs/endpoints/migration-plans.md`](docs/endpoints/migration-plans.md) |
 > | **E2** — custo no destino por escopo | ✅ feito: instância pela taxa do pool dela, disco/banco/bucket pela categoria, o resto declarado sem cotação |
 > | **E3** — Terraform do escopo | ⬜ sprint de Terraform |
-> | **E4** — pré-requisitos | ✅ em parte: sem tag, cada unidade vira "aplicação"; custo sem recurso fica em `sem_aplicacao`. Falta a mensagem própria para fatura resumida (Cost Explorer) |
+> | **E4** — pré-requisitos | ✅ sem tag, cada unidade vira "aplicação"; custo sem recurso fica em `sem_aplicacao`; fatura resumida tem mensagem própria e o Cost Explorer por serviço é recusado no upload (PLANO_CENARIOS_DE_ENTRADA §3.4) |
 > | **E5** — limite das dependências | ✅ `limite_das_dependencias` nas duas respostas |
 > | **E6** — dependência entre serviços na mesma aplicação | ✅ `topologia/dependencias_de_servico.py`; não muda unidades, grupos, ondas nem Terraform |
 > | **E7** — exportar | ✅ `?formato=pdf` (para circular: passos pré/principal/pós, ordem, pendências) e `?formato=xlsx` (para executar: cada recurso com status); persistência do plano ainda a decidir |
-> | Front | ⬜ tela Dependências na develop do front (ver §4) |
+> | Front | ✅ abas Dependências e Plano de migração na develop do front (14/10), com as prováveis aplicações do cluster no plano (`3eac536`) |
+| **E8** — multicloud (decisão por ligação) | ⏸ adiado em 14/10 ("implemente sem multicloud por hora"); desenho no §6 |
 
 ## 1. O pedido
 
@@ -184,3 +185,37 @@ análise existente com o inventário.
 3. E2 (custo do escopo pelas instâncias).
 4. E3 (Terraform do escopo), junto com os itens já marcados da sprint.
 5. Front.
+
+## 6. Multicloud no plano (E8): desenho de 14/10, adiado
+
+O usuário pediu o plano sem multicloud por ora. O desenho fica registrado para quando
+voltar.
+
+**Decisão por ligação, com prazo.** Cada serviço que o escopo usa e fica na origem ganha
+três escolhas:
+- **levar junto:** migra no mesmo passo e some a ligação entre nuvens;
+- **levar depois:** vira um passo de pós-migração; o multicloud tem data de fim;
+- **manter na origem:** multicloud permanente, declarado.
+
+Duas camadas na tela: por serviço (padrão) e exceção por aplicação, em chips
+(`EC2 → OCI`, `RDS fica`), com contador de exceções. Disco, interface e IP seguem o
+servidor. Sem inventário, só a camada por serviço.
+
+**Impacto da ligação, por regra:** acesso a dados (banco, cache) alto, porque a latência
+soma em cada consulta; chamada de serviço e encaminhamento médio; objeto sem ligação de
+rede baixo (custo de saída, não latência).
+
+**Custo da transição:** um quarto número no topo do plano: destino do que migrou + origem
+do que fica + rede. A rede usa uma estimativa de tráfego em GB/mês informada pela pessoa
+e as taxas de saída que a análise já tem; sem estimativa, "a informar".
+
+**Visão de recursos:** alternância Passos | Recursos, com a tabela de tudo que o plano toca
+(recurso, tipo, aplicação, destino, passo, custo hoje e no destino, ligação entre nuvens).
+A mesma tabela alimenta a planilha exportada e o Terraform do escopo.
+
+**Backend, na ordem:**
+1. recorte por recurso: a escolha vira `[{servico, aplicacao?, destino: junto | depois | fica}]`;
+2. classificar o impacto das ligações entre nuvens;
+3. custo da transição;
+4. "levar depois" vira passo;
+5. salvar o plano (decisão 2.1).

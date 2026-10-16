@@ -321,8 +321,8 @@ O resto não é ajuste de código.
 
 | assunto | por que não foi corrigido agora | caminho |
 |---|---|---|
-| Cotação de balanceador, NAT, segredo, DNS, CDN e plano de controle do Kubernetes | O DE-PARA diz o que equivale; o preço precisa de tabela por serviço e por nuvem. Hoje só pools de compute e as categorias (disco, objeto, egress, banco) têm preço; `cloud_services_metadata` tem 40 linhas e o balanceador só para AWS e OCI | Bloco novo: preço oficial por serviço (API de preço de cada nuvem), sync em dev e prod |
-| Serviço fora do DE-PARA (MSK, "Bandwidth" da Azure) | O DE-PARA é a tabela curada e autoritativa (`seed_from_csv`); linha inventada viraria equivalência sem curadoria | Propor as linhas para quem cura a tabela |
+| ◐ Cotação de balanceador, NAT, segredo, DNS, CDN e plano de controle do Kubernetes | O DE-PARA diz o que equivale; o preço precisa de tabela por serviço e por nuvem. Hoje só pools de compute e as categorias (disco, objeto, egress, banco) têm preço; `cloud_services_metadata` tem 40 linhas e o balanceador só para AWS e OCI | **Em parte (16/10):** balanceador, NAT, IP, VPN e tráfego entre zonas cotados pela quantidade (PLANO_PRECO_NAO_COMPUTE R1–R3). Segredo, DNS, CDN e plano de controle do Kubernetes seguem ao custo atual: falta preço por serviço |
+| Serviço fora do DE-PARA ("Bandwidth" da Azure; o MSK entrou na V4.3) | O DE-PARA é a tabela curada e autoritativa (`seed_from_csv`); linha inventada viraria equivalência sem curadoria | Propor as linhas para quem cura a tabela |
 | Nome de fatura que é mistura de verdade ("Networking" do GCP, "NETWORK" da OCI) | Sem alvo com 60% do custo, qualquer tipo escolhido estaria errado para parte do dinheiro | Fica sem tipo, por desenho |
 | Padrões da Azure e do GCP (rede `default`, regras padrão) | Ao contrário da AWS, costumam estar em uso; tirar quebraria a topologia | Fica, por desenho |
 | Cada repositório do ACR e cada segredo do Key Vault | O Resource Graph lista o registro e o cofre, não o conteúdo | As prováveis aplicações do AKS vêm das tags de Service e de volume |
@@ -330,4 +330,4 @@ O resto não é ajuste de código.
 | Kubernetes opção B (export do `kubectl`) | Arquivo novo, tela de envio e leitor | Evolução, decisão de produto |
 | Regras de Azure e GCP validadas em conta real | Não há conta real dessas nuvens | Validar na primeira conta que chegar |
 | Linha de Savings Plan e reserva | É linha financeira, sem recurso | Por desenho: o compromisso sai junto com os pools (PLANO_EMPACOTAMENTO) |
-| Confiança que cai quando o compute oficial fica mais barato | A métrica pesa pelo valor cotado. Trocar para o custo atual muda o significado de `custo_total_cotado` no payload do agente | Decisão de contrato, para o lote v3 |
+| ✅ Confiança que cai quando o compute oficial fica mais barato | A métrica pesa pelo valor cotado. Trocar para o custo atual muda o significado de `custo_total_cotado` no payload do agente | **Feito na V4.7 (16/10):** a confiança pesa pelo custo atual |

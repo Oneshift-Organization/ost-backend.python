@@ -284,3 +284,7 @@ igual, não casa.
 - **Recálculo diário agendado:** CronJob no infra rodando o sync de preços, que já
   recalcula ao final. Hoje o recálculo só roda quando alguém roda o sync. Sem
   agendamento, o rótulo de um preço que ninguém reconfirma fica parado.
+- **Guarda contra lista parcial no sync:** se uma fonte devolver menos itens sem erro, o
+  SKU que faltou fica `ausente_desde` e sai da cotação na hora (antes era apagado). Não
+  perde dado, mas a cobertura cai até o próximo sync. Recusar a substituição quando a
+  coleta nova tiver bem menos itens que a anterior (PLANO_PRECO_REGIONAL, risco do R3).
