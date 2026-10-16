@@ -336,3 +336,21 @@ async def test_oci_pipeline(oci) -> None:
     medido = ctx.inventario.armazenamento["storage_ssd"].gb
     assert abs(medido - esperado.gb_disco["storage_ssd"]) < Decimal("0.01")
     assert ctx.premissas["reconciliacao"]["conservacao_custo"]["bate"] is True
+
+
+def _lock_in_da_origem(ctx) -> dict[str, str | None]:
+    return {
+        s.service_name: (s.migration_metadata or {}).get("vendor_lock_in_level")
+        for grupo in ctx.categories
+        for s in grupo.services
+    }
+
+
+async def test_nota_curada_chega_aos_servicos_da_azure_e_da_oci(azure, oci) -> None:
+    """Lote v4, V4.4: o nome da fatura acha a metadata curada pelo nome do DE-PARA."""
+    na_azure = _lock_in_da_origem(azure[1])
+    assert na_azure["Virtual Machines"] == "medium"
+    assert na_azure["Storage"] == "low"  # pela linha do DE-PARA que o uso escolheu
+    na_oci = _lock_in_da_origem(oci[1])
+    for servico in ("OBJECT_STORAGE", "BLOCK_STORAGE", "LOAD_BALANCER"):
+        assert na_oci[servico] == "low", servico

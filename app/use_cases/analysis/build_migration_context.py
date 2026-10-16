@@ -579,6 +579,10 @@ class BuildMigrationContextUseCase:
                         _canonical_name(raw["service_name"]),
                     )
                 )
+            if svc_meta is None and comp is not None:
+                # Nome que a fatura dá a mais de um serviço ("Storage") só acha a
+                # metadata pela linha do DE-PARA que o uso escolheu.
+                svc_meta = meta_squashed.get(service_key(source_provider, comp.service_name))
             expectation = None
             if not sem_uso:
                 expectation = derive_expectation(svc_meta.metadata) if svc_meta else None

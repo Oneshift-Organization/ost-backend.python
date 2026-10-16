@@ -200,6 +200,11 @@ com" e o custo do grupo ao lado do nível.
 
 ### Bloco C — promover ao score (versionado)
 
+> **16/10/2026:** C2 entrou pelo PR #32 (fator dependências, `score-7rs-v4`). C1
+> (exclusividade do inventário no lock-in) e a classe como hipótese seguem em
+> [`PLANO_SCORE_V5_LOCKIN.md`](PLANO_SCORE_V5_LOCKIN.md): a regra está na develop, e
+> o score v5 está com o autor do #32.
+
 **C1.** `technical_evidence` passa a ler exclusividade promovida: arquitetura
 do pool e inventário (quando confirma ou sobe). A classe continua fora do
 score, salvo decisão explícita.

@@ -16,10 +16,15 @@ gasto por construção, e o nível é o que o score usa:
   e destino; desconhecido quando o mapeamento é ambíguo ou falta).
 
 O que o score não usa — a nota herdada do tipo de serviço, um pool sem a mesma
-arquitetura no destino, a dependência do inventário — vai em ``sugestoes``,
-nunca em ``nivel``. Serviço sem categoria identificada também é listado (é gasto
-real), marcado ``entra_no_score=False``; fora da lista fica só o financeiro. Os pools de
-compute aparecem dentro da linha de máquinas virtuais, que é onde está o custo.
+arquitetura no destino, a exclusividade e a dependência do inventário — vai em
+``sugestoes``, nunca em ``nivel``. ``nivel_sugerido`` é o nível que essa evidência
+daria pela regra do lote v4 (`lock_in_efetivo`: o inventário sobe, só desce com
+cobertura alta, a classe só vale quando os curados concordam); a arquitetura só
+sobe; "migra junto" não entra, porque é dependência entre serviços, não da nuvem.
+
+Serviço sem categoria identificada também é listado (é gasto real), marcado
+``entra_no_score=False``; fora da lista fica só o financeiro. Os pools de compute
+aparecem dentro da linha de máquinas virtuais, que é onde está o custo.
 
 Função pura, sem I/O.
 """
@@ -39,11 +44,12 @@ from app.domain.services.decision_support import (
     number,
     unique_targets,
 )
+from app.domain.services.lock_in_efetivo import lock_in_da_origem
 from app.domain.services.migration_strategy import normalized, technical_evidence
 from app.domain.services.perfil_de_familia import perfil
 from app.domain.services.service_identity import is_financial_component
 from app.domain.services.sku_normalization import normalize_provider
-from app.domain.services.technical_assessment import assess
+from app.domain.services.technical_assessment import assess, inventory_services
 
 VERSAO = "acoplamento-v1"
 
@@ -53,6 +59,7 @@ _PROVEDORES = frozenset({"aws", "azure", "gcp", "oci"})
 _ZERO = Decimal(0)
 _CENTAVO = Decimal("0.01")
 _SEM_REGIAO = frozenset({"", "global"})
+_ROTULO = {"low": "baixo", "medium": "médio", "high": "alto"}
 
 
 class PayloadSemServicosError(ValueError):
@@ -161,9 +168,10 @@ def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPor
     com_inventario = isinstance(topologia, Mapping)
     por_servico = _dependencias_do_inventario(topologia)
     policy_v4 = (dados.get("decision_support") or {}).get("policy_version") == "score-7rs-v4"
+    estimado = any(e.get("cost_estimated") for e in inventory_services(dados).values())
 
     linhas = [
-        _linha(w, cenarios, custo_atual, por_servico, policy_v4=policy_v4)
+        _linha(w, cenarios, custo_atual, por_servico, policy_v4=policy_v4, estimado=estimado)
         for w in all_workloads(dados)
         if _listado(w)
     ]
@@ -215,6 +223,7 @@ def _linha(
     por_servico: Mapping[str, Any] | None,
     *,
     policy_v4: bool = False,
+    estimado: bool = False,
 ) -> AcoplamentoDeServico:
     nome = str(workload.get("name") or "Serviço não identificado")
     categoria = normalized(workload.get("category"))
@@ -246,12 +255,21 @@ def _linha(
 
     dependencias = (por_servico or {}).get(nome)
     sugestoes = (*_sugestoes_de_classe(workload), *_sugestoes_de_dependencia(dependencias))
+    entrada = {**dependencias, "cost_estimated": estimado} if dependencias else None
+    pela_evidencia = lock_in_da_origem(workload, entrada, aceitar_tipo_inferido=True).nivel
     alertas: tuple[str, ...] = ()
     if not no_score:
         alertas = ("Categoria não identificada: fica fora do score até ser classificada.",)
     elif inferido:
         alertas = (
             "Tipo de serviço inferido pelo classificador; a nota só vale depois de confirmado.",
+        )
+    faixa = [_ROTULO[n] for n in migracao.get("lock_in_faixa") or () if n in _ROTULO]
+    if migracao.get("fonte") == "classe" and len(faixa) > 1 and nivel is None:
+        alertas = (
+            *alertas,
+            f"Os serviços curados deste tipo têm lock-in de {faixa[0]} a {faixa[-1]}: "
+            "a nota deste depende de curadoria.",
         )
     return AcoplamentoDeServico(
         id=f"service/{categoria}/{nome}",
@@ -263,7 +281,7 @@ def _linha(
         fracao=_fracao(custo, custo_atual),
         nivel=nivel,
         fonte=_fonte(workload) if nivel else None,
-        nivel_sugerido=_nivel_sugerido(nivel, sugestoes),
+        nivel_sugerido=_nivel_sugerido(nivel, pela_evidencia, sugestoes),
         sugestoes=sugestoes,
         por_destino=por_destino,
         pools=(),
@@ -285,10 +303,10 @@ def _sugestoes_de_dependencia(dependencias: Any) -> tuple[Sugestao, ...]:
     """Do inventário saem duas sugestões independentes:
 
     - ``inventario``: a exclusividade pelos atributos do recurso (motor do
-      banco, tipo nativo). Qualquer nível conta, inclusive baixo: é evidência
-      sobre o que o cliente usa, e pode preencher um nível vazio;
-    - ``dependencias``: só médio e alto. Dependência baixa não diz nada sobre
-      exclusividade e não deve preencher um nível vazio.
+      banco, tipo nativo). Qualquer nível aparece, inclusive baixo: é evidência
+      sobre o que o cliente usa. No nível sugerido ela entra pela regra do lote v4;
+    - ``dependencias``: só médio e alto. Fica como informação do eixo de
+      dependência; não entra no nível sugerido.
     """
     if not isinstance(dependencias, Mapping):
         return ()
@@ -333,14 +351,21 @@ def _fonte(workload: dict[str, Any]) -> str:
     return "catalogo" if origem == "catalog_snapshot" else "informado"
 
 
-def _nivel_sugerido(nivel: str | None, sugestoes: Sequence[Sugestao]) -> str | None:
-    """A sugestão só conta quando mudaria o nível: sobe ou preenche o vazio."""
-    if not sugestoes:
-        return None
-    maior = max((s.nivel for s in sugestoes), key=_ORDEM.__getitem__)
-    if nivel is None or _ORDEM[maior] > _ORDEM[nivel]:
-        return maior
-    return None
+def _nivel_sugerido(
+    nivel: str | None, pela_evidencia: str | None, sugestoes: Sequence[Sugestao]
+) -> str | None:
+    """O nível que a evidência além do catálogo daria, só quando difere do nível.
+
+    `pela_evidencia` é o de `lock_in_efetivo` (catálogo, inventário ou classe). A
+    arquitetura do destino só sobe ou preenche; "migra junto" não conta.
+    """
+    candidato = pela_evidencia
+    arquitetura = [s.nivel for s in sugestoes if s.fonte == "arquitetura" and s.nivel in _ORDEM]
+    if arquitetura:
+        maior = max(arquitetura, key=_ORDEM.__getitem__)
+        if candidato is None or _ORDEM[maior] > _ORDEM[candidato]:
+            candidato = maior
+    return candidato if candidato != nivel else None
 
 
 # ── pools de compute ─────────────────────────────────────────────────────────
@@ -431,7 +456,9 @@ def _anexar_pools(
         servico,
         pools=pools,
         sugestoes=sugestoes,
-        nivel_sugerido=_nivel_sugerido(servico.nivel, sugestoes),
+        nivel_sugerido=_nivel_sugerido(
+            servico.nivel, servico.nivel_sugerido or servico.nivel, sugestoes
+        ),
     )
     return linhas, ()
 

@@ -38,6 +38,8 @@ class MigrationExpectation:
     # "curada"  = metadata do próprio serviço
     # "classe"  = herdada de serviços curados do MESMO service_type
     fonte: str = "curada"
+    # Classe cujos curados discordam do lock-in: sem nota, só os níveis vistos.
+    lock_in_faixa: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -47,6 +49,8 @@ class MigrationExpectation:
         }
         if self.lock_in:
             d["lock_in"] = self.lock_in
+        if self.lock_in_faixa:
+            d["lock_in_faixa"] = list(self.lock_in_faixa)
         if self.fonte != "curada":
             d["fonte"] = self.fonte
         return d
@@ -100,8 +104,13 @@ def learn_class_defaults(
     conforme a curadoria cresce.
 
     Agregação **conservadora**: se algum serviço curado daquele tipo exige
-    reescrita, o tipo inteiro é tratado como `refactor`; o lock-in é o maior
-    observado. Errar para o lado difícil não gera promessa de economia fácil.
+    reescrita, o tipo inteiro é tratado como `refactor`, e a classe sai do maior
+    lock-in observado. Errar para o lado difícil não gera promessa de economia fácil.
+
+    A **nota de lock-in** da classe só existe quando os curados do tipo concordam
+    (lote v4, V4.4). Banco relacional tem RDS e Cloud SQL médios e Azure SQL alto: o
+    maior dava "alto" ao Azure Database for PostgreSQL, motor aberto. Tipo misto sai
+    sem `lock_in`, com `lock_in_faixa`, e a nota fica para a curadoria.
 
     Recebe pares ``(service_type, metadata)`` — função pura, sem I/O.
     """
@@ -112,24 +121,28 @@ def learn_class_defaults(
         exp = derive_expectation(metadata)
         if exp is None:
             continue
-        acc = agregado.setdefault(service_type, {"refac": False, "lock": None})
+        acc = agregado.setdefault(service_type, {"refac": False, "locks": set()})
         acc["refac"] = acc["refac"] or exp.requer_refatoracao
-        if exp.lock_in and _LOCK_RANK.get(exp.lock_in, 0) > _LOCK_RANK.get(
-            acc["lock"] or "", 0
-        ):
-            acc["lock"] = exp.lock_in
+        if exp.lock_in in _LOCK_RANK:
+            acc["locks"].add(exp.lock_in)
 
     defaults: dict[str, MigrationExpectation] = {}
     for service_type, acc in agregado.items():
+        niveis = sorted(acc["locks"], key=_LOCK_RANK.__getitem__)
         base = derive_expectation(
-            {"requires_refactoring": acc["refac"], "vendor_lock_in_level": acc["lock"]}
+            {
+                "requires_refactoring": acc["refac"],
+                "vendor_lock_in_level": niveis[-1] if niveis else None,
+            }
         )
         if base is not None:
+            unanime = len(niveis) <= 1
             defaults[service_type] = MigrationExpectation(
                 classe=base.classe,
                 esforco=base.esforco,
-                lock_in=base.lock_in,
+                lock_in=base.lock_in if unanime else None,
                 requer_refatoracao=base.requer_refatoracao,
                 fonte="classe",
+                lock_in_faixa=() if unanime else tuple(niveis),
             )
     return defaults
