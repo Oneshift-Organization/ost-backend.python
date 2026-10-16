@@ -57,8 +57,12 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
     # v3: score normalizado 50/40/10 e benefícios informativos sem efeito financeiro.
+    # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE):
+    # `equivalence_pricing._CATEGORIES` ganhou as categorias de rede por tipo, que só
+    # existem em `custos_auxiliares` de payload preparado depois da mudança. Snapshot
+    # antigo não tem as chaves e anexa os mesmos preços.
     "agent-authority-v3": (
-        "05bf4c69c205564f0f8e99a106abbf5966d1f2007bd4a1b363a3f10ea89132d7"
+        "73c1b46fe83bba410d12014a7bcb581d84a38889a7089bef86e8e75afc33473e"
     ),
     "agent-authority-v1": "1d3e1f935092a2260a5c740b8b1b94c2ec9319faffa5eaf078a31d7bcea4d8c6",
     # v2: payback.meses derivado da premissa do agente (PLANO_PRECO_REGIONAL D11).
@@ -68,12 +72,8 @@ _HASH_POR_VERSAO = {
     # passou a ler `premissas.compromisso_de_compute`, que só existe em payload
     # preparado depois da mudança. Snapshot antigo reconcilia igual (teste em
     # test_equivalence_pricing.py).
-    # Hash trocado de novo sem subir a versão (PLANO_PRECO_NAO_COMPUTE):
-    # `equivalence_pricing._CATEGORIES` ganhou as categorias de rede por tipo, que só
-    # existem em `custos_auxiliares` de payload preparado depois da mudança. Snapshot
-    # antigo não tem as chaves e anexa os mesmos preços.
     "agent-authority-v2": (
-        "22df4139f48d03c9b14c241a0f5f82ce4f12bca3bcbc65b32779b8a421ab1067"
+        "7329f9fd996a9a63d2f182528642c22bca96d5b543a33594593384a03f543b66"
     ),
 }
 
