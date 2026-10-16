@@ -1,4 +1,4 @@
-# Score determinístico e 7 Rs — política v1
+# Score determinístico e 7 Rs — política v4
 
 ## Escopo e compatibilidade
 
@@ -9,7 +9,7 @@ Análises já persistidas não são recalculadas. Não requer migration de banco
 o snapshot e o resultado usam os campos JSON existentes.
 
 `decision_support` é um campo aditivo de `AnalysisV2Response`. Contrato
-`oneshift-decision-v1`, política `score-7rs-v3`, escala 0–100. O backend o
+`oneshift-decision-v1`, política `score-7rs-v4`, escala 0–100. O backend o
 recalcula após inferência, inclusive no fallback e na submissão do agente.
 Entradas do agente não podem substituir scores nem estratégias.
 
@@ -19,16 +19,38 @@ Política inicial normativa e versionada, não calibrada com migrações reais:
 
 | Eixo | Peso global | Fatores e pesos internos |
 |---|---:|---|
-| Financeiro | 50% | economia 70%; cobertura de preços 30% |
-| Técnico | 50% | refatoração 60%; lock-in 40% |
+| Financeiro | 50% | economia 100% |
+| Técnico | 40% | compatibilidade funcional 40%; adaptação 30%; portabilidade/lock-in 20%; dependências 10% |
+| Cobertura da análise | 10% | identificação 30%; preços 40%; evidência técnica 30% |
+
+A v4 mantém lock-in no técnico. O terceiro pilar mede a cobertura disponível,
+não governança nem benefícios comerciais. Preços incompletos deixam de reduzir
+a nota financeira diretamente e passam ao eixo de cobertura. Análises persistidas
+conservam seus eixos, notas e versão originais; não são recalculadas.
 
 - Economia: `clamp(50 + 100 * economia_mensal / custo_atual, 0, 100)`.
-- Cobertura: `100 * cobertura` calculada no resumo financeiro.
+- Cobertura: `30 * identificação + 40 * cobertura_preços + 30 * cobertura_técnica`.
+  Identificação considera o custo positivo não financeiro, incluindo serviços
+  desconhecidos no denominador; tipos curados ou aliases entram no numerador.
+- Compatibilidade: 100 para mesma capacidade curada (não comprova compatibilidade
+  de runtime, versão, licença ou aplicação). Não inventar evidência para tipos inferidos.
 - Refatoração: 30 se necessária, 100 se explicitamente dispensada nos dois
   lados do catálogo; ausência não equivale a `false`.
+  Sem esse metadado, uma classe curada pode formar hipótese explícita:
+  rehost=80, replatform=60, refactor=30. Hipótese mantém o score preliminar e
+  nunca altera o fato de refatoração ou confirma uma estratégia 7 Rs.
 - Lock-in: baixo=100, médio=50, alto=0; vale a restrição conhecida mais forte.
+- Dependências: baixo=100, médio=50, alto=0 na fração de custo correlacionada
+  pelo inventário (`topologia.detalhe.servicos`). Ausência de inventário é
+  desconhecida, nunca dependência baixa. Não substitui lock-in do catálogo.
+  Se a correlação inclui custo estimado por tipo (em vez de ID), o fator é
+  rotulado como hipótese e a nota permanece preliminar, conservadoramente em
+  todos os serviços, pois o resumo ainda não separa essa origem por serviço.
+- Alternativas do mesmo provedor só são agrupadas se todas forem da mesma
+  capacidade curada; usam a avaliação conservadora, sem selecionar SKU/preço.
 - Fatores técnicos são ponderados pelo custo positivo dos componentes. Impostos,
-  compromissos e itens não classificados não são aplicações migráveis.
+  compromissos não são aplicações migráveis. Itens não classificados não
+  pontuam tecnicamente, mas continuam reduzindo a cobertura de identificação.
   Mapeamento de tipo inferido não confirma compatibilidade técnica.
 - Governança não pontua (removida do score na `score-7rs-v3`). Declarar
   `region_approved` ou `compliance_approved` como `false` continua bloqueando
@@ -36,21 +58,66 @@ Política inicial normativa e versionada, não calibrada com migrações reais:
 
 Cada fator expõe regra, entradas, cobertura e contribuição. Arredondamento
 decimal para duas casas; pequenas diferenças de 0,01 podem aparecer ao somar
-valores exibidos já arredondados. Pesos não são redistribuídos por falta de dados.
+valores exibidos já arredondados. Dentro do técnico, o valor observado é
+`sum(nota_fator * peso_fator * cobertura_fator) / sum(peso_fator * cobertura_fator)`.
+Os pesos globais 50/40/10 não mudam. Assim, desconhecido não equivale a ruim.
 
-Quando faltam informações, `value=null`, `status=partial` e os limites representam
-o mínimo/máximo aritmético dos fatores desconhecidos. **Não são probabilidades nem
-intervalos estatísticos.** Confiança alta/média/baixa e lock-in continuam separados.
+Para publicar uma nota geral, exigem-se identificação, preços e evidência técnica
+de pelo menos 50%, e dois critérios técnicos cobrindo pelo menos 50% do custo cada.
+Sem isso: `value=null`, `status=not_scored`, com pendências explícitas. Esse piso
+evita extrapolar uma pequena parcela fácil para a infraestrutura inteira.
+Os limites são regras iniciais de produto, não calibração estatística.
+
+`assessment_method=evidence_normalized` identifica a nova leitura. Havendo piso,
+dados faltantes ou hipóteses produzem `status=partial` e nota observada única,
+arredondada ao inteiro na UI e rotulada **preliminar**; ela pode subir ou cair
+com novas evidências. `complete` exige todas as coberturas integrais, sem hipóteses.
+Os limites inferior/superior continuam diagnósticos, não a nota exibida nem um
+intervalo probabilístico. Confiança alta/média/baixa permanece separada da nota.
 
 Campos legados obrigatórios permanecem numéricos: scores inteiros recebem o
-limite inferior arredondado; `viability_score` é esse inteiro ×10. Sem destino,
-recebem zero. Consumidores novos **devem usar `decision_support`** para não
-confundir limite ou ausência de dados com nota final. A UI atualizada faz isso.
+valor observado arredondado; `viability_score` é esse inteiro ×10. Sem nota,
+recebem zero por compatibilidade. Consumidores novos **devem usar `decision_support`**
+para distinguir ausência de zero real. O histórico recebe `decision_score_value`
+e `decision_score_method`; registros antigos conservam a exibição conservadora.
 
 Mesmos dados normalizados + snapshot de catálogo/preços/câmbio + declarações +
 versão de política produzem a mesma decisão e fingerprint SHA-256. Reimportar a
 mesma fatura com preços ou evidências atualizados pode legitimamente mudar a nota.
 Notas iguais de duas faturas diferentes, isoladamente, não comprovam um defeito.
+
+O cálculo usa o detalhe de topologia congelado no backend; o modelo recebe
+apenas o resumo e o ledger compacto. Rede e regras privadas não são enviadas.
+
+## Benefícios comerciais (fora da pontuação)
+
+`decision_support.corporate_benefits` é aditivo e opcional para resultados
+históricos. A versão `corporate-benefits-v1`, revisada em 14/10/2026, contém
+fontes oficiais de programas de crédito e suporte para AWS, Azure, GCP e OCI.
+Em OCI, a oportunidade documentada é Free Tier/avaliação, não um programa
+corporativo de startups presumido. Não se expõem máximos promocionais como saldo.
+
+Toda oportunidade tem `eligibility=not_verified` e `score_effect=none` no
+catálogo. O billing não comprova elegibilidade, porte, aprovação ou plano
+contratado. Nenhum benefício modifica economia, preço, score ou recomendação.
+A UI oferece um diálogo discreto no detalhe de economia, com requisitos, links
+oficiais e data da revisão. Não há nova chamada LLM nem consulta externa em runtime.
+
+Fontes e requisitos ficam em `app/domain/services/corporate_benefits.py`.
+Revisar periodicamente e antes de atualizar; mudar catálogo/data/versão e a
+autoridade do agente conjuntamente. Resultados salvos não são enriquecidos
+retroativamente. Condições podem mudar e devem ser reconfirmadas na fonte.
+
+Simulação de créditos aprovados **não está implementada nesta entrega**. Exige
+saldo, moeda, vencimento, escopo e limites de uso comprovados, além de comparação
+sem benefício após o prazo. Não tratar oferta potencial como economia permanente.
+
+O novo eixo usa `id=coverage`; `enterprise` continua significando governança
+em históricos. `enterprise_score` legado fica em zero nas novas respostas (não
+participa da fórmula); consumidores devem ler os eixos de `decision_support`.
+O contrato de snapshot usa `agent-authority-v3`: envios novos sobre snapshots
+de política/autoridade anterior são recusados por versão. Repetições já gravadas
+mantêm a idempotência existente. Nenhuma allowlist ou flag de envio é liberada.
 
 ## Seleção e bloqueios
 
@@ -130,5 +197,5 @@ a interface exibe fielmente as informações disponíveis e as lacunas.
   testes de apresentação no frontend. Não usar dados de clientes em fixtures.
 - Rollback: reverter os commits desta funcionalidade por GitOps. Nenhuma tabela
   é removida ou alterada. Preservar snapshots e resultados para auditoria.
-- Redesign da homepage, Mermaid e benefícios/créditos corporativos automáticos
-  são entregas posteriores, não são incluídos silenciosamente nesta alteração.
+- Redesign da homepage, Mermaid, elegibilidade automática e simulação de créditos
+  aprovados não fazem parte desta entrega.

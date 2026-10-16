@@ -25,7 +25,7 @@ CONTRACT_VERSION = "agent-snapshot-v1"
 
 # As regras que o envio aplica sobre o snapshot. Suba quando a mesma entrada
 # passar a produzir outra análise corrigida.
-AUTHORITY_VERSION = "agent-authority-v2"
+AUTHORITY_VERSION = "agent-authority-v3"
 
 
 def politica_de_decisao_atual() -> str:

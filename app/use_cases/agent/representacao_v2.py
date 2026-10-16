@@ -205,7 +205,11 @@ def _fator_compacto(fator: Mapping[str, Any]) -> dict[str, Any]:
         return dict(fator)
     distribuicao: dict[str, dict[str, Any]] = {}
     for evidencia in fator.get("evidence") or []:
-        chave = next((c for c in _VALOR_DO_FATOR if c in evidencia), None)
+        chave = {"lock_in": "lock_in", "refactoring": "requires_refactoring"}.get(fator.get("id"))
+        if chave is None or evidencia.get(chave) is None:
+            chave = "assessed_value" if "assessed_value" in evidencia else next(
+                (c for c in _VALOR_DO_FATOR if c in evidencia), None
+            )
         valor = evidencia.get(chave) if chave else None
         rotulo = _DESCONHECIDO if valor is None else str(valor).lower()
         grupo = distribuicao.setdefault(rotulo, {"servicos": 0, "custo": Decimal(0)})

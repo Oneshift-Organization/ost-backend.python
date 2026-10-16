@@ -39,6 +39,9 @@ _ARQUIVOS_DA_AUTORIDADE = (
     "app/domain/services/sku_normalization.py",
     "app/schemas/analysis_v2.py",
     "app/schemas/decision_support.py",
+    "app/schemas/corporate_benefits.py",
+    "app/domain/services/corporate_benefits.py",
+    "app/domain/services/technical_assessment.py",
 )
 # Do `topologia_no_payload`, só o que roda no envio. O resto do arquivo monta o
 # payload na preparação, e mudança lá já gera snapshot novo pelo fingerprint.
@@ -53,6 +56,10 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 #   AUTHORITY_VERSION em `use_cases/agent/versoes.py` e registre o hash novo;
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
+    # v3: score normalizado 50/40/10 e benefícios informativos sem efeito financeiro.
+    "agent-authority-v3": (
+        "05bf4c69c205564f0f8e99a106abbf5966d1f2007bd4a1b363a3f10ea89132d7"
+    ),
     "agent-authority-v1": "1d3e1f935092a2260a5c740b8b1b94c2ec9319faffa5eaf078a31d7bcea4d8c6",
     # v2: payback.meses derivado da premissa do agente (PLANO_PRECO_REGIONAL D11).
     # SHA-256 do código das regras, não credencial. Entre parênteses porque o
@@ -134,6 +141,11 @@ def test_snapshot_do_codigo_atual_nao_diverge() -> None:
 def test_politica_de_decisao_anterior_diverge() -> None:
     # O caso real: score-7rs-v2 → v3 (#30), entre a preparação e o envio.
     v = versoes_do_payload({"decision_support": {"policy_version": "score-7rs-v2"}})
+    assert divergencias(v) == ["decision_policy"]
+
+
+def test_v3_score_snapshot_is_not_reinterpreted_as_v4() -> None:
+    v = versoes_do_payload({"decision_support": {"policy_version": "score-7rs-v3"}})
     assert divergencias(v) == ["decision_policy"]
 
 
