@@ -87,6 +87,18 @@ class AuxiliaryCosts:
     # reprecificados com taxa de disco — errando o GB e a comparação.
     object_storage: Decimal = Decimal("0")
     network_egress: Decimal = Decimal("0")
+    # O balde de rede separado por tipo (domain/services/rede_por_uso): o egress acima
+    # fica só com o tráfego; balanceador, NAT, IP, VPN e tráfego entre zonas têm taxa
+    # própria e são cotados pela quantidade medida. `network_other` (endpoint, DNS,
+    # resolver, log) fica ao custo atual.
+    inter_zone_transfer: Decimal = Decimal("0")
+    load_balancer: Decimal = Decimal("0")
+    load_balancer_data: Decimal = Decimal("0")
+    nat_gateway: Decimal = Decimal("0")
+    nat_gateway_data: Decimal = Decimal("0")
+    public_ip: Decimal = Decimal("0")
+    vpn: Decimal = Decimal("0")
+    network_other: Decimal = Decimal("0")
     database: Decimal = Decimal("0")
     # Custo de linhas com papel de compute (core/ram) que NÃO contribuíram
     # capacidade — Savings Plans, Reserved Instances, Committed Use, Universal
@@ -104,6 +116,10 @@ class AuxiliaryCosts:
     # Categoria → região da linha → custo ("" = linha sem região). A cotação das
     # categorias usa a taxa da zona de cada parte (P1); a soma é o total da categoria.
     por_regiao: Mapping[str, Mapping[str, Decimal]] = field(default_factory=dict)
+    # Categoria cotada pela quantidade → região → quantidade na unidade dela, e o custo
+    # das linhas que trouxeram essa quantidade (o resto usa o preço efetivo delas)
+    quantidade_por_regiao: Mapping[str, Mapping[str, Decimal]] = field(default_factory=dict)
+    medido_por_regiao: Mapping[str, Mapping[str, Decimal]] = field(default_factory=dict)
 
     @property
     def any_positive(self) -> bool:
@@ -114,6 +130,14 @@ class AuxiliaryCosts:
                 self.storage_hdd > 0,
                 self.object_storage > 0,
                 self.network_egress > 0,
+                self.inter_zone_transfer > 0,
+                self.load_balancer > 0,
+                self.load_balancer_data > 0,
+                self.nat_gateway > 0,
+                self.nat_gateway_data > 0,
+                self.public_ip > 0,
+                self.vpn > 0,
+                self.network_other > 0,
                 self.database > 0,
                 self.commitment > 0,
                 self.orphan > 0,

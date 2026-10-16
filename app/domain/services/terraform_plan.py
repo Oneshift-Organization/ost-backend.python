@@ -49,9 +49,24 @@ _TAXA_GB_MES: dict[str, dict[str, str]] = {
     "oci": {"storage_ssd": "0.0255", "storage_hdd": "0.0255", "object_storage": "0.0255"},
 }
 
+# Chaves de `custos_auxiliares` com serviço de rede pago (rede por tipo, PLANO_PRECO_NAO_COMPUTE)
+_REDE_PAGA = (
+    "balanceador",
+    "balanceador_dados",
+    "nat",
+    "nat_dados",
+    "ip_publico",
+    "vpn",
+    "transferencia_entre_zonas",
+    "rede_outros",
+)
+
 # $/vCPU-mês de banco gerenciado, general-purpose. Mesma origem.
 _TAXA_DB_VCPU_MES: dict[str, str] = {
-    "aws": "62", "gcp": "60", "azure": "73", "oci": "30",
+    "aws": "62",
+    "gcp": "60",
+    "azure": "73",
+    "oci": "30",
 }
 
 # O plano descreve o disco com os nomes do GCP, que são o vocabulário neutro da
@@ -103,6 +118,7 @@ def motor_aceito(destino: str, familia: str | None) -> bool:
     aceitos = _MOTORES_POR_DESTINO.get(destino)
     return aceitos is None or familia in aceitos
 
+
 # Tempo ligada abaixo disto sugere agendamento (dev, horário comercial).
 _TEMPO_ATIVO_BAIXO = 0.6
 
@@ -137,6 +153,7 @@ def _tipo_de_maquina(sku: str) -> str:
     conseguia reconciliar os dois.
     """
     return sku.rsplit(":", 1)[-1].strip() or sku
+
 
 # Teto de um persistent disk no GCP. O balde de armazenamento é o TOTAL da conta,
 # somando muitos volumes na origem; representá-lo como um disco só já é
@@ -347,10 +364,7 @@ def _equivalente_do_destino(
     Sem isto, a ordem da lista decidiria — e um equivalente curado apagaria um
     com hardware casado só por vir antes.
     """
-    candidatos = [
-        e for e in equivalentes
-        if str(e.get("provedor", "")).lower() == destino
-    ]
+    candidatos = [e for e in equivalentes if str(e.get("provedor", "")).lower() == destino]
     if not candidatos:
         return None
     com_sku = [e for e in candidatos if e.get("sku")]
@@ -567,7 +581,6 @@ def _derivar_banco(
         return
     if _banco_medido(payload, destino, plano, alta_disponibilidade, nomeador):
         return
-
 
     origem = str(payload.get("provedor_origem") or "").lower()
     taxa = _TAXA_DB_VCPU_MES.get(origem)
@@ -812,6 +825,12 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "Egresso de rede aparece no custo mas não vira recurso: é "
             "consequência do tráfego, não algo a provisionar."
         )
+    if any(_decimal(auxiliares.get(chave)) for chave in _REDE_PAGA):
+        plano.nao_suportado.append(
+            "Serviços de rede pagos (balanceador, NAT, VPN, IP público, tráfego entre "
+            "zonas) aparecem no custo e não viram recurso: a rede do pacote vem das "
+            "escolhas da requisição."
+        )
     if _decimal(auxiliares.get("compromisso_reserva")):
         plano.nao_suportado.append(
             "Compromisso/reserva (Savings Plan, CUD) é instrumento comercial, "
@@ -864,9 +883,7 @@ class Nomeador:
         self._usados: set[str] = set(usados)
 
     def gerar(self, prefixo: str, *partes: object) -> str:
-        base = "_".join(
-            limpo for limpo in (_sanear(p) for p in partes if p) if limpo
-        ) or "recurso"
+        base = "_".join(limpo for limpo in (_sanear(p) for p in partes if p) if limpo) or "recurso"
         nome = f"{prefixo}_{base}"[:57]
 
         if nome not in self._usados:
@@ -890,9 +907,7 @@ def _sanear(bruto: object) -> str:
     só explodia na validação do identificador HCL, que é ASCII. Um nome de
     família com acento derrubava a geração inteira.
     """
-    limpo = "".join(
-        c if (c.isascii() and c.isalnum()) else "_" for c in str(bruto).lower()
-    )
+    limpo = "".join(c if (c.isascii() and c.isalnum()) else "_" for c in str(bruto).lower())
     return "_".join(p for p in limpo.split("_") if p)
 
 

@@ -51,6 +51,44 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("gcp", "database", "db_vcpu_month", "60"),      # Cloud SQL
     ("azure", "database", "db_vcpu_month", "73"),    # Azure SQL / MySQL Flex
     ("oci", "database", "db_vcpu_month", "30"),      # OCI DB/MySQL (mais barato)
+    # Rede por tipo (PLANO_PRECO_NAO_COMPUTE), cotada pela quantidade medida. Valores
+    # das APIs oficiais em 16/10/2026: AWS `AWSELB`/`AmazonVPC` us-east-1, Azure
+    # Retail Prices (balanceador e NAT são globais), catálogo do GCP, OCI cetools.
+    # Zero é serviço grátis no destino; provedor sem linha fica sem cotação.
+    # Balanceador, por hora: ALB/NLB, Std LB (5 regras), regra mínima, Flexible LB
+    ("aws", "load_balancer", "hour", "0.0225"),
+    ("azure", "load_balancer", "hour", "0.025"),
+    ("gcp", "load_balancer", "hour", "0.025"),
+    ("oci", "load_balancer", "hour", "0.0113"),
+    # Processamento do balanceador, por GB. LCU-hora como 1 GB (o teto de bytes de
+    # uma LCU); na OCI, US$ 0,0001 por Mbps-hora, e 1 Mbps-hora = 0,45 GB
+    ("aws", "load_balancer_data", "gb", "0.008"),
+    ("azure", "load_balancer_data", "gb", "0.005"),
+    ("gcp", "load_balancer_data", "gb", "0.008"),
+    ("oci", "load_balancer_data", "gb", "0.0002"),
+    # NAT por hora. GCP: teto do Cloud NAT (32 VMs). OCI: sem cobrança
+    ("aws", "nat_gateway", "hour", "0.045"),
+    ("azure", "nat_gateway", "hour", "0.045"),
+    ("gcp", "nat_gateway", "hour", "0.044"),
+    ("oci", "nat_gateway", "hour", "0"),
+    ("aws", "nat_gateway_data", "gb", "0.045"),
+    ("azure", "nat_gateway_data", "gb", "0.045"),
+    ("gcp", "nat_gateway_data", "gb", "0.045"),
+    ("oci", "nat_gateway_data", "gb", "0"),
+    # IP público por hora. OCI: sem cobrança
+    ("aws", "public_ip", "hour", "0.005"),
+    ("azure", "public_ip", "hour", "0.005"),
+    ("gcp", "public_ip", "hour", "0.005"),
+    ("oci", "public_ip", "hour", "0"),
+    # VPN site a site por conexão-hora (2 túneis). Azure cobra por gateway: sem taxa
+    ("aws", "vpn", "hour", "0.05"),
+    ("gcp", "vpn", "hour", "0.10"),
+    ("oci", "vpn", "hour", "0"),
+    # Tráfego entre zonas da mesma região, por GB. OCI: grátis entre ADs
+    ("aws", "inter_zone_transfer", "gb", "0.01"),
+    ("azure", "inter_zone_transfer", "gb", "0.01"),
+    ("gcp", "inter_zone_transfer", "gb", "0.01"),
+    ("oci", "inter_zone_transfer", "gb", "0"),
 )
 
 

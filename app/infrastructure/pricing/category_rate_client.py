@@ -14,6 +14,12 @@ por região: em São Paulo o gp3 custa 1,9x a Virgínia e o S3, 1,8x.
 Disco da Azure é por tamanho de disco (P10, P20…), não por GB: segue
 `reference`. Banco gerenciado segue `reference` nos quatro.
 
+Rede por tipo (PLANO_PRECO_NAO_COMPUTE): balanceador, processamento do balanceador,
+NAT, IP público, VPN e tráfego entre zonas, nas fontes acima e no serviço Networking
+do GCP. Fica em `reference`: o NAT da AWS (o offer do EC2 passa de 480 MB por região),
+o NAT por hora do GCP (o catálogo cobra por VM; a referência usa o teto do gateway),
+a VPN da Azure (cobra por gateway) e os serviços grátis da OCI (sem SKU no cetools).
+
 Em todas, a **primeira faixa paga**: a que a maior parte dos custos encontra
 primeiro, e a mesma regra para os quatro (a faixa gratuita de 100 GB da AWS,
 de 200 GB do GCP e de 10 TB da OCI fica de fora de todos). urllib da stdlib.
@@ -22,6 +28,7 @@ de 200 GB do GCP e de 10 TB da OCI fica de fora de todos). urllib da stdlib.
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Sequence
@@ -39,6 +46,8 @@ _AWS_EBS = "https://b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/ec2/USD/curre
 _AWS_BULK = (
     "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/{servico}/current/{regiao}/index.json"
 )
+
+_MBPS_HORA_EM_GB = Decimal("0.45")
 
 _AWS_EBS_TIPOS = {
     "Storage General Purpose gp3 GB Mo": ("storage_ssd", "gp3"),
@@ -124,6 +133,63 @@ def _aws_egress(dados: dict[str, Any], rotulo: str) -> Decimal | None:
     )
 
 
+# (offer, UsageType sem o prefixo da região, família, categoria, unidade, detalhe)
+_AWS_REDE = (
+    ("AWSELB", "LoadBalancerUsage", "Load Balancer-Application", "load_balancer", "hour", "alb"),
+    # LCU-hora vale 1 GB: o teto de bytes processados de uma LCU
+    ("AWSELB", "LCUUsage", "Load Balancer-Application", "load_balancer_data", "gb", "alb-lcu"),
+    ("AmazonVPC", "PublicIPv4:InUseAddress", None, "public_ip", "hour", "ipv4"),
+    ("AmazonVPC", "VPN-Usage-Hours:ipsec.1", None, "vpn", "hour", "site-to-site"),
+)
+# Prefixo de região do UsageType (`SAE1-`, `EU-`); us-east-1 vem sem prefixo.
+# `Outposts-`, `TS-` e `Reserved` são outros produtos e ficam de fora.
+_AWS_PREFIXO_DA_REGIAO = r"(?:(?:[A-Z]{2,3}\d|EU)-)?"
+
+
+def _aws_preco_do_uso(dados: dict[str, Any], uso: str, familia: str | None) -> Decimal | None:
+    """Primeira faixa paga do UsageType na região do offer."""
+    padrao = re.compile(_AWS_PREFIXO_DA_REGIAO + re.escape(uso) + "$")
+    termos = (dados.get("terms") or {}).get("OnDemand") or {}
+    faixas: list[tuple[float, Decimal]] = []
+    for sku, produto in (dados.get("products") or {}).items():
+        if familia is not None and produto.get("productFamily") != familia:
+            continue
+        if not padrao.match(str((produto.get("attributes") or {}).get("usagetype", ""))):
+            continue
+        for termo in (termos.get(sku) or {}).values():
+            for dim in (termo.get("priceDimensions") or {}).values():
+                preco = aws._decimal((dim.get("pricePerUnit") or {}).get("USD"))
+                if preco is not None and preco > 0:
+                    faixas.append((float(dim.get("beginRange") or 0), preco))
+    return min(faixas)[1] if faixas else None
+
+
+def _aws_rede_da_regiao(
+    regiao: str, transferencia: dict[str, Any], timeout: float
+) -> list[CloudPricePoint]:
+    offers = {
+        servico: aws.get_json(_AWS_BULK.format(servico=servico, regiao=regiao), timeout=timeout)
+        for servico in sorted({o for o, *_ in _AWS_REDE})
+    }
+    precos = [
+        (categoria, unidade, detalhe, _aws_preco_do_uso(offers[offer], uso, familia))
+        for offer, uso, familia, categoria, unidade, detalhe in _AWS_REDE
+    ]
+    precos.append(
+        (
+            "inter_zone_transfer",
+            "gb",
+            "regional",
+            _aws_preco_do_uso(transferencia, "DataTransfer-Regional-Bytes", None),
+        )
+    )
+    return [
+        _point("aws", categoria, unidade, preco, "aws_price_list_bulk", region=regiao, detalhe=d)
+        for categoria, unidade, d, preco in precos
+        if preco is not None
+    ]
+
+
 def fetch_aws_category_rates(
     regioes: Sequence[str], *, timeout: float = 60.0
 ) -> list[CloudPricePoint]:
@@ -183,6 +249,7 @@ def fetch_aws_category_rates(
                     detalhe="internet",
                 )
             )
+        out += _aws_rede_da_regiao(regiao, transferencia, timeout)
     return out
 
 
@@ -238,9 +305,14 @@ def fetch_gcp_category_rates(
     storage = gcp.skus_do_servico(gcp.STORAGE_SERVICE, api_key=api_key, timeout=timeout)
     if compute is None or storage is None:
         return []
+    # Sem o serviço de rede, as categorias dele ficam na referência; o resto segue
+    rede = gcp.skus_do_servico(_GCP_NETWORKING, api_key=api_key, timeout=timeout) or []
     out: list[CloudPricePoint] = []
     for regiao in regioes:
-        for categoria, unidade, detalhe, preco in _gcp_taxas_da_regiao(compute, storage, regiao):
+        taxas = _gcp_taxas_da_regiao(compute, storage, regiao) + _gcp_rede_da_regiao(
+            compute, rede, regiao
+        )
+        for categoria, unidade, detalhe, preco in taxas:
             if preco is not None:
                 out.append(
                     _point(
@@ -288,6 +360,79 @@ def _gcp_taxas_da_regiao(
     ]
 
 
+_GCP_NETWORKING = "E505-1604-58F8"
+
+
+def _gcp_na_regiao(
+    skus: list[dict[str, Any]], regiao: str, casa: Callable[[str], bool]
+) -> Decimal | None:
+    """Primeira faixa paga do SKU da região, ou do global; o mais específico vence.
+
+    Os SKUs de rede não têm `resourceGroup` estável, e vários valem só como
+    `global` (IP externo, dados do Cloud NAT)."""
+    candidatos = [
+        s
+        for s in skus
+        if {regiao, "global"} & set(s.get("serviceRegions") or [])
+        and (s.get("category") or {}).get("usageType") == "OnDemand"
+        and casa(str(s.get("description") or ""))
+    ]
+    for sku in sorted(
+        candidatos, key=lambda s: (len(s.get("serviceRegions") or []), s.get("description"))
+    ):
+        preco = gcp.preco_unitario(sku)
+        if preco is not None:
+            return preco
+    return None
+
+
+def _gcp_rede_da_regiao(
+    compute: list[dict[str, Any]], rede: list[dict[str, Any]], regiao: str
+) -> list[tuple[str, str, str, Decimal | None]]:
+    tunel = _gcp_na_regiao(rede, regiao, lambda d: d.startswith("Networking Cloud VPN Tunnel"))
+    return [
+        (
+            "load_balancer",
+            "hour",
+            "forwarding-rule",
+            _gcp_na_regiao(rede, regiao, lambda d: "Forwarding Rule Minimum" in d),
+        ),
+        (
+            "load_balancer_data",
+            "gb",
+            "data-processing",
+            _gcp_na_regiao(
+                rede,
+                regiao,
+                lambda d: "Application Load Balancer" in d and "Data Processing" in d,
+            ),
+        ),
+        (
+            "nat_gateway_data",
+            "gb",
+            "cloud-nat",
+            _gcp_na_regiao(rede, regiao, lambda d: d == "Networking Cloud Nat Data Processing"),
+        ),
+        # A conexão tem dois túneis, como a VPN site a site da AWS
+        ("vpn", "hour", "ha-vpn", tunel * 2 if tunel is not None else None),
+        (
+            "public_ip",
+            "hour",
+            "external-ip",
+            _gcp_na_regiao(compute, regiao, lambda d: d == "External IP Charge on a Standard VM"),
+        ),
+        (
+            "inter_zone_transfer",
+            "gb",
+            "inter-zone",
+            # A genérica vale em 5 regiões; São Paulo tem a sua ("... in Sao Paulo")
+            _gcp_na_regiao(
+                compute, regiao, lambda d: d.startswith("Network Inter Zone Data Transfer Out")
+            ),
+        ),
+    ]
+
+
 # ── Azure ────────────────────────────────────────────────────────────────────
 
 
@@ -297,8 +442,81 @@ def _azure_itens(filtro: str, timeout: float) -> list[dict[str, Any]]:
     return itens
 
 
+# Balanceador e NAT têm preço global na Azure: (serviço, medidor, unidade) → categoria
+_AZURE_GLOBAL = {
+    ("Load Balancer", "Standard Included LB Rules and Outbound Rules", "1 Hour"): (
+        "load_balancer",
+        "hour",
+    ),
+    ("Load Balancer", "Standard Data Processed", "1 GB"): ("load_balancer_data", "gb"),
+    ("NAT Gateway", "Standard Gateway", "1 Hour"): ("nat_gateway", "hour"),
+    ("NAT Gateway", "Standard Data Processed", "1 GB"): ("nat_gateway_data", "gb"),
+}
+
+
+def fetch_azure_network_global(*, timeout: float = 30.0) -> tuple[tuple[str, str, Decimal], ...]:
+    """Balanceador e NAT da Azure, (categoria, unidade, preço). Preço global: o sync
+    busca uma vez e repassa para cada região (a API devolve 429 cedo)."""
+    precos: dict[tuple[str, str], Decimal] = {}
+    for servico in sorted({s for s, *_ in _AZURE_GLOBAL}):
+        filtro = (
+            f"serviceName eq '{servico}' and armRegionName eq 'Global' "
+            "and priceType eq 'Consumption'"
+        )
+        for item in _azure_itens(filtro, timeout):
+            # O filtro é do servidor; a conferência aqui é a do item
+            chave = (
+                str(item.get("serviceName")),
+                str(item.get("meterName")),
+                str(item.get("unitOfMeasure")),
+            )
+            alvo = _AZURE_GLOBAL.get(chave)
+            price = Decimal(str(item.get("retailPrice") or 0))
+            if alvo is not None and price > 0:
+                precos[alvo] = max(price, precos.get(alvo, Decimal(0)))
+    return tuple((categoria, unidade, preco) for (categoria, unidade), preco in precos.items())
+
+
+def _azure_rede_regional(
+    region: str,
+    banda: list[dict[str, Any]],
+    rede_global: tuple[tuple[str, str, Decimal], ...],
+    timeout: float,
+) -> list[CloudPricePoint]:
+    precos: list[tuple[str, str, str, Decimal]] = list(
+        (categoria, unidade, "global", preco) for categoria, unidade, preco in rede_global
+    )
+    entre_zonas = [
+        Decimal(str(i.get("retailPrice") or 0))
+        for i in banda
+        if i.get("meterName") == "Standard Inter-Availability Zone Data Transfer Out"
+        and i.get("unitOfMeasure") == "1 GB"
+    ]
+    if entre_zonas and max(entre_zonas) > 0:
+        precos.append(("inter_zone_transfer", "gb", "inter-az", max(entre_zonas)))
+    filtro = (
+        f"serviceName eq 'Virtual Network' and armRegionName eq '{region}' "
+        "and priceType eq 'Consumption' and meterName eq 'Standard IPv4 Static Public IP'"
+    )
+    ip = [
+        Decimal(str(i.get("retailPrice") or 0))
+        for i in _azure_itens(filtro, timeout)
+        if i.get("meterName") == "Standard IPv4 Static Public IP"
+        and i.get("unitOfMeasure") == "1 Hour"
+    ]
+    if ip and max(ip) > 0:
+        precos.append(("public_ip", "hour", "standard-ipv4", max(ip)))
+    return [
+        _point("azure", c, u, preco, "azure_retail_api", region=region, detalhe=d)
+        for c, u, d, preco in precos
+    ]
+
+
 def fetch_azure_category_rates(
-    region: str = "eastus", *, timeout: float = 30.0
+    region: str = "eastus",
+    *,
+    timeout: float = 30.0,
+    rede_global: tuple[tuple[str, str, Decimal], ...] | None = None,
 ) -> list[CloudPricePoint]:
     """Egress (Standard Data Transfer Out) e Blob Hot LRS de uma região.
 
@@ -310,7 +528,8 @@ def fetch_azure_category_rates(
     filtro = (
         f"serviceName eq 'Bandwidth' and armRegionName eq '{region}' and priceType eq 'Consumption'"
     )
-    for item in _azure_itens(filtro, timeout):
+    banda = _azure_itens(filtro, timeout)
+    for item in banda:
         if item.get("meterName") != "Standard Data Transfer Out":
             continue
         if item.get("unitOfMeasure") != "1 GB":
@@ -352,7 +571,9 @@ def fetch_azure_category_rates(
                 detalhe="blob-hot-lrs",
             )
         )
-    return out
+    if rede_global is None:
+        rede_global = fetch_azure_network_global(timeout=timeout)
+    return out + _azure_rede_regional(region, banda, rede_global, timeout)
 
 
 # ── OCI ──────────────────────────────────────────────────────────────────────
@@ -387,6 +608,7 @@ def fetch_oci_category_rates(
     block: Decimal | None = None
     objeto: Decimal | None = None
     egress_por_origem: dict[str, Decimal] = {}
+    rede: dict[tuple[str, str], Decimal] = {}
     for it in items:
         name = it.get("displayName") or ""
         valor = _oci_primeira_faixa_paga(it)
@@ -398,6 +620,13 @@ def fetch_oci_category_rates(
             objeto = valor
         elif name.startswith("Outbound Data Transfer - Originating in "):
             egress_por_origem[name.removeprefix("Outbound Data Transfer - Originating in ")] = valor
+        elif name == "Load Balancer Base":
+            rede[("load_balancer", "hour")] = valor
+        elif name == "Load Balancer Bandwidth":
+            # Por Mbps-hora; 1 Mbps durante uma hora são 0,45 GB
+            rede[("load_balancer_data", "gb")] = (valor / _MBPS_HORA_EM_GB).quantize(
+                Decimal("0.00000001")
+            )
 
     out: list[CloudPricePoint] = []
     for regiao in regioes:
@@ -427,6 +656,18 @@ def fetch_oci_category_rates(
                     detalhe="object-storage",
                 )
             )
+        out += [
+            _point(
+                "oci",
+                categoria,
+                unidade,
+                preco,
+                "oci_cetools_api",
+                region=regiao,
+                detalhe="flexible-lb",
+            )
+            for (categoria, unidade), preco in rede.items()
+        ]
         egress = egress_por_origem.get(_oci_origem_do_egress(regiao))
         if egress is not None:
             out.append(

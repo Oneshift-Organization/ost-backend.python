@@ -34,6 +34,10 @@ class ParteDaZona:
     fracao: Decimal
     # Custo que caiu aqui por não ter região na linha
     sem_regiao: Decimal = _ZERO
+    # Categoria cotada pela quantidade (rede, PLANO_PRECO_NAO_COMPUTE): a quantidade
+    # medida nas linhas da zona e o custo dessas linhas
+    quantidade: Decimal = _ZERO
+    custo_medido: Decimal = _ZERO
 
 
 def dividir_por_zona(
@@ -42,14 +46,20 @@ def dividir_por_zona(
     *,
     zona_dominante: str,
     regiao_dominante: str | None,
+    quantidade_por_regiao: Mapping[str, Decimal] | None = None,
+    medido_por_regiao: Mapping[str, Decimal] | None = None,
 ) -> list[ParteDaZona]:
     """Partes por zona, a de mais custo primeiro. ``por_regiao``: região → custo; a
-    chave ``""`` é o custo sem região."""
+    chave ``""`` é o custo sem região. A quantidade e o custo medido, quando vêm, vão
+    para a zona da mesma região."""
     total = sum((c for c in por_regiao.values() if c > 0), _ZERO)
     if total <= 0:
         return []
     custo: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     sem_regiao: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+    quantidade: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+    medido: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+    zona_de: dict[str, str] = {}
     regioes: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: _ZERO))
     for regiao, valor in por_regiao.items():
         if valor <= 0:
@@ -61,10 +71,15 @@ def dividir_por_zona(
         else:
             regioes[zona][normalizar_regiao(provedor, regiao) or regiao] += valor
         custo[zona] += valor
+        zona_de[regiao] = zona
+    for regiao, valor in (quantidade_por_regiao or {}).items():
+        if valor > 0 and regiao in zona_de:
+            quantidade[zona_de[regiao]] += valor
+            medido[zona_de[regiao]] += (medido_por_regiao or {}).get(regiao, _ZERO)
     partes = []
     for zona, valor in custo.items():
         da_zona = regioes.get(zona)
-        regiao = (
+        regiao_da_parte = (
             max(da_zona.items(), key=lambda kv: (kv[1], kv[0]))[0]
             if da_zona
             else (regiao_dominante if zona == zona_dominante else None)
@@ -72,10 +87,12 @@ def dividir_por_zona(
         partes.append(
             ParteDaZona(
                 zona=zona,
-                regiao_origem=regiao,
+                regiao_origem=regiao_da_parte,
                 custo=valor,
                 fracao=valor / total,
                 sem_regiao=sem_regiao.get(zona, _ZERO),
+                quantidade=quantidade.get(zona, _ZERO),
+                custo_medido=medido.get(zona, _ZERO),
             )
         )
     return sorted(partes, key=lambda p: (-p.custo, p.zona))

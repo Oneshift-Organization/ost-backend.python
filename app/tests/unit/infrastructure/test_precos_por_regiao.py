@@ -113,13 +113,73 @@ def _dt(rotulo: str, preco: str) -> dict[str, Any]:
     )
 
 
+def _com_familia(
+    produtos: dict[str, tuple[str | None, str]], faixas: dict[str, list[tuple[str, str]]]
+) -> dict[str, Any]:
+    """Offer com `productFamily`: (família, UsageType) por SKU."""
+    dados = _bulk({sku: {"usagetype": uso} for sku, (_, uso) in produtos.items()}, faixas)
+    for sku, (familia, _) in produtos.items():
+        if familia is not None:
+            dados["products"][sku]["productFamily"] = familia
+    return dados
+
+
+def _elb(prefixo: str, hora: str, lcu: str) -> dict[str, Any]:
+    alb = "Load Balancer-Application"
+    return _com_familia(
+        {
+            "h": (alb, f"{prefixo}LoadBalancerUsage"),
+            "lcu": (alb, f"{prefixo}LCUUsage"),
+            # Iscas: outros produtos com o mesmo sufixo, mais baratos
+            "ts": (alb, f"{prefixo}TS-LoadBalancerUsage"),
+            "out": (alb, "Outposts-LCUUsage"),
+            "res": (alb, f"{prefixo}ReservedLCUUsage"),
+            "nlb": ("Load Balancer-Network", f"{prefixo}LoadBalancerUsage"),
+        },
+        {
+            "h": [("0", hora)],
+            "lcu": [("0", lcu)],
+            "ts": [("0", "0.005")],
+            "out": [("0", "0")],
+            "res": [("0", "0.001")],
+            "nlb": [("0", "0.001")],
+        },
+    )
+
+
+def _vpc(prefixo: str) -> dict[str, Any]:
+    return _com_familia(
+        {
+            "ip": (None, f"{prefixo}PublicIPv4:InUseAddress"),
+            "vpn": ("Cloud Connectivity", f"{prefixo}VPN-Usage-Hours:ipsec.1"),
+        },
+        {"ip": [("0", "0.005")], "vpn": [("0", "0.05")]},
+    )
+
+
+def _com_entre_zonas(dados: dict[str, Any], prefixo: str) -> dict[str, Any]:
+    dados["products"]["az"] = {"attributes": {"usagetype": f"{prefixo}DataTransfer-Regional-Bytes"}}
+    dados["terms"]["OnDemand"]["az"] = {
+        "t": {"priceDimensions": {"0": {"beginRange": "0", "pricePerUnit": {"USD": "0.01"}}}}
+    }
+    return dados
+
+
 def test_aws_categorias_por_regiao(monkeypatch: pytest.MonkeyPatch) -> None:
     respostas = {
         crc._AWS_EBS: _EBS,
         crc._AWS_BULK.format(servico="AmazonS3", regiao="sa-east-1"): _s3("SAE1", "0.0405"),
         crc._AWS_BULK.format(servico="AmazonS3", regiao="us-east-1"): _s3("USE1", "0.023"),
-        crc._AWS_BULK.format(servico="AWSDataTransfer", regiao="sa-east-1"): _dt(_SP, "0.15"),
-        crc._AWS_BULK.format(servico="AWSDataTransfer", regiao="us-east-1"): _dt(_VA, "0.09"),
+        crc._AWS_BULK.format(servico="AWSDataTransfer", regiao="sa-east-1"): _com_entre_zonas(
+            _dt(_SP, "0.15"), "SAE1-"
+        ),
+        crc._AWS_BULK.format(servico="AWSDataTransfer", regiao="us-east-1"): _com_entre_zonas(
+            _dt(_VA, "0.09"), ""
+        ),
+        crc._AWS_BULK.format(servico="AWSELB", regiao="sa-east-1"): _elb("SAE1-", "0.034", "0.011"),
+        crc._AWS_BULK.format(servico="AWSELB", regiao="us-east-1"): _elb("", "0.0225", "0.008"),
+        crc._AWS_BULK.format(servico="AmazonVPC", regiao="sa-east-1"): _vpc("SAE1-"),
+        crc._AWS_BULK.format(servico="AmazonVPC", regiao="us-east-1"): _vpc("USE1-"),
     }
     monkeypatch.setattr(aws, "get_json", lambda url, timeout: respostas[url])
 
@@ -134,6 +194,17 @@ def test_aws_categorias_por_regiao(monkeypatch: pytest.MonkeyPatch) -> None:
         ("aws", "storage_hdd", "us-east-1"): Decimal("0.0450000000"),
         ("aws", "object_storage", "us-east-1"): Decimal("0.023"),
         ("aws", "network_egress", "us-east-1"): Decimal("0.09"),
+        # Rede por tipo: o ALB, não o NLB nem as iscas de mesmo sufixo
+        ("aws", "load_balancer", "sa-east-1"): Decimal("0.034"),
+        ("aws", "load_balancer_data", "sa-east-1"): Decimal("0.011"),
+        ("aws", "public_ip", "sa-east-1"): Decimal("0.005"),
+        ("aws", "vpn", "sa-east-1"): Decimal("0.05"),
+        ("aws", "inter_zone_transfer", "sa-east-1"): Decimal("0.01"),
+        ("aws", "load_balancer", "us-east-1"): Decimal("0.0225"),
+        ("aws", "load_balancer_data", "us-east-1"): Decimal("0.008"),
+        ("aws", "public_ip", "us-east-1"): Decimal("0.005"),
+        ("aws", "vpn", "us-east-1"): Decimal("0.05"),
+        ("aws", "inter_zone_transfer", "us-east-1"): Decimal("0.01"),
     }
 
 
@@ -435,3 +506,134 @@ def test_sync_pede_uma_regiao_por_zona_sem_repetir() -> None:
 def test_serie_da_azure(arm: str, serie: str) -> None:
     assert azure._serie(arm) == serie
     assert (serie in azure._CONFIDENCIAIS) is (serie in {"dc", "ec"})
+
+
+# ── Rede por tipo (PLANO_PRECO_NAO_COMPUTE) ──────────────────────────────────
+
+
+def test_azure_rede_global_e_regional(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _item(servico: str, medidor: str, unidade: str, preco: float) -> dict[str, Any]:
+        return {
+            "serviceName": servico,
+            "meterName": medidor,
+            "unitOfMeasure": unidade,
+            "retailPrice": preco,
+        }
+
+    def _resposta(url: str, timeout: float) -> dict[str, Any]:
+        if "Load+Balancer" in url or "Load%20Balancer" in url:
+            return {
+                "Items": [
+                    _item(
+                        "Load Balancer",
+                        "Standard Included LB Rules and Outbound Rules",
+                        "1 Hour",
+                        0.025,
+                    ),
+                    _item(
+                        "Load Balancer",
+                        "Standard Included LB Rules and Outbound Rules",
+                        "1 Hour",
+                        0.0,
+                    ),
+                    _item("Load Balancer", "Standard Data Processed", "1 GB", 0.005),
+                ]
+            }
+        if "NAT+Gateway" in url or "NAT%20Gateway" in url:
+            return {
+                "Items": [
+                    _item("NAT Gateway", "Standard Gateway", "1 Hour", 0.045),
+                    _item("NAT Gateway", "Standard Data Processed", "1 GB", 0.045),
+                ]
+            }
+        if "Virtual+Network" in url or "Virtual%20Network" in url:
+            return {
+                "Items": [
+                    _item("Virtual Network", "Standard IPv4 Static Public IP", "1 Hour", 0.005)
+                ]
+            }
+        if "Bandwidth" in url:
+            return {
+                "Items": [
+                    _item(
+                        "Bandwidth",
+                        "Standard Inter-Availability Zone Data Transfer Out",
+                        "1 GB",
+                        0.01,
+                    )
+                ]
+            }
+        return {"Items": []}
+
+    monkeypatch.setattr(crc, "_get", _resposta)
+    rede = crc.fetch_azure_network_global()
+    taxas = _por_chave(crc.fetch_azure_category_rates("brazilsouth", rede_global=rede))
+    assert taxas == {
+        ("azure", "load_balancer", "brazilsouth"): Decimal("0.025"),
+        ("azure", "load_balancer_data", "brazilsouth"): Decimal("0.005"),
+        ("azure", "nat_gateway", "brazilsouth"): Decimal("0.045"),
+        ("azure", "nat_gateway_data", "brazilsouth"): Decimal("0.045"),
+        ("azure", "public_ip", "brazilsouth"): Decimal("0.005"),
+        ("azure", "inter_zone_transfer", "brazilsouth"): Decimal("0.01"),
+    }
+
+
+def _gcp_sku(descricao: str, regioes: list[str], *precos: float) -> dict[str, Any]:
+    return {
+        "description": descricao,
+        "serviceRegions": regioes,
+        "category": {"usageType": "OnDemand"},
+        "pricingInfo": [
+            {
+                "pricingExpression": {
+                    "tieredRates": [
+                        {"unitPrice": {"units": str(int(p)), "nanos": round((p % 1) * 1e9)}}
+                        for p in precos
+                    ]
+                }
+            }
+        ],
+    }
+
+
+def test_gcp_rede_da_regiao() -> None:
+    rede = [
+        _gcp_sku("Cloud Load Balancer Forwarding Rule Minimum Global", ["global"], 0.025),
+        _gcp_sku(
+            "Global External Application Load Balancer Inbound Data Processing for Sao Paulo",
+            ["southamerica-east1"],
+            0.012,
+        ),
+        _gcp_sku("Networking Cloud Nat Data Processing", ["global"], 0.045),
+        _gcp_sku("Networking Cloud VPN Tunnel Southamericaeast1", ["southamerica-east1"], 0.075),
+    ]
+    compute = [
+        # Faixa gratuita antes da paga: vale a paga
+        _gcp_sku("External IP Charge on a Standard VM", ["global"], 0.0, 0.005),
+        # A genérica não cobre São Paulo; a de lá tem nome próprio
+        _gcp_sku("Network Inter Zone Data Transfer Out", ["us-central1", "us-east1"], 0.01),
+        _gcp_sku("Network Inter Zone Data Transfer Out in Sao Paulo", ["southamerica-east1"], 0.02),
+    ]
+    taxas = {
+        (c, u): p for c, u, _, p in crc._gcp_rede_da_regiao(compute, rede, "southamerica-east1")
+    }
+    assert taxas == {
+        ("load_balancer", "hour"): Decimal("0.025"),
+        ("load_balancer_data", "gb"): Decimal("0.012"),
+        ("nat_gateway_data", "gb"): Decimal("0.045"),
+        # A conexão tem dois túneis
+        ("vpn", "hour"): Decimal("0.150"),
+        ("public_ip", "hour"): Decimal("0.005"),
+        ("inter_zone_transfer", "gb"): Decimal("0.02"),
+    }
+
+
+def test_oci_balanceador_e_banda_convertida(monkeypatch: pytest.MonkeyPatch) -> None:
+    itens = [_oci("Load Balancer Base", 0, 0.0113), _oci("Load Balancer Bandwidth", 0, 0.0001)]
+    monkeypatch.setattr(crc, "_get", lambda url, timeout: {"items": itens})
+    taxas = _por_chave(crc.fetch_oci_category_rates(["sa-saopaulo-1"]))
+    assert taxas == {
+        ("oci", "load_balancer", "sa-saopaulo-1"): Decimal("0.0113"),
+        # US$ 0,0001 por Mbps-hora; 1 Mbps-hora = 0,45 GB
+        ("oci", "load_balancer_data", "sa-saopaulo-1"): Decimal("0.00022222"),
+    }

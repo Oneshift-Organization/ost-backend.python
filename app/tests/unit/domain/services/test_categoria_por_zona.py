@@ -40,3 +40,28 @@ def test_tudo_sem_regiao_usa_a_regiao_dominante() -> None:
 
 def test_sem_custo_nao_ha_partes() -> None:
     assert dividir_por_zona("aws", {}, zona_dominante="virginia", regiao_dominante=None) == []
+
+
+def test_quantidade_e_custo_medido_vao_para_a_zona_da_regiao() -> None:
+    partes = dividir_por_zona(
+        "aws",
+        {"us-east-1": Decimal("45"), "sa-east-1": Decimal("93"), "": Decimal("7")},
+        zona_dominante="sao-paulo",
+        regiao_dominante="sa-east-1",
+        quantidade_por_regiao={"us-east-1": Decimal("1000"), "sa-east-1": Decimal("1000")},
+        medido_por_regiao={"us-east-1": Decimal("45"), "sa-east-1": Decimal("93")},
+    )
+    por_zona = {p.zona: p for p in partes}
+    assert por_zona["sao-paulo"].quantidade == Decimal("1000")
+    assert por_zona["sao-paulo"].custo_medido == Decimal("93")
+    # O custo sem região entra na zona dominante, mas sem quantidade
+    assert por_zona["sao-paulo"].custo == Decimal("100")
+    assert por_zona["virginia"].quantidade == Decimal("1000")
+
+
+def test_sem_quantidade_a_parte_fica_com_zero() -> None:
+    partes = dividir_por_zona(
+        "aws", {"us-east-1": Decimal("10")}, zona_dominante="virginia", regiao_dominante=None
+    )
+    assert partes[0].quantidade == Decimal("0")
+    assert partes[0].custo_medido == Decimal("0")
