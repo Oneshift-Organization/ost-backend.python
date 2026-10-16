@@ -63,7 +63,7 @@ async def test_regioes_com_preco(repo: _Repo) -> None:
     assert await r.regioes_com_preco(_PROVEDOR.upper(), "storage_ssd") == ["eu-west-1"]
 
 
-async def test_substituir_remove_so_o_que_saiu_do_mesmo_conjunto(repo: _Repo) -> None:
+async def test_substituir_tira_da_cotacao_so_o_que_saiu_do_mesmo_conjunto(repo: _Repo) -> None:
     r, s = repo
     await r.substituir(
         [
@@ -86,6 +86,28 @@ async def test_substituir_remove_so_o_que_saiu_do_mesmo_conjunto(repo: _Repo) ->
         ("e2-standard-64", "southamerica-east1", "api"),
         ("ref", "us-central1", "seed"),
     }
+    # O que saiu fica guardado, marcado como ausente, para envelhecer no ciclo de vida
+    ausente = (
+        await s.execute(
+            text(
+                "select ausente_desde from cloud_price_points "
+                "where provider = :p and sku_key = 'e2-standard-64' and region = 'us-central1'"
+            ),
+            {"p": _PROVEDOR},
+        )
+    ).scalar_one()
+    assert ausente is not None
+    # Se a coleta trouxer de novo, volta para a cotação
+    await r.substituir(
+        [_ponto("e2-standard-32", "us-central1"), _ponto("e2-standard-64", "us-central1")]
+    )
+    await s.flush()
+    assert {
+        p.sku_key
+        for p in await r.find(
+            provider=_PROVEDOR, service_type="virtual_server", region="us-central1"
+        )
+    } == {"e2-standard-32", "e2-standard-64", "ref"}
 
 
 async def test_find_filtra_por_regiao(repo: _Repo) -> None:

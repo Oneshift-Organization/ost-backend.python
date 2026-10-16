@@ -35,5 +35,8 @@ class CloudPricePointModel(Base):
     confirmado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ultima_fonte: Mapped[str | None] = mapped_column(String(20), nullable=True)
     versao: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1", default=1)
+    # A coleta oficial deixou de trazer o SKU: fica como referência e envelhece; a
+    # cotação ignora. Volta a None quando a coleta traz de novo.
+    ausente_desde: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (Index("ix_price_points_provider_type", "provider", "service_type"),)

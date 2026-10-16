@@ -25,7 +25,8 @@ class SyncCloudPricesResult:
     fetched: int
     upserted: int
     # Preços do mesmo conjunto (provedor, região, tipo, fonte) que a coleta não
-    # trouxe: tipo descontinuado ou nome que a coleta antiga gerava errado.
+    # trouxe: tipo descontinuado ou nome que a coleta antiga gerava errado. Ficam
+    # marcados como ausentes (saem da cotação e envelhecem no ciclo de vida).
     removed: int = 0
 
 
