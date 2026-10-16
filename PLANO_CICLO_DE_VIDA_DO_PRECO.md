@@ -78,9 +78,13 @@ configuração**, não em código.
 ## 6. Decisões em aberto (do usuário)
 
 1. Termos de uso: o billing de um cliente pode alimentar a base de todos? Opt-out?
+   **Decidido (16/10): sim**, como experimento, com regra nos termos de uso; os
+   clientes atuais aceitam ceder. Desenho no §10.
 2. Peso entre fonte oficial recente e billing recente quando divergem.
 3. Quórum e tolerância por categoria.
-4. SKU que some da doc oficial mas segue nos billings.
+4. SKU que some da doc oficial mas segue nos billings. **Decidido (16/10):** fica,
+   marcado `ausente_desde`, envelhece até ADUBO e sai da cotação (migração
+   `d4e5f6a7b8c9`); volta quando a coleta traz de novo.
 5. Quando: proposta é **depois** da sprint de Terraform; a P3.0 (descoberta) é
    barata e pode rodar em paralelo.
 
@@ -175,10 +179,108 @@ muda o número da análise:
 
 ## 9. Próximos passos
 
-- **Agendar o recálculo diário:** CronJob no infra, como o sync.
 - **Gravar a contestação de preço do agente como observação `agente`:** vai com o
   lote v3 (V3.1), porque mexe no envio do agente. A tela do ADUBO lê essa observação.
 - **P3.3:** revitalizar por billing só depois da decisão 1 do §6 (termos de uso).
   Formatos que servem: CUR, Azure Cost Details, BigQuery.
 - **P3.4:** quórum, que muda número e exige versão de autoridade.
 - **P3.5:** calibração com dados reais.
+
+## 10. Fatura como fonte (P3.3 e P3.4): desenho combinado em 16/10, nada construído
+
+O usuário respondeu à análise crítica; o desenho abaixo junta as duas coisas.
+
+**O que entra e o que nunca entra**
+- Entra:
+  - o preço de lista explícito (CUR `publicOnDemandRate`, Azure `PayGPrice`,
+    BigQuery `cost_at_list`);
+  - a taxonomia do provedor: código de produto, serviço, categoria de medidor,
+    tipo de uso, descrição e código de SKU, unidade.
+- Nunca entra numa tabela compartilhada:
+  - o custo efetivo, o desconto e as linhas de compromisso, spot e crédito;
+  - tag, nome de recurso, projeto e conta.
+- O relatório de custo da OCI não tem preço de lista. Somado ao inventário ele casa
+  o shape exato e a quantidade, mas o desconto continua no valor. Caminho: estimar o
+  fator de desconto do cliente pelos SKUs que ele tem e nós temos oficiais (mediana
+  das razões); dividir o efetivo por esse fator dá um preço de lista derivado, com
+  peso menor.
+
+**Âncoras e oscilação (proposta do usuário)**
+- Preço de documentação oficial é âncora: só outra observação oficial troca o valor.
+  A fatura confirma (revive) ou propõe divergência.
+- Volatilidade por SKU: com que frequência e quanto a fatura diverge da âncora.
+  Mediana e desvio absoluto mediano, não média. SKU estável tem tolerância apertada,
+  SKU oscilante tem tolerância larga.
+- Sem âncora (serviço que não buscamos), vale o quórum:
+  - 3 clientes distintos com preços muito parecidos, pela mediana, no mesmo SKU,
+    região e moeda;
+  - pode ser reajuste ou promoção da nuvem, e naquele período o preço fica mais
+    confiável.
+- Valor que veio de fatura envelhece mais rápido (meia-vida menor), para promoção não
+  deixar dano permanente.
+- Ponderação:
+  - preço **abaixo** da âncora é o caso perigoso (desconto ou promoção) e pede quórum
+    maior;
+  - preço **acima** costuma ser reajuste real.
+  - Mesmo com quórum, três clientes no mesmo Savings Plan mostram a mesma taxa com
+    desconto: por isso só entra preço de lista, nunca custo efetivo.
+
+**Moeda e região:** o preço vale por região e moeda. Uma fatura em reais não mexe no
+preço em dólar. Os nomes, que não dependem de moeda, entram de qualquer fatura.
+
+**Data:** a observação leva o período de uso da linha (todos os formatos trazem),
+não o dia do upload. Observação mais velha que a última confirmação oficial não
+revive nada.
+
+**Casamento com o SKU (o ponto mais perigoso; plano antes de código):** casar pelo
+código que o próprio provedor usa na lista de preço, não por nome ou shape:
+
+| nuvem | na fatura | na lista de preço |
+|---|---|---|
+| AWS | `product/sku` | código de SKU do offer |
+| Azure | `MeterId` | `meterId` da Retail Prices |
+| GCP | `sku.id` | `skuId` do catálogo |
+| OCI | `cost/productSku` | `partNumber` do cetools |
+
+Exige guardar esse código em cada ponto de preço (os fetchers já leem); sem código
+igual, não casa.
+
+**Dado de teste:**
+- quórum, mediana e corte de outlier pelo histórico;
+- fora os uploads marcados como teste (os mocks do nosso banco têm preços
+  inventados);
+- tudo atrás de flag de experimento.
+
+**Nome não é equivalência: ideias**
+1. **A identidade é o código, o nome é rótulo.** Cada formato tem um identificador
+   estável do serviço:
+   - AWS: código de produto;
+   - GCP: `service.id`;
+   - Azure: categoria de medidor;
+   - OCI: código de serviço.
+   O DE-PARA liga o identificador uma vez; cada fatura nova acrescenta variantes de
+   nome ao mesmo identificador, e esses apelidos são seguros. Só identificador novo
+   vai para a curadoria.
+2. **O inventário como ponte.** Com o ID do recurso, a linha da fatura liga ao tipo
+   do recurso no inventário (ELBv2, Key Vault). O tipo já liga ao DE-PARA, então a
+   equivalência sai sem adivinhar.
+3. **O uso como evidência,** como o `servico_pelo_uso`: o padrão de tipos de uso e
+   unidades de um nome desconhecido aponta o serviço quando um alvo domina (60% ou
+   mais).
+4. **Quórum para virar automático:** a mesma proposta vinda de N clientes distintos
+   vira equivalência "automática", com confiança menor que "curada".
+5. **Fila de curadoria:**
+   - nome novo, custo, tipos de uso e proposta;
+   - aprovar ou recusar, guardando a fonte (as páginas oficiais de comparação entre
+     nuvens que o DE-PARA já cita).
+
+**Ordem:**
+1. Etapa A, nomes: não mexe em número.
+2. B, confirmação por preço de lista igual.
+3. C, troca de valor por quórum. Muda número e pede versão de autoridade.
+
+## 11. Melhorias futuras
+
+- **Recálculo diário agendado:** CronJob no infra rodando o sync de preços, que já
+  recalcula ao final. Hoje o recálculo só roda quando alguém roda o sync. Sem
+  agendamento, o rótulo de um preço que ninguém reconfirma fica parado.

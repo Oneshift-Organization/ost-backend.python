@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,10 @@ def _to_entity(row: CloudPricePointModel) -> CloudPricePoint:
     )
 
 
+# Só o preço que a última coleta ainda trouxe entra na cotação
+_VIGENTE = CloudPricePointModel.ausente_desde.is_(None)
+
+
 class PgCloudPricePointRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -45,6 +49,7 @@ class PgCloudPricePointRepository:
         stmt = select(CloudPricePointModel).where(
             CloudPricePointModel.provider.ilike(provider),
             CloudPricePointModel.service_type == service_type,
+            _VIGENTE,
         )
         if region is not None:
             stmt = stmt.where(CloudPricePointModel.region == region)
@@ -57,7 +62,7 @@ class PgCloudPricePointRepository:
     async def rates_for_category(self, category: str) -> list[CloudPricePoint]:
         stmt = (
             select(CloudPricePointModel)
-            .where(CloudPricePointModel.service_type == category)
+            .where(CloudPricePointModel.service_type == category, _VIGENTE)
             .order_by(CloudPricePointModel.provider, CloudPricePointModel.sku_key)
         )
         result = await self._session.execute(stmt)
@@ -66,7 +71,7 @@ class PgCloudPricePointRepository:
     async def providers_with_prices(self, service_type: str) -> list[str]:
         stmt = (
             select(CloudPricePointModel.provider)
-            .where(CloudPricePointModel.service_type == service_type)
+            .where(CloudPricePointModel.service_type == service_type, _VIGENTE)
             .distinct()
         )
         result = await self._session.execute(stmt)
@@ -78,6 +83,7 @@ class PgCloudPricePointRepository:
             .where(
                 CloudPricePointModel.provider.ilike(provider),
                 CloudPricePointModel.service_type == service_type,
+                _VIGENTE,
             )
             .distinct()
         )
@@ -92,19 +98,26 @@ class PgCloudPricePointRepository:
         for p in points:
             chave = (p.provider.lower(), p.region, p.service_type, p.source)
             conjuntos.setdefault(chave, set()).add(p.sku_key)
-        removidos = 0
+        # O que a coleta deixou de trazer fica, marcado como ausente: envelhece no
+        # ciclo de vida até ADUBO e segue de referência, mas sai da cotação
+        # (PLANO_CICLO_DE_VIDA_DO_PRECO §6, decisão 4)
+        ausentes = 0
+        agora = datetime.now(UTC)
         for (provider, region, service_type, source), chaves in conjuntos.items():
             result = await self._session.execute(
-                delete(CloudPricePointModel).where(
+                update(CloudPricePointModel)
+                .where(
                     CloudPricePointModel.provider == provider,
                     CloudPricePointModel.region == region,
                     CloudPricePointModel.service_type == service_type,
                     CloudPricePointModel.source == source,
                     CloudPricePointModel.sku_key.not_in(chaves),
+                    _VIGENTE,
                 )
+                .values(ausente_desde=agora)
             )
-            removidos += int(getattr(result, "rowcount", 0) or 0)
-        return (gravados, removidos)
+            ausentes += int(getattr(result, "rowcount", 0) or 0)
+        return (gravados, ausentes)
 
     async def bulk_upsert(self, points: list[CloudPricePoint]) -> tuple[int, int]:
         if not points:
@@ -126,6 +139,8 @@ class PgCloudPricePointRepository:
                 "source": p.source,
                 "confidence": p.confidence,
                 "captured_at": p.captured_at or now,
+                # A coleta trouxe: deixa de estar ausente
+                "ausente_desde": None,
             }
             stmt = pg_insert(CloudPricePointModel).values(**values)
             update_cols = {
@@ -141,6 +156,7 @@ class PgCloudPricePointRepository:
                     "source",
                     "confidence",
                     "captured_at",
+                    "ausente_desde",
                 )
             }
             stmt = stmt.on_conflict_do_update(

@@ -129,7 +129,7 @@ async def main() -> None:
                 print(f"{provider}: FALHOU ({type(exc).__name__}: {exc})")  # noqa: T201
                 continue
             await session.commit()
-        linha = f"fetched={res.fetched} upserted={res.upserted} removed={res.removed}"
+        linha = f"fetched={res.fetched} upserted={res.upserted} ausentes={res.removed}"
         print(f"{provider}: {linha}")  # noqa: T201
     # Estado e score dos preços depois da coleta (PLANO_CICLO_DE_VIDA_DO_PRECO)
     print(await recalcular_ciclo_de_vida())  # noqa: T201
