@@ -10,10 +10,14 @@ Rodam contra Postgres real com seeds; pulam graciosamente sem banco (conftest).
 
 from __future__ import annotations
 
+import csv
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
+from app.domain.services.service_identity import service_key
+from app.infrastructure.database.seed_service_metadata import METADATA_SEED
 from app.schemas.analysis_v2 import (
     AnalysisV2Response,
     ProviderComparison,
@@ -24,8 +28,16 @@ from app.use_cases.analysis.run_analysis_pipeline import (
     build_pipeline_llm_input_payload,
 )
 
-# ── Onda 1 — conservação e segregação de compromisso ────────────────────
+_DE_PARA = (
+    Path(__file__).resolve().parents[2]
+    / "infrastructure"
+    / "database"
+    / "models"
+    / "cloud_services_mapping.csv"
+)
 
+
+# ── Onda 1 — conservação e segregação de compromisso ────────────────────
 
 @pytest.mark.parametrize("ctx_name", ["aws_context", "gcp_context"])
 def test_conservacao_de_custo(ctx_name: str, request: pytest.FixtureRequest) -> None:
@@ -265,12 +277,33 @@ def test_expectativa_herda_do_tipo_quando_falta_metadata(
         assert mg["classe_migracao"] in {"rehost", "replatform", "refactor"}
 
 
-def test_classe_nao_e_inventada_sem_exemplo(aws_context) -> None:
-    """Sem nenhum serviço curado daquele tipo, o sistema CALA em vez de chutar."""
-    payload, _ = build_pipeline_llm_input_payload(aws_context)
-    waf = next(s for s in payload["servicos"] if s["nome"] == "AWS WAF")
-    # `web_application_firewall` não tem exemplo curado -> sem expectativa.
-    assert "migracao" not in waf
+def _tipos_com_exemplo_curado() -> set[str]:
+    """Tipos do DE-PARA com ao menos um serviço curado no seed da metadata."""
+    tipos: dict[tuple[str, str], set[str]] = {}
+    with _DE_PARA.open(encoding="utf-8") as arquivo:
+        for linha in csv.DictReader(arquivo):
+            provedor = linha["provider"].lower()
+            chave = (provedor, service_key(provedor, linha["service_name"]))
+            tipos.setdefault(chave, set()).add(linha["service_type"])
+    return {
+        tipo
+        for provedor, _, nome, _ in METADATA_SEED
+        for tipo in tipos.get((provedor, service_key(provedor, nome)), set())
+    }
+
+
+@pytest.mark.parametrize("ctx_name", ["aws_context", "gcp_context"])
+def test_classe_nao_e_inventada_sem_exemplo(ctx_name: str, request: pytest.FixtureRequest) -> None:
+    """Sem nenhum serviço curado daquele tipo, o sistema CALA em vez de chutar.
+
+    Até a curadoria de 16/10 o AWS WAF era o exemplo de tipo sem curado. Hoje os
+    serviços dos dois bills têm nota própria, e o invariante é conferido em todos: a
+    expectativa herdada da classe só aparece em tipo com exemplo curado."""
+    payload, _ = build_pipeline_llm_input_payload(request.getfixturevalue(ctx_name))
+    com_exemplo = _tipos_com_exemplo_curado()
+    for servico in payload["servicos"]:
+        if (servico.get("migracao") or {}).get("fonte") == "classe":
+            assert servico["tipo"] in com_exemplo, servico["nome"]
 
 
 # ── Onda 7 — contrato com o LLM ─────────────────────────────────────────

@@ -116,6 +116,8 @@ COMPARATION_SEED = [
     ("analytics", "data_warehouse", "oci", "Oracle Autonomous Data Warehouse"),
 ]
 
+_Linha = tuple[str, str, str, dict[str, Any]]
+
 # Nomes antigos da metadata, que não existiam no DE-PARA (`cloud_services_mapping.csv`):
 # a nota curada nunca chegava à análise, nem na origem nem no destino. O seed
 # renomeia as linhas já gravadas para o nome do DE-PARA (lote v4, V4.4).
@@ -132,7 +134,90 @@ RENOMEADOS: dict[tuple[str, str], str] = {
     ("oci", "Oracle Object Storage"): "Oracle Cloud Infrastructure Object Storage",
     ("oci", "Oracle Block Volume"): "OCI Block Volumes",
     ("oci", "Oracle Flexible Load Balancer"): "OCI Load Balancing",
+    # Curadoria de 16/10: o DE-PARA não tem o Autonomous. O DATABASE da OCI com uso
+    # Autonomous cai em "Oracle Database Cloud Service" (`servico_pelo_uso`).
+    ("oci", "Oracle Autonomous Database"): "Oracle Database Cloud Service",
 }
+
+
+def _curado(lock_in: str, refatora: bool, motivo: str) -> dict[str, Any]:
+    """Nota da curadoria de 16/10: só os dois campos que a análise lê, mais o porquê."""
+    return {"vendor_lock_in_level": lock_in, "requires_refactoring": refatora, "notes": motivo}
+
+
+# Curadoria aprovada em 16/10 (PLANO_SCORE_V5_LOCKIN §8): os serviços dos seis
+# relatórios que ficavam "a confirmar". Categoria e nome do DE-PARA.
+_CURADORIA_16_10: list[_Linha] = [
+    ("aws", "security_identity", "AWS WAF", _curado(
+        "medium", False,
+        "Regras e grupos gerenciados próprios: reescreve a configuração, não a aplicação",
+    )),
+    ("aws", "analytics", "Amazon MSK", _curado(
+        "low", False, "Kafka gerenciado; o protocolo é aberto (Event Hubs e OCI Streaming)",
+    )),
+    ("aws", "ai_ml", "Amazon Translate", _curado("medium", True, "API e SDK próprios")),
+    ("aws", "analytics", "Amazon Managed Workflows for Apache Airflow (MWAA)", _curado(
+        "low", False, "Airflow aberto; os DAGs são portáveis",
+    )),
+    ("aws", "application_services", "Amazon Simple Queue Service (SQS)", _curado(
+        "medium", True, "API própria: muda o cliente",
+    )),
+    ("aws", "containers", "Amazon Elastic Container Registry (ECR)", _curado(
+        "low", False, "Imagem OCI padrão",
+    )),
+    ("aws", "ai_ml", "Amazon Comprehend", _curado("medium", True, "API e modelos próprios")),
+    ("aws", "security_identity", "AWS Directory Service", _curado(
+        "low", False, "Active Directory e LDAP padrão",
+    )),
+    ("aws", "security_identity", "AWS Key Management Service (KMS)", _curado(
+        "medium", True, "A chave não sai do serviço: recriptografar; SDK próprio",
+    )),
+    ("aws", "management_tools", "AWS Config", _curado(
+        "medium", False, "Regras próprias: reescreve a política",
+    )),
+    ("aws", "security_identity", "AWS Secrets Manager", _curado(
+        "medium", False, "API própria, troca simples",
+    )),
+    ("aws", "security_identity", "AWS Security Hub", _curado(
+        "medium", False, "Achados e integrações próprios",
+    )),
+    ("aws", "management_tools", "AWS Cost Explorer", _curado(
+        "low", False, "Ferramenta de custo, sem dado a migrar",
+    )),
+    ("gcp", "containers", "Cloud Run", _curado("low", False, "Contêiner padrão")),
+    ("gcp", "storage", "Filestore", _curado("low", False, "NFS, como o EFS")),
+    ("gcp", "containers", "Artifact Registry", _curado("low", False, "Imagem OCI padrão")),
+    ("gcp", "management_tools", "Cloud Monitoring", _curado(
+        "low", False, "Como o CloudWatch",
+    )),
+    ("gcp", "serverless", "Cloud Scheduler", _curado("low", False, "Cron")),
+    ("gcp", "networking", "Cloud DNS", _curado("low", False, "Como o Route 53")),
+    ("gcp", "security_identity", "Secret Manager", _curado(
+        "medium", False, "Como o Secrets Manager",
+    )),
+    ("gcp", "management_tools", "Cloud Logging", _curado("low", False, "Como o CloudWatch")),
+    ("azure", "database", "Azure Database for PostgreSQL", _curado(
+        "medium", True, "Motor aberto gerenciado, como o RDS e o Cloud SQL",
+    )),
+    ("azure", "database", "Azure Database for MySQL", _curado(
+        "medium", True, "Motor aberto gerenciado, como o RDS e o Cloud SQL",
+    )),
+    ("oci", "compute", "Oracle Cloud Infrastructure Compute", _curado(
+        "medium", False, "Como EC2, VMs da Azure e Compute Engine",
+    )),
+    ("oci", "database", "MySQL Database Service", _curado("medium", True, "Como o RDS")),
+    # Transferência de dados: o "Bandwidth" da Azure era o único serviço dos seis
+    # relatórios sem linha no DE-PARA. Tráfego cobrado por GB, sem dado a migrar.
+    *(
+        (provider, "networking", nome, _curado("low", False, "Tráfego por GB; nada a migrar"))
+        for provider, nome in (
+            ("aws", "AWS Data Transfer"),
+            ("azure", "Bandwidth"),
+            ("gcp", "Network Service Tiers"),
+            ("oci", "OCI Outbound Data Transfer"),
+        )
+    ),
+]
 
 # (provider, category, service_name, metadata). O nome é o do DE-PARA.
 METADATA_SEED = [
@@ -398,13 +483,11 @@ METADATA_SEED = [
         "pricing_model": "per_gb_monthly",
         "price_per_gb_month_usd": 0.0425,
     }),
-    ("oci", "database", "Oracle Autonomous Database", {
-        "vendor_lock_in_level": "high",
-        "requires_refactoring": True,
-        "isolation_level": "dedicated",
-        "pricing_model": "ocpu_hourly",
-        "price_per_ocpu_hour_usd": 0.036,
-    }),
+    ("oci", "database", "Oracle Database Cloud Service", _curado(
+        "medium", True,
+        "Motor Oracle: licença e edição limitam o destino, mas ele roda na Azure, no GCP"
+        " e na AWS (Oracle Database@). Coerente com a exclusividade do inventário",
+    )),
     ("oci", "networking", "Oracle Virtual Cloud Network (VCN)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
@@ -418,10 +501,10 @@ METADATA_SEED = [
         "pricing_model": "per_hour_per_mbps",
         "price_per_hour_usd": 0.020,
     }),
+    *_CURADORIA_16_10,
 ]
 
 
-_Linha = tuple[str, str, str, dict[str, Any]]
 
 
 async def _renomear(session: AsyncSession, renomeados: Mapping[tuple[str, str], str]) -> None:
