@@ -29,7 +29,9 @@ CONTRACT_VERSION = "agent-snapshot-v1"
 # PR #32 já usou a v3 para o score normalizado)
 # v4.1: explicit retention and conservative scores; v5 lock-in remains separate.
 # v4.2: global weights 35/50/15; historical snapshots keep their original weights.
-AUTHORITY_VERSION = "agent-authority-v4.2"
+# v4.3: a ordem de migração da topologia sai em etapas (nome, duração, detalhe) e os
+# riscos em alertas estruturados (título e tema), no contrato de `agent_views`.
+AUTHORITY_VERSION = "agent-authority-v4.3"
 
 
 def politica_de_decisao_atual() -> str:

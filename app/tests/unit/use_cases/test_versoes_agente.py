@@ -57,6 +57,9 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 #   AUTHORITY_VERSION em `use_cases/agent/versoes.py` e registre o hash novo;
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
+    "agent-authority-v4.3": (
+        "0c06a661ded4d225259d5df44cfad27351e6eda078028ff9d24fbb4c30cd9230"
+    ),
     # v4.2: rebalanceamento global 35/50/15, sem reinterpretar snapshots antigos.
     "agent-authority-v4.2": (
         "d6af6f0b3166b22a744d49e4e363607381000dbfc86b24a9eb58400ccbb817b8"

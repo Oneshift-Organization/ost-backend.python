@@ -104,9 +104,11 @@ def test_impor_substitui_a_sequencia_do_modelo_e_soma_os_riscos() -> None:
     )
     imposta = impor_topologia(resposta, {"topologia": _topologia()})
     risco = imposta.agent_views.risk_migration
-    assert risco.recommended_migration_sequence[0].startswith("Onda 0")
-    assert "Migre tudo no sábado" not in risco.recommended_migration_sequence
-    assert risco.risk_flags == [
+    # Os passos viram etapas: "Onda 0, fundação: 2 rede(s)..." -> nome e detalhe
+    assert risco.recommended_migration_sequence[0].name == "fundação"
+    assert risco.recommended_migration_sequence[0].detail.startswith("2 rede(s)")
+    assert "Migre tudo no sábado" not in [s.name for s in risco.recommended_migration_sequence]
+    assert [f.message for f in risco.risk_flags] == [
         "[alta] Porta de banco aberta para a internet (3)",
         "do modelo",
         "[media] Banco sem alta disponibilidade (1)",
@@ -132,9 +134,7 @@ def test_impose_decision_aplica_a_ordem_tambem() -> None:
         "topologia": _topologia(),
     }
     resposta = impose_decision(AnalysisV2Response(), deepcopy(payload))
-    assert resposta.agent_views.risk_migration.recommended_migration_sequence[0].startswith(
-        "Onda 0"
-    )
+    assert resposta.agent_views.risk_migration.recommended_migration_sequence[0].name == "fundação"
 
 
 def test_posicionamento_agrupa_por_subrede_e_soma_os_grupos() -> None:

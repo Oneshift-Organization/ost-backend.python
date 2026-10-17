@@ -128,7 +128,9 @@ async def test_client_validation_then_backend_authority(provider, partial_respon
     assert result.flags["lock_in_risk"] == []
     assert result.flags["other"] == ["Evidence"]
     assert result.agent_views.finops.financial_flags[0].message == "Preço ausente"
-    assert result.agent_views.finops.financial_flags[1] == "Alerta legado"
+    # Alerta em texto (formato antigo) vira alerta estruturado, com título e tema neutro
+    assert result.agent_views.finops.financial_flags[1].message == "Alerta legado"
+    assert result.agent_views.finops.financial_flags[1].theme == "outro"
     assert result.agent_views.cloud_engineering.technical_flags[0].code == "unknown"
     assert result.agent_views.risk_migration.risk_flags[0].impact_area == "risk"
     assert AnalysisV2Response.model_validate_json(result.model_dump_json()) == result
