@@ -56,7 +56,7 @@ from app.domain.services.topologia import analisar_topologia
 from app.domain.services.topologia.indice import Indice
 from app.domain.services.topologia.modelo import AnaliseDeTopologia, Nivel, Severidade
 from app.domain.services.topologia.servicos_do_billing import Vizinho, dependencias_por_servico
-from app.schemas.analysis_v2 import AnalysisV2Response
+from app.schemas.analysis_v2 import AgentFlag, AnalysisV2Response
 from app.use_cases.inventory.consultas import exigir_processado, obter_do_usuario
 from app.use_cases.inventory.correlacao import ProvedorDiferenteError
 from app.use_cases.inventory.declaracoes import para_dominio
@@ -636,10 +636,17 @@ def impor_topologia(response: AnalysisV2Response, payload: Mapping[str, Any]) ->
         return response
     seq = sequencia_de_migracao(topologia)
     risco_migracao = response.agent_views.risk_migration
-    flags = list(risco_migracao.risk_flags)
-    flags += [r for r in seq.riscos if r not in flags]
-    novo_risco = risco_migracao.model_copy(
-        update={"recommended_migration_sequence": seq.passos, "risk_flags": flags}
+    existentes = {f.message for f in risco_migracao.risk_flags}
+    flags: list[AgentFlag | str] = [*risco_migracao.risk_flags]
+    flags += [r for r in seq.riscos if r not in existentes]
+    # Validar de novo (não `model_copy`): os passos e riscos entram como texto e
+    # precisam virar etapa e alerta, no mesmo contrato da resposta do modelo
+    novo_risco = type(risco_migracao).model_validate(
+        {
+            **risco_migracao.model_dump(),
+            "recommended_migration_sequence": seq.passos,
+            "risk_flags": [f if isinstance(f, str) else f.model_dump() for f in flags],
+        }
     )
     return response.model_copy(
         update={
