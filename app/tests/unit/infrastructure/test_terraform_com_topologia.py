@@ -299,9 +299,64 @@ def test_azure_asg_na_nic_e_nsg_por_subrede() -> None:
     assert nsgs
     for nsg in nsgs.values():
         prioridades = [int(x) for x in re.findall(r"priority\s*=\s*(\d+)", nsg)]
-        assert prioridades == list(range(100, 100 + 10 * len(prioridades), 10))
-        assert "destination_application_security_group_ids" in nsg
+        # As duas últimas são o isolamento entre subredes (T2)
+        dependencias, isolamento = prioridades[:-2], prioridades[-2:]
+        assert dependencias == list(range(100, 100 + 10 * len(dependencias), 10))
+        assert isolamento == [4095, 4096]
+    assert any("destination_application_security_group_ids" in nsg for nsg in nsgs.values())
     assert len(_blocos(main, "azurerm_subnet_network_security_group_association")) == len(nsgs)
+
+
+@pytest.mark.parametrize("origem", ["aws", "gcp", "oci"])
+def test_azure_subrede_sem_dependencia_nao_fala_com_outra(origem: str) -> None:
+    """T2: a regra padrão `AllowVnetInBound` liberava tudo entre as subredes da VNet.
+    Toda subrede espelhada ganha NSG: ela fala com ela mesma, e o resto da VNet é negado."""
+    main = pacote(com_topologia(origem), "azure")["main.tf"]
+    subredes = {
+        nome: bloco
+        for nome, bloco in _blocos(main, "azurerm_subnet").items()
+        if nome != "subnet_principal"  # a padrão não é espelho de origem
+    }
+    nsgs = _blocos(main, "azurerm_network_security_group")
+    assert subredes and len(nsgs) == len(subredes)
+    for nsg in nsgs.values():
+        negar = re.search(r'name\s*=\s*"negar-outras-subredes"(.*?)\}', nsg, re.S)
+        assert negar, nsg
+        assert re.search(r'access\s*=\s*"Deny"', negar.group(1))
+        assert re.search(r'source_address_prefix\s*=\s*"VirtualNetwork"', negar.group(1))
+        assert '"permitir-mesma-subrede"' in nsg
+
+
+def test_banco_na_subrede_de_dados_espelhada() -> None:
+    """T3: o banco do mock Azure (subrede "dados") vai para a subrede espelhada.
+
+    Na OCI, endpoint privado. Na Azure, a subrede é delegada ao PostgreSQL Flexible, com
+    zona DNS privada e sem acesso público. Só o mock Azure diz a subrede do banco, e
+    Azure para Azure não é par: a origem é trocada para exercitar o destino Azure."""
+    oci = pacote(com_topologia("azure"), "oci")["main.tf"]
+    banco = _bloco(oci, "oci_database_autonomous_database", "banco_")
+    assert re.search(r"subnet_id\s*=\s*oci_core_subnet\.subnet_dados\.id", banco)
+
+    azure = pacote({**com_topologia("azure"), "provedor_origem": "aws"}, "azure")["main.tf"]
+    subrede = _bloco(azure, "azurerm_subnet", "subnet_dados")
+    assert "Microsoft.DBforPostgreSQL/flexibleServers" in subrede
+    banco = _bloco(azure, "azurerm_postgresql_flexible_server", "banco_")
+    assert re.search(r"delegated_subnet_id\s*=\s*azurerm_subnet\.subnet_dados\.id", banco)
+    assert re.search(r"public_network_access_enabled\s*=\s*false", banco)
+    assert len(_blocos(azure, "azurerm_private_dns_zone")) == 1
+    # O banco não entra em ASG: a subrede dele abre a porta do PostgreSQL para a VNet
+    nsg = _bloco(azure, "azurerm_network_security_group", "nsg_subnet_dados")
+    assert re.search(r'destination_port_range\s*=\s*"5432"', nsg)
+
+
+def test_gcp_banco_com_acesso_privado() -> None:
+    """T3: o Cloud SQL usa `private_network`; sem a conexão de acesso privado, o apply falha."""
+    for origem in ("aws", "azure", "oci"):
+        main = pacote(com_topologia(origem), "gcp")["main.tf"]
+        assert len(_blocos(main, "google_service_networking_connection")) == 1
+        assert len(_blocos(main, "google_compute_global_address")) == 1
+        banco = _bloco(main, "google_sql_database_instance", "banco_")
+        assert "google_service_networking_connection.acesso_privado" in banco
 
 
 def test_oci_nsg_e_combinado() -> None:

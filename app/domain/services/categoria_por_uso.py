@@ -8,7 +8,9 @@ comparável com o que não tem:
 - `secrets`: segredo por mês, chave por mês e as operações de cada um são cotados;
   rotação, certificado, cofre privado e HSM dedicado ficam ao custo atual;
 - `serverless`: Cloud Run, Lambda, Functions e Container Apps, ao custo atual. A
-  cobrança (vCPU-segundo ativo e ocioso) não se traduz um a um entre as nuvens.
+  cobrança (vCPU-segundo ativo e ocioso) não se traduz um a um entre as nuvens;
+- `file_storage`: Filestore, EFS, Azure Files e File Storage da OCI, ao custo atual.
+  Saíam como disco HDD ou objeto, e o Terraform fazia disco deles (T4).
 
 Cada categoria cotada tem uma unidade, e o destino é cotado pela quantidade medida
 vezes a taxa dele. O fator traduz a unidade da linha para a da categoria (requisição
@@ -34,12 +36,14 @@ CHAVE = "key_management"
 CHAVE_OPERACOES = "key_management_operations"
 SEGURANCA_OUTROS = "security_other"
 SERVERLESS = "serverless_compute"
+ARQUIVOS = "file_storage"
 
 # Tipo de componente da linha → categoria do que nenhuma regra separa (ao custo atual)
 BALDES: Mapping[str, str] = {
     "gke_control_plane": KUBERNETES_OUTROS,
     "secrets": SEGURANCA_OUTROS,
     "serverless": SERVERLESS,
+    "file_storage": ARQUIVOS,
 }
 
 CATEGORIAS: tuple[str, ...] = (
@@ -51,6 +55,7 @@ CATEGORIAS: tuple[str, ...] = (
     CHAVE_OPERACOES,
     SEGURANCA_OUTROS,
     SERVERLESS,
+    ARQUIVOS,
 )
 
 CHAVE_NO_PAYLOAD: Mapping[str, str] = {
@@ -62,6 +67,7 @@ CHAVE_NO_PAYLOAD: Mapping[str, str] = {
     CHAVE_OPERACOES: "chaves_operacoes",
     SEGURANCA_OUTROS: "seguranca_outros",
     SERVERLESS: "computacao_serverless",
+    ARQUIVOS: "armazenamento_arquivos",
 }
 
 # Categoria cotada pela quantidade → unidade dela

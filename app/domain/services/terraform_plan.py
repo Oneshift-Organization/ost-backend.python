@@ -272,6 +272,7 @@ def _derivar_compute(
 
         instancias = int(pool.get("instancias") or equivalente.get("instancias") or 1)
         tecnica = equivalente.get("correspondencia_tecnica") or {}
+        ocupacao = _ocupacao(pool.get("capacidade") or {}, tecnica)
 
         plano.recursos.append(
             RecursoDerivado(
@@ -309,6 +310,15 @@ def _derivar_compute(
         if idade is not None:
             base += f" Preço capturado há {idade} dias."
         base += _origem_medida(pool, familia, max(1, instancias), plano)
+        base += _aviso_de_empacotamento(
+            familia,
+            max(1, instancias),
+            ocupacao,
+            plano,
+            instancias_na_origem=pool.get("instancias_medidas"),
+            capacidade=pool.get("capacidade") or {},
+            tecnica=tecnica,
+        )
         if pool.get("custo_coberto_por_compromisso") or pool.get(
             "coberto_por_compromisso_estimado"
         ):
@@ -331,6 +341,82 @@ def _derivar_compute(
                 base=base,
             )
         )
+
+
+# Fora desta faixa, o número de máquinas pede atenção: muita sobra, ou o uso médio
+# já passa do que se provisiona (T1)
+_OCUPACAO_BAIXA = Decimal("0.5")
+_OCUPACAO_CHEIA = Decimal("1")
+# Máquina do destino abaixo disto da média da origem: o empacotamento fragmentou
+_MAQUINA_MENOR = Decimal("0.9")
+
+
+def _ocupacao(capacidade: dict[str, Any], tecnica: dict[str, Any]) -> Decimal | None:
+    """Que fração das máquinas provisionadas o uso medido ocupa.
+
+    A cotação é pela capacidade-hora: o pool paga a fração que usa. O Terraform
+    provisiona máquinas inteiras. Vale a dimensão que mais aperta (vCPU ou memória)."""
+    fracoes = [
+        usado / provisionado
+        for usado, provisionado in (
+            (_decimal(capacidade.get("vcpus")), _decimal(tecnica.get("vcpus"))),
+            (_decimal(capacidade.get("ram_gib")), _decimal(tecnica.get("ram_gb"))),
+        )
+        if usado is not None and provisionado is not None
+    ]
+    return max(fracoes) if fracoes else None
+
+
+def _aviso_de_empacotamento(
+    familia: str,
+    instancias: int,
+    ocupacao: Decimal | None,
+    plano: PlanoDerivado,
+    *,
+    instancias_na_origem: object,
+    capacidade: dict[str, Any],
+    tecnica: dict[str, Any],
+) -> str:
+    """"N máquinas provisionadas; o uso medido ocupa X% delas" (T1).
+
+    Avisa quando a ocupação sai da faixa, e quando o empacotamento quebra poucas
+    máquinas grandes em muitas pequenas (2 FSV2 de 16 vCPU viram 9 de 4): a soma é a
+    mesma, mas cada processo precisa caber numa máquina pequena."""
+    if ocupacao is None:
+        return ""
+    uma = instancias == 1
+    maquinas = "máquina provisionada" if uma else "máquinas provisionadas"
+    parte = "menos de 1%" if ocupacao < Decimal("0.005") else f"{ocupacao:.0%}"
+    texto = f"{instancias} {maquinas}; o uso medido ocupa {parte} {'dela' if uma else 'delas'}."
+    na_origem = _decimal(instancias_na_origem)
+    usado = _decimal(capacidade.get("vcpus"))
+    vcpus = _decimal(tecnica.get("vcpus"))
+    destino = vcpus / instancias if vcpus else None
+    origem = usado / na_origem if usado and na_origem else None
+    if destino is not None and origem is not None and destino < _MAQUINA_MENOR * origem:
+        plano.avisos.append(
+            f"Pool '{familia}': {_quantas(na_origem)} de ~{origem:.0f} vCPU na origem "
+            f"{'vira' if na_origem == 1 else 'viram'} {instancias} de "
+            f"{destino.normalize():f} vCPU no destino; o uso medido "
+            f"ocupa {parte} delas. A capacidade somada é a mesma, mas cada processo "
+            "precisa caber numa máquina menor: confirme antes de aplicar."
+        )
+    elif ocupacao > _OCUPACAO_CHEIA:
+        plano.avisos.append(
+            f"Pool '{familia}': {texto} O uso médio passa do que se provisiona: "
+            "picos ficam sem folga. Avalie uma máquina a mais antes de aplicar."
+        )
+    elif ocupacao < _OCUPACAO_BAIXA:
+        plano.avisos.append(
+            f"Pool '{familia}': {texto} Sobra capacidade: a cotação considerou só a "
+            "fração usada, mas o destino cobra as máquinas inteiras."
+        )
+    return f" {texto}"
+
+
+def _quantas(instancias: Decimal) -> str:
+    n = instancias.normalize()
+    return f"{n:f} instância" if n == 1 else f"{n:f} instâncias"
 
 
 def _origem_medida(
@@ -856,6 +942,13 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "virtuais, e as aplicações de dentro do cluster não são separadas: o "
             "inventário da nuvem não vê Deployment nem Service. O plano de controle "
             "fica fora do MVP: exige decidir sobre node pools, versão e rede do cluster."
+        )
+    if _decimal(auxiliares.get("armazenamento_arquivos")):
+        # T4: o Filestore saía como disco HDD e virava ~1.570 GB de disco que não existe
+        plano.nao_suportado.append(
+            "Armazenamento de arquivos (Filestore, EFS, Azure Files, File Storage da OCI) "
+            "aparece no custo e não vira disco: o pacote não cria compartilhamento NFS. "
+            "Crie o serviço de arquivos do destino à parte e monte nas máquinas."
         )
     nao_classificado = auxiliares.get("nao_classificado") or {}
     if _decimal(nao_classificado.get("custo")):
