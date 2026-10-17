@@ -170,6 +170,7 @@ def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPor
     policy_v4 = (dados.get("decision_support") or {}).get("policy_version") in {
         "score-7rs-v4",
         "score-7rs-v4.1",
+        "score-7rs-v4.2",
     }
     estimado = any(e.get("cost_estimated") for e in inventory_services(dados).values())
 

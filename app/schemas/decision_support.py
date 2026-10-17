@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 from app.schemas.corporate_benefits import CorporateBenefits
 
 Provider = Literal["aws", "azure", "gcp", "oci"]
-DECISION_POLICY_VERSION = "score-7rs-v4.1"
+DECISION_POLICY_VERSION = "score-7rs-v4.2"
 Strategy = Literal["retain", "retire", "rehost", "relocate", "repurchase", "replatform", "refactor"]
 
 
@@ -134,7 +134,12 @@ class DecisionComparison(BaseModel):
 class DecisionSupport(BaseModel):
     contract_version: Literal["oneshift-decision-v1"] = "oneshift-decision-v1"
     policy_version: Literal[
-        "score-7rs-v1", "score-7rs-v2", "score-7rs-v3", "score-7rs-v4", "score-7rs-v4.1"
+        "score-7rs-v1",
+        "score-7rs-v2",
+        "score-7rs-v3",
+        "score-7rs-v4",
+        "score-7rs-v4.1",
+        "score-7rs-v4.2",
     ] = DECISION_POLICY_VERSION
     scale: Literal["0-100"] = "0-100"
     source: Literal["backend_rules"] = "backend_rules"

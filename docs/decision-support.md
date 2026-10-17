@@ -1,4 +1,14 @@
-# Score determinístico e 7 Rs — política v4.1
+# Score determinístico e 7 Rs — política v4.2
+
+## Rebalanceamento (v4.2)
+
+Novas análises usam **financeiro 35%, técnico 50%, cobertura 15%**.
+Somente os pesos globais mudam; critérios internos, pisos de evidência,
+arredondamento, bloqueios e regras dos 7 Rs permanecem iguais.
+A autoridade sobe para `agent-authority-v4.2`: snapshots anteriores exigem
+nova preparação para envios novos, sem alterar retries já persistidos.
+Históricos v4/v4.1 mantêm 50/40/10 e a UI exibe os pesos salvos em `axes`.
+Não há migration nem recálculo de análises existentes.
 
 ## Permanência e comparação (v4.1)
 
@@ -15,7 +25,7 @@ desempatada pelo provedor, e `selected_provider` permanece nulo. Nenhum score
 anula bloqueios. O campo compacto legado `score_do_selecionado` referencia a
 nota exibida; não implica provedor recomendado. Histórico não é recalculado.
 
-Autoridade `agent-authority-v4.1`: snapshots anteriores não são reinterpretados
+Autoridade atual `agent-authority-v4.2`: snapshots anteriores não são reinterpretados
 no envio; repetições já persistidas mantêm idempotência. Esta versão é separada
 do lote futuro `score-7rs-v5` de lock-in por inventário: não o declara entregue.
 
@@ -28,7 +38,7 @@ Análises já persistidas não são recalculadas. Não requer migration de banco
 o snapshot e o resultado usam os campos JSON existentes.
 
 `decision_support` é um campo aditivo de `AnalysisV2Response`. Contrato
-`oneshift-decision-v1`, política `score-7rs-v4.1`, escala 0–100. O backend o
+`oneshift-decision-v1`, política `score-7rs-v4.2`, escala 0–100. O backend o
 recalcula após inferência, inclusive no fallback e na submissão do agente.
 Entradas do agente não podem substituir scores nem estratégias.
 
@@ -38,9 +48,9 @@ Política inicial normativa e versionada, não calibrada com migrações reais:
 
 | Eixo | Peso global | Fatores e pesos internos |
 |---|---:|---|
-| Financeiro | 50% | economia 100% |
-| Técnico | 40% | compatibilidade funcional 40%; adaptação 30%; portabilidade/lock-in 20%; dependências 10% |
-| Cobertura da análise | 10% | identificação 30%; preços 40%; evidência técnica 30% |
+| Financeiro | 35% | economia 100% |
+| Técnico | 50% | compatibilidade funcional 40%; adaptação 30%; portabilidade/lock-in 20%; dependências 10% |
+| Cobertura da análise | 15% | identificação 30%; preços 40%; evidência técnica 30% |
 
 A v4 mantém lock-in no técnico. O terceiro pilar mede a cobertura disponível,
 não governança nem benefícios comerciais. Preços incompletos deixam de reduzir
@@ -79,7 +89,8 @@ Cada fator expõe regra, entradas, cobertura e contribuição. Arredondamento
 decimal para duas casas; pequenas diferenças de 0,01 podem aparecer ao somar
 valores exibidos já arredondados. Dentro do técnico, o valor observado é
 `sum(nota_fator * peso_fator * cobertura_fator) / sum(peso_fator * cobertura_fator)`.
-Os pesos globais 50/40/10 não mudam. Assim, desconhecido não equivale a ruim.
+Os pesos globais 35/50/15 não são redistribuídos pela falta de dados.
+Assim, desconhecido não equivale a ruim.
 
 Para publicar uma nota normalizada, exigem-se identificação, preços e evidência técnica
 de pelo menos 50%, e dois critérios técnicos cobrindo pelo menos 50% do custo cada.
@@ -137,8 +148,8 @@ sem benefício após o prazo. Não tratar oferta potencial como economia permane
 O novo eixo usa `id=coverage`; `enterprise` continua significando governança
 em históricos. `enterprise_score` legado fica em zero nas novas respostas (não
 participa da fórmula); consumidores devem ler os eixos de `decision_support`.
-O contrato de snapshot usa `agent-authority-v4.1` (permanência explícita sobre
-o lote v4; a v3 foi a do score normalizado): envios novos
+O contrato de snapshot usa `agent-authority-v4.2` (rebalanceamento sobre
+a permanência da v4.1; a v3 foi a do score normalizado): envios novos
 sobre snapshots de política/autoridade anterior são recusados por versão. Repetições já gravadas
 mantêm a idempotência existente. Nenhuma allowlist ou flag de envio é liberada.
 

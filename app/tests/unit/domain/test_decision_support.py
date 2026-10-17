@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 from decimal import Decimal
 from unittest.mock import AsyncMock
@@ -88,7 +89,8 @@ def decision_payload() -> dict:
 def test_complete_score_and_exact_contributions(decision_payload):
     result = build_decision_support(decision_payload)
     assert result.score.status == "complete"
-    assert result.score.value == 95  # F=90 * .5 + T=100 * .4 + cobertura=100 * .1
+    assert result.score.value == 96.5  # F=90 * .35 + T=100 * .5 + cobertura=100 * .15
+    assert [a.contribution for a in result.score.axes] == [31.5, 50, 15]
     assert sum(a.contribution for a in result.score.axes) == result.score.value
     assert result.score.axes[0].value == 90
     assert result.workload_strategies[0].strategy == "rehost"
@@ -102,23 +104,23 @@ def test_governance_is_not_a_score_axis(decision_payload):
     result = build_decision_support(decision_payload)
     assert [a.id for a in result.score.axes] == ["financial", "technical", "coverage"]
     assert result.score.status == "complete"
-    assert result.score.value == 95
+    assert result.score.value == 96.5
     assert result.score.coverage == 1.0
     assert result.confidence == "high"  # separate from score/data completeness
 
 
-@pytest.mark.parametrize(("lock", "expected"), [("low", 95), ("medium", 91), ("high", 87)])
-def test_lock_in_stays_in_technical_and_coverage_is_ten_percent(decision_payload, lock, expected):
+@pytest.mark.parametrize(("lock", "expected"), [("low", 96.5), ("medium", 91.5), ("high", 86.5)])
+def test_lock_in_and_global_weights(decision_payload, lock, expected):
     workload = decision_payload["decision_workloads"][0]
     workload["migration"]["lock_in"] = lock
     workload["targets"][0]["metadata"]["vendor_lock_in_level"] = lock
     result = build_decision_support(decision_payload)
-    assert result.policy_version == "score-7rs-v4.1"
+    assert result.policy_version == "score-7rs-v4.2"
     axes = {a.id: a for a in result.score.axes}
     assert {k: v.weight for k, v in axes.items()} == {
-        "financial": 0.5,
-        "technical": 0.4,
-        "coverage": 0.1,
+        "financial": 0.35,
+        "technical": 0.5,
+        "coverage": 0.15,
     }
     assert [f.id for f in axes["technical"].factors] == [
         "compatibility",
@@ -140,7 +142,7 @@ def test_unknown_lock_in_is_pending_not_zero_technical_grade(decision_payload):
     assert technical.factors[2].value is None
     assert technical.value == 100
     assert technical.coverage == 0.8
-    assert score.value == 94.4
+    assert score.value == 95.6
     assert score.coverage == 0.94
 
 
@@ -357,11 +359,11 @@ def test_model_cannot_forge_score_strategy_or_provider(decision_payload):
         provider_comparison=[ProviderComparison(provider="fake")],
     )
     result = impose_decision(response, decision_payload)
-    assert result.viability_score == 950
+    assert result.viability_score == 970
     assert result.recommended_provider == "OCI"
-    assert result.oneshift_scores.overall_score == 95
+    assert result.oneshift_scores.overall_score == 97
     assert result.provider_comparison[0].provider == "OCI"
-    assert result.decision_support.score.value == 95
+    assert result.decision_support.score.value == 96.5
     assert result.oneshift_scores.enterprise_score == 0
     assert result.provider_comparison[0].enterprise_score == 0
     assert "corporate_score" not in result.provider_comparison[0].model_dump()
@@ -382,8 +384,8 @@ def test_agent_receipt_uses_same_engine_and_keeps_contestation_separate(decision
             }
         ],
     )
-    assert result.resposta["viability_score"] == 950
-    assert result.resposta["decision_support"]["score"]["value"] == 95
+    assert result.resposta["viability_score"] == 970
+    assert result.resposta["decision_support"]["score"]["value"] == 96.5
     assert result.confianca_final == "medium"
     assert result.resposta["decision_support"]["confidence"] == "high"
     assert result.autoridade.substituicoes
@@ -424,7 +426,9 @@ async def test_primary_and_fallback_models_share_deterministic_result(
     ).generate_from_legacy(payload)
     assert a.decision_support == b.decision_support
     assert a.oneshift_scores == b.oneshift_scores
-    assert a.viability_score == b.viability_score == 950
+    assert a.viability_score == b.viability_score == 970
+    instructions = json.loads(fallback.prompt)["billing_data"]["decision_instructions"]
+    assert "financeiro 35%, técnico 50%, cobertura 15%" in instructions
     assert "decision_instructions" in fallback.prompt
     assert "decision_workloads" not in fallback.prompt
     # O modelo não devolve o decision_support: o backend impõe (saída cortada em fatura real)
@@ -564,8 +568,8 @@ async def test_real_pipeline_persists_authoritative_snapshot_and_scores(
     await pipeline.execute(job, decision_context=decision_payload["decision_context"])
     assert job.status == "COMPLETED", job.error
     saved = job.ai_structured_output
-    assert saved["decision_support"]["score"]["value"] == 94.7
-    assert saved["oneshift_scores"]["overall_score"] == 95
+    assert saved["decision_support"]["score"]["value"] == 96.05
+    assert saved["oneshift_scores"]["overall_score"] == 96
     assert saved["decision_support"] == job.llm_input_payload["decision_support"]
     assert job.llm_input_payload["decision_context"] == decision_payload["decision_context"]
-    assert "94.7/100" in job.llm_output
+    assert "96.05/100" in job.llm_output

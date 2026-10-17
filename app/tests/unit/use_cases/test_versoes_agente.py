@@ -57,6 +57,10 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 #   AUTHORITY_VERSION em `use_cases/agent/versoes.py` e registre o hash novo;
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
+    # v4.2: rebalanceamento global 35/50/15, sem reinterpretar snapshots antigos.
+    "agent-authority-v4.2": (
+        "d6af6f0b3166b22a744d49e4e363607381000dbfc86b24a9eb58400ccbb817b8"
+    ),
     "agent-authority-v4.1": (
         "6256a5075dce478331ca1f6092769570cc18167210d373f8bf7af2e47fdf525e"
     ),
@@ -172,6 +176,12 @@ def test_v3_score_snapshot_is_not_reinterpreted_as_v4() -> None:
 def test_v4_snapshot_is_not_silently_reinterpreted_as_retention_policy() -> None:
     v = versoes_do_payload({"decision_support": {"policy_version": "score-7rs-v4"}})
     v["authority"] = "agent-authority-v4"
+    assert divergencias(v) == ["authority", "decision_policy"]
+
+
+def test_previous_weights_snapshot_requires_new_preparation() -> None:
+    v = versoes_do_payload({"decision_support": {"policy_version": "score-7rs-v4.1"}})
+    v["authority"] = "agent-authority-v4.1"
     assert divergencias(v) == ["authority", "decision_policy"]
 
 

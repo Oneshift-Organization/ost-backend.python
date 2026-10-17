@@ -12,7 +12,7 @@ def test_billing_only_keeps_observed_grade_but_discloses_missing_inventory(decis
     decision_payload.pop("topologia")
     result = build_decision_support(decision_payload)
     assert result.score.status == "partial"
-    assert result.score.value == 94.7
+    assert result.score.value == 96.05
     assert result.score.axes[1].value == 100
     assert result.score.axes[1].coverage == 0.9
     assert result.score.axes[1].factors[3].value is None
@@ -68,7 +68,7 @@ def test_same_capability_alternatives_use_worst_evidence_not_list_order(decision
     b = build_decision_support(decision_payload)
     assert a == b
     assert a.score.axes[1].factors[2].value == 0
-    assert a.score.value == 87
+    assert a.score.value == 86.5
 
 
 def test_partial_inventory_counts_only_correlated_cost_and_changes_fingerprint(decision_payload):
@@ -111,7 +111,7 @@ def test_price_coverage_changes_coverage_pillar_not_economic_grade(decision_payl
     after = build_decision_support(decision_payload)
     assert before.score.axes[0] == after.score.axes[0]
     assert after.score.axes[2].value == 80
-    assert after.score.value == 93
+    assert after.score.value == 93.5
     assert after.score.status == "partial"
 
 
