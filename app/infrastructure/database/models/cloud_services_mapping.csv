@@ -821,3 +821,38 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,compute,memory_optimized_machines,aws,Amazon EC2 U7i High Memory Instances,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,compute,memory_optimized_machines,azure,Azure M-series Mv3,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,compute,memory_optimized_machines,gcp,Memory-optimized Machine Family,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,in_memory_database,oci,OCI Cache,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,networking,nat_gateway,oci,NAT Gateway,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,analytics,messaging,oci,OCI Streaming,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,serverless,async_task_processing,oci,OCI Queue,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,database,key_value_nosql,oci,Oracle NoSQL Database Cloud,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,database,wide_column_nosql,oci,Oracle NoSQL Database Cloud,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,ai_ml,intelligent_search,oci,OCI Search with OpenSearch,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,ai_ml,translation,oci,OCI Language,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,secrets_management,oci,OCI Vault,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,next_generation_firewall,oci,OCI Network Firewall,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,containers,container_instances,oci,OCI Container Instances,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,containers,serverless_containers,oci,OCI Container Instances,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,compute,batch_jobs,oci,OCI Batch,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,analytics,change_data_capture,oci,OCI GoldenGate,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,application_services,ipaas_integration,oci,Oracle Integration,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,storage,high_performance_file_storage,oci,OCI File Storage with Lustre,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,certificate_management,oci,OCI Certificates,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,management_tools,audit_logging,oci,OCI Audit,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,management_tools,performance_tracing,oci,OCI Application Performance Monitoring,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,serverless,event_driven_integration,oci,OCI Events,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,networking,dynamic_routing,oci,Dynamic Routing Gateway,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,analytics,data_catalog,oci,OCI Data Catalog,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,database,postgresql_compatible_db,oci,OCI Database with PostgreSQL,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,database,oracle_database_on_bare_metal,oci,Oracle Exadata Database Service,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,consumer_identity,oci,OCI IAM Identity Domains,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,intrusion_detection,oci,OCI Cloud Guard,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,containers,service_mesh,oci,OCI Service Mesh,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,developer_tools,cicd_build,oci,OCI DevOps,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,developer_tools,continuous_delivery,oci,OCI DevOps,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,developer_tools,source_repositories,oci,OCI DevOps,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,media,live_streaming,oci,OCI Media Streams,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,generative_ai,rag_engine,oci,OCI Generative AI Agents,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,generative_ai,model_catalog,oci,OCI Generative AI,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,migration,data_transfer_appliance_petabyte,oci,OCI Data Transfer Appliance,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,migration,server_migration,oci,Oracle Cloud Migrations,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
