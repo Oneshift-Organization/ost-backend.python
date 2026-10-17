@@ -383,15 +383,34 @@ def _pools(payload: Mapping[str, Any]) -> list[PoolCotado]:
 
 
 def _taxas(payload: Mapping[str, Any]) -> dict[str, dict[str, Decimal]]:
-    """Razão de preço de cada categoria (taxa no destino ÷ taxa na origem), por provedor."""
+    """Razão de preço de cada categoria no destino, por provedor: o custo estimado da
+    categoria ÷ o custo dela na origem, como a análise cotou.
+
+    A razão das taxas (destino ÷ origem) só vale quando a categoria inteira foi cotada
+    por uma taxa: no banco, a taxa da origem é o preço efetivo da vCPU-hora e não serve
+    para o storage dele; no egress, ela não desconta a franquia do destino
+    (PLANO_PRECISAO_OCI). Sem o custo na entrada, vale a razão das taxas."""
     auxiliares = payload.get("custos_auxiliares") or {}
     taxas: dict[str, dict[str, Decimal]] = defaultdict(dict)
     for chave, categoria in _CATEGORIAS.items():
         for e in auxiliares.get(chave) or []:
-            origem, destino = _decimal(e.get("taxa_origem")), _decimal(e.get("taxa_destino"))
-            if e.get("provedor") and origem and destino is not None:
-                taxas[str(e["provedor"]).lower()][categoria] = destino / origem
+            if not e.get("provedor"):
+                continue
+            razao = _razao_do_custo(e)
+            if razao is None:
+                origem, destino = _decimal(e.get("taxa_origem")), _decimal(e.get("taxa_destino"))
+                razao = destino / origem if origem and destino is not None else None
+            if razao is not None:
+                taxas[str(e["provedor"]).lower()][categoria] = razao
     return dict(taxas)
+
+
+def _razao_do_custo(e: Mapping[str, Any]) -> Decimal | None:
+    estimado, delta = _decimal(e.get("custo_mensal_estimado")), _decimal(e.get("delta_custo"))
+    if estimado is None or delta is None:
+        return None
+    origem = estimado - delta
+    return estimado / origem if origem > 0 else None
 
 
 def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:

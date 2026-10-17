@@ -24,7 +24,22 @@ from app.domain.services.instance_shape import InstanceShape, parse_instance_sha
         ("BoxUsage:m7g.4xlarge", "16", "64"),
         ("BoxUsage:is4gen.xlarge", "4", "24"),  # storage: 6 GiB/vCPU
         ("BoxUsage:c4.large", "2", "4"),
-        ("BoxUsage:m7g.medium", "2", "8"),      # sub-large achatado em 2
+        # medium fora da família T é 1 vCPU (m7g.medium: 1 vCPU, 4 GiB)
+        ("BoxUsage:m7g.medium", "1", "4"),
+        ("BoxUsage:c7g.medium", "1", "2"),
+        ("BoxUsage:r7g.medium", "1", "8"),
+        # Família T (burstable): tabela de fábrica, a RAM não segue a letra
+        ("BoxUsage:t3.nano", "2", "0.5"),
+        ("BoxUsage:t3.micro", "2", "1"),
+        ("BoxUsage:t3a.small", "2", "2"),
+        ("BoxUsage:t4g.medium", "2", "4"),
+        ("BoxUsage:t4g.large", "2", "8"),
+        ("BoxUsage:t4g.xlarge", "4", "16"),
+        ("BoxUsage:t3.2xlarge", "8", "32"),
+        ("BoxUsage:t2.micro", "1", "1"),
+        ("BoxUsage:t2.small", "1", "2"),
+        ("BoxUsage:t2.medium", "2", "4"),
+        ("InstanceUsage:db.t3.micro", "2", "1"),
     ],
 )
 def test_shape_matches_factory_specs(text: str, vcpus: str, ram_gib: str) -> None:

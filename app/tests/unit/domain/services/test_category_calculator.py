@@ -136,3 +136,40 @@ def test_no_effective_price_yields_nothing() -> None:
         )
         == []
     )
+
+
+def _gb(provider: str, rate: str) -> CategoryRate:
+    return CategoryRate(provider=provider, rate=Decimal(rate), unit="gb", confidence="official")
+
+
+def test_franquia_de_egress_sai_da_quantidade_do_destino() -> None:
+    """Egress (PLANO_PRECISAO_OCI P1.5): a OCI não cobra os primeiros 10 TB do mês; a
+    Azure, os primeiros 100 GB. Abaixo da franquia, o destino sai de graça."""
+    out = estimate_by_quantity(
+        source_provider="aws",
+        source_cost=Decimal("900"),
+        quantity=Decimal("10000"),
+        measured_cost=Decimal("900"),
+        effective_price=Decimal("0.09"),
+        rates={"oci": _gb("oci", "0.0085"), "azure": _gb("azure", "0.087")},
+        unit="gb",
+        franquia={"oci": Decimal("10240"), "azure": Decimal("100")},
+    )
+    custos = {e.provider: e.estimated_monthly_cost for e in out}
+    assert custos["oci"] == Decimal("0")
+    assert custos["azure"] == Decimal("861.300")  # (10.000 - 100) x 0,087
+
+
+def test_franquia_maior_que_a_parte_nao_fica_negativa() -> None:
+    out = estimate_by_quantity(
+        source_provider="aws",
+        source_cost=Decimal("9"),
+        quantity=Decimal("100"),
+        measured_cost=Decimal("9"),
+        effective_price=Decimal("0.09"),
+        rates={"oci": _gb("oci", "0.0085")},
+        unit="gb",
+        franquia={"oci": Decimal("10240")},
+    )
+    assert out[0].estimated_monthly_cost == Decimal("0")
+    assert out[0].cost_delta == Decimal("-9")

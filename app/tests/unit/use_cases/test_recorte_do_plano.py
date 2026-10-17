@@ -13,6 +13,7 @@ from app.use_cases.analysis.escopo_de_migracao import (
     ContextoDoEscopo,
     PlanoCotado,
     RecursoDoEscopo,
+    _taxas,
     recorte_do_plano,
 )
 
@@ -104,3 +105,27 @@ def test_grupo_incluido_entra_no_recorte() -> None:
     assert len(recorte.maquinas) == 3
     assert recorte.bancos_por_classe == {"db.t4g.small": 3}
     assert not recorte.antes
+
+
+def test_razao_da_categoria_e_a_do_custo_total() -> None:
+    """Banco cotado em duas partes (instância pela vCPU-hora, storage pela razão de
+    storage): a razão do escopo é a do custo total, não a das taxas de vCPU, que não
+    servem para o storage (PLANO_PRECISAO_OCI)."""
+    payload = {
+        "custos_auxiliares": {
+            "equivalentes_banco_dados": [
+                {
+                    "provedor": "oci",
+                    "custo_mensal_estimado": 38508.08,
+                    "delta_custo": 8473.46,
+                    "taxa_origem": "0.034662",
+                    "taxa_destino": "0.0549",
+                },
+                # Sem o custo na entrada, vale a razão das taxas
+                {"provedor": "gcp", "taxa_origem": "0.04", "taxa_destino": "0.06"},
+            ]
+        }
+    }
+    taxas = _taxas(payload)
+    assert round(taxas["oci"]["banco"], 4) == D("1.2821")
+    assert taxas["gcp"]["banco"] == D("1.5")

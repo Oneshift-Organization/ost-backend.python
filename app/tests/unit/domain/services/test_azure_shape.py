@@ -17,6 +17,20 @@ from app.domain.services.azure_shape import parse_azure_shape
         ("Standard_B2ms", "2", "8"),
         ("Standard_D96as_v5", "96", "384"),  # instância grande — sobe o teto
         ("Standard_E8-4as_v5", "4", "32"),   # constrained: vCPU efetivo = 4
+        # O sufixo manda na RAM (PLANO_PRECISAO_OCI P1.4): "t" 0,5 e "l" 2 GiB por vCPU
+        ("Standard_B2ts_v2", "2", "1"),
+        ("Standard_B2pts_v2", "2", "1"),
+        ("Standard_B2ats_v2", "2", "1"),
+        ("Standard_B2ls_v2", "2", "4"),
+        ("Standard_B4pls_v2", "4", "8"),
+        ("Standard_B2s_v2", "2", "8"),
+        ("Standard_D4ls_v5", "4", "8"),
+        ("Standard_D48pls_v6", "48", "96"),
+        ("Standard_D4plds_v5", "4", "8"),
+        ("Standard_D4ps_v5", "4", "16"),
+        # Série B v1: "m" é 4 GiB por vCPU; sem ele, 2
+        ("Standard_B2s", "2", "4"),
+        ("Standard_B4ms", "4", "16"),
     ],
 )
 def test_azure_shape_matches_specs(arm: str, vcpus: str, ram_gib: str) -> None:

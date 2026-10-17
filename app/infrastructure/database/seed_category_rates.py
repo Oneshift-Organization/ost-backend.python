@@ -26,7 +26,7 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("aws", "storage_ssd", "gb_month", "0.080"),     # gp3
     ("gcp", "storage_ssd", "gb_month", "0.100"),     # pd-balanced
     ("azure", "storage_ssd", "gb_month", "0.088"),   # premium ssd
-    ("oci", "storage_ssd", "gb_month", "0.0255"),    # block balanced
+    ("oci", "storage_ssd", "gb_month", "0.0425"),    # block balanced: 0,0255 + 10 VPU x 0,0017
     # Armazenamento de objetos, tier padrão ($/GB-mês). Cerca de metade da taxa
     # de bloco — é essa diferença que tornava a classificação errada cara: a
     # linha de S3 era reprecificada como disco e o GB estimado saía pela metade.
@@ -38,19 +38,39 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("aws", "storage_hdd", "gb_month", "0.045"),     # st1
     ("gcp", "storage_hdd", "gb_month", "0.040"),     # pd-standard
     ("azure", "storage_hdd", "gb_month", "0.045"),   # standard hdd
-    ("oci", "storage_hdd", "gb_month", "0.0255"),    # block (mesma tier)
+    ("oci", "storage_hdd", "gb_month", "0.0255"),    # block lower cost (0 VPU)
     # Egress de internet, primeira faixa ($/GB)
     ("aws", "network_egress", "gb", "0.090"),
     ("gcp", "network_egress", "gb", "0.120"),
     ("azure", "network_egress", "gb", "0.087"),
     ("oci", "network_egress", "gb", "0.0085"),       # OCI egress ~10x mais barato
-    # Índice de managed relational DB ($/vCPU-mês, general-purpose single-AZ). O
-    # custo de DB inclui instância+storage+IO; reprecificar o total pela razão dos
-    # índices é uma 1ª aproximação direcional (compute domina o custo de managed DB).
-    ("aws", "database", "db_vcpu_month", "62"),      # RDS m6g
-    ("gcp", "database", "db_vcpu_month", "60"),      # Cloud SQL
-    ("azure", "database", "db_vcpu_month", "73"),    # Azure SQL / MySQL Flex
-    ("oci", "database", "db_vcpu_month", "30"),      # OCI DB/MySQL (mais barato)
+    # Banco gerenciado por vCPU-hora de instância, uso geral x86, sem alta
+    # disponibilidade, leste dos EUA (PLANO_PRECISAO_OCI P1.6; fontes oficiais lidas em
+    # 17/10/2026): AWS, Price List do RDS (db.m6i.large: MySQL 0,171/h, PostgreSQL
+    # 0,178/h, 2 vCPU); Azure, Retail Prices (Flexible Server Ddsv5 por vCore: MySQL
+    # 0,0855, PostgreSQL 0,089); GCP, preço do Cloud SQL Enterprise (vCPU 0,0413 +
+    # 4 GiB x 0,007); OCI, lista da Oracle (MySQL 0,0366 por ECPU com memória; PostgreSQL
+    # 0,098 por OCPU = 2 vCPU, mais 4 GB por vCPU a 0,0015, a taxa de memória do E4).
+    # `database` vale para fatura sem motor: a maior das duas, premissa declarada.
+    ("aws", "database", "vcpu_hour", "0.089"),
+    ("azure", "database", "vcpu_hour", "0.089"),
+    ("gcp", "database", "vcpu_hour", "0.0693"),
+    ("oci", "database", "vcpu_hour", "0.055"),
+    ("aws", "database_mysql", "vcpu_hour", "0.0855"),
+    ("azure", "database_mysql", "vcpu_hour", "0.0855"),
+    ("gcp", "database_mysql", "vcpu_hour", "0.0693"),
+    ("oci", "database_mysql", "vcpu_hour", "0.0366"),
+    ("aws", "database_postgresql", "vcpu_hour", "0.089"),
+    ("azure", "database_postgresql", "vcpu_hour", "0.089"),
+    ("gcp", "database_postgresql", "vcpu_hour", "0.0693"),
+    ("oci", "database_postgresql", "vcpu_hour", "0.055"),
+    # Storage de banco por GB-mês (o resto do custo de banco: storage, IO, backup):
+    # RDS gp3 0,115; Azure Flexible Server 0,115; Cloud SQL SSD 0,17 (0,000232877 por
+    # GiB-hora); OCI, o maior entre MySQL (0,04) e PostgreSQL (0,072)
+    ("aws", "database_storage", "gb_month", "0.115"),
+    ("azure", "database_storage", "gb_month", "0.115"),
+    ("gcp", "database_storage", "gb_month", "0.17"),
+    ("oci", "database_storage", "gb_month", "0.072"),
     # Rede por tipo (PLANO_PRECO_NAO_COMPUTE), cotada pela quantidade medida. Valores
     # das APIs oficiais em 16/10/2026: AWS `AWSELB`/`AmazonVPC` us-east-1, Azure
     # Retail Prices (balanceador e NAT são globais), catálogo do GCP, OCI cetools.
@@ -136,6 +156,9 @@ _CONFERIDO_EM: dict[tuple[str, str], date] = {
        for c in ("storage_ssd", "storage_hdd", "network_egress", "database")},
     **{(p, "object_storage"): date(2026, 9, 13) for p in ("aws", "gcp", "azure", "oci")},
     ("gcp", "storage_ssd"): date(2026, 9, 27),
+    ("oci", "storage_ssd"): date(2026, 10, 17),
+    **{(p, c): date(2026, 10, 17) for p in ("aws", "gcp", "azure", "oci")
+       for c in ("database", "database_mysql", "database_postgresql", "database_storage")},
 }
 _REDE_CONFERIDA_EM = date(2026, 10, 16)
 

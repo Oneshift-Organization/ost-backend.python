@@ -515,6 +515,7 @@ def _oci(nome: str, *faixas: float, metrica: str = "") -> dict[str, Any]:
 def test_oci_egress_depende_do_continente(monkeypatch: pytest.MonkeyPatch) -> None:
     itens = [
         _oci("Storage - Block Volume - Storage", 0.0255),
+        _oci("Storage - Block Volume - Performance Units", 0.0017),
         _oci("Object Storage - Storage", 0, 0.0255),
         _oci("Outbound Data Transfer - Originating in North America, Europe, and UK", 0, 0.0085),
         _oci("Outbound Data Transfer - Originating in APAC, Japan, and South America", 0, 0.025),
@@ -524,7 +525,8 @@ def test_oci_egress_depende_do_continente(monkeypatch: pytest.MonkeyPatch) -> No
     assert taxas[("oci", "network_egress", "us-ashburn-1")] == Decimal("0.0085")
     assert taxas[("oci", "network_egress", "sa-saopaulo-1")] == Decimal("0.025")
     assert taxas[("oci", "object_storage", "sa-saopaulo-1")] == Decimal("0.0255")
-    assert taxas[("oci", "storage_ssd", "sa-saopaulo-1")] == Decimal("0.0255")
+    # Balanced: armazenamento + 10 VPU
+    assert taxas[("oci", "storage_ssd", "sa-saopaulo-1")] == Decimal("0.0425")
 
 
 def test_oci_compute_gravado_em_cada_regiao(monkeypatch: pytest.MonkeyPatch) -> None:

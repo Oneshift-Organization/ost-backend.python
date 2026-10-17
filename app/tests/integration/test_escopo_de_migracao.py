@@ -127,9 +127,14 @@ async def test_plano_de_uma_aplicacao_num_ambiente(app: FastAPI, analise: tuple[
         "natureza": "dados",
         "portas": ["tcp/5432"],
     } in p["ligacoes"]
-    oci = next(d for d in p["destino"] if d["provedor"] == "oci")
-    # A OCI sai mais barata e quase tudo tem cotação (balanceador e EKS não)
-    assert oci["custo_estimado"] < oci["custo_origem_cotado"]
+    destinos = {d["provedor"]: d for d in p["destino"]}
+    oci = destinos["oci"]
+    # A OCI é o destino mais barato do escopo e quase tudo tem cotação (balanceador e
+    # EKS não). Não necessariamente abaixo da origem: o RDS do mock roda com reserva
+    # (~US$ 0,035 por vCPU-hora) e o destino é cotado on-demand (PLANO_PRECISAO_OCI P1.6)
+    assert oci["custo_estimado"] < min(
+        d["custo_estimado"] for k, d in destinos.items() if k != "oci"
+    )
     assert oci["sem_cotacao"] < 0.02 * p["custo"]
     rds = next(s for s in p["servicos"] if s["nome"] == "AmazonRDS")
     assert rds["metodos"] == ["categoria"]

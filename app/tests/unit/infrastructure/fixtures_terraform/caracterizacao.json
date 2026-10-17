@@ -19,7 +19,7 @@
  },
  "aws>oci": {
   "README.md": "46a991c45f0b3016e45c1f953e4d4419af1613a492818b6045931ecdb3777a06",
-  "main.tf": "54fd1098c2d6c218a6933d4191087b84f7aef9eed51fa0919d81765580ed0751",
+  "main.tf": "e2bc0946fc7128ae020e21d8e9944d6b6102fa3114b4c97918c7352c893046dc",
   "outputs.tf": "cd0ac690b89ba9ba50f38a2c9069f8301b8946153958808d72f9bea7cbfb37cc",
   "providers.tf": "808fc6f03a3e7345a21a5599a70c28628cc734d776b19d01e276b72cad1d5be7",
   "terraform.tfvars.example": "4acf9d3df23eadbf96079c3dfc56104cf6073ad2434daae15cbfe61a636d7792",
@@ -46,7 +46,7 @@
  },
  "azure>oci": {
   "README.md": "011ee1b4a78e691ad644e3a9674e1c360506a4d0853bcc607a3d6ad31752b863",
-  "main.tf": "3a396db0f635c893ea3a5d97937fea3687146121038eff3f91cd6708e2f3375f",
+  "main.tf": "76b6754c02a12401625663fd54e56a8a90dcce7e6665aea7f483e67733141d1b",
   "outputs.tf": "cd0ac690b89ba9ba50f38a2c9069f8301b8946153958808d72f9bea7cbfb37cc",
   "providers.tf": "808fc6f03a3e7345a21a5599a70c28628cc734d776b19d01e276b72cad1d5be7",
   "terraform.tfvars.example": "052c50fa14b64bfe6febcb2a6b0834cf7326393e01ac010f90b698ec8f282c03",
@@ -73,7 +73,7 @@
  },
  "gcp>oci": {
   "README.md": "0776d8d8b7dbbd911b40d66f14132fbf476f02022224e33d818d631ee5ac8e0d",
-  "main.tf": "7c541046e0de434e40fd18f246db84704a008e12ee778d4160f6cc3ac3af3595",
+  "main.tf": "eb59ea35d8e739e3f34ca647dbf8577c437502cce8e3fe9c3017262e2419a00b",
   "outputs.tf": "cd0ac690b89ba9ba50f38a2c9069f8301b8946153958808d72f9bea7cbfb37cc",
   "providers.tf": "808fc6f03a3e7345a21a5599a70c28628cc734d776b19d01e276b72cad1d5be7",
   "terraform.tfvars.example": "052c50fa14b64bfe6febcb2a6b0834cf7326393e01ac010f90b698ec8f282c03",
@@ -100,7 +100,7 @@
  },
  "gcp_legado>oci": {
   "README.md": "f03466ffffbaa1d8f63484c1bf5d31cad886ce4307191ceaa1c986bb6a66c18e",
-  "main.tf": "229b0c949b52d4bcb89e114c17593bfc7dc30c9582f51a0d00f0411eee195c67",
+  "main.tf": "14bbdf003897da3657ca4c5431d737a70921e83a5e65082be70a9feeb49c78dd",
   "outputs.tf": "cd0ac690b89ba9ba50f38a2c9069f8301b8946153958808d72f9bea7cbfb37cc",
   "providers.tf": "808fc6f03a3e7345a21a5599a70c28628cc734d776b19d01e276b72cad1d5be7",
   "terraform.tfvars.example": "052c50fa14b64bfe6febcb2a6b0834cf7326393e01ac010f90b698ec8f282c03",

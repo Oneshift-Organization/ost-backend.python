@@ -16,6 +16,7 @@ Função pura, sem I/O.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -86,8 +87,12 @@ def estimate_by_quantity(
     effective_price: Decimal,
     rates: dict[str, CategoryRate],
     unit: str,
+    franquia: Mapping[str, Decimal] | None = None,
 ) -> list[CategoryEquivalent]:
     """Destino pela quantidade medida na fatura x a taxa dele (PLANO_PRECO_NAO_COMPUTE).
+
+    ``franquia``: quantidade que o destino não cobra nesta parte (os 10 TB de egress da
+    OCI, os 100 GB da Azure), já repartida entre as partes por quem chama.
 
     Não precisa da taxa da origem: a quantidade vem das linhas. O custo da parte sem
     quantidade (``source_cost - measured_cost``) vira quantidade pelo preço efetivo
@@ -103,7 +108,8 @@ def estimate_by_quantity(
     for provider, rate in rates.items():
         if provider == source_provider.lower() or rate.rate < 0 or rate.unit != unit:
             continue
-        target_cost = total * rate.rate
+        cobrada = max(total - (franquia or {}).get(provider, Decimal(0)), Decimal(0))
+        target_cost = cobrada * rate.rate
         out.append(
             CategoryEquivalent(
                 provider=provider,
