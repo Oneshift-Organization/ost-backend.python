@@ -19,6 +19,7 @@ class PgBillingReportRepository:
             provider=report.provider.value if report.provider else None,
             schema_version=report.schema_version,
             source_filename=report.source_filename,
+            alias=report.alias,
             status=report.status.value,
             row_count=report.row_count,
             error_message=report.error_message,

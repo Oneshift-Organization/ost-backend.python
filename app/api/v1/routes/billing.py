@@ -8,6 +8,7 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     File,
+    Form,
     HTTPException,
     UploadFile,
     status,
@@ -101,11 +102,14 @@ _MAX_ITEMS_PER_PAGE = 1000
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_billing_file(
+    *,
     user: CurrentUser,
     upload_uc: UploadBillingFileUC,
     background: BackgroundTasks,
     file: Annotated[UploadFile, File(...)],
     external_id: UUID | None = None,
+    # Nome dado na importação; sem ele, a tela mostra o nome do arquivo
+    alias: Annotated[str | None, Form(max_length=1000)] = None,
 ) -> BillingFileUploadResponse:
     settings = get_settings()
     if file.filename is None:
@@ -151,14 +155,19 @@ async def upload_billing_file(
     except ValueError as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid user id in token") from e
 
-    report = await upload_uc.execute(
-        UploadBillingFileInput(
-            user_id=user_uuid,
-            file_path=Path(tmp_name),
-            source_filename=file.filename,
-            external_id=external_id,
+    try:
+        report = await upload_uc.execute(
+            UploadBillingFileInput(
+                user_id=user_uuid,
+                file_path=Path(tmp_name),
+                source_filename=file.filename,
+                external_id=external_id,
+                alias=alias,
+            )
         )
-    )
+    except ValidationError as e:
+        Path(tmp_name).unlink(missing_ok=True)  # noqa: ASYNC240 - arquivo temporário pequeno
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from e
 
     background.add_task(
         _run_ingest_isolated,
@@ -173,6 +182,8 @@ async def upload_billing_file(
         external_id=report.external_id,
         status=report.status,
         source_filename=report.source_filename or file.filename,
+        alias=report.alias,
+        nome_exibicao=report.nome_exibicao or file.filename,
         created_at=report.created_at,
     )
 

@@ -32,6 +32,10 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
 
 - Content-Type: `multipart/form-data`
 - Campo: `file` (obrigatório)
+- Campo: `alias` (opcional): o nome que a pessoa dá na importação. Mesma regra do
+  [`PUT …/alias`](#put-v1billing-filesjob_idalias); vazio ou ausente fica com o nome
+  do arquivo. O front já preenche com o nome do arquivo e só manda o campo se a
+  pessoa mudar
 - Extensões aceitas: `.csv`, `.tsv`, `.txt`, `.gz`, `.zip`, `.json`, `.ndjson`, `.xlsx`, `.xlsm`
 - Tamanho máximo: 50 MB (configurável via `MAX_UPLOAD_SIZE_MB`)
 
@@ -42,6 +46,8 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
   "job_id": "07531638-0c1f-4453-acdb-703ebb01c0f7",
   "status": "queued",
   "source_filename": "aws_cur2_sample.csv",
+  "alias": null,
+  "nome_exibicao": "aws_cur2_sample.csv",
   "created_at": "2026-04-01T00:00:00Z"
 }
 ```
@@ -54,6 +60,7 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
 | 401 | Token ausente ou inválido |
 | 413 | Arquivo > 50 MB |
 | 415 | Extensão não suportada |
+| 422 | `alias` com mais de 120 caracteres ou com caractere de controle (o billing não é criado) |
 | 422 | `FORMATO_NAO_SUPORTADO`: o que a verificação (`POST /v1/billing-file-checks`) recusa — Cost Explorer por serviço (`AWS_CE_DAILY_BY_SERVICE`, sem tipo de uso), relatório de uso da OCI (`reports_usage`, sem custo) ou arquivo que não é fatura conhecida. `mensagem` explica e diz o export certo |
 
 ---
@@ -248,6 +255,9 @@ igual: é o rastro do upload.
 - **Análise, LLM e números:** nada muda. O nome do arquivo não entra no payload da
   análise, no prompt nem no snapshot do agente; o alias também não. Nenhuma nota ao
   MCP é necessária.
+- **Nome na importação (17/10):** `alias` opcional no `POST /v1/billing-files`,
+  validado antes de gravar o billing; nome inválido devolve 422 sem deixar billing
+  nem arquivo temporário. Cliente que não manda o campo continua igual.
 - **Ingestão em andamento:** o `update` do repositório (estado da ingestão) não
   grava o alias; ele tem o próprio `rename`. Uma ingestão que leu o billing antes
   da renomeação não apaga o nome dado.
