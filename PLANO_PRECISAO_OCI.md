@@ -96,6 +96,28 @@ Cada item: o que muda, em quem, e para que lado. Correção geral, nunca para um
 - **Impacto:** não mexe no preço. Melhora a Portabilidade e o lock-in da OCI e acaba com a
   contradição "recomendado, mas 38% sem equivalente".
 
+## 4b. Resultado (17/10, antes × depois nas faturas locais)
+
+Mesmo banco e o mesmo sync nos dois lados (código da develop × branch); análise com LLM
+em mock. US$/mês:
+
+| fatura | atual | OCI | Azure | GCP | AWS | recomendada |
+|---|---|---|---|---|---|---|
+| fatura-aws-2026-09 (a da tela) | 378 | 206 → 224 | 310 → 399 | 400 → 423 | origem | OCI |
+| aws_cost_explorer_full | 92.103 | 54.483 → 58.618 | 101.494 → 108.759 | 106.756 → 126.358 | origem | OCI |
+| mock_aws_cur2 | 92.103 | 54.155 → 71.259 | 100.896 → 129.472 | 106.077 → 132.938 | origem | OCI |
+| gcp_cost_table_full | 4.890 | 2.463 → 2.607 | 4.676 → 5.273 | origem | 4.412 → 4.859 | OCI |
+| mock_azure | 6.711 | 2.557 → 2.828 | origem | 6.613 → 6.356 | 6.241 → 6.071 | OCI |
+
+- Na fatura da tela a OCI fica em US$ 224, dentro da conta manual da régua (211 a 224).
+- A OCI segue recomendada em todas; a economia dela fica menor e real.
+- A Azure sobe onde usava série B `t`/`l` e D `l` (a RAM era de mentira).
+- **O banco agora segue a regra do compute:** destino on-demand contra o custo efetivo
+  da origem. Onde a origem tem RDS com reserva (o mock CUR: US$ 0,035 por vCPU-hora
+  efetivo), todos os destinos sobem; a reserva da origem não vai junto na migração.
+- O plano de migração passou a usar a razão do custo total de cada categoria (não a
+  das taxas), para o banco e o egress saírem iguais à análise.
+
 ## 5. Para as melhorias
 
 - **Tela:** separar "economia por preço oficial" de "economia estimada por premissa",
