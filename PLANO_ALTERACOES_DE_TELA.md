@@ -7,6 +7,7 @@
 |---|---|---|---|
 | 1 | Premissa "1 vCPU = 1 vCPU" visível | decisão 2.7 (`PLANO_ESTRATEGIA_SPRINT_TERRAFORM` §2) | ⏳ |
 | 2 | Estado da reanálise na linha da lista | correção da duplicidade (17/10) | ⏳ |
+| 3 | Nome do billing (alias) no lugar do arquivo | melhoria M9 (17/10) | ✅ front `5be3b28` |
 
 ## 1. Premissa "1 vCPU = 1 vCPU" visível (decisão 2.7)
 
@@ -74,3 +75,18 @@ falhou. O sino e o aviso de fim já funcionam (`analysis-watcher`).
 
 **Pronto quando:** anexar inventário mostra "Atualizando" na linha do billing e, no fim,
 a linha troca para a análise nova, sem aparecer uma segunda linha.
+
+## 3. Nome do billing no lugar do arquivo (M9) — ✅ 17/10
+
+**Backend:** `PUT /v1/billing-files/{job_id}/alias`; as listas e o status trazem
+`alias` e `nome_exibicao` ([`docs/endpoints/billing.md`](docs/endpoints/billing.md)).
+
+**Front (feito, `5be3b28`):**
+- **"Renomear"** no menu de cada análise (lista e grade), com diálogo. O nome em
+  branco volta ao nome do arquivo, que aparece como dica.
+- `nome_exibicao` na lista, na grade, no menu de análises recentes, no aviso de
+  análise concluída, na trilha, na linha do tempo e na confirmação de exclusão.
+- A busca acha pelo nome dado e pelo do arquivo.
+- O formato e o campo "Nome" em "Dados do arquivo" continuam vindo do arquivo enviado.
+
+O nome é do billing: renomear vale para todas as revisões da análise dele.
