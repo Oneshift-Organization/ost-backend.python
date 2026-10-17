@@ -118,6 +118,57 @@ em mock. US$/mês:
 - O plano de migração passou a usar a razão do custo total de cada categoria (não a
   das taxas), para o banco e o egress saírem iguais à análise.
 
+## 4c. Lote B — banco por partes (decidido em 17/10, depois da régua do mock CUR)
+
+**Régua do banco do mock CUR** (US$ 30.035/mês na origem; conta manual com preço e
+especificação oficiais, sem o motor): OCI ~US$ 24.000–24.500. O motor dava 38.508; com a
+correção da taxa de reserva (horas em dobro, `78aa0cf`), 32.753 — ainda ~34% acima. As
+causas e a correção de cada uma:
+
+| # | causa | correção | quem muda |
+|---|---|---|---|
+| B1 | ElastiCache cotado como banco por vCPU-hora | cache pela memória do nó (GB-hora), na taxa de cache de cada nuvem, por faixa de tamanho do nó (OCI Cache: US$ 0,0194 até 10 GB por nó, 0,0136 acima) | as 4 nuvens como destino de cache; OCI desce |
+| B2 | storage, IOPS, backup e cobranças da AWS pela razão de taxas de storage | o banco vira partes: **armazenamento** pelos GB medidos × taxa de storage de banco do destino; **backup** pelos GB × taxa de backup; **sem equivalente** (IOPS provisionado, throughput, créditos de CPU, extended support, requisições de IO do Aurora) a zero no destino, declarado; **outros** ao custo da origem | as 4 nuvens; a parte "sem equivalente" deixa de pesar em todos os destinos |
+| B3 | PostgreSQL da OCI com memória somada (0,055/vCPU) | a calculadora oficial lista só OCPU (US$ 0,098 = 2 vCPU) e storage: **0,049/vCPU** | só OCI, desce |
+| B4 | alta disponibilidade como o dobro em todo destino | réplicas por nuvem e motor: OCI MySQL = **3 instâncias**, cada uma com compute e storage (docs oficiais); OCI PostgreSQL = nós × compute e storage uma vez (premissa: storage otimizado compartilhado); demais = 2 | OCI MySQL com HA sobe 50%; OCI PostgreSQL com HA desce no storage |
+
+**Análise de impacto (escrita antes do código):**
+
+- **Números:** o banco de todos os destinos muda. Origens com muito IOPS provisionado,
+  extended support ou créditos de CPU ficam mais baratas em qualquer destino (essas
+  cobranças não migram). ElastiCache sai mais barato na OCI e no GCP.
+- **Classificação:** pelo tipo de uso, IO antes de storage — o `Aurora:StorageIOUsage`
+  é requisição de IO, não GB (o mock rotulava como GB-mês).
+- **Linhas que não se encaixam** (proxy, backtrack, serverless do Aurora) ficam ao custo
+  da origem, sem fingir cotação.
+- **Payload:** `custos_auxiliares.banco_dados` continua um número só; o equivalente de
+  cada provedor ganha `partes` (instâncias, cache, armazenamento, backup, sem
+  equivalente, outros) — campo novo, aditivo; nota ao MCP.
+- **Plano de migração:** usa a razão do custo total da categoria; acompanha sozinho.
+- **Terraform:** o tamanho do banco não sai deste custo; não muda.
+- **Ambientes:** taxas novas no seed (storage, backup e cache por nuvem, com fonte e
+  data) — `sync_prices --providers categories` no develop.
+
+**Resultado (17/10, develop × lote B nas faturas locais, US$/mês):**
+
+| fatura | atual | OCI | Azure | GCP |
+|---|---|---|---|---|
+| a da tela | 378 | 224 → 217 | 399 → 399 | 423 → 423 |
+| Cost Explorer completo | 92.103 | 58.618 → 60.258 | 108.759 → 114.228 | 126.358 → 119.967 |
+| mock CUR | 92.103 | 65.504 → 56.734 | 120.159 → 114.603 | 125.687 → 120.408 |
+
+- **Régua do banco do mock CUR:** o motor dá US$ 23.983 para a OCI; a conta manual com
+  preço oficial dá US$ 23.983. Partes: instâncias 18.318, cache 2.510, armazenamento
+  2.098 (RDS e Aurora), backup 886, sem equivalente 0, outros 172.
+- **Cost Explorer:** a taxa da reserva vem sem horas e o uso coberto, a custo zero, traz
+  as horas; o motor descartava as linhas a custo zero e perdia as horas cobertas (144 mil
+  vCPU-hora contra 373 mil do CUR, mesmos dados). Agora `HeavyUsage` é sempre taxa da
+  reserva (sem hora), o uso coberto conta, e o storage sem unidade é medido pelo nome,
+  sob a trava de preço plausível. A diferença que resta entre os dois formatos é a
+  premissa do motor desconhecido (o Cost Explorer não diz o motor: vale a maior taxa,
+  com as 3 instâncias do MySQL da OCI em alta disponibilidade).
+- A OCI segue recomendada em todas.
+
 ## 5. Para as melhorias
 
 - **Tela:** separar "economia por preço oficial" de "economia estimada por premissa",

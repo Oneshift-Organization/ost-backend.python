@@ -21,9 +21,16 @@ from app.domain.entities.workload_pool import (
     WorkloadPool,
 )
 from app.domain.services.azure_shape import parse_azure_shape
+from app.domain.services.banco_por_uso import (
+    CACHE,
+    INSTANCIA,
+    INSTANCIA_SEM_HORAS,
+    chave_da_parte,
+    chave_do_motor,
+    parte_do_banco,
+    preco_plausivel,
+)
 from app.domain.services.banco_por_uso import CATEGORIA as _BANCO
-from app.domain.services.banco_por_uso import motor as motor_do_banco
-from app.domain.services.banco_por_uso import vcpu_horas as vcpu_horas_do_banco
 from app.domain.services.categoria_por_uso import BALDES as _BALDES_POR_USO
 from app.domain.services.categoria_por_uso import CATEGORIAS as _CATEGORIAS_POR_USO
 from app.domain.services.categoria_por_uso import PLANO_DE_CONTROLE as _PLANO_DE_CONTROLE
@@ -188,6 +195,10 @@ class BillingAggregator:
         bancos: dict[str, dict[str, Any]] = {}
         # Banco: vCPU-hora de instância por motor ("" sem motor), PLANO_PRECISAO_OCI P1.6
         banco_por_motor: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+        # Banco fora das instâncias: parte → quantidade e custo (PLANO_PRECISAO_OCI B1 a B4)
+        banco_partes: dict[str, dict[str, Decimal]] = defaultdict(
+            lambda: {"quantidade": _ZERO, "custo": _ZERO}
+        )
         custo_sob_demanda = _ZERO
         custo_referenciado = _ZERO
         custo_por_base: dict[str, Decimal] = defaultdict(lambda: _ZERO)
@@ -275,6 +286,7 @@ class BillingAggregator:
                         quantidade=aux_quantidade,
                         medido=aux_medido,
                         por_motor=banco_por_motor,
+                        partes=banco_partes,
                     )
                 if atributos:
                     _medir_auxiliar(item, component_type, armazenamento, bancos)
@@ -337,6 +349,7 @@ class BillingAggregator:
                 medido_por_regiao={c: dict(r) for c, r in aux_medido.items()},
                 por_servico={c: dict(s) for c, s in aux_por_servico.items()},
                 banco_por_motor=dict(banco_por_motor),
+                banco_partes={k: dict(v) for k, v in banco_partes.items()},
                 por_uso={
                     c: aux_totals[c]
                     for c in _CATEGORIAS_POR_USO
@@ -614,31 +627,48 @@ def _medir_banco(
     quantidade: dict[str, dict[str, Decimal]],
     medido: dict[str, dict[str, Decimal]],
     por_motor: dict[str, Decimal],
+    partes: dict[str, dict[str, Decimal]],
 ) -> None:
-    """Instância de banco: a vCPU-hora dela, para o destino cotar pela taxa por
-    vCPU-hora; storage, IO e backup ficam sem quantidade (PLANO_PRECISAO_OCI P1.6).
+    """Cada linha do balde de banco na parte dela (domain/services/banco_por_uso).
 
-    A taxa da reserva (`charge_kind` commitment) não soma horas: o uso coberto vem na
-    linha de uso, com as horas dele, e a taxa só entra no custo das instâncias. Na base
-    amortizada ela traz a parte não usada com as horas da reserva inteira; contar essas
-    horas dobrava a vCPU-hora. Linha de uso a custo zero (coberta pela reserva, base
-    sem amortização) soma as horas."""
-    vcpu_h = vcpu_horas_do_banco(item.provider, item.usage_type, item.usage_amount, item.usage_unit)
-    if vcpu_h is None:
-        return
+    Instância: a vCPU-hora, por motor e alta disponibilidade, para o destino cotar pela
+    taxa por vCPU-hora. A taxa da reserva (`charge_kind` commitment ou `HeavyUsage`) não
+    soma horas: o uso coberto vem na linha de uso, com as horas dele, e a taxa só entra
+    no custo das instâncias (na base amortizada ela traz a parte não usada com as horas
+    da reserva inteira; no Cost Explorer, nenhuma hora). Linha de uso a custo zero
+    (coberta pela reserva) soma as horas. O resto (cache, armazenamento, backup, sem
+    equivalente, outros) vai para `partes`, com quantidade e custo."""
     cobranca = atributos.get("charge_kind")
-    if cobranca == "commitment":
+    parte = parte_do_banco(
+        item.provider,
+        item.service_name,
+        item.usage_type,
+        item.usage_unit,
+        item.usage_amount,
+        motor_declarado=atributos.get("database_engine"),
+        cobranca=cobranca,
+    )
+    # Linha a custo zero só conta pela hora de instância ou de cache: é o uso coberto
+    # pela reserva (a taxa vem em outra linha, sem hora) ou a franquia
+    if item.cost <= 0 and (parte.tipo not in (INSTANCIA, CACHE) or parte.quantidade is None):
+        return
+    if parte.tipo == INSTANCIA and parte.quantidade is not None:
+        quantidade[_BANCO][regiao] += parte.quantidade
+        medido[_BANCO][regiao] += item.cost
+        por_motor[chave_do_motor(parte.motor, ha=parte.ha)] += parte.quantidade
+        return
+    if parte.tipo in (INSTANCIA, INSTANCIA_SEM_HORAS):
         if item.cost > 0:
             medido[_BANCO][regiao] += item.cost
         return
-    if item.cost <= 0 and cobranca != "usage":
-        return
-    quantidade[_BANCO][regiao] += vcpu_h
-    medido[_BANCO][regiao] += item.cost
-    chave = motor_do_banco(
-        item.provider, item.service_name, item.usage_type, atributos.get("database_engine")
-    )
-    por_motor[chave or ""] += vcpu_h
+    # Quantidade incoerente com o custo (IO rotulado como GB, unidade trocada) não é
+    # medida: a linha fica ao custo da origem, em vez de virar volume de mentira
+    if parte.quantidade is not None and item.cost > 0 and not preco_plausivel(parte, item.cost):
+        destino = partes["outros"]
+    else:
+        destino = partes[chave_da_parte(parte)]
+        destino["quantidade"] += parte.quantidade or _ZERO
+    destino["custo"] += item.cost
 
 
 def _bancos_medidos(bancos: dict[str, dict[str, Any]]) -> tuple[BancoMedido, ...]:

@@ -1,4 +1,5 @@
-"""Banco pela vCPU-hora e pelo motor, storage à parte (PLANO_PRECISAO_OCI P1.6)."""
+"""Banco por partes: instância pela vCPU-hora e pelo motor, o resto pela parte
+(PLANO_PRECISAO_OCI P1.6, B1 a B4)."""
 
 from __future__ import annotations
 
@@ -10,7 +11,11 @@ import pytest
 from app.domain.entities.billing_enriched import BillingEnriched
 from app.domain.services.category_calculator import CategoryRate
 from app.services.billing_aggregator import BillingAggregator
-from app.use_cases.analysis.build_migration_context import _cotar_banco, _misturar_motores
+from app.use_cases.analysis.build_migration_context import (
+    _cotar_banco,
+    _misturar_motores,
+    _resto_do_banco,
+)
 
 D = Decimal
 
@@ -19,55 +24,125 @@ def _t(prov: str, taxa: str, unidade: str = "vcpu_hour") -> CategoryRate:
     return CategoryRate(provider=prov, rate=D(taxa), unit=unidade, confidence="reference")
 
 
+_STORAGE = {
+    None: {"aws": _t("aws", "0.115", "gb_month"), "oci": _t("oci", "0.072", "gb_month")},
+    "mysql": {"oci": _t("oci", "0.04", "gb_month")},
+    "postgresql": {"oci": _t("oci", "0.072", "gb_month")},
+}
+_BACKUP = {
+    None: {"oci": _t("oci", "0.04", "gb_month")},
+    "postgresql": {"oci": _t("oci", "0.0255", "gb_month")},
+}
+_CACHE = {
+    "ate_4gb": {"oci": _t("oci", "0.0194", "gb_hour")},
+    "acima_10gb": {"oci": _t("oci", "0.0136", "gb_hour")},
+}
+
+
+def _resto(
+    partes: dict[str, dict[str, Decimal]],
+) -> tuple[dict[str, Decimal], dict[str, dict[str, Decimal]]]:
+    return _resto_do_banco(
+        partes,
+        custos={k: v["custo"] for k, v in partes.items()},
+        storage=_STORAGE,
+        backup=_BACKUP,
+        cache=_CACHE,
+        provedores=["oci"],
+    )
+
+
 def test_regua_da_fatura_da_tela() -> None:
-    """db.t3.medium PostgreSQL, 535,747 h (US$ 38,57) + 48,228 GB gp3 (US$ 5,55). Na OCI:
-    2 vCPU x 535,747 h x 0,055 + 5,55 x (0,072 / 0,115)."""
+    """db.t3.medium PostgreSQL, 535,747 h (US$ 38,57) + 48,228 GB gp3 (US$ 5,55). Na
+    OCI, pela calculadora oficial: 2 vCPU x 535,747 h x 0,049 + 48,228 GB x 0,072."""
     taxas = _misturar_motores(
-        {"aws": _t("aws", "0.089"), "oci": _t("oci", "0.055")},
-        {"postgresql": {"aws": _t("aws", "0.089"), "oci": _t("oci", "0.055")}},
+        {"aws": _t("aws", "0.089"), "oci": _t("oci", "0.049")},
+        {"postgresql": {"aws": _t("aws", "0.089"), "oci": _t("oci", "0.049")}},
         {"postgresql": D("1071.494")},
     )
-    out = _cotar_banco(
+    fator, detalhe = _resto(
+        {"armazenamento:postgresql:": {"quantidade": D("48.228"), "custo": D("5.55")}}
+    )
+    [oci] = _cotar_banco(
         source_provider="aws",
         custo=D("44.12"),
         medido=D("38.57"),
         quantidade=D("1071.494"),
         preco_efetivo=D("38.57") / D("1071.494"),
         taxas=taxas,
-        taxas_storage={
-            "aws": _t("aws", "0.115", "gb_month"),
-            "oci": _t("oci", "0.072", "gb_month"),
-        },
+        fator_do_resto=fator,
     )
-    [oci] = out
-    assert round(oci.estimated_monthly_cost, 2) == D("62.41")
-    # Antes, pela razão de referência (30 / 62), a OCI saía a US$ 21,35
-    assert oci.estimated_monthly_cost > D("44.12")
+    assert round(oci.estimated_monthly_cost, 2) == D("55.98")
+    assert round(detalhe["oci"]["armazenamento"], 3) == D("3.472")
 
 
 def test_motor_mistura_a_taxa_pela_vcpu_hora() -> None:
-    base = {"oci": _t("oci", "0.055")}
-    por_motor = {"mysql": {"oci": _t("oci", "0.0366")}, "postgresql": {"oci": _t("oci", "0.055")}}
+    base = {"oci": _t("oci", "0.049")}
+    por_motor = {"mysql": {"oci": _t("oci", "0.0366")}, "postgresql": {"oci": _t("oci", "0.049")}}
     taxas = _misturar_motores(base, por_motor, {"mysql": D(300), "postgresql": D(100)})
     # 3/4 MySQL + 1/4 PostgreSQL
-    assert taxas["oci"].rate == D("0.04120")
-    # Sem motor conhecido vale a base (a maior)
-    assert _misturar_motores(base, por_motor, {"": D(10)})["oci"].rate == D("0.055")
+    assert taxas["oci"].rate == D("0.039700")
+    # Sem motor conhecido vale a maior taxa entre os motores
+    assert _misturar_motores(base, por_motor, {"": D(10)})["oci"].rate == D("0.049")
     assert _misturar_motores(base, por_motor, {}) is base
 
 
-def test_sem_taxa_de_storage_da_origem_o_resto_segue_o_preco_efetivo() -> None:
+def test_alta_disponibilidade_usa_as_replicas_do_destino() -> None:
+    """A vCPU-hora em HA da origem conta 2 instâncias; o OCI MySQL HeatWave tem 3."""
+    base = {"oci": _t("oci", "0.049"), "aws": _t("aws", "0.089")}
+    por_motor = {"mysql": {"oci": _t("oci", "0.0366"), "aws": _t("aws", "0.0855")}}
+    taxas = _misturar_motores(base, por_motor, {"mysql:ha": D(100)})
+    assert taxas["oci"].rate == D("0.05490")  # 0,0366 x 3/2
+    assert taxas["aws"].rate == D("0.0855")
+    # Sem motor e em HA, a maior entre os motores: MySQL em HA (0,0549) > base (0,049)
+    assert _misturar_motores(base, por_motor, {":ha": D(1)})["oci"].rate == D("0.05490")
+
+
+def test_resto_por_parte() -> None:
+    fator, detalhe = _resto(
+        {
+            # Cache pela memória do nó, na faixa dele
+            "cache:ate_4gb": {"quantidade": D(1000), "custo": D(30)},
+            # Storage do MySQL em HA: 3 cópias na OCI
+            "armazenamento:mysql:ha": {"quantidade": D(100), "custo": D(23)},
+            "backup:postgresql": {"quantidade": D(200), "custo": D(19)},
+            # Só a origem cobra: zero no destino
+            "sem_equivalente": {"quantidade": D(0), "custo": D(40)},
+            "outros": {"quantidade": D(0), "custo": D(8)},
+        }
+    )
+    oci = detalhe["oci"]
+    assert oci["cache"] == D("19.4000")
+    assert oci["armazenamento"] == D("12.00")  # 100 GB x 0,04 x 3
+    assert oci["backup"] == D("5.1000")
+    assert oci["sem_equivalente"] == D(0)
+    assert oci["outros"] == D(8)
+    assert fator["oci"] == sum(oci.values(), D(0)) / D(120)
+
+
+def test_parte_sem_quantidade_ou_sem_taxa_fica_ao_custo_da_origem() -> None:
+    _, detalhe = _resto(
+        {
+            "cache:ate_4gb": {"quantidade": D(0), "custo": D(10)},
+            "cache:de_4_a_10gb": {"quantidade": D(500), "custo": D(12)},
+        }
+    )
+    assert detalhe["oci"]["cache"] == D(22)
+
+
+def test_sem_vcpu_hora_a_instancia_vai_pela_razao() -> None:
     out = _cotar_banco(
         source_provider="aws",
         custo=D("100"),
         medido=D("80"),
-        quantidade=D("1000"),
-        preco_efetivo=D("0.08"),
-        taxas={"oci": _t("oci", "0.04")},
-        taxas_storage={"oci": _t("oci", "0.072", "gb_month")},
+        quantidade=D(0),
+        preco_efetivo=None,
+        taxas={"aws": _t("aws", "0.089"), "oci": _t("oci", "0.049")},
+        fator_do_resto={"oci": D("0.5")},
     )
-    # 1.250 vCPU-hora (1.000 medidas + 20 / 0,08) x 0,04
-    assert out[0].estimated_monthly_cost == D("50.00")
+    [oci] = out
+    # 80 x 0,049 / 0,089 + 20 x 0,5
+    assert round(oci.estimated_monthly_cost, 2) == D("54.04")
 
 
 def _linha(
@@ -77,13 +152,15 @@ def _linha(
     motor: str | None,
     *,
     cobranca: str | None = None,
+    unidade: str = "hours",
+    servico: str = "AmazonRDS",
 ) -> BillingEnriched:
     return BillingEnriched(
         user_id=uuid4(),
         report_id=uuid4(),
         provider="aws",
         billing_period="2026-09",
-        service_name="AmazonRDS",
+        service_name=servico,
         cost=D(custo),
         currency="USD",
         source_line_hash=uuid4().hex,
@@ -91,7 +168,7 @@ def _linha(
         pricing_confidence="high",
         usage_type=uso,
         usage_amount=D(horas) if horas else None,
-        usage_unit="hours" if horas else None,
+        usage_unit=unidade if horas else None,
         project_id="p1",
         component_type="database",
         mapping_confidence="high",
@@ -112,7 +189,9 @@ async def test_agregador_mede_a_vcpu_hora_do_banco_por_motor() -> None:
     assert aux.database == D("294.12")
     assert aux.quantidade_por_regiao["database"] == {"us-east-1": D("3991.494")}
     assert aux.medido_por_regiao["database"] == {"us-east-1": D("288.57")}
-    assert aux.banco_por_motor == {"postgresql": D("1071.494"), "mysql": D("2920")}
+    assert aux.banco_por_motor == {"postgresql": D("1071.494"), "mysql:ha": D("2920")}
+    # O storage sem quantidade fica nas partes, ao custo da origem
+    assert aux.banco_partes == {"outros": {"quantidade": D(0), "custo": D("5.55")}}
 
 
 @pytest.mark.asyncio
@@ -137,3 +216,44 @@ async def test_taxa_de_reserva_nao_soma_horas_e_entra_no_custo_das_instancias() 
     assert aux.quantidade_por_regiao["database"] == {"us-east-1": D("11904")}
     assert aux.medido_por_regiao["database"] == {"us-east-1": D("1357.06")}
     assert aux.banco_por_motor == {"postgresql": D("11904")}
+
+
+@pytest.mark.asyncio
+async def test_agregador_separa_as_partes_do_banco() -> None:
+    linhas = [
+        _linha("NodeUsage:cache.t4g.medium", "47.45", "730", None, servico="AmazonElastiCache"),
+        _linha("RDS:Multi-AZ-GP3-Storage", "23", "100", "MySQL", unidade="GB-Mo"),
+        _linha("RDS:ChargedBackupUsage", "19", "200", "PostgreSQL", unidade="GB-Mo"),
+        _linha("RDS:Multi-AZ-GP3-PIOPS", "40", "3000", "MySQL", unidade="IOPS-Mo"),
+        # IO rotulado como GB-mês: US$ 0,0000002 por "GB" não é armazenamento
+        _linha("Aurora:IO-OptimizedStorageUsage", "0.24", "1191126", None, unidade="GB-Mo"),
+    ]
+    aux = (await BillingAggregator().aggregate(linhas, "aws")).auxiliary
+    assert aux.banco_partes == {
+        "cache:ate_4gb": {"quantidade": D("2255.70"), "custo": D("47.45")},
+        "armazenamento:mysql:ha": {"quantidade": D(100), "custo": D(23)},
+        "backup:postgresql": {"quantidade": D(200), "custo": D(19)},
+        "sem_equivalente": {"quantidade": D(0), "custo": D(40)},
+        "outros": {"quantidade": D(0), "custo": D("0.24")},
+    }
+    assert "database" not in aux.quantidade_por_regiao
+
+
+@pytest.mark.asyncio
+async def test_cost_explorer_horas_do_uso_coberto_e_reserva_sem_horas() -> None:
+    """Cost Explorer (sem atributos): a taxa da reserva vem sem horas e o uso coberto, a
+    custo zero, traz as horas. Contar só as linhas pagas perdia as horas cobertas; o
+    storage vem sem unidade e é medido pelo nome, sob a trava de preço plausível."""
+    sem_atributos = [
+        _linha("HeavyUsage:db.r8g.4xl", "1357.06", None, None),
+        _linha("Multi-AZUsage:db.r8g.4xl", "0", "744", None, unidade=""),
+        _linha("InstanceUsage:db.t3.micro", "13.39", "744", None, unidade=""),
+        _linha("RDS:Multi-AZ-GP3-Storage", "23", "100", None, unidade=""),
+    ]
+    aux = (await BillingAggregator().aggregate(sem_atributos, "aws")).auxiliary
+    # 744 h x 16 vCPU x 2 réplicas + 744 h x 2 vCPU
+    assert aux.quantidade_por_regiao["database"] == {"us-east-1": D("25296")}
+    assert aux.medido_por_regiao["database"] == {"us-east-1": D("1370.45")}
+    assert aux.banco_partes == {
+        "armazenamento::ha": {"quantidade": D(100), "custo": D(23)},
+    }

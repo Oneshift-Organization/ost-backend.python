@@ -50,12 +50,13 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     # 0,178/h, 2 vCPU); Azure, Retail Prices (Flexible Server Ddsv5 por vCore: MySQL
     # 0,0855, PostgreSQL 0,089); GCP, preço do Cloud SQL Enterprise (vCPU 0,0413 +
     # 4 GiB x 0,007); OCI, lista da Oracle (MySQL 0,0366 por ECPU com memória; PostgreSQL
-    # 0,098 por OCPU = 2 vCPU, mais 4 GB por vCPU a 0,0015, a taxa de memória do E4).
+    # 0,098 por OCPU = 2 vCPU: a calculadora oficial lista só OCPU e storage, sem
+    # memória à parte — oracle.com/cloud/postgresql/pricing, lida em 17/10/2026).
     # `database` vale para fatura sem motor: a maior das duas, premissa declarada.
     ("aws", "database", "vcpu_hour", "0.089"),
     ("azure", "database", "vcpu_hour", "0.089"),
     ("gcp", "database", "vcpu_hour", "0.0693"),
-    ("oci", "database", "vcpu_hour", "0.055"),
+    ("oci", "database", "vcpu_hour", "0.049"),
     ("aws", "database_mysql", "vcpu_hour", "0.0855"),
     ("azure", "database_mysql", "vcpu_hour", "0.0855"),
     ("gcp", "database_mysql", "vcpu_hour", "0.0693"),
@@ -63,7 +64,7 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("aws", "database_postgresql", "vcpu_hour", "0.089"),
     ("azure", "database_postgresql", "vcpu_hour", "0.089"),
     ("gcp", "database_postgresql", "vcpu_hour", "0.0693"),
-    ("oci", "database_postgresql", "vcpu_hour", "0.055"),
+    ("oci", "database_postgresql", "vcpu_hour", "0.049"),
     # Storage de banco por GB-mês (o resto do custo de banco: storage, IO, backup):
     # RDS gp3 0,115; Azure Flexible Server 0,115; Cloud SQL SSD 0,17 (0,000232877 por
     # GiB-hora); OCI, o maior entre MySQL (0,04) e PostgreSQL (0,072)
@@ -71,6 +72,41 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("azure", "database_storage", "gb_month", "0.115"),
     ("gcp", "database_storage", "gb_month", "0.17"),
     ("oci", "database_storage", "gb_month", "0.072"),
+    # Por motor (PLANO_PRECISAO_OCI B2): só a OCI difere — MySQL 0,04, PostgreSQL 0,072
+    *(
+        (p, f"database_storage_{m}", "gb_month", v)
+        for m in ("mysql", "postgresql")
+        for p, v in (("aws", "0.115"), ("azure", "0.115"), ("gcp", "0.17"))
+    ),
+    ("oci", "database_storage_mysql", "gb_month", "0.04"),
+    ("oci", "database_storage_postgresql", "gb_month", "0.072"),
+    # Backup de banco por GB-mês: RDS 0,095 (Price List), Azure Flexible Server 0,095
+    # (Retail Prices), Cloud SQL 0,08 (0,000109589 por GiB-hora); OCI, backup do MySQL
+    # 0,04 e, no PostgreSQL, o Object Storage (0,0255) — lista da Oracle, 17/10/2026
+    *(
+        (p, c, "gb_month", v)
+        for c in ("database_backup", "database_backup_mysql", "database_backup_postgresql")
+        for p, v in (("aws", "0.095"), ("azure", "0.095"), ("gcp", "0.08"))
+    ),
+    ("oci", "database_backup", "gb_month", "0.04"),
+    ("oci", "database_backup_mysql", "gb_month", "0.04"),
+    ("oci", "database_backup_postgresql", "gb_month", "0.0255"),
+    # Cache (Redis) por GB-hora da memória do nó, por faixa de tamanho do nó (B1). AWS:
+    # ElastiCache on-demand (t4g.medium, m7g.large, r7g.large, Price List); Azure: nó
+    # Standard de Azure Cache for Redis (C2, C3, C4; Retail Prices); GCP: Memorystore
+    # Basic (M1, M2, M3); OCI Cache: até 10 GB por nó 0,0194, acima 0,0136. 17/10/2026
+    ("aws", "cache_ate_4gb", "gb_hour", "0.02104"),
+    ("aws", "cache_de_4_a_10gb", "gb_hour", "0.02476"),
+    ("aws", "cache_acima_10gb", "gb_hour", "0.01676"),
+    ("azure", "cache_ate_4gb", "gb_hour", "0.0448"),
+    ("azure", "cache_de_4_a_10gb", "gb_hour", "0.0375"),
+    ("azure", "cache_acima_10gb", "gb_hour", "0.02015"),
+    ("gcp", "cache_ate_4gb", "gb_hour", "0.049"),
+    ("gcp", "cache_de_4_a_10gb", "gb_hour", "0.027"),
+    ("gcp", "cache_acima_10gb", "gb_hour", "0.023"),
+    ("oci", "cache_ate_4gb", "gb_hour", "0.0194"),
+    ("oci", "cache_de_4_a_10gb", "gb_hour", "0.0194"),
+    ("oci", "cache_acima_10gb", "gb_hour", "0.0136"),
     # Rede por tipo (PLANO_PRECO_NAO_COMPUTE), cotada pela quantidade medida. Valores
     # das APIs oficiais em 16/10/2026: AWS `AWSELB`/`AmazonVPC` us-east-1, Azure
     # Retail Prices (balanceador e NAT são globais), catálogo do GCP, OCI cetools.
@@ -158,7 +194,12 @@ _CONFERIDO_EM: dict[tuple[str, str], date] = {
     ("gcp", "storage_ssd"): date(2026, 9, 27),
     ("oci", "storage_ssd"): date(2026, 10, 17),
     **{(p, c): date(2026, 10, 17) for p in ("aws", "gcp", "azure", "oci")
-       for c in ("database", "database_mysql", "database_postgresql", "database_storage")},
+       for c in (
+           "database", "database_mysql", "database_postgresql", "database_storage",
+           "database_storage_mysql", "database_storage_postgresql", "database_backup",
+           "database_backup_mysql", "database_backup_postgresql", "cache_ate_4gb",
+           "cache_de_4_a_10gb", "cache_acima_10gb",
+       )},
 }
 _REDE_CONFERIDA_EM = date(2026, 10, 16)
 

@@ -129,6 +129,9 @@ class AuxiliaryCosts:
     # vCPU-hora de instância de banco por motor ("mysql", "postgresql"; "" sem motor),
     # para o destino cotar pela taxa do motor (PLANO_PRECISAO_OCI P1.6)
     banco_por_motor: Mapping[str, Decimal] = field(default_factory=dict)
+    # Banco fora das instâncias: parte (`cache:ate_4gb`, `armazenamento:mysql:ha`,
+    # `backup:`, `sem_equivalente`, `outros`) → quantidade e custo (PLANO_PRECISAO_OCI)
+    banco_partes: Mapping[str, Mapping[str, Decimal]] = field(default_factory=dict)
     # Plano de controle, segredos, chaves e serverless separados pelo uso
     # (domain/services/categoria_por_uso), exceto a hora do cluster, que fica em
     # `gke_control_plane`: categoria → custo. Entra na conservação.
