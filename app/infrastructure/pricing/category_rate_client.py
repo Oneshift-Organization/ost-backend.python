@@ -872,6 +872,28 @@ def _oci_primeira_faixa_paga(item: dict[str, Any]) -> Decimal | None:
     return None
 
 
+# VPU por GB do perfil Balanced do Block Volume
+_VPU_BALANCED = Decimal(10)
+
+
+def _oci_block_volume(
+    block: Decimal | None, vpu: Decimal | None, regiao: str
+) -> list[CloudPricePoint]:
+    """SSD é o Balanced, o padrão do volume: armazenamento + 10 VPU por GB. HDD é o
+    Lower Cost, sem VPU (docs.oracle.com, Block Volume Performance). Sem o preço do
+    VPU o SSD não sai: o armazenamento sozinho o deixava ~40% barato. Mesma chave de
+    antes, para o preço novo substituir o antigo no sync."""
+    if block is None:
+        return []
+    tiers: dict[str, Decimal] = {"storage_hdd": block}
+    if vpu is not None:
+        tiers["storage_ssd"] = block + _VPU_BALANCED * vpu
+    return [
+        _point("oci", c, "gb_month", p, "oci_cetools_api", region=regiao, detalhe="block-volume")
+        for c, p in tiers.items()
+    ]
+
+
 def _oci_origem_do_egress(regiao: str) -> str:
     """Grupo de origem do egress da OCI, como o `cetools` escreve."""
     if regiao.startswith(("sa-", "ap-")):
@@ -898,6 +920,7 @@ def fetch_oci_category_rates(
     origem e sai por região com o valor do grupo dela."""
     items = _get(_OCI, timeout).get("items", [])
     block: Decimal | None = None
+    vpu: Decimal | None = None
     objeto: Decimal | None = None
     egress_por_origem: dict[str, Decimal] = {}
     rede: dict[tuple[str, str, str], Decimal] = {}
@@ -908,6 +931,8 @@ def fetch_oci_category_rates(
             continue
         if name == "Storage - Block Volume - Storage":
             block = valor
+        elif name == "Storage - Block Volume - Performance Units":
+            vpu = valor
         elif name == "Object Storage - Storage":
             objeto = valor
         elif name.startswith("Outbound Data Transfer - Originating in "):
@@ -922,20 +947,7 @@ def fetch_oci_category_rates(
 
     out: list[CloudPricePoint] = []
     for regiao in regioes:
-        if block is not None:
-            # Block balanced serve como tier única de SSD e HDD no OCI.
-            for categoria in ("storage_ssd", "storage_hdd"):
-                out.append(
-                    _point(
-                        "oci",
-                        categoria,
-                        "gb_month",
-                        block,
-                        "oci_cetools_api",
-                        region=regiao,
-                        detalhe="block-volume",
-                    )
-                )
+        out += _oci_block_volume(block, vpu, regiao)
         if objeto is not None:
             out.append(
                 _point(

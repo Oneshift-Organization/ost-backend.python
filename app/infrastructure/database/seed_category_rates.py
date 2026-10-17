@@ -26,7 +26,7 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("aws", "storage_ssd", "gb_month", "0.080"),     # gp3
     ("gcp", "storage_ssd", "gb_month", "0.100"),     # pd-balanced
     ("azure", "storage_ssd", "gb_month", "0.088"),   # premium ssd
-    ("oci", "storage_ssd", "gb_month", "0.0255"),    # block balanced
+    ("oci", "storage_ssd", "gb_month", "0.0425"),    # block balanced: 0,0255 + 10 VPU x 0,0017
     # Armazenamento de objetos, tier padrão ($/GB-mês). Cerca de metade da taxa
     # de bloco — é essa diferença que tornava a classificação errada cara: a
     # linha de S3 era reprecificada como disco e o GB estimado saía pela metade.
@@ -38,7 +38,7 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("aws", "storage_hdd", "gb_month", "0.045"),     # st1
     ("gcp", "storage_hdd", "gb_month", "0.040"),     # pd-standard
     ("azure", "storage_hdd", "gb_month", "0.045"),   # standard hdd
-    ("oci", "storage_hdd", "gb_month", "0.0255"),    # block (mesma tier)
+    ("oci", "storage_hdd", "gb_month", "0.0255"),    # block lower cost (0 VPU)
     # Egress de internet, primeira faixa ($/GB)
     ("aws", "network_egress", "gb", "0.090"),
     ("gcp", "network_egress", "gb", "0.120"),

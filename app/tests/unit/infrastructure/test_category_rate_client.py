@@ -40,6 +40,7 @@ def test_oci_block_storage_and_egress(monkeypatch) -> None:
     payload = {
         "items": [
             _oci_item("Storage - Block Volume - Storage", 0.0255),
+            _oci_item("Storage - Block Volume - Performance Units", 0.0017),
             _oci_item("Storage - Block Volume - Free 200GB", 0.0),  # free tier ignorado
             # 10 TB grátis, depois a taxa: a primeira faixa paga é a que vale.
             _oci_item(
@@ -49,7 +50,8 @@ def test_oci_block_storage_and_egress(monkeypatch) -> None:
     }
     monkeypatch.setattr(crc, "_get", lambda url, timeout: payload)
     pts = {p.service_type: p for p in crc.fetch_oci_category_rates()}
-    assert pts["storage_ssd"].price == Decimal("0.0255")
+    # SSD = Balanced: armazenamento + 10 VPU (0,0255 + 10 x 0,0017); HDD = Lower Cost
+    assert pts["storage_ssd"].price == Decimal("0.0425")
     assert pts["storage_hdd"].price == Decimal("0.0255")
     assert pts["network_egress"].price == Decimal("0.0085")
     assert all(p.confidence == "official" for p in pts.values())
