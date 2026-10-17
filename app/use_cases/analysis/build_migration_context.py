@@ -281,8 +281,7 @@ def _misturar_motores(
     misturadas: dict[str, CategoryRate] = {}
     for prov, b in base.items():
         taxa = sum(
-            (peso / total) * (por_motor.get(m, {}).get(prov) or b).rate
-            for m, peso in pesos.items()
+            (peso / total) * (por_motor.get(m, {}).get(prov) or b).rate for m, peso in pesos.items()
         )
         misturadas[prov] = replace(b, rate=Decimal(taxa))
     return misturadas

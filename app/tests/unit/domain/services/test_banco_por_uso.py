@@ -37,7 +37,9 @@ D = Decimal
         ("gcp", "Cloud SQL for PostgreSQL: Regional - vCPU in Americas", "730", "hour", "1460"),
     ],
 )
-def test_vcpu_hora_da_instancia(provedor, uso, horas, unidade, esperado) -> None:
+def test_vcpu_hora_da_instancia(
+    provedor: str, uso: str, horas: str, unidade: str | None, esperado: str
+) -> None:
     assert vcpu_horas(provedor, uso, D(horas), unidade) == D(esperado)
 
 
@@ -52,7 +54,7 @@ def test_vcpu_hora_da_instancia(provedor, uso, horas, unidade, esperado) -> None
         ("oci", "Oracle Autonomous Transaction Processing - ECPU", "hours"),
     ],
 )
-def test_linha_que_nao_e_instancia_nao_mede(provedor, uso, unidade) -> None:
+def test_linha_que_nao_e_instancia_nao_mede(provedor: str, uso: str, unidade: str) -> None:
     assert vcpu_horas(provedor, uso, D("100"), unidade) is None
 
 
@@ -73,5 +75,5 @@ def test_sem_quantidade_nao_mede() -> None:
         ("AmazonElastiCache", "NodeUsage:cache.m6g.xlarge", "Redis", None),
     ],
 )
-def test_motor(servico, uso, declarado, esperado) -> None:
+def test_motor(servico: str, uso: str, declarado: str | None, esperado: str | None) -> None:
     assert motor("aws", servico, uso, declarado) == esperado

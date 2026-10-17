@@ -55,7 +55,7 @@ def test_generates_only_flex_families(_patched) -> None:
     assert fams == {"E5", "A4", "A1"}
 
 
-def test_vcpu_por_ocpu_pela_regra_oficial(_patched) -> None:
+def test_vcpu_por_ocpu_pela_regra_oficial(_patched: None) -> None:
     """x86 e AmpereOne (A2/A4): 2 vCPU por OCPU; A1: 1 (docs.oracle.com, Compute Shapes)."""
     pts = {p.sku_key: p for p in oci_price_client.fetch_oci_compute_prices()}
     assert pts["VM.Standard.E5.Flex.8c64g"].vcpus == Decimal("16")
@@ -64,25 +64,23 @@ def test_vcpu_por_ocpu_pela_regra_oficial(_patched) -> None:
     assert pts["VM.Standard.E5.Flex.8c64g"].ram_gib == Decimal("64")
 
 
-def test_a1_pela_faixa_paga(_patched) -> None:
+def test_a1_pela_faixa_paga(_patched: None) -> None:
     pts = {p.sku_key: p for p in oci_price_client.fetch_oci_compute_prices()}
     # 2 OCPU x 0,01 + 16 GB x 0,0015 = 0,044
     assert pts["VM.Standard.A1.Flex.2c16g"].price == Decimal("0.0440")
 
 
-def test_grade_de_ram_por_vcpu_dentro_do_limite(_patched) -> None:
+def test_grade_de_ram_por_vcpu_dentro_do_limite(_patched: None) -> None:
     """De 1 a 16 GB por vCPU, sem passar de 64 GB por OCPU (limite do Flex)."""
     pts = oci_price_client.fetch_oci_compute_prices()
     for fam, por_ocpu in (("E5", 2), ("A1", 1), ("A4", 2)):
-        razoes = {
-            p.ram_gib / p.vcpus for p in pts if p.sku_key.startswith(f"VM.Standard.{fam}.")
-        }
-        assert razoes == {Decimal(r) for r in (1, 2, 4, 8, 16)}
-        assert all(
-            p.ram_gib / (p.vcpus / por_ocpu) <= 64
+        formas = [
+            (p.vcpus, p.ram_gib)
             for p in pts
-            if p.sku_key.startswith(f"VM.Standard.{fam}.")
-        )
+            if p.sku_key.startswith(f"VM.Standard.{fam}.") and p.vcpus and p.ram_gib
+        ]
+        assert {ram / vcpus for vcpus, ram in formas} == {Decimal(r) for r in (1, 2, 4, 8, 16)}
+        assert all(ram / (vcpus / por_ocpu) <= 64 for vcpus, ram in formas)
 
 
 def test_price_is_ocpu_plus_memory(_patched) -> None:

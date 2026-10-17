@@ -26,7 +26,14 @@ def test_le_o_shape_sintetico() -> None:
 
 @pytest.mark.parametrize(
     ("vcpus", "familia", "ocpus"),
-    [(4, "E4", 2), (3, "E4", 2), (1, "E4", 1), (4, "A1", 4), (4, "A2", 2), (Decimal("0.5"), "A2", 1)],
+    [
+        (4, "E4", 2),
+        (3, "E4", 2),
+        (1, "E4", 1),
+        (4, "A1", 4),
+        (4, "A2", 2),
+        (Decimal("0.5"), "A2", 1),
+    ],
 )
-def test_ocpus_que_cobrem_as_vcpus(vcpus, familia: str, ocpus: int) -> None:
+def test_ocpus_que_cobrem_as_vcpus(vcpus: Decimal | int, familia: str, ocpus: int) -> None:
     assert ocpus_para(vcpus, familia) == ocpus
