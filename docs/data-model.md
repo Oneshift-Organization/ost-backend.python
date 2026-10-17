@@ -38,6 +38,7 @@ CREATE TABLE billing_reports (
     provider        VARCHAR(10),
     schema_version  VARCHAR(50),
     source_filename VARCHAR(500),
+    alias           VARCHAR(120),  -- nome dado pelo usuário (M9); a tela mostra alias ou arquivo
     status          VARCHAR(20)  NOT NULL DEFAULT 'queued',
     row_count       INTEGER      NOT NULL DEFAULT 0,
     error_message   VARCHAR(2000),

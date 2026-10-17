@@ -118,6 +118,9 @@ class AnalysisJobSummary(BaseModel):
     status: str
     provider: str | None = None
     source_filename: str | None = None
+    # Nome do billing dado pelo usuário, e o que a tela mostra (alias ou arquivo)
+    alias: str | None = None
+    nome_exibicao: str | None = None
     row_count: int = 0
     recommended_provider: str | None = None
     recommendation: str | None = None

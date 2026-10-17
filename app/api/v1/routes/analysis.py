@@ -354,6 +354,8 @@ async def list_analysis_jobs(
                     status=job.status,
                     provider=report.provider,
                     source_filename=report.source_filename,
+                    alias=report.alias,
+                    nome_exibicao=report.alias or report.source_filename,
                     row_count=report.row_count or 0,
                     recommended_provider=_texto(structured.get("recommended_provider")),
                     recommendation=_texto(structured.get("recommendation")),

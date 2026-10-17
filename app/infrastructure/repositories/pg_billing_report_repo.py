@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.billing_report import BillingReport, JobStatus
@@ -64,6 +64,14 @@ class PgBillingReportRepository:
         await self._session.refresh(model)
         return self._to_entity(model)
 
+    async def rename(self, report_id: UUID, user_id: UUID, alias: str | None) -> None:
+        await self._session.execute(
+            update(BillingReportModel)
+            .where(BillingReportModel.id == report_id, BillingReportModel.user_id == user_id)
+            .values(alias=alias)
+        )
+        await self._session.flush()
+
     async def list_by_user(self, user_id: UUID, limit: int = 50) -> list[BillingReport]:
         stmt = (
             select(BillingReportModel)
@@ -82,6 +90,7 @@ class PgBillingReportRepository:
             provider=CloudProvider(model.provider) if model.provider else None,
             schema_version=model.schema_version,
             source_filename=model.source_filename,
+            alias=model.alias,
             status=JobStatus(model.status),
             row_count=model.row_count,
             error_message=model.error_message,
