@@ -70,8 +70,8 @@ async def test_aws_separa_nat_balanceador_ip_e_egress() -> None:
     # A quantidade vai para a região da linha (prefixo do UsageType)
     assert aux.quantidade_por_regiao["nat_gateway"] == {"sa-east-1": Decimal("730")}
     assert aux.medido_por_regiao["nat_gateway"] == {"sa-east-1": Decimal("67.89")}
-    # Egress segue pela razão de taxas e a rede sem cotação não mede quantidade
-    assert "network_egress" not in aux.quantidade_por_regiao
+    # Egress mede os GB, para a franquia do destino; a rede sem cotação não mede
+    assert aux.quantidade_por_regiao["network_egress"] == {"us-east-1": Decimal("1000")}
     assert "network_other" not in aux.quantidade_por_regiao
 
 

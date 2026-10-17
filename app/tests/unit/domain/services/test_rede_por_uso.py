@@ -161,6 +161,8 @@ def test_sem_uso_nem_servico_vai_para_outros():
 
 def test_unidade_de_cada_categoria_cotada():
     assert UNIDADE == {
+        # Egress pela quantidade desde 17/10, para a franquia do destino (PLANO_PRECISAO_OCI)
+        EGRESS: "gb",
         BALANCEADOR: "hour",
         BALANCEADOR_DADOS: "gb",
         NAT: "hour",
@@ -171,8 +173,7 @@ def test_unidade_de_cada_categoria_cotada():
         CDN: "gb",
         CDN_REQUISICOES: "10k",
     }
-    # Egress segue pela razão de taxas; o resto da rede não é cotado
-    assert EGRESS not in UNIDADE
+    # O resto da rede não é cotado
     assert OUTROS not in UNIDADE
 
 

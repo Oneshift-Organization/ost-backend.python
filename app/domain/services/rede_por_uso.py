@@ -70,9 +70,11 @@ CHAVE_NO_PAYLOAD: Mapping[str, str] = {
     OUTROS: "rede_outros",
 }
 
-# Categoria cotada pela quantidade → unidade dela. O egress segue pela razão de taxas,
-# como antes; `network_other` não é cotada.
+# Categoria cotada pela quantidade → unidade dela; `network_other` não é cotada. O
+# egress entrou em 17/10 (PLANO_PRECISAO_OCI P1.5): pela quantidade, a franquia do
+# destino pode ser descontada; pela razão de taxas, não.
 UNIDADE: Mapping[str, str] = {
+    EGRESS: GB,
     BALANCEADOR: HORA,
     BALANCEADOR_DADOS: GB,
     NAT: HORA,
@@ -82,6 +84,16 @@ UNIDADE: Mapping[str, str] = {
     ENTRE_ZONAS: GB,
     CDN: GB,
     CDN_REQUISICOES: DEZ_MIL,
+}
+
+# GB de saída para a internet que o destino não cobra por mês, somadas todas as regiões
+# (fontes oficiais lidas em 17/10/2026): OCI, primeiros 10 TB (oracle.com, preço de
+# rede da VCN); AWS, 100 GB (aws.amazon.com, free tier de data transfer, desde 12/2021);
+# Azure, 100 GB (azure.microsoft.com, bandwidth pricing). GCP Premium: nenhuma.
+FRANQUIA_DE_EGRESS_GB: Mapping[str, Decimal] = {
+    "oci": Decimal("10240"),
+    "aws": Decimal("100"),
+    "azure": Decimal("100"),
 }
 
 _1 = Decimal(1)

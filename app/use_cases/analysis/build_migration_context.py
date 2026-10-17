@@ -31,6 +31,7 @@ from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRep
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
 from app.domain.services.alertas import avaliar_cambio, avaliar_regioes
+from app.domain.services.categoria_por_uso import UNIDADE as UNIDADE_POR_USO
 from app.domain.services.categoria_por_zona import dividir_por_zona
 from app.domain.services.category_calculator import (
     CategoryRate,
@@ -70,7 +71,8 @@ from app.domain.services.provider_consolidation import (
     weakest_confidence,
 )
 from app.domain.services.reconciliation import reconcile
-from app.domain.services.categoria_por_uso import UNIDADE as UNIDADE_POR_USO
+from app.domain.services.rede_por_uso import EGRESS as CATEGORIA_EGRESS
+from app.domain.services.rede_por_uso import FRANQUIA_DE_EGRESS_GB
 from app.domain.services.rede_por_uso import UNIDADE as UNIDADE_DA_REDE
 from app.domain.services.regioes import (
     ZONA_PADRAO,
@@ -953,6 +955,13 @@ class BuildMigrationContextUseCase:
                             effective_price=preco_efetivo,
                             rates=rates,
                             unit=unidade_medida,
+                            # A franquia é mensal e da conta toda: cada zona fica com a
+                            # parte dela pelo custo
+                            franquia=(
+                                {p: g * parte.fracao for p, g in FRANQUIA_DE_EGRESS_GB.items()}
+                                if category == CATEGORIA_EGRESS
+                                else None
+                            ),
                         )
                         if preco_efetivo is not None and unidade_medida
                         else estimate_by_cost_ratio(
