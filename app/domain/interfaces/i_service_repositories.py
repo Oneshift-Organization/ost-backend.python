@@ -41,3 +41,8 @@ class IServiceComparisonRepository(ABC):
     @abstractmethod
     async def list_all(self) -> list[ServiceComparison]:
         ...
+
+    async def apelidos_aprovados(self, provider: str) -> dict[str, str]:
+        """Nome da fatura (`service_key`) → linha do DE-PARA, aprovado pela curadoria
+        (decisão 2.11). Sem curadoria, nenhum."""
+        return {}

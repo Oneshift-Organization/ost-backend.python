@@ -275,7 +275,7 @@ igual, não casa.
      nuvens que o DE-PARA já cita).
 
 **Ordem:**
-1. Etapa A, nomes: não mexe em número.
+1. Etapa A, nomes: não mexe no custo. ✅ **Feita em 17/10** como fila de sugestões aprovada pela curadoria da OneShift (`docs/endpoints/curadoria.md`). Mexe no tipo do serviço, e com ele no score.
 2. B, confirmação por preço de lista igual.
 3. C, troca de valor por quórum. Muda número e pede versão de autoridade.
 

@@ -96,6 +96,14 @@ class Settings(BaseSettings):
     # Com envio, fica: é o lastro do que o agente disse e da repetição.
     agent_snapshot_retention_days: int = 7
 
+    # Curadoria de nomes de serviço (fatura como fonte, etapa A, decisão 2.11): e-mails
+    # da OneShift, separados por vírgula, que aprovam apelidos do DE-PARA em
+    # `/v1/admin/service-name-suggestions`. Vazio: ninguém aprova.
+    curadores: str = ""
+    # Usuários (UUID, por vírgula) cujas faturas não entram na coleta: contas de teste.
+    # Arquivo com "mock" no nome também fica fora.
+    curadoria_usuarios_excluidos: str = ""
+
     # `terraform validate` contra o schema real do provider. Desligado por
     # decisão de escopo, não por custo: medido em 2026-09-13, com
     # `TF_PLUGIN_CACHE_DIR` quente o `init` leva 0,86s e o `validate` 0,35s. O

@@ -7,6 +7,7 @@ from app.api.v1.routes import (
     analysis_agent,
     billing,
     billing_checks,
+    curadoria,
     health,
     inventory,
     migration_scope,
@@ -26,3 +27,4 @@ api_router.include_router(terraform.router)
 api_router.include_router(reports.router, tags=["reports"])
 api_router.include_router(inventory.router)
 api_router.include_router(account.router)
+api_router.include_router(curadoria.router)
