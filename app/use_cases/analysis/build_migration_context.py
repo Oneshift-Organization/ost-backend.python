@@ -1091,9 +1091,17 @@ class BuildMigrationContextUseCase:
                             rates=rates,
                             unit=unidade_medida,
                             # A franquia é mensal e da conta toda: cada zona fica com a
-                            # parte dela pelo custo
+                            # parte dela pelos GB medidos (pelo custo, sem medida)
                             franquia=(
-                                {p: g * parte.fracao for p, g in FRANQUIA_DE_EGRESS_GB.items()}
+                                {
+                                    p: g
+                                    * (
+                                        parte.quantidade / quantidade_total
+                                        if quantidade_total > 0
+                                        else parte.fracao
+                                    )
+                                    for p, g in FRANQUIA_DE_EGRESS_GB.items()
+                                }
                                 if category == CATEGORIA_EGRESS
                                 else None
                             ),
