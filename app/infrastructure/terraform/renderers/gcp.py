@@ -253,19 +253,58 @@ def _bucket(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     ])
 
 
+_PSA = "acesso_privado"
+
+
+def _primeiro_banco(r: RecursoTerraform, bp: TerraformBlueprint) -> bool:
+    """A faixa e a conexão são uma por VPC: saem com o primeiro banco."""
+    primeiro = next(
+        (x.logical_name for x in bp.resources if x.resource_type is TipoRecurso.MANAGED_DATABASE),
+        None,
+    )
+    return primeiro == r.logical_name
+
+
+def _acesso_privado(bp: TerraformBlueprint) -> str:
+    """Acesso privado a serviços (T3): o Cloud SQL ganha IP privado na VPC nova.
+
+    Sem a conexão, `private_network` falha no apply."""
+    return comentario(
+        "Acesso privado a serviços: faixa /16 reservada para os serviços do Google\n"
+        "(Cloud SQL) e a conexão de peering com a VPC nova."
+    ) + "\n" + bloco("resource", ["google_compute_global_address", f"{_PSA}_faixa"], [
+        atributo("name", nome_cloud(bp.project_name, "faixa-servicos")),
+        atributo("purpose", "VPC_PEERING"),
+        atributo("address_type", "INTERNAL"),
+        atributo("prefix_length", 16),
+        atributo("network", referencia(f"google_compute_network.{REDE}.id")),
+    ]) + "\n\n" + bloco("resource", ["google_service_networking_connection", _PSA], [
+        atributo("network", referencia(f"google_compute_network.{REDE}.id")),
+        atributo("service", "servicenetworking.googleapis.com"),
+        atributo("reserved_peering_ranges", referencia(
+            f"[google_compute_global_address.{_PSA}_faixa.name]"
+        )),
+    ])
+
+
 def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
     vcpus = int(cfg.get("vcpus") or 1)
     ha = bool(cfg.get("high_availability"))
-    return comentario(
+    # O banco sempre usa `private_network`: sem o acesso privado a serviços, o apply
+    # falhava, com ou sem inventário (T3)
+    acesso = _acesso_privado(bp) + "\n\n" if _primeiro_banco(r, bp) else ""
+    return acesso + comentario(
         texto_banco(cfg, vcpus) + "\n"
-        "`deletion_protection` fica ligado; desligue conscientemente."
+        "`deletion_protection` fica ligado; desligue conscientemente.\n"
+        "IP privado na VPC nova, por acesso privado a serviços."
     ) + "\n" + bloco("resource", ["google_sql_database_instance", r.logical_name], [
         *([atributo("count", n)] if (n := instancias_banco(cfg)) > 1 else []),
         atributo("name", com_indice(nome_banco(bp, r), n)),
         atributo("database_version", var_versao(cfg)),
         atributo("region", bp.region),
         atributo("deletion_protection", True),
+        atributo("depends_on", referencia(f"[google_service_networking_connection.{_PSA}]")),
         bloco_aninhado("settings", [
             atributo("tier", f"db-custom-{vcpus}-{vcpus * 3840}", nivel=2),
             atributo("availability_type", "REGIONAL" if ha else "ZONAL", nivel=2),

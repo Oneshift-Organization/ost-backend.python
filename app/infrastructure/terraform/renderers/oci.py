@@ -344,6 +344,7 @@ def _db_name(bp: TerraformBlueprint, r: RecursoTerraform, n: int) -> str:
 def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
     vcpus = max(1, int(cfg.get("vcpus") or 1))
+    subredes = [str(x) for x in cfg.get("db_subnets") or []]
     return comentario(
         texto_banco(cfg, vcpus) + "\n"
         "Autonomous Database: a OCI cobra por OCPU, que casa com o vCPU derivado.\n"
@@ -358,5 +359,8 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             atributo("data_storage_size_in_tbs", 1),
             atributo("admin_password", referencia("var.db_admin_password")),
             atributo("is_auto_scaling_enabled", True),
+            # T3: endpoint privado na subrede de dados espelhada
+            *([atributo("subnet_id", referencia(f"oci_core_subnet.{subredes[0]}.id"))]
+              if subredes else []),
         ],
     )

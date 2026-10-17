@@ -34,7 +34,7 @@ podman (a máquina não tem o binário).
 2. ✅ Curadoria aprovada (`b09b3ba`): os 26 serviços e o Oracle (`PLANO_SCORE_V5_LOCKIN`
    §8.1), mais a linha "Bandwidth" da Azure no DE-PARA.
 3. ✅ T0 com o C2 (`35a3888`): os 24 testes de Terraform passam local; a CI instala o binário.
-4. **Próxima etapa: o Terraform** (T1 a T4).
+4. ✅ **Terraform T1 a T4 (17/10):** ver cada bloco no §4. Os 25 pacotes de mock (com e sem topologia, todos os pares) validam no Terraform 1.9.8.
 
 O PR #31 (develop → main) foi **fechado** em 16/10 a pedido do usuário: a promoção para
 a main saiu de pauta. A segurança (2.9) foi para as melhorias (§7).
@@ -153,7 +153,11 @@ o binário do Terraform.
 - Pedir ao dono da CI o passo que instala o binário e o cache (workflow `tests.yml`).
 - **Aceite:** 0 testes pulados local; na CI, quando o passo existir.
 
-### T1 — Aviso de empacotamento
+### T1 — Aviso de empacotamento — ✅ 17/10
+
+> Premissa de cada pool: "N máquinas provisionadas; o uso medido ocupa X% delas".
+> Aviso quando a máquina do destino é menor que 90% da média da origem (2 FSV2 de
+> 16 vCPU viram 9 de 4), quando a ocupação passa de 100% e quando fica abaixo de 50%.
 
 Com a capacidade-hora, `instancias` é o que se provisiona e a fração é o que o uso
 medido ocupa. O caso conhecido: 2 FSV2 viram 9 VMs.
@@ -163,7 +167,11 @@ medido ocupa. O caso conhecido: 2 FSV2 viram 9 VMs.
 - **Aceite:** o mock Azure mostra o aviso no pool FSV2; caracterização atualizada
   de propósito.
 
-### T2 — Isolamento entre subredes na Azure
+### T2 — Isolamento entre subredes na Azure — ✅ 17/10
+
+> Toda subrede espelhada ganha NSG com as regras das dependências (ASG), mais
+> `permitir-mesma-subrede` (4095) e `negar-outras-subredes` (4096, origem
+> `VirtualNetwork`), antes da `AllowVnetInBound` (65000).
 
 `AllowVnetInBound` libera tráfego entre todas as subredes da VNet: o destino fica
 mais aberto que a origem.
@@ -173,14 +181,30 @@ mais aberto que a origem.
 - **Aceite:** `terraform validate` nos mocks; teste de que subrede sem dependência
   não fala com outra.
 
-### T3 — Banco fora da AWS nas subredes espelhadas
+### T3 — Banco fora da AWS nas subredes espelhadas — ✅ 17/10
+
+> - Azure: subrede de dados espelhada e delegada ao PostgreSQL Flexible, com zona DNS
+>   privada e sem acesso público. A porta 5432 fica aberta para a VNet, porque o banco
+>   não entra em ASG. Se houver VM na subrede, o banco fica fora e o pacote avisa.
+> - OCI: endpoint privado (`subnet_id`) na subrede de dados espelhada.
+> - GCP: acesso privado a serviços (faixa /16 e conexão de peering). Corrige um defeito
+>   antigo: o Cloud SQL usava `private_network` sem a conexão e falharia no apply em
+>   todo pacote GCP com banco.
 
 O banco migrado não vai para as subredes espelhadas da origem.
 
 - Posicionar o banco nas subredes de dados espelhadas, como a VM.
 - **Aceite:** mocks GCP/Azure/OCI com o banco na subrede certa.
 
-### T4 — Disco fantasma do Filestore
+### T4 — Disco fantasma do Filestore — ✅ 17/10
+
+> - Categoria nova, `file_storage`, ao custo atual: Filestore, EFS, Azure Files e File
+>   Storage da OCI. A correção é na agregação, e por isso vale para fatura já
+>   processada; as regras de SKU também foram corrigidas.
+> - No bill GCP real, o disco HDD estimado vai de 2.256 GB para cerca de 670 GB.
+> - O README avisa que o armazenamento de arquivos não vira disco.
+> - Seis relatórios: decisão e confiança iguais. No GCP, a economia da OCI cai
+>   US$ 22,77 e a de AWS e Azure sobe US$ 7,85.
 
 Cerca de 1.570 GB de HDD que não existem no bill GCP. A causa é a classificação
 (V3.3, lote v3); na sprint, uma guarda no gerador.

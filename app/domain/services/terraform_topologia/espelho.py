@@ -60,7 +60,7 @@ def espelhar(
             )
 
     necessarias = {f.subrede for fs in fatias.values() for f in fs if f.vms and f.subrede}
-    if destino == "aws":
+    if destino in _BANCO_EM_SUBREDE:
         necessarias |= _subredes_dos_bancos(plano, detalhe)
     todas = {s.chave: s for s in de_payload(rede_origem.get("subredes") or [])}
     origens = [s for chave, s in todas.items() if chave in necessarias]
@@ -252,24 +252,35 @@ def _premissa_do_pool(
         )
 
 
+# Destino em que o banco ocupa uma subrede da rede nova (T3). No GCP o Cloud SQL não
+# entra em subrede: liga-se à VPC por acesso privado a serviços.
+_BANCO_EM_SUBREDE = frozenset({"aws", "azure", "oci"})
+# Subrede delegada ao PostgreSQL Flexible na Azure: exclusiva do banco
+_DELEGACAO_AZURE = "Microsoft.DBforPostgreSQL/flexibleServers"
+
+
 def _ligar_bancos(
     plano: PlanoDerivado, nomes: Mapping[str, str], alocacao: Alocacao, destino: str
 ) -> None:
-    """Na AWS, o banco vai para um grupo de subredes da VPC nova (RI15.6).
+    """O banco vai para a rede nova, nas subredes espelhadas da origem (RI15.6, T3).
 
-    O RDS exige duas zonas. Quando as subredes do banco ficam numa só (sempre, com
-    origem regional), o grupo é completado com subredes espelhadas de outra zona:
-    sem grupo, o RDS cairia na VPC padrão da conta, onde os grupos de segurança da
-    VPC nova não se aplicam.
+    - AWS: grupo de subredes. O RDS exige duas zonas; quando as subredes do banco ficam
+      numa só, o grupo é completado com subredes espelhadas de outra zona. Sem grupo,
+      o RDS cairia na VPC padrão da conta, fora dos grupos de segurança espelhados.
+    - Azure: a subrede de dados espelhada é delegada ao PostgreSQL Flexible, que a
+      exige exclusiva; com VM nela, o banco fica fora e o pacote avisa.
+    - OCI: endpoint privado do Autonomous na subrede de dados espelhada.
+    - GCP: acesso privado a serviços (faixa reservada e conexão de peering na VPC nova).
     """
     bancos = [(i, r) for i, r in enumerate(plano.recursos) if r.resource_type == "managed_database"]
     if not bancos:
         return
-    if destino != "aws":
-        plano.avisos.append(
-            f"Bancos em {destino.upper()} ficam fora das subredes espelhadas: pôr o banco na "
-            "rede exige endpoint privado, decisão de rede sua."
-        )
+    if destino == "gcp":
+        # O Cloud SQL não entra em subrede; o renderer liga o banco à VPC nova por
+        # acesso privado a serviços
+        return
+    if destino in ("azure", "oci"):
+        _banco_na_subrede_de_dados(plano, bancos, nomes, destino)
         return
     zona_de = {nomes[s.origem.chave]: s.zona for s in alocacao.subredes}
     for i, r in bancos:
@@ -308,6 +319,46 @@ def _ligar_bancos(
                         + ", de outra zona. Escolha do pacote, não fato medido."
                     ),
                 )
+            )
+
+
+def _banco_na_subrede_de_dados(
+    plano: PlanoDerivado,
+    bancos: list[tuple[int, RecursoDerivado]],
+    nomes: Mapping[str, str],
+    destino: str,
+) -> None:
+    com_vm = {
+        str(r.configuration.get("subnet"))
+        for r in plano.recursos
+        if r.resource_type == "compute" and r.configuration.get("subnet")
+    }
+    indice = {r.logical_name: i for i, r in enumerate(plano.recursos)}
+    for i, r in bancos:
+        proprias = sorted(
+            {nomes[s] for s in _lista(r.configuration.get("source_subnets")) if s in nomes}
+        )
+        if not proprias:
+            plano.avisos.append(
+                f"Banco {r.logical_name}: o inventário não diz em que subrede ele estava; ficou "
+                f"fora da rede nova em {destino.upper()}, com acesso pelo endpoint público."
+            )
+            continue
+        livres = [n for n in proprias if n not in com_vm] if destino == "azure" else proprias
+        if not livres:
+            plano.avisos.append(
+                f"Banco {r.logical_name}: a subrede dele na origem ({', '.join(proprias)}) também "
+                "tem VMs, e a Azure exige subrede exclusiva para o PostgreSQL Flexible. Ficou "
+                "fora da rede nova: separe a subrede de dados antes de aplicar."
+            )
+            continue
+        escolhida = livres[0]
+        plano.recursos[i] = replace(r, configuration={**r.configuration, "db_subnets": [escolhida]})
+        if destino == "azure":
+            j = indice[escolhida]
+            subrede = plano.recursos[j]
+            plano.recursos[j] = replace(
+                subrede, configuration={**subrede.configuration, "delegation": _DELEGACAO_AZURE}
             )
 
 

@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 
 from app.domain.services.categoria_por_uso import (
+    ARQUIVOS,
     BALDES,
     CHAVE,
     CHAVE_NO_PAYLOAD,
@@ -106,6 +107,7 @@ def test_balde_desconhecido_ou_sem_uso_vai_para_o_resto_do_balde():
         "gke_control_plane": KUBERNETES_OUTROS,
         "secrets": SEGURANCA_OUTROS,
         "serverless": SERVERLESS,
+        "file_storage": ARQUIVOS,
     }
 
 
@@ -118,7 +120,7 @@ def test_unidade_de_cada_categoria_cotada():
         CHAVE_OPERACOES: "10k",
     }
     # O resto de cada balde fica ao custo atual
-    for categoria in (KUBERNETES_OUTROS, SEGURANCA_OUTROS, SERVERLESS):
+    for categoria in (KUBERNETES_OUTROS, SEGURANCA_OUTROS, SERVERLESS, ARQUIVOS):
         assert categoria not in UNIDADE
 
 
@@ -134,6 +136,7 @@ def test_chave_no_payload():
         CHAVE_OPERACOES,
         SEGURANCA_OUTROS,
         SERVERLESS,
+        ARQUIVOS,
     }
 
 

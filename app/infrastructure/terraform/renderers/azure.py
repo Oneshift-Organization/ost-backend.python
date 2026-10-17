@@ -148,11 +148,28 @@ def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("address_prefixes", [
             str(r.configuration.get("cidr") or "10.0.0.0/24")
         ]),
+        *_delegacao(r.configuration),
     ])
     nsg = _nsg_da_subrede(r, bp)
     if espelho:
         bloco_hcl = comentario(espelho) + "\n" + bloco_hcl
     return bloco_hcl + ("\n\n" + nsg if nsg else "")
+
+
+def _delegacao(cfg: dict[str, object]) -> list[str]:
+    """Subrede de dados delegada ao PostgreSQL Flexible (T3): exclusiva do banco."""
+    servico = cfg.get("delegation")
+    if not servico:
+        return []
+    return [bloco_aninhado("delegation", [
+        atributo("name", "banco", nivel=2),
+        bloco_aninhado("service_delegation", [
+            atributo("name", str(servico), nivel=3),
+            atributo("actions", [
+                "Microsoft.Network/virtualNetworks/subnets/join/action",
+            ], nivel=3),
+        ], nivel=2),
+    ], nivel=1)]
 
 
 def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -307,16 +324,25 @@ def _nsg_da_subrede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
                         ) + "]"
                     ), nivel=2,
                 )])
+    espelhada = bool(r.configuration.get("mirror_of"))
+    if espelhada and r.configuration.get("delegation"):
+        # O PostgreSQL Flexible não entra em ASG: o banco abre a porta dele para a VNet
+        regras.append(_regra_de_entrada(
+            "Tcp", str(_PORTA_DO_BANCO),
+            [atributo("source_address_prefix", "VirtualNetwork", nivel=2)],
+        ))
     blocos = []
     for i, corpo in enumerate(regras):
         prioridade = _PRIORIDADE_INICIAL + _PASSO * i
-        if prioridade > _PRIORIDADE_MAXIMA:
+        if prioridade > _PRIORIDADE_MAXIMA - 2:
             break
         blocos.append(bloco_aninhado("security_rule", [
             atributo("name", f"regra-{i + 1}", nivel=2),
             atributo("priority", prioridade, nivel=2),
             *corpo,
         ], nivel=1))
+    if espelhada:
+        blocos += _isolamento(str(r.configuration.get("cidr") or ""))
     if not blocos:
         return ""
     nsg = f"nsg_{r.logical_name}"
@@ -333,6 +359,55 @@ def _nsg_da_subrede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
                 f"azurerm_network_security_group.{nsg}.id"
             )),
         ])
+
+
+# Porta do PostgreSQL, o motor do banco gerenciado no pacote da Azure
+_PORTA_DO_BANCO = 5432
+
+
+def _regra_de_entrada(protocolo: str, porta: str, origem: list[str]) -> list[str]:
+    return [
+        atributo("direction", "Inbound", nivel=2),
+        atributo("access", "Allow", nivel=2),
+        atributo("protocol", protocolo, nivel=2),
+        atributo("source_port_range", "*", nivel=2),
+        atributo("destination_port_range", porta, nivel=2),
+        *origem,
+        atributo("destination_address_prefix", "*", nivel=2),
+    ]
+
+
+def _isolamento(cidr: str) -> list[str]:
+    """Isolamento entre subredes (T2).
+
+    A regra padrão `AllowVnetInBound` (65000) libera tráfego entre todas as subredes
+    da VNet: o destino ficaria mais aberto que a origem. Aqui a própria subrede fala
+    com ela mesma, e o resto da VNet é negado. O que as dependências pedem vem antes,
+    nas regras dos grupos (ASG)."""
+    comum = [
+        atributo("direction", "Inbound", nivel=2),
+        atributo("protocol", "*", nivel=2),
+        atributo("source_port_range", "*", nivel=2),
+        atributo("destination_port_range", "*", nivel=2),
+    ]
+    return [
+        bloco_aninhado("security_rule", [
+            atributo("name", "permitir-mesma-subrede", nivel=2),
+            atributo("priority", _PRIORIDADE_MAXIMA - 1, nivel=2),
+            atributo("access", "Allow", nivel=2),
+            *comum,
+            atributo("source_address_prefix", cidr, nivel=2),
+            atributo("destination_address_prefix", cidr, nivel=2),
+        ], nivel=1),
+        bloco_aninhado("security_rule", [
+            atributo("name", "negar-outras-subredes", nivel=2),
+            atributo("priority", _PRIORIDADE_MAXIMA, nivel=2),
+            atributo("access", "Deny", nivel=2),
+            *comum,
+            atributo("source_address_prefix", "VirtualNetwork", nivel=2),
+            atributo("destination_address_prefix", "*", nivel=2),
+        ], nivel=1),
+    ]
 
 
 def _disco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
@@ -384,10 +459,24 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     vcpus = int(cfg.get("vcpus") or 1)
     ha = bool(cfg.get("high_availability"))
     sku = _sku_azure(vcpus)
-    return comentario(
+    subredes = [str(x) for x in cfg.get("db_subnets") or []]
+    rede: list[str] = []
+    dns = ""
+    nota = ""
+    if subredes:
+        # T3: na subrede de dados espelhada, delegada ao banco, sem acesso público
+        rede = [
+            atributo("delegated_subnet_id", referencia(f"azurerm_subnet.{subredes[0]}.id")),
+            atributo("private_dns_zone_id", referencia(f"azurerm_private_dns_zone.{_DNS}.id")),
+            atributo("public_network_access_enabled", False),
+        ]
+        nota = f"\nNa subrede de dados espelhada ({subredes[0]}), delegada ao banco."
+        if _primeiro_banco_na_rede(r, bp):
+            dns = _zona_dns(bp) + "\n\n"
+    return dns + comentario(
         texto_banco(cfg, vcpus) + "\n"
         f"Traduzido para o SKU {sku}, o mais próximo acima.\n"
-        "`database_version` aqui é a versão do PostgreSQL (ex.: 15)."
+        "`database_version` aqui é a versão do PostgreSQL (ex.: 15)." + nota
     ) + "\n" + bloco(
         "resource", ["azurerm_postgresql_flexible_server", r.logical_name], [
             *([atributo("count", n)] if (n := instancias_banco(cfg)) > 1 else []),
@@ -398,10 +487,43 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             atributo("storage_mb", 131072),
             atributo("administrator_login", referencia("var.admin_username")),
             atributo("zone", "1"),
+            *rede,
         ]
         + ([bloco_aninhado("high_availability", [
             atributo("mode", "ZoneRedundant", nivel=2),
         ], nivel=1)] if ha else []),
+    )
+
+
+_DNS = "dns_banco"
+
+
+def _primeiro_banco_na_rede(r: RecursoTerraform, bp: TerraformBlueprint) -> bool:
+    """A zona DNS privada é uma por pacote: sai com o primeiro banco na rede."""
+    primeiro = next(
+        (
+            x.logical_name
+            for x in bp.resources
+            if x.resource_type is TipoRecurso.MANAGED_DATABASE and x.configuration.get("db_subnets")
+        ),
+        None,
+    )
+    return primeiro == r.logical_name
+
+
+def _zona_dns(bp: TerraformBlueprint) -> str:
+    grupo = atributo("resource_group_name", referencia(f"azurerm_resource_group.{GRUPO}.name"))
+    zona = f"{nome_cloud(bp.project_name, 'banco')}.postgres.database.azure.com"
+    return bloco("resource", ["azurerm_private_dns_zone", _DNS], [
+        atributo("name", zona),
+        grupo,
+    ]) + "\n\n" + bloco(
+        "resource", ["azurerm_private_dns_zone_virtual_network_link", f"{_DNS}_rede"], [
+            atributo("name", nome_cloud(bp.project_name, "dns-banco")),
+            atributo("private_dns_zone_name", referencia(f"azurerm_private_dns_zone.{_DNS}.name")),
+            atributo("virtual_network_id", referencia(f"azurerm_virtual_network.{REDE}.id")),
+            grupo,
+        ],
     )
 
 

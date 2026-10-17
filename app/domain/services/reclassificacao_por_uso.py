@@ -17,6 +17,8 @@ PLANO_PRECO_NAO_COMPUTE R4:
   deles continua rede;
 - **segredos e chaves** (Secrets Manager, KMS, Secret Manager, Key Vault, Vault):
   saíam órfãos ou como disco HDD (requisição, "Secret version replica storage");
+- **armazenamento de arquivos** (Filestore, EFS, Azure Files, File Storage da OCI):
+  saía como disco HDD ou objeto, e o Terraform fazia disco dele (T4 da sprint);
 - **requisição da CloudFront e consulta ao cache do Cloud CDN**: saíam órfãs. São CDN,
   no balde de rede. O nome do serviço separa a da CloudFront da requisição do S3, que
   tem o mesmo jeito de UsageType.
@@ -36,6 +38,7 @@ SEM_COTACAO = "unclassified"
 SERVERLESS = "serverless"
 SEGREDOS = "secrets"
 REDE = "network_egress"
+ARQUIVOS = "file_storage"
 
 
 def _r(texto: str) -> re.Pattern[str]:
@@ -50,12 +53,14 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"cloudfront[^|]*\|.*requests"), REDE),
         (_r(r"^aws ?lambda[^|]*\|(?!.*(datatransfer|-bytes))"), SERVERLESS),
         (_r(r"^(aws ?secrets ?manager|aws ?key ?management|awskms)"), SEGREDOS),
+        (_r(r"^(amazon ?efs|amazon elastic file system)"), ARQUIVOS),
     ),
     "gcp": (
         (_r(r"source repositor[^|]*\| *storage$"), "object_storage"),
         (_r(r"^cloud run[^|]*\|(?!.*(data transfer|egress))"), SERVERLESS),
         (_r(r"^(secret manager|cloud key management)"), SEGREDOS),
         (_r(r"\|.*cdn.*lookup"), REDE),
+        (_r(r"filestore"), ARQUIVOS),
     ),
     "azure": (
         (
@@ -63,10 +68,12 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
             SERVERLESS,
         ),
         (_r(r"^key vault"), SEGREDOS),
+        (_r(r"^(storage|azure files)[^|]*\|.*\bfiles?\b"), ARQUIVOS),
     ),
     "oci": (
         (_r(r"^functions"), SERVERLESS),
         (_r(r"^(key[ _]management|vault|kms)|\|.*key management"), SEGREDOS),
+        (_r(r"file storage"), ARQUIVOS),
     ),
 }
 

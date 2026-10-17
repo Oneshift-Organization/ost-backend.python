@@ -1,6 +1,7 @@
 import pytest
 
 from app.domain.services.reclassificacao_por_uso import (
+    ARQUIVOS,
     SEGREDOS,
     SEM_COTACAO,
     SERVERLESS,
@@ -99,6 +100,27 @@ from app.domain.services.reclassificacao_por_uso import (
             "unclassified",
             SEGREDOS,
         ),
+        # Armazenamento de arquivos: nem disco nem objeto (T4)
+        (
+            "gcp",
+            "Cloud Filestore",
+            "Filestore Capacity Zonal and High Scale Iowa",
+            "storage_hdd",
+            ARQUIVOS,
+        ),
+        ("aws", "AmazonEFS", "USE1-TimedStorage-ByteHrs", "object_storage", ARQUIVOS),
+        ("aws", "AmazonEFS", "USE1-IATimedStorage-ET-ByteHrs", "storage_hdd", ARQUIVOS),
+        # O backup do EFS é backup, não o sistema de arquivos
+        ("aws", "AWS Backup", "USE1-WarmStorage-ByteHrs-EFS", "storage_hdd", "storage_hdd"),
+        ("azure", "Storage", "Storage | Files v2 | LRS Data Stored", "storage_hdd", ARQUIVOS),
+        (
+            "azure",
+            "Storage",
+            "Storage | Premium SSD Managed Disks | P10 LRS Disk",
+            "storage_ssd",
+            "storage_ssd",
+        ),
+        ("oci", "FILE_STORAGE", "File Storage - Storage", "storage_hdd", ARQUIVOS),
         # Requisição da CloudFront e consulta ao cache do Cloud CDN são rede (CDN)
         ("aws", "Amazon CloudFront", "US-Requests-Tier2-HTTPS", "unclassified", "network_egress"),
         ("aws", "Amazon CloudFront", "US-Requests-Tier2-HTTPS", "storage_hdd", "network_egress"),

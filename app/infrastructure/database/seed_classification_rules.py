@@ -70,7 +70,9 @@ GCP_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*balanced pd capacity*", "glob", "storage_ssd", None, "high", 41),
     ("*extreme pd capacity*", "glob", "storage_ssd", None, "high", 42),
     ("*pd capacity*", "glob", "storage_hdd", None, "medium", 50),
-    ("*filestore*", "glob", "storage_hdd", None, "high", 51),
+    # Armazenamento de arquivos, ao custo atual (T4): como disco HDD, o Terraform
+    # fazia ~1.570 GB de disco que não existe. A agregação corrige fatura antiga.
+    ("*filestore*", "glob", "file_storage", None, "high", 51),
     ("*snapshot*", "glob", "storage_hdd", None, "medium", 52),
     ("*storage*", "glob", "storage_hdd", None, "low", 53),
     # ── OS licensing ──
@@ -210,7 +212,7 @@ AZURE_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("storage | *managed disks*", "glob", "storage_hdd", None, "medium", 32),
     ("storage | *blob*", "glob", "object_storage", None, "high", 33),
     ("storage | *data lake*", "glob", "object_storage", None, "medium", 34),
-    ("storage | *files*", "glob", "storage_hdd", None, "medium", 35),
+    ("storage | *files*", "glob", "file_storage", None, "medium", 35),
     ("storage*", "glob", "storage_hdd", None, "low", 39),
     ("bandwidth*", "glob", "network_egress", None, "high", 40),
     ("virtual network*", "glob", "network_egress", None, "high", 41),
@@ -239,7 +241,7 @@ OCI_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("block volume*", "glob", "storage_ssd", None, "high", 30),
     ("object storage*", "glob", "object_storage", None, "high", 31),
     ("archive storage*", "glob", "object_storage", None, "high", 32),
-    ("file storage*", "glob", "storage_hdd", None, "medium", 33),
+    ("file storage*", "glob", "file_storage", None, "medium", 33),
     ("*outbound data transfer*", "glob", "network_egress", None, "high", 40),
     ("*data transfer*", "glob", "network_egress", None, "medium", 41),
     ("load balancer*", "glob", "network_egress", None, "high", 42),
