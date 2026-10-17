@@ -115,6 +115,18 @@ class DisponibilidadeIn(BaseModel):
     high_availability: bool = False
 
 
+class EscopoIn(BaseModel):
+    """Terraform só do escopo do plano de migração (T5): a mesma escolha do
+    `POST /v1/analyses/{job_id}/migration-plans`, fechada pelas mesmas regras."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    aplicacoes: list[str] = Field(default_factory=list)
+    servicos: list[str] = Field(default_factory=list)
+    ambiente: str | None = Field(default=None, description="null = todos os ambientes")
+    incluir_grupos: list[str] = Field(default_factory=list)
+
+
 class TerraformGenerationIn(BaseModel):
     """O que o frontend envia.
 
@@ -132,6 +144,9 @@ class TerraformGenerationIn(BaseModel):
     network: RedeIn = Field(default_factory=RedeIn)
     availability: DisponibilidadeIn = Field(default_factory=DisponibilidadeIn)
     tags: dict[str, str] = Field(default_factory=dict)
+    # Sem escopo, o pacote é da análise inteira. Com ele, só o plano escolhido (T5);
+    # exige o inventário anexado à análise.
+    escopo: EscopoIn | None = None
 
     @field_validator("project_name")
     @classmethod

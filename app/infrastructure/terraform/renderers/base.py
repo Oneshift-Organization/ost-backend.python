@@ -233,6 +233,7 @@ def readme(
         "terraform plan    # leia o plano inteiro antes de aplicar",
         "```",
         "",
+        *([_secao_escopo(topologia["escopo"])] if topologia and topologia.get("escopo") else []),
         _secao_premissas(bp.assumptions),
     ]
     if bp.unsupported_items:
@@ -252,6 +253,63 @@ def readme(
     partes += [_secao_procedencia(procedencia)]
     partes += [_secao_custo(bp.provider.value, bp.region, procedencia)]
     return "\n".join(partes).rstrip() + "\n"
+
+
+def _secao_escopo(escopo: dict[str, Any]) -> str:
+    """Terraform só do escopo do plano de migração (T5): o que entra, em que ordem, e o
+    que fica do outro lado e precisa de conexão entre as nuvens."""
+
+    def ligacao(g: dict[str, Any]) -> str:
+        ordem = f" (ordem {g['ordem']})" if g.get("ordem") is not None else ""
+        portas = f", portas {', '.join(g['portas'])}" if g.get("portas") else ""
+        return f"- {g['grupo']}{ordem}{portas}"
+
+    aplicacoes = ", ".join(escopo.get("aplicacoes") or []) or "—"
+    linhas = [
+        "## Escopo deste pacote",
+        "",
+        f"Só o plano de migração escolhido: **{aplicacoes}** "
+        f"({escopo.get('unidades', 0)} unidade(s)). Máquinas, bancos, subredes e grupos "
+        "de segurança são os deles; discos e buckets saem do custo deles na fatura.",
+        "",
+    ]
+    ordens = escopo.get("ordens") or []
+    if ordens:
+        linhas += ["Ordem de migração:", ""]
+        linhas += [
+            f"{o['ordem'] if o.get('ordem') is not None else 'livre'}. "
+            + ", ".join(o.get("grupos") or [])
+            for o in ordens
+        ]
+        linhas.append("")
+    antes, para_tras = escopo.get("antes") or [], escopo.get("para_tras") or []
+    if antes or para_tras:
+        linhas += ["### Conectividade entre nuvens a prever", ""]
+        if antes:
+            linhas += [
+                "Vão **antes** e não estão aqui: o escopo depende deles. Precisam estar no "
+                "destino antes, ou acessíveis por uma conexão entre as nuvens.",
+                "",
+                *[ligacao(g) for g in antes],
+                "",
+            ]
+        if para_tras:
+            linhas += [
+                "Ficam **para trás**, na origem, e dependem do escopo: até migrarem, falam "
+                "com ele por uma conexão entre as nuvens.",
+                "",
+                *[ligacao(g) for g in para_tras],
+                "",
+            ]
+    if escopo.get("pools_fora"):
+        linhas += [
+            "Pools de compute da análise sem máquina no escopo não entram: "
+            + ", ".join(escopo["pools_fora"])
+            + ".",
+            "",
+        ]
+    linhas += [f"- {a}" for a in escopo.get("avisos") or []]
+    return "\n".join(linhas).rstrip() + "\n"
 
 
 def _secao_custo(destino: str, regiao: str, premissas: dict[str, Any]) -> str:

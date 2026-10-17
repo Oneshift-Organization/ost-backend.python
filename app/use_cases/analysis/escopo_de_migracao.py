@@ -10,7 +10,7 @@ Dinheiro na moeda da análise, com a mesma taxa de câmbio do payload.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -43,12 +43,18 @@ from app.domain.services.cotacao_do_escopo import (
 )
 from app.domain.services.currency import FxRate, convert, identity_rate
 from app.domain.services.sku_matcher import extract_family
+from app.domain.services.terraform_topologia.escopo import (
+    LigacaoEntreNuvens,
+    RecorteDoEscopo,
+    familia_da_maquina,
+)
 from app.domain.services.topologia import analisar_topologia
 from app.domain.services.topologia.cargas_no_cluster import CargasDoCluster, cargas_no_cluster
 from app.domain.services.topologia.dependencias_de_servico import dependencias_de_servico
 from app.domain.services.topologia.escopo import (
     CatalogoDeAplicacoes,
     Escolha,
+    GrupoVizinho,
     PlanoDeMigracao,
     fechar_plano,
     montar_catalogo,
@@ -107,6 +113,12 @@ class RecursoDoEscopo:
     tipo_nativo: str
     regiao: str | None
     custo: Decimal  # na moeda da análise; 0 quando a fatura não cita o recurso
+    # Para o Terraform do escopo (T5): onde está e o que é
+    subredes: tuple[str, ...] = ()
+    familia: str | None = None
+    categoria_disco: str | None = None
+    classe: str | None = None
+    motor: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +175,13 @@ class EscopoDeMigracaoUseCase:
             ctx.provedores,
         )
         return PlanoCotado(plano=plano, cotacao=cotacao, contexto=ctx)
+
+    async def recorte(
+        self, user_id: UUID, job_id: UUID, escolha: Escolha
+    ) -> tuple[PlanoCotado, RecorteDoEscopo]:
+        """O plano e o que o Terraform do escopo provisiona (T5)."""
+        cotado = await self.plano(user_id, job_id, escolha)
+        return cotado, recorte_do_plano(cotado)
 
     async def _contexto(self, user_id: UUID, job_id: UUID) -> ContextoDoEscopo:
         job = await self._job(user_id, job_id)
@@ -288,6 +307,11 @@ class EscopoDeMigracaoUseCase:
                     tipo_nativo=r.tipo_nativo,
                     regiao=r.regiao,
                     custo=custo_do_recurso.get(chave, _ZERO),
+                    subredes=tuple(sorted(indice.subredes_de(chave))),
+                    familia=familia_da_maquina(_texto(r.atributos.get("tipo_maquina"))),
+                    categoria_disco=_texto(r.atributos.get("categoria_disco")),
+                    classe=_texto_cru(r.atributos.get("classe")),
+                    motor=_texto_cru(r.atributos.get("motor")),
                 )
                 for u in analise.unidades
                 for chave in u.recursos
@@ -368,3 +392,55 @@ def _taxas(payload: Mapping[str, Any]) -> dict[str, dict[str, Decimal]]:
             if e.get("provedor") and origem and destino is not None:
                 taxas[str(e["provedor"]).lower()][categoria] = destino / origem
     return dict(taxas)
+
+
+def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:
+    """As unidades do plano → máquinas por (subrede, família), bancos e custo por categoria."""
+    ctx, plano = cotado.contexto, cotado.plano
+    unidades = set(plano.unidades)
+    chaves = {
+        chave for u in ctx.catalogo.analise.unidades if u.id in unidades for chave in u.recursos
+    }
+    recursos = [ctx.recursos[c] for c in sorted(chaves) if c in ctx.recursos]
+    maquinas: Counter[tuple[str | None, str]] = Counter()
+    bancos: Counter[str | None] = Counter()
+    no_escopo: Counter[tuple[str | None, str]] = Counter()
+    na_conta: Counter[tuple[str | None, str]] = Counter()
+    for r in ctx.recursos.values():
+        if r.tipo == TipoDeRecurso.INSTANCIA and r.familia:
+            na_conta[(r.regiao, r.familia.upper())] += 1
+    for r in recursos:
+        if r.tipo == TipoDeRecurso.INSTANCIA and r.familia:
+            maquinas[(r.subredes[0] if r.subredes else None, r.familia.upper())] += 1
+            no_escopo[(r.regiao, r.familia.upper())] += 1
+        elif r.tipo == TipoDeRecurso.BANCO:
+            bancos[r.classe] += 1
+    custos: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+    for linha in ctx.linhas:
+        if linha.unidade not in unidades or linha.recurso is None:
+            continue
+        recurso = ctx.recursos.get(linha.recurso)
+        if linha.tipo is TipoDeRecurso.DISCO:
+            hdd = recurso is not None and recurso.categoria_disco == "hdd"
+            custos["armazenamento_hdd" if hdd else "armazenamento_ssd"] += linha.custo
+        elif linha.tipo is TipoDeRecurso.BUCKET:
+            custos["armazenamento_objetos"] += linha.custo
+        elif linha.tipo is TipoDeRecurso.BANCO:
+            custos["banco_dados"] += linha.custo
+    nomes = {g.id: g.nome for g in ctx.catalogo.grupos}
+
+    def ligacoes(vizinhos: tuple[GrupoVizinho, ...]) -> tuple[LigacaoEntreNuvens, ...]:
+        return tuple(LigacaoEntreNuvens(g.nome or g.grupo, g.ordem, g.portas) for g in vizinhos)
+
+    return RecorteDoEscopo(
+        aplicacoes=plano.aplicacoes,
+        unidades=len(unidades),
+        maquinas=dict(maquinas),
+        bancos=frozenset(r.chave for r in recursos if r.tipo == TipoDeRecurso.BANCO),
+        bancos_por_classe=dict(bancos),
+        por_familia={k: (no_escopo[k], n) for k, n in na_conta.items()},
+        custos=dict(custos),
+        ordens=tuple((o.ordem, tuple(nomes.get(g, g) for g in o.grupos)) for o in plano.ordens),
+        antes=ligacoes(plano.antes),
+        para_tras=ligacoes(plano.para_tras),
+    )

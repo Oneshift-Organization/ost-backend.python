@@ -82,6 +82,8 @@ _TRADUCAO: dict[type[Exception], tuple[int, str, bool]] = {
     EscolhaInvalidaError: (status.HTTP_422_UNPROCESSABLE_ENTITY, "ESCOLHA_INVALIDA", False),
 }
 _ERROS = tuple(_TRADUCAO)
+# A rota do Terraform do escopo (T5) fecha o mesmo plano e responde os mesmos erros
+ERROS_DO_ESCOPO = _ERROS
 
 
 def _traduzir(e: Exception) -> HTTPException:
@@ -159,3 +161,6 @@ async def post_migration_plan(
         media_type=tipo,
         headers={"Content-Disposition": f'attachment; filename="{arquivo}"'},
     )
+
+
+traduzir_erro_do_escopo = _traduzir

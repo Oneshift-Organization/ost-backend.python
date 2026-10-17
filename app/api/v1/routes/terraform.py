@@ -13,14 +13,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, escopo_de_migracao_uc
+from app.api.v1.routes.migration_scope import ERROS_DO_ESCOPO, traduzir_erro_do_escopo
 from app.core.config import get_settings
 from app.domain.entities.analysis_job import AnalysisStatus, agora_utc
+from app.domain.services.terraform_topologia.escopo import recortar_ao_escopo
+from app.domain.services.topologia.escopo import Escolha
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
 from app.infrastructure.database.models.terraform_generation_job import (
     TerraformGenerationJobModel,
@@ -29,6 +33,7 @@ from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.terraform.archive import montar_zip
 from app.infrastructure.terraform.renderers import arquivos_esperados
 from app.schemas.terraform import (
+    EscopoIn,
     ResumoValidacao,
     StatusGeracao,
     TerraformGenerationIn,
@@ -117,8 +122,13 @@ async def iniciar_geracao(
             retryable=False,
         )
 
+    payload_analise = dict(analise.llm_input_payload)
+    if entrada.escopo is not None:
+        payload_analise = await _recortar(
+            user_uuid, entrada.analysis_job_id, entrada.escopo, payload_analise, session
+        )
     try:
-        validate_migration_strategy(analise.llm_input_payload, entrada.target_provider.value)
+        validate_migration_strategy(payload_analise, entrada.target_provider.value)
     except ValueError as error:
         raise _erro(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -145,7 +155,7 @@ async def iniciar_geracao(
     background.add_task(
         _executar_geracao,
         job.generation_id,
-        dict(analise.llm_input_payload),
+        payload_analise,
         entrada,
         get_sessionmaker(),
     )
@@ -263,6 +273,34 @@ async def _executar_geracao(
 
         job.updated_at = agora_utc()
         await session.commit()
+
+
+async def _recortar(
+    user_id: UUID,
+    job_id: UUID,
+    escopo: EscopoIn,
+    payload: dict[str, Any],
+    session: DbSession,
+) -> dict[str, Any]:
+    """O payload só com o escopo do plano de migração (T5). Os erros são os do plano."""
+    if not get_settings().inventory_enabled:
+        raise _erro(
+            status.HTTP_404_NOT_FOUND,
+            "INVENTARIO_DESLIGADO",
+            "o Terraform do escopo usa o inventário, que não está habilitado neste ambiente",
+            retryable=False,
+        )
+    escolha = Escolha(
+        aplicacoes=frozenset(escopo.aplicacoes),
+        servicos=frozenset(escopo.servicos),
+        ambiente=escopo.ambiente or None,
+        incluir_grupos=frozenset(escopo.incluir_grupos),
+    )
+    try:
+        _, recorte = await escopo_de_migracao_uc(session).recorte(user_id, job_id, escolha)
+    except ERROS_DO_ESCOPO as e:
+        raise traduzir_erro_do_escopo(e) from e
+    return recortar_ao_escopo(payload, recorte)
 
 
 # ── utilidades ──────────────────────────────────────────────────────────
