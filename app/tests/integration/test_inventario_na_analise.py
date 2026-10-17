@@ -194,7 +194,8 @@ async def test_analise_congela_a_topologia_e_impoe_a_ordem(app, cur, mocks_inven
     sequencia = job.ai_structured_output["agent_views"]["risk_migration"][
         "recommended_migration_sequence"
     ]
-    assert sequencia[0].startswith("Onda 0 — fundação")
-    assert any(s.startswith("Onda 1:") for s in sequencia)
+    # Etapas e alertas no contrato de `agent_views`: "Onda 0, fundação: ..." vira nome e detalhe
+    assert sequencia[0]["name"] == "fundação"
+    assert any(s["name"] == "Onda 1" for s in sequencia)
     flags = job.ai_structured_output["agent_views"]["risk_migration"]["risk_flags"]
-    assert any(f.startswith("[alta]") for f in flags)
+    assert any(f["message"].startswith("[alta]") for f in flags)
