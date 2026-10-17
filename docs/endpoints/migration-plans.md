@@ -122,6 +122,42 @@ Dois arquivos, para dois públicos, montados da mesma leitura
 Os dois vêm com `Content-Disposition: attachment` e nome
 `plano-de-migracao-<escolha>-<AAAAMMDD-HHMM>.<pdf|xlsx>`.
 
+### Terraform do escopo
+
+`POST /v1/terraform-generations` aceita o campo opcional `escopo`, com a mesma
+escolha do `POST …/migration-plans`. Sem ele, o pacote é da análise inteira, como
+sempre foi.
+
+```json
+{
+  "analysis_job_id": "…",
+  "target_provider": "gcp",
+  "region": "us-central1",
+  "network": {"mode": "create", "cidr": "10.50.0.0/16"},
+  "escopo": {"aplicacoes": ["checkout"], "ambiente": "prod", "incluir_grupos": []}
+}
+```
+
+`escopo` aceita `aplicacoes`, `servicos`, `ambiente` e `incluir_grupos`; campo
+desconhecido é 422. O plano é fechado pelas mesmas regras da tela, e o payload da
+análise é recortado antes de derivar o pacote
+(`app/domain/services/terraform_topologia/escopo.py`):
+
+| parte | no pacote do escopo |
+|---|---|
+| compute | só os pools com máquina no escopo, na proporção dela: vCPUs das fatias de subrede do escopo sobre as do pool. Pool sem posicionamento (fatura sem ID de recurso): máquinas do escopo sobre as da conta, na mesma família e região, pelo inventário |
+| subredes e grupos | os que as máquinas e os bancos do escopo usam (o espelho já cria só esses) |
+| bancos | os do escopo, pela classe |
+| discos, buckets, banco estimado | pelo custo das linhas do escopo na fatura; o armazenamento medido do inventário é da conta e sai |
+| rede, segredos, serverless… | saem: o pacote não os provisiona |
+
+O README do pacote ganha a seção **Escopo deste pacote**: aplicações, ordem de
+migração, **conectividade entre nuvens a prever** (os grupos que vão `antes` e os
+que ficam `para_tras`, com ordem e portas) e os pools da análise que não entraram.
+
+Erros: os mesmos da tabela [Erros](#erros) (o escopo usa o inventário), mais os da
+geração. `INVENTARIO_DESLIGADO` também quando `INVENTORY_ENABLED=false`.
+
 ## Fatura e inventário: a correspondência
 
 As duas respostas trazem `correspondencia`, que diz se o inventário casa com a fatura:

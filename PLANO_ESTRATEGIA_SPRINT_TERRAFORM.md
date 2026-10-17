@@ -213,7 +213,13 @@ Cerca de 1.570 GB de HDD que não existem no bill GCP. A causa é a classificaç
   (Filestore, EFS, Azure Files), com aviso no README.
 - **Aceite:** pacote do bill GCP real sem o disco; aviso presente.
 
-### T5 — Terraform do escopo ([`PLANO_ESCOPO_DE_MIGRACAO`](PLANO_ESCOPO_DE_MIGRACAO.md) E3)
+### T5 — Terraform do escopo ([`PLANO_ESCOPO_DE_MIGRACAO`](PLANO_ESCOPO_DE_MIGRACAO.md) E3) — ✅ back 17/10
+
+> Feito com a escolha no corpo (2.1 = não agora): `TerraformGenerationIn.escopo`. Medido
+> nas análises locais: checkout/auth gera auth, checkout e pagamentos (50 de 95 VMs),
+> o README cita catalogo (antes) e monitoramento (para trás); fatura sem ID de recurso
+> recorta pela proporção do inventário (50 de 105). Os 16 pares origem × destino dos
+> mocks passam no `terraform validate`. Falta o botão no front.
 
 - `TerraformGenerationIn` aceita o plano (`migration_plan_id`, se 2.1 = sim; senão
   a escolha no corpo).
@@ -273,6 +279,8 @@ Em ordem de prioridade, definida pelo usuário em 17/10. M1 e M2 vieram de 16/10
 | # | melhoria | prioridade | de quem | observação |
 |---|---|---|---|---|
 | M3 | **Completar a análise existente sem rodar o LLM de novo** quando os números não mudam: anexar inventário (ou reanalisar) recalcula o determinístico e reaproveita a narrativa; o LLM só roda se o resultado mudar ou se o usuário pedir | **máxima** | nós | Analisar com cautela antes: a narrativa velha não pode citar número que mudou (marcar desatualizada); a topologia do inventário vai ao LLM hoje sem necessidade. A duplicidade na lista já foi corrigida em 17/10 |
+| M9 | **Renomear o billing (alias), pedido em 17/10.** Rota `PUT /v1/billing-files/{job_id}/alias` grava um nome dado pelo usuário. A tela (lista de billings, lista de análises, menu de análises recentes, cabeçalho da análise, exportações) mostra o alias no lugar do nome do arquivo. Sem alias, o padrão é o nome do arquivo (`source_filename`) | **máxima** | nós (back e front) | Coluna nova `alias` nullable em `billing_reports` (migration; o deploy do develop não roda migration). `source_filename` fica intacto: é o rastro do upload. As respostas ganham `nome_exibicao` = alias ou nome do arquivo, e o front passa a ler esse campo. Isolamento por `user_id`: 404 para billing de outro usuário. Nota ao MCP: campo aditivo no snapshot |
+| M10 | **Tabela de custos da OCI, pedido em 17/10.** Corrigir as falhas na identificação do preço dos recursos e dos custos da OCI: recurso sem preço ou com o preço errado, custo que não chega à categoria certa | **máxima** | nós | Primeiro levantar os casos concretos (quais recursos e quais linhas falham, em que tela aparecem) e escrever a análise de impacto; corrigir de forma geral, nunca para uma fatura. Pontos de partida: `cloud_price_points` da OCI (`_OCI_POR_NOME` no `category_rate_client`), regras de classificação da OCI e a cobertura de SKU (`sku_coverage_ratio`) |
 | M4 | **Custo de transição** (multicloud temporário): durante as ondas, paga-se as duas nuvens e o tráfego entre elas (egress, VPN). **Complemento: payback na tela**, com o custo da migração informado pelo usuário, somado ao de transição | média-baixa | nós | Hoje a economia mostrada não inclui esse custo. Desenho em [`PLANO_ESCOPO_DE_MIGRACAO`](PLANO_ESCOPO_DE_MIGRACAO.md) §6 |
 | M5 | Modo "só o serviço" no plano de migração | baixa | nós | Depende do M4: a parte que fica conversa com a que foi |
 | M6 | Coleta automática do inventário pela plataforma (I10) | extremamente baixa | nós | **Apenas se houver muito tempo disponível e estivermos correndo grande risco de o cliente não gostar do projeto.** Nunca guardar chave do cliente; papel delegado só leitura |

@@ -234,6 +234,55 @@ async def test_analise_incompleta_pede_para_esperar(_app_ligado, _db_ready) -> N
         await _limpar(rid)
 
 
+# ── Terraform do escopo (T5) ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_escopo_sem_inventario_ligado_e_404(
+    _app_ligado, _db_ready, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("INVENTORY_ENABLED", "false")
+    config.get_settings.cache_clear()
+    rid = await _ingest(FIXTURES / "aws_cost_explorer_full.csv", user_id=HTTP_USER)
+    try:
+        job = await _analise_pronta(rid, {"provedor_origem": "aws"})
+        async with _cliente(_app_ligado) as c:
+            r = await c.post(
+                "/v1/terraform-generations",
+                json=_corpo(job.job_id, escopo={"aplicacoes": ["checkout"]}),
+            )
+        assert r.status_code == 404
+        assert r.json()["detail"]["codigo"] == "INVENTARIO_DESLIGADO"
+    finally:
+        await _limpar(rid)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_escopo_de_analise_sem_inventario_traz_o_erro_do_plano(
+    _app_ligado, _db_ready, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Os erros do escopo são os da rota do plano de migração: a tela já os trata."""
+    monkeypatch.setenv("INVENTORY_ENABLED", "true")
+    config.get_settings.cache_clear()
+    rid = await _ingest(FIXTURES / "aws_cost_explorer_full.csv", user_id=HTTP_USER)
+    try:
+        job = await _analise_pronta(rid, {"provedor_origem": "aws"})
+        async with _cliente(_app_ligado) as c:
+            r = await c.post(
+                "/v1/terraform-generations",
+                json=_corpo(job.job_id, escopo={"aplicacoes": ["checkout"]}),
+            )
+            invalido = await c.post(
+                "/v1/terraform-generations",
+                json=_corpo(job.job_id, escopo={"aplicacao": ["checkout"]}),
+            )
+        assert r.status_code == 409
+        assert r.json()["detail"]["codigo"] == "INVENTARIO_AUSENTE"
+        assert invalido.status_code == 422
+    finally:
+        await _limpar(rid)
+
+
 @pytest.mark.asyncio(loop_scope="session")
 async def test_o_legado_nao_muda_com_a_flag_ligada(_app_ligado, _db_ready) -> None:
     async with _cliente(_app_ligado) as c:

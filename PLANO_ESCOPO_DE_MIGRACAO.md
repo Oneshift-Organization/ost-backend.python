@@ -10,7 +10,7 @@
 > |---|---|
 > | **E1** — rotas `applications` e `migration-plans` | ✅ feito, contrato em [`docs/endpoints/migration-plans.md`](docs/endpoints/migration-plans.md) |
 > | **E2** — custo no destino por escopo | ✅ feito: instância pela taxa do pool dela, disco/banco/bucket pela categoria, o resto declarado sem cotação |
-> | **E3** — Terraform do escopo | ⬜ sprint de Terraform |
+> | **E3** — Terraform do escopo | ✅ 17/10: campo `escopo` no `POST /v1/terraform-generations`, recorte do payload e seção no README ([`docs/endpoints/migration-plans.md`](docs/endpoints/migration-plans.md#terraform-do-escopo)); falta o botão no front |
 > | **E4** — pré-requisitos | ✅ sem tag, cada unidade vira "aplicação"; custo sem recurso fica em `sem_aplicacao`; fatura resumida tem mensagem própria e o Cost Explorer por serviço é recusado no upload (PLANO_CENARIOS_DE_ENTRADA §3.4) |
 > | **E5** — limite das dependências | ✅ `limite_das_dependencias` nas duas respostas |
 > | **E6** — dependência entre serviços na mesma aplicação | ✅ `topologia/dependencias_de_servico.py`; não muda unidades, grupos, ondas nem Terraform |
