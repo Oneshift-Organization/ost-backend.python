@@ -31,6 +31,9 @@ class BillingFileUploadResponse(BaseModel):
     external_id: UUID | None = None
     status: JobStatus
     source_filename: str
+    alias: str | None = None
+    # O que a tela mostra: o alias, ou o nome do arquivo sem ele
+    nome_exibicao: str | None = None
     created_at: datetime
 
 

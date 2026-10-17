@@ -88,5 +88,7 @@ a linha troca para a análise nova, sem aparecer uma segunda linha.
   análise concluída, na trilha, na linha do tempo e na confirmação de exclusão.
 - A busca acha pelo nome dado e pelo do arquivo.
 - O formato e o campo "Nome" em "Dados do arquivo" continuam vindo do arquivo enviado.
+- **Na importação:** campo "Nome da análise" no modal, preenchido com o nome do
+  arquivo; só vai como `alias` no upload se a pessoa mudar.
 
 O nome é do billing: renomear vale para todas as revisões da análise dele.

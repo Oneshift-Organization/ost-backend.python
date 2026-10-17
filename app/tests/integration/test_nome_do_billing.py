@@ -116,3 +116,38 @@ async def test_a_lista_de_analises_mostra_o_alias_e_a_ingestao_nao_o_apaga(_app,
         assert (linha["alias"], linha["nome_exibicao"]) == ("Produção AWS", "Produção AWS")
     finally:
         await _limpar(rid)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_nome_dado_na_importacao(_app, _db_ready) -> None:
+    conteudo = (FIXTURES / _ARQUIVO).read_bytes()
+    async with _cliente(_app) as c:
+        com_nome = await c.post(
+            "/v1/billing-files",
+            files={"file": (_ARQUIVO, conteudo, "text/plain")},
+            data={"alias": "  Fatura   de março "},
+        )
+        sem_nome = await c.post(
+            "/v1/billing-files", files={"file": (_ARQUIVO, conteudo, "text/plain")}
+        )
+        invalido = await c.post(
+            "/v1/billing-files",
+            files={"file": (_ARQUIVO, conteudo, "text/plain")},
+            data={"alias": "x" * 121},
+        )
+    ids = [UUID(r.json()["job_id"]) for r in (com_nome, sem_nome)]
+    try:
+        assert com_nome.status_code == 202
+        assert (com_nome.json()["alias"], com_nome.json()["nome_exibicao"]) == (
+            "Fatura de março",
+            "Fatura de março",
+        )
+        assert (sem_nome.json()["alias"], sem_nome.json()["nome_exibicao"]) == (None, _ARQUIVO)
+        assert invalido.status_code == 422
+        async with _cliente(_app) as c:
+            status_ = (await c.get(f"/v1/billing-files/{ids[0]}")).json()
+        assert status_["nome_exibicao"] == "Fatura de março"
+        assert status_["source_filename"] == _ARQUIVO
+    finally:
+        for rid in ids:
+            await _limpar(rid)
