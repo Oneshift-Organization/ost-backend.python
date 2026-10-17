@@ -22,6 +22,7 @@ from app.domain.services.service_identity import is_financial_component
 from app.domain.services.technical_assessment import CURATED, assess, fraction, inventory_services
 from app.schemas.decision_support import (
     DECISION_POLICY_VERSION,
+    DecisionComparison,
     DecisionContext,
     DecisionSupport,
     ScenarioScore,
@@ -350,7 +351,21 @@ def _scenario(
         and technical.coverage == 1
         and not any(f.provisional for f in technical.factors)
     )
-    value = sum((Decimal(str(a.contribution)) for a in axes), _ZERO) if enough else None
+    # A small sample must not be extrapolated to the entire estate. Still publish
+    # its conservative, evidenced minimum when an economic comparison exists.
+    comparable = axes[0].value is not None
+    if not enough and comparable:
+        for axis in axes:
+            axis.contribution = rounded(Decimal(str(axis.lower_bound)) * Decimal(str(axis.weight)))
+            for factor in axis.factors:
+                factor.contribution = rounded(
+                    Decimal(str(factor.lower_bound)) * Decimal(str(factor.weight))
+                )
+    value = (
+        (sum((Decimal(str(a.contribution)) for a in axes), _ZERO) if enough else lower)
+        if comparable
+        else None
+    )
     blockers = [
         f"{key}: requisito obrigatório não atendido"
         for key in ("region_approved", "compliance_approved")
@@ -364,18 +379,19 @@ def _scenario(
         blockers.append("Cobertura de preços inferior a 50% ou desconhecida.")
     return ScenarioScore(
         provider=provider,
-        status="complete" if complete else ("partial" if enough else "not_scored"),
+        status="complete" if complete else ("partial" if comparable else "not_scored"),
         value=rounded(value) if value is not None else None,
         lower_bound=rounded(lower),
         upper_bound=rounded(upper),
         coverage=float(coverage),
         axes=axes,
-        assessment_method="evidence_normalized",
+        assessment_method="evidence_normalized" if enough else "conservative_bound",
         missing_information=[]
         if enough
         else [
-            "Score geral requer ≥50% de identificação, preços e evidência técnica, "
-            "além de dois critérios técnicos cobrindo ≥50% do custo cada."
+            "Nota parcial conservadora: soma apenas contribuições comprovadas, sem "
+            "extrapolar a amostra. Para nota normalizada faltam ≥50% de identificação, "
+            "preços e evidência técnica e dois critérios técnicos com cobertura ≥50%."
         ],
         eligible=not blockers,
         blockers=blockers,
@@ -442,6 +458,45 @@ def build_decision_support(payload: dict) -> DecisionSupport:
         )
     )
     selected = eligible[0] if eligible else None
+    comparisons = [
+        DecisionComparison(
+            provider=normalized(row.get("provedor")),
+            current_monthly_cost=rounded(current) if current is not None else None,
+            target_monthly_cost=rounded(cost)
+            if (cost := number(row.get("custo_estimado_total"))) is not None
+            else None,
+            cost_delta=rounded(cost - current)
+            if cost is not None and current is not None
+            else None,
+            price_coverage=float(fraction(row.get("cobertura"))),
+        )
+        for row in rows
+    ]
+    no_cheaper_target = (
+        bool(rows)
+        and current is not None
+        and current > 0
+        and all(
+            (cost := number(row.get("custo_estimado_total"))) is not None
+            and cost >= current
+            and fraction(row.get("cobertura")) > 0
+            for row in rows
+        )
+    )
+    outcome = "migrate" if selected else "retain" if no_cheaper_target else "inconclusive"
+    # Display the closest economic alternative without turning it into a recommendation.
+    reference = selected or next(
+        iter(
+            sorted(
+                scores,
+                key=lambda s: (
+                    -(number(by_provider[s.provider].get("economia_mensal")) or _ZERO),
+                    s.provider,
+                ),
+            )
+        ),
+        None,
+    )
     reason = (
         (
             "Maior score completo entre cenários elegíveis; desempate por economia e provedor."
@@ -450,7 +505,15 @@ def build_decision_support(payload: dict) -> DecisionSupport:
             "faltam dados para score completo."
         )
         if selected
-        else "Nenhum destino elegível; manter provisoriamente e revisar as pendências."
+        else (
+            "Permanecer na cloud atual: os destinos cotados não reduzem o gasto mensal. "
+            "O score mede a atratividade da migração para a alternativa econômica mais próxima, "
+            "não a qualidade da cloud atual. Conclusão limitada ao escopo e preços avaliados; "
+            "revise a cobertura, as pendências e os custos de transição antes de decidir."
+            if no_cheaper_target
+            else "Comparação inconclusiva: não há destino elegível. Ausência de cotação ou "
+            "restrições não comprovam que permanecer seja economicamente melhor."
+        )
     )
     selected_strategies = [s for s in strategies if selected and s.provider == selected.provider]
     rs = {s.strategy for s in selected_strategies if s.strategy}
@@ -484,17 +547,19 @@ def build_decision_support(payload: dict) -> DecisionSupport:
         corporate_benefits=build_corporate_benefits(),
         input_fingerprint=digest,
         selected_provider=selected.provider if selected else None,
+        outcome=outcome,
+        comparison_basis=comparisons,
         selection_reason=reason,
-        score=selected,
+        score=reference,
         provider_scores=scores,
         workload_strategies=strategies,
         strategy_summary=summary,
         confidence=confidence,
         limitations=[
-            "Política de regras v4 (50/40/10), não modelo treinado nem probabilidade de sucesso.",
+            "Política de regras v4.1 (50/40/10), não modelo treinado nem probabilidade de sucesso.",
             "Financeiro 50%, técnico 40%, cobertura da análise 10%; benefícios não pontuam.",
             "Nota técnica normalizada pela evidência disponível; hipóteses são preliminares. "
-            "Nota geral exige cobertura mínima, não é autorização para migrar.",
+            "Sem cobertura mínima, a nota é o mínimo comprovado, não autorização para migrar.",
             "Limites representam fatores desconhecidos, não intervalo estatístico.",
             "Billing não comprova dependências, topologia, compliance ou autorização para migrar.",
             "Economia recorrente não inclui todo o investimento de migração "

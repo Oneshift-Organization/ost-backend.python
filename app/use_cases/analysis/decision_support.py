@@ -7,7 +7,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from app.domain.services.decision_support import build_decision_support, number
 from app.schemas.analysis_v2 import AnalysisV2Response
-from app.schemas.decision_support import DecisionSupport
+from app.schemas.decision_support import DecisionSupport, ScenarioScore
 from app.use_cases.analysis.backend_authority import apply_backend_authority
 from app.use_cases.analysis.equivalence_pricing import reconcile_pricing
 from app.use_cases.analysis.equivalence_projection import project_equivalences
@@ -74,6 +74,12 @@ def _legacy_int(value: float) -> int:
     return int(Decimal(str(value)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
+def _score_int(score: ScenarioScore) -> int:
+    if score.assessment_method == "conservative_bound" and score.status == "partial":
+        return int(score.value or 0)
+    return _legacy_int(score.value or 0)
+
+
 def impose_decision(response: AnalysisV2Response, payload: dict) -> AnalysisV2Response:
     """The response's decision_support is untrusted. Recompute from the input snapshot."""
     prepared = prepare_decision_payload(payload)
@@ -95,7 +101,7 @@ def impose_decision(response: AnalysisV2Response, payload: dict) -> AnalysisV2Re
                         if key in {"financial", "technical"}
                     },
                     "enterprise_score": 0,
-                    "overall_score": _legacy_int(score.value or 0),
+                    "overall_score": _score_int(score),
                 }
             )
         )
@@ -109,7 +115,7 @@ def impose_decision(response: AnalysisV2Response, payload: dict) -> AnalysisV2Re
                 if a.id in {"financial", "technical"}
             }
         )
-        numeric["overall_score"] = _legacy_int(selected.value or 0)
+        numeric["overall_score"] = _score_int(selected)
     # Legacy integers remain parseable; new clients distinguish zero from missing.
     equivalents = project_equivalences(prepared)
     update = {
@@ -122,7 +128,7 @@ def impose_decision(response: AnalysisV2Response, payload: dict) -> AnalysisV2Re
         "cross_cloud_equivalents": equivalents,
         "pricing_reconciliation": reconcile_pricing(equivalents, prepared),
     }
-    if selected is None:
+    if decision.selected_provider is None:
         update["savings_summary"] = response.savings_summary.model_copy(
             update={
                 "total_monthly_savings_usd": 0.0,

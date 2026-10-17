@@ -1,4 +1,23 @@
-# Score determinístico e 7 Rs — política v4
+# Score determinístico e 7 Rs — política v4.1
+
+## Permanência e comparação (v4.1)
+
+`outcome` distingue `migrate`, `retain` e `inconclusive`. Sem destino elegível,
+se todos os destinos cotados têm custo maior ou igual ao atual e cobertura de
+preços positiva, a recomendação é **permanecer na cloud atual**, limitada ao
+escopo avaliado. Falta de cotações não é evidência de vantagem da origem.
+
+`comparison_basis` registra origem/destino mensal, diferença (destino − origem)
+e cobertura por provedor, na moeda USD usada pelo resultado. Não soma alternativas.
+`score` mede atratividade de migração; não é qualidade da cloud nem confiança
+da decisão. Sem seleção, usa a alternativa com maior economia (menor aumento),
+desempatada pelo provedor, e `selected_provider` permanece nulo. Nenhum score
+anula bloqueios. O campo compacto legado `score_do_selecionado` referencia a
+nota exibida; não implica provedor recomendado. Histórico não é recalculado.
+
+Autoridade `agent-authority-v4.1`: snapshots anteriores não são reinterpretados
+no envio; repetições já persistidas mantêm idempotência. Esta versão é separada
+do lote futuro `score-7rs-v5` de lock-in por inventário: não o declara entregue.
 
 ## Escopo e compatibilidade
 
@@ -9,7 +28,7 @@ Análises já persistidas não são recalculadas. Não requer migration de banco
 o snapshot e o resultado usam os campos JSON existentes.
 
 `decision_support` é um campo aditivo de `AnalysisV2Response`. Contrato
-`oneshift-decision-v1`, política `score-7rs-v4`, escala 0–100. O backend o
+`oneshift-decision-v1`, política `score-7rs-v4.1`, escala 0–100. O backend o
 recalcula após inferência, inclusive no fallback e na submissão do agente.
 Entradas do agente não podem substituir scores nem estratégias.
 
@@ -62,17 +81,20 @@ valores exibidos já arredondados. Dentro do técnico, o valor observado é
 `sum(nota_fator * peso_fator * cobertura_fator) / sum(peso_fator * cobertura_fator)`.
 Os pesos globais 50/40/10 não mudam. Assim, desconhecido não equivale a ruim.
 
-Para publicar uma nota geral, exigem-se identificação, preços e evidência técnica
+Para publicar uma nota normalizada, exigem-se identificação, preços e evidência técnica
 de pelo menos 50%, e dois critérios técnicos cobrindo pelo menos 50% do custo cada.
-Sem isso: `value=null`, `status=not_scored`, com pendências explícitas. Esse piso
-evita extrapolar uma pequena parcela fácil para a infraestrutura inteira.
+Sem isso, havendo comparação econômica, publica-se `value=lower_bound`,
+`status=partial`, `assessment_method=conservative_bound`, com pendências explícitas.
+Somam-se contribuições comprovadas sem redistribuir os pesos desconhecidos.
+Isso evita extrapolar uma pequena parcela fácil para a infraestrutura inteira.
+Sem comparação calculável, a nota permanece indisponível, nunca inventada.
 Os limites são regras iniciais de produto, não calibração estatística.
 
 `assessment_method=evidence_normalized` identifica a nova leitura. Havendo piso,
 dados faltantes ou hipóteses produzem `status=partial` e nota observada única,
 arredondada ao inteiro na UI e rotulada **preliminar**; ela pode subir ou cair
 com novas evidências. `complete` exige todas as coberturas integrais, sem hipóteses.
-Os limites inferior/superior continuam diagnósticos, não a nota exibida nem um
+Na leitura normalizada, os limites inferior/superior são diagnósticos, não a nota exibida nem um
 intervalo probabilístico. Confiança alta/média/baixa permanece separada da nota.
 
 Campos legados obrigatórios permanecem numéricos: scores inteiros recebem o
@@ -115,8 +137,8 @@ sem benefício após o prazo. Não tratar oferta potencial como economia permane
 O novo eixo usa `id=coverage`; `enterprise` continua significando governança
 em históricos. `enterprise_score` legado fica em zero nas novas respostas (não
 participa da fórmula); consumidores devem ler os eixos de `decision_support`.
-O contrato de snapshot usa `agent-authority-v4` (o lote da autoridade,
-`PLANO_AUTORIDADE_V3_E_PRECISAO` §2; a v3 foi a do score normalizado): envios novos
+O contrato de snapshot usa `agent-authority-v4.1` (permanência explícita sobre
+o lote v4; a v3 foi a do score normalizado): envios novos
 sobre snapshots de política/autoridade anterior são recusados por versão. Repetições já gravadas
 mantêm a idempotência existente. Nenhuma allowlist ou flag de envio é liberada.
 
@@ -130,7 +152,21 @@ bloqueia o cenário, evitando ignorar uma restrição por erro de identificaçã
 Se todos os destinos elegíveis têm nota completa, vence a maior nota; desempate
 por economia e nome do provedor. Se algum é parcial, a seleção é **econômica
 preliminar**, por economia, sem comparar notas de completudes diferentes. Isso
-fica explícito na saída. Sem elegível, não há destino recomendado.
+fica explícito na saída. Sem elegível, não há destino recomendado; a decisão
+explícita de permanência ou inconclusão e a nota de referência seguem a seção v4.1.
+
+## Novos arquivos Azure
+
+Não existe regra por report_id, nome de arquivo, valor total ou quantidade de linhas.
+O parser usa as colunas EA/MCA/PAYG; o enriquecimento carrega catálogo e regras
+ativos do provedor a cada ingestão. Regras genéricas por MeterCategory,
+MeterSubCategory e MeterName também se aplicam a novos arquivos.
+Se catálogo e regras estiverem ambos ausentes, interrompe com diagnóstico antes
+de substituir o enriquecimento. Serviço desconhecido é preservado como não
+classificado; não recebe preço, SKU ou compatibilidade inventados. Os testes
+sintéticos variam assinatura PAYG/EA, região, valores, nomes e IDs de arquivo,
+passando pelo parser, normalização e enriquecimento. Isso não certifica toda
+variação futura de export nem supre inventário ausente.
 
 ## Estratégias 7 Rs
 

@@ -57,6 +57,9 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 #   AUTHORITY_VERSION em `use_cases/agent/versoes.py` e registre o hash novo;
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
+    "agent-authority-v4.1": (
+        "6256a5075dce478331ca1f6092769570cc18167210d373f8bf7af2e47fdf525e"
+    ),
     # v4: lote da autoridade (PLANO_AUTORIDADE_V3_E_PRECISAO §2). Atualizado a cada item
     # do lote até a entrega; a versão sobe uma vez só.
     # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE R4):
@@ -164,6 +167,12 @@ def test_politica_de_decisao_anterior_diverge() -> None:
 def test_v3_score_snapshot_is_not_reinterpreted_as_v4() -> None:
     v = versoes_do_payload({"decision_support": {"policy_version": "score-7rs-v3"}})
     assert divergencias(v) == ["decision_policy"]
+
+
+def test_v4_snapshot_is_not_silently_reinterpreted_as_retention_policy() -> None:
+    v = versoes_do_payload({"decision_support": {"policy_version": "score-7rs-v4"}})
+    v["authority"] = "agent-authority-v4"
+    assert divergencias(v) == ["authority", "decision_policy"]
 
 
 def test_autoridade_e_topologia_anteriores_divergem() -> None:

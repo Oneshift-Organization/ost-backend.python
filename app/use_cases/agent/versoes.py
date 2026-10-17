@@ -27,7 +27,8 @@ CONTRACT_VERSION = "agent-snapshot-v1"
 # passar a produzir outra análise corrigida.
 # v4: lote da autoridade (PLANO_AUTORIDADE_V3_E_PRECISAO §2, renomeado v4 porque o
 # PR #32 já usou a v3 para o score normalizado)
-AUTHORITY_VERSION = "agent-authority-v4"
+# v4.1: explicit retention and conservative scores; v5 lock-in remains separate.
+AUTHORITY_VERSION = "agent-authority-v4.1"
 
 
 def politica_de_decisao_atual() -> str:

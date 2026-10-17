@@ -25,8 +25,9 @@ def test_small_easy_subset_cannot_generate_overall_grade(decision_payload):
     unknown = {"name": "Unknown", "category": "compute", "cost": 900, "targets": []}
     decision_payload["decision_workloads"].append(unknown)
     score = build_decision_support(decision_payload).score
-    assert score.status == "not_scored"
-    assert score.value is None
+    assert score.status == "partial"
+    assert score.value == score.lower_bound
+    assert score.assessment_method == "conservative_bound"
     assert score.missing_information
     assert score.axes[1].value == 100  # describes the subset, not the whole estate
     assert score.axes[1].coverage == 0.1
@@ -37,7 +38,8 @@ def test_excluded_unclassified_cost_cannot_hide_missing_scope(decision_payload):
         {"name": "Unknown", "category": "unclassified", "cost": 9000}
     )
     result = build_decision_support(decision_payload)
-    assert result.score.value is None
+    assert result.score.value == result.score.lower_bound
+    assert result.score.assessment_method == "conservative_bound"
     assert result.score.axes[2].factors[0].value == 10
 
 
@@ -120,8 +122,9 @@ def test_no_technical_evidence_has_no_grade_even_with_large_savings(decision_pay
     w["targets"][0]["metadata"] = {}
     score = build_decision_support(decision_payload).score
     assert score.axes[1].coverage == 0.4  # capability match alone is insufficient
-    assert score.status == "not_scored"
-    assert score.value is None
+    assert score.status == "partial"
+    assert score.value == score.lower_bound
+    assert score.assessment_method == "conservative_bound"
 
 
 def test_estimated_inventory_cost_keeps_grade_preliminary(decision_payload):
@@ -137,5 +140,6 @@ def test_price_coverage_gate_and_rounding_do_not_certify_completeness(
 ):
     decision_payload["resumo_executivo"]["por_provedor"][0]["cobertura"] = coverage
     score = build_decision_support(decision_payload).provider_scores[0]
-    assert (score.value is not None) is scored
+    assert score.value is not None
+    assert (score.assessment_method == "evidence_normalized") is scored
     assert score.status != "complete"

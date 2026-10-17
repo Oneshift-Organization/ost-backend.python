@@ -167,7 +167,10 @@ def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPor
     topologia = dados.get("topologia")
     com_inventario = isinstance(topologia, Mapping)
     por_servico = _dependencias_do_inventario(topologia)
-    policy_v4 = (dados.get("decision_support") or {}).get("policy_version") == "score-7rs-v4"
+    policy_v4 = (dados.get("decision_support") or {}).get("policy_version") in {
+        "score-7rs-v4",
+        "score-7rs-v4.1",
+    }
     estimado = any(e.get("cost_estimated") for e in inventory_services(dados).values())
 
     linhas = [
