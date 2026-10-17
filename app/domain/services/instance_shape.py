@@ -62,9 +62,24 @@ _DEFAULT_RAM_PER_VCPU = Decimal("4")
 # O separador '.' é o que distingue o padrão AWS do 'e2-standard-4' do GCP (que
 # não casa e portanto não é expandido).
 _SHAPE = re.compile(
-    r"\b([a-z]{1,4})\d[a-z]{0,3}\.(\d*)(nano|micro|small|medium|large|xlarge)\b",
+    r"\b(([a-z]{1,4})\d[a-z]{0,3})\.(\d*)(nano|micro|small|medium|large|xlarge)\b",
     re.IGNORECASE,
 )
+
+# Família T (burstable) da AWS: (vCPU, GiB) de fábrica por tamanho. A RAM não segue a
+# letra de classe: t3.micro tem 1 GiB, e a regra dava 8 (PLANO_PRECISAO_OCI P1.3). O
+# t2 abaixo de medium tem 1 vCPU.
+_FAMILIA_T = {
+    "nano": (Decimal("2"), Decimal("0.5")),
+    "micro": (Decimal("2"), Decimal("1")),
+    "small": (Decimal("2"), Decimal("2")),
+    "medium": (Decimal("2"), Decimal("4")),
+    "large": (Decimal("2"), Decimal("8")),
+}
+_T2_UMA_VCPU = frozenset({"nano", "micro", "small"})
+_FAMILIAS_T = frozenset({"t2", "t3", "t3a", "t4g"})
+# Fora da família T, o medium tem 1 vCPU (m7g.medium, c6g.medium, r7g.medium)
+_MEDIUM_VCPU = Decimal("1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,12 +101,21 @@ def parse_instance_shape(text: str | None) -> InstanceShape | None:
     if not m:
         return None
 
-    class_letter = m.group(1)[0].lower()
-    mult, size = m.group(2), m.group(3).lower()
+    familia = m.group(1).lower()
+    class_letter = m.group(2)[0].lower()
+    mult, size = m.group(3), m.group(4).lower()
+
+    if familia in _FAMILIAS_T and size in _FAMILIA_T:
+        vcpus, ram = _FAMILIA_T[size]
+        if familia == "t2" and size in _T2_UMA_VCPU:
+            vcpus = Decimal("1")
+        return InstanceShape(vcpus=vcpus, ram_gib=ram)
 
     if size == "xlarge":
         n = Decimal(mult) if mult else Decimal("1")
         vcpus = n * _XLARGE_STEP
+    elif size == "medium":
+        vcpus = _MEDIUM_VCPU
     else:
         vcpus = _SIZE_VCPU.get(size, Decimal("2"))
 
