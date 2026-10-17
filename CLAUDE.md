@@ -46,6 +46,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Ciclo de vida do preço (VIVO → ADUBO, duração de cada estado, agente não revive preço, revitalização por billing, quórum) — P3.0–P3.2 feitos | [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) |
 | Rede por tipo (balanceador, NAT, IP, VPN, tráfego entre zonas, CDN) cotada pela quantidade medida / destino grátis / taxas oficiais / plano de controle do Kubernetes, segredos e chaves (R4) / Cloud Run como serverless | [`PLANO_PRECO_NAO_COMPUTE.md`](PLANO_PRECO_NAO_COMPUTE.md) |
 | Cenários de entrada (Cost Explorer, fatura sem ID, CUR, com ou sem inventário) / custo estimado pelo tipo / diagnóstico de entrada da análise | [`PLANO_CENARIOS_DE_ENTRADA.md`](PLANO_CENARIOS_DE_ENTRADA.md) |
+| Mudanças de tela decididas, para o front (premissa 1 vCPU = 1 vCPU, estado da reanálise na lista) | [`PLANO_ALTERACOES_DE_TELA.md`](PLANO_ALTERACOES_DE_TELA.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
 

@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.domain.analysis import MigrationContext
 from app.domain.entities.analysis_job import AnalysisJob, DispStatus, agora_utc
+from app.domain.services.analise_vigente import Revisao, analises_por_billing
 from app.domain.services.diagnostico_de_entrada import diagnosticar_payload
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
 from app.infrastructure.database.models.billing_reports import BillingReportModel
@@ -241,11 +242,21 @@ async def definir_disp_status(
             retryable=False,
         )
 
-    job.disp_status = int(corpo.disp_status)
+    # Uma análise por billing: excluir (ou restaurar) vale para todas as revisões do
+    # mesmo billing. Senão, excluir a vigente faria a revisão anterior voltar à lista.
     # Carimbar é o que ancora a carência do expurgo. Sem data, o primeiro
     # expurgo levaria tudo que já estivesse depreciado.
-    job.disp_status_updated_at = agora_utc()
+    carimbo = agora_utc()
+    await session.execute(
+        update(AnalysisJobModel)
+        .where(
+            AnalysisJobModel.user_id == user_uuid,
+            AnalysisJobModel.report_id == job.report_id,
+        )
+        .values(disp_status=int(corpo.disp_status), disp_status_updated_at=carimbo)
+    )
     await session.commit()
+    await session.refresh(job)
 
     logger.info("disp_status_alterado job_id=%s valor=%s", job_id, corpo.disp_status)
     return DispStatusOut(
@@ -274,21 +285,63 @@ async def list_analysis_jobs(
         )
 
     user_uuid = UUID(user.sub)
+    # Uma linha por billing (domain/services/analise_vigente): primeiro as revisões,
+    # só com as colunas leves; depois o conteúdo das que a lista mostra.
+    revisoes = [
+        Revisao(
+            job_id=linha.job_id,
+            report_id=linha.report_id,
+            status=str(linha.status),
+            criada_em=linha.created_at,
+            ativa=linha.disp_status == DispStatus.ATIVA,
+        )
+        for linha in (
+            await session.execute(
+                select(
+                    AnalysisJobModel.job_id,
+                    AnalysisJobModel.report_id,
+                    AnalysisJobModel.status,
+                    AnalysisJobModel.created_at,
+                    AnalysisJobModel.disp_status,
+                )
+                .join(BillingReportModel, AnalysisJobModel.report_id == BillingReportModel.id)
+                .where(
+                    AnalysisJobModel.user_id == user_uuid,
+                    BillingReportModel.user_id == user_uuid,
+                )
+            )
+        ).all()
+    ]
+    por_billing = analises_por_billing(revisoes, incluir_depreciadas=incluir_depreciadas)[
+        :limit
+    ]
+    reanalises = {a.vigente.job_id: a.reanalise for a in por_billing}
+    ordem = {a.vigente.job_id: i for i, a in enumerate(por_billing)}
+    erros_das_reanalises = {
+        job_id: erro
+        for job_id, erro in (
+            await session.execute(
+                select(AnalysisJobModel.job_id, AnalysisJobModel.error).where(
+                    AnalysisJobModel.job_id.in_(
+                        [r.job_id for r in reanalises.values() if r is not None]
+                    )
+                )
+            )
+        ).all()
+    }
     stmt = (
         select(AnalysisJobModel, BillingReportModel)
         .join(BillingReportModel, AnalysisJobModel.report_id == BillingReportModel.id)
         .where(
             AnalysisJobModel.user_id == user_uuid,
-            BillingReportModel.user_id == user_uuid,
-            *(() if incluir_depreciadas else (AnalysisJobModel.disp_status == DispStatus.ATIVA,)),
+            AnalysisJobModel.job_id.in_(list(ordem)),
         )
-        .order_by(AnalysisJobModel.created_at.desc())
-        .limit(limit)
     )
-    result = await session.execute(stmt)
+    linhas = sorted((await session.execute(stmt)).all(), key=lambda par: ordem[par[0].job_id])
 
     summaries: list[AnalysisJobSummary] = []
-    for job, report in result.all():
+    for job, report in linhas:
+        reanalise = reanalises.get(job.job_id)
         structured = job.ai_structured_output if isinstance(job.ai_structured_output, dict) else {}
         decision = structured.get("decision_support") or {}
         decision_score = decision.get("score") or {}
@@ -317,6 +370,11 @@ async def list_analysis_jobs(
                     created_at=job.created_at,
                     diagnostico_de_entrada=_diagnostico_de_entrada(
                         report.schema_version, report.provider, job.llm_input_payload
+                    ),
+                    reanalise_job_id=reanalise.job_id if reanalise else None,
+                    reanalise_status=reanalise.status if reanalise else None,
+                    reanalise_erro=(
+                        erros_das_reanalises.get(reanalise.job_id) if reanalise else None
                     ),
                 )
             )

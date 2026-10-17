@@ -840,12 +840,22 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "Compromisso/reserva (Savings Plan, CUD) é instrumento comercial, "
             "contratado fora do Terraform."
         )
-    if _decimal(auxiliares.get("gke_plano_controle")) or _decimal(
-        auxiliares.get("kubernetes_outros")
+    # Cluster visto pelo inventário (topologia congelada) ou pelo custo do plano de
+    # controle no billing. As aplicações de dentro dele não são separadas: o
+    # inventário da nuvem não vê Deployment nem Service (PLANO_CENARIOS_DE_ENTRADA §9,
+    # opção B adiada pelo usuário em 17/10)
+    contagens = ((payload.get("topologia") or {}).get("resumo") or {}).get("contagens") or {}
+    clusters = (contagens.get("por_tipo") or {}).get("cluster_kubernetes")
+    if (
+        _decimal(clusters)
+        or _decimal(auxiliares.get("gke_plano_controle"))
+        or _decimal(auxiliares.get("kubernetes_outros"))
     ):
         plano.nao_suportado.append(
-            "Plano de controle de Kubernetes fora do MVP: exige decidir sobre "
-            "node pools, versão e rede do cluster."
+            "Kubernetes: o pacote leva o cluster inteiro. Os nós entram como máquinas "
+            "virtuais, e as aplicações de dentro do cluster não são separadas: o "
+            "inventário da nuvem não vê Deployment nem Service. O plano de controle "
+            "fica fora do MVP: exige decidir sobre node pools, versão e rede do cluster."
         )
     nao_classificado = auxiliares.get("nao_classificado") or {}
     if _decimal(nao_classificado.get("custo")):

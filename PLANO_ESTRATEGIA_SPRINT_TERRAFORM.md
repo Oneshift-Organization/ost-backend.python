@@ -99,20 +99,28 @@ Filestore para `storage_hdd`, e o gerador faz disco dele.
 
 ## 2. Decisões do usuário
 
-Com a recomendação; nenhuma bloqueia o início da sprint, exceto a 2.1 para o T5.
+Decididas pelo usuário em 17/10, depois de uma revisão por um conselho de cinco
+agentes (custo, produto, segurança, arquitetura, red team). A coluna "decisão"
+vale; a recomendação original fica para histórico.
 
-| # | decisão | recomendação | bloqueia |
+| # | decisão em aberto | decisão (17/10) | bloqueia |
 |---|---|---|---|
-| 2.1 | O plano de migração fica **salvo** (para reabrir, exportar e gerar o Terraform do escopo)? | **Sim**, entidade simples (`migration_plans`: escolha + fingerprint da análise). O Terraform do escopo referencia o plano salvo, não uma escolha solta | T5 |
-| 2.2 | Decisão 23: o envio do agente pode gerar Terraform? | **Não nesta sprint**: Terraform só da análise e do plano do usuário | T7 |
-| 2.3 | Decisão 22: o envio do agente aparece na lista de análises da tela? | Sim, com selo "do agente" | — |
-| 2.4 | Decisão 24: por quanto tempo guardar snapshot com envio? | 90 dias | — |
+| 2.1 | O plano de migração fica **salvo**? | **Não agora.** O T5 recebe a escolha na requisição, sem estado | — |
+| 2.2 | Decisão 23: o envio do agente pode gerar Terraform? | Em discussão: o usuário perguntou por que não, já que o arquivo fica para ele editar | T7 |
+| 2.3 | Decisão 22: o envio do agente aparece na lista de análises da tela? | Em discussão (qual lista e onde) | — |
+| 2.4 | Decisão 24: por quanto tempo guardar snapshot com envio? | **Como está:** para sempre. MVP com teste de cliente real e apresentação do produto | — |
 | 2.5 | Decisão 25: data de remoção da rota antiga de envio | duas semanas depois de o MCP confirmar a migração | MCP |
-| 2.6 | Anexar inventário refaz a análise inteira (LLM de novo) | aceitar por ora; reavaliar se o custo pesar | — |
-| 2.7 | Fonte do `perf_coef` | tabela curada das publicações oficiais (opção 1 do P2) | P2 |
+| 2.6 | Anexar inventário refaz a análise inteira (LLM de novo) | **Duplicidade corrigida já** (17/10): a lista mostra uma análise por billing; a nova é uma revisão. Reaproveitar a narrativa sem rodar o LLM vai para as melhorias (M3, prioridade máxima) | — |
+| 2.7 | Fonte do `perf_coef` | **Manter 1 vCPU = 1 vCPU e mostrar isso na tela** ([`PLANO_ALTERACOES_DE_TELA`](PLANO_ALTERACOES_DE_TELA.md) §1) | — |
 | 2.8 | Termos de uso para o ciclo de vida do preço (billing de um cliente alimenta a base de todos?) | levar ao jurídico antes da P3.3 | P3.3 |
 | 2.9 | Segurança: revogar a chave GCP das branches órfãs; trocar `MCP_TOKEN`, token do inspector e `GCP_BILLING_API_KEY` | movida para as melhorias (§7) em 16/10 | — |
 | 2.10 | Quando promover develop → main | **fora de pauta**: o PR #31 foi fechado em 16/10 a pedido do usuário | — |
+| 2.11 | Fatura como fonte, etapa A (nomes novos de serviço) | **Sim, como sugestão que alguém aprova.** Quem aprova está em discussão | — |
+| 2.12 | Kubernetes opção B (export do `kubectl`) | **Adiar.** O pacote do Terraform avisa que leva o cluster inteiro (17/10) | — |
+| 2.13 | Modo "só o serviço" | **Adiar** (melhorias, M5) | — |
+| 2.14 | Custo de transição (multicloud) | **Adiar** (melhorias, M4) | — |
+| 2.15 | Coleta automática do inventário (I10) | **Adiar** (melhorias, M6) | — |
+| 2.16 | Payback na tela | **Não mostrar agora.** Entra como complemento do custo de transição (M4) | — |
 
 ## 3. MCP e agente
 
@@ -236,7 +244,13 @@ Só se 2.2 mudar.
 
 ## 7. Melhorias (sem data)
 
-| # | melhoria | de quem | observação |
-|---|---|---|---|
-| M1 | **Segurança (era a decisão 2.9):** revogar a chave da service account do GCP (`oneshift-catalogsync`) commitada nas branches órfãs `dev/feat/billing-refactor-prep` e `feat/sku-accuracy-impl`; trocar `MCP_TOKEN`, o token do inspector e a `GCP_BILLING_API_KEY` | usuário (console do GCP e segredos do cluster), numa janela combinada com o MCP | apagar as branches não resolve: o objeto continua alcançável no GitHub. Depois da revogação, limpar o histórico só se ainda interessar |
-| M2 | Recálculo diário agendado: CronJob no infra rodando o sync de preços e o câmbio | nós preparamos o PR no infra; o merge é do usuário | [`PLANO_CICLO_DE_VIDA_DO_PRECO`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) §11 |
+Em ordem de prioridade, definida pelo usuário em 17/10. M1 e M2 vieram de 16/10.
+
+| # | melhoria | prioridade | de quem | observação |
+|---|---|---|---|---|
+| M3 | **Completar a análise existente sem rodar o LLM de novo** quando os números não mudam: anexar inventário (ou reanalisar) recalcula o determinístico e reaproveita a narrativa; o LLM só roda se o resultado mudar ou se o usuário pedir | **máxima** | nós | Analisar com cautela antes: a narrativa velha não pode citar número que mudou (marcar desatualizada); a topologia do inventário vai ao LLM hoje sem necessidade. A duplicidade na lista já foi corrigida em 17/10 |
+| M4 | **Custo de transição** (multicloud temporário): durante as ondas, paga-se as duas nuvens e o tráfego entre elas (egress, VPN). **Complemento: payback na tela**, com o custo da migração informado pelo usuário, somado ao de transição | média-baixa | nós | Hoje a economia mostrada não inclui esse custo. Desenho em [`PLANO_ESCOPO_DE_MIGRACAO`](PLANO_ESCOPO_DE_MIGRACAO.md) §6 |
+| M5 | Modo "só o serviço" no plano de migração | baixa | nós | Depende do M4: a parte que fica conversa com a que foi |
+| M6 | Coleta automática do inventário pela plataforma (I10) | extremamente baixa | nós | **Apenas se houver muito tempo disponível e estivermos correndo grande risco de o cliente não gostar do projeto.** Nunca guardar chave do cliente; papel delegado só leitura |
+| M1 | **Segurança (era a decisão 2.9):** revogar a chave da service account do GCP (`oneshift-catalogsync`) commitada nas branches órfãs `dev/feat/billing-refactor-prep` e `feat/sku-accuracy-impl`; trocar `MCP_TOKEN`, o token do inspector e a `GCP_BILLING_API_KEY` | não definida | usuário (console do GCP e segredos do cluster), numa janela combinada com o MCP | apagar as branches não resolve: o objeto continua alcançável no GitHub. Depois da revogação, limpar o histórico só se ainda interessar |
+| M2 | Recálculo diário agendado: CronJob no infra rodando o sync de preços e o câmbio | não definida | nós preparamos o PR no infra; o merge é do usuário | [`PLANO_CICLO_DE_VIDA_DO_PRECO`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) §11 |
