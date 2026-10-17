@@ -1,6 +1,6 @@
 """Deterministic score ledger. Missing evidence forms bounds, never an invented grade.
 
-Policy v4: financial 50%, technical 40%, evidence coverage 10%.
+Policy v4.2: financial 35%, technical 50%, evidence coverage 15%.
 Governance declarations only block a
 destination; they are not a score axis. Bounds are arithmetic
 limits from unknown factors, NOT statistical confidence intervals. No I/O/LLM.
@@ -195,7 +195,7 @@ def _financial(row: dict, current: Decimal | None) -> ScoreAxis:
     return _axis(
         "financial",
         "Financeiro",
-        "0.5",
+        "0.35",
         [
             _factor(
                 "savings",
@@ -270,7 +270,7 @@ def _technical(workloads: list[dict], provider: str, inventory: dict) -> ScoreAx
     return _axis(
         "technical",
         "Técnico",
-        "0.4",
+        "0.5",
         [
             _factor(key, label, weight, rule, samples[key])
             for key, label, weight, rule in definitions
@@ -307,7 +307,7 @@ def _coverage_axis(row: dict, identified: Decimal, technical: ScoreAxis) -> Scor
     return _axis(
         "coverage",
         "Cobertura da análise",
-        "0.1",
+        "0.15",
         [
             _factor(
                 key,
@@ -556,8 +556,8 @@ def build_decision_support(payload: dict) -> DecisionSupport:
         strategy_summary=summary,
         confidence=confidence,
         limitations=[
-            "Política de regras v4.1 (50/40/10), não modelo treinado nem probabilidade de sucesso.",
-            "Financeiro 50%, técnico 40%, cobertura da análise 10%; benefícios não pontuam.",
+            "Política de regras v4.2 (35/50/15), não modelo treinado nem probabilidade de sucesso.",
+            "Financeiro 35%, técnico 50%, cobertura da análise 15%; benefícios não pontuam.",
             "Nota técnica normalizada pela evidência disponível; hipóteses são preliminares. "
             "Sem cobertura mínima, a nota é o mínimo comprovado, não autorização para migrar.",
             "Limites representam fatores desconhecidos, não intervalo estatístico.",
