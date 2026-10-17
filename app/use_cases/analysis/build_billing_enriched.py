@@ -98,6 +98,11 @@ class BuildBillingEnrichedUseCase:
         provider = normalize_provider(items[0].provider.value)
         catalog = await self._sku.list_by_provider(provider)
         rules = await self._rules.list_active_by_provider(provider)
+        if not catalog and not rules:
+            raise ValueError(
+                f"Classificação indisponível para {provider}: catálogo e regras ativos ausentes. "
+                "A equipe deve carregar as referências antes de reprocessar o arquivo."
+            )
         matcher = SkuMatcher(catalog, rules)
 
         enriched_items: list[BillingEnriched] = []

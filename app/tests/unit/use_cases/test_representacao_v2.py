@@ -117,10 +117,10 @@ def test_distribuicao_preserva_quantidade_e_custo() -> None:
 
 def test_sem_provedor_selecionado_continua_sem() -> None:
     decisao = _payload(economia=-50.0)["decision_support"]
-    assert decisao["selected_provider"] is None and decisao["score"] is None
+    assert decisao["selected_provider"] is None and decisao["score"] is not None
     compacto = compactar_decision_support(decisao)
     assert compacto["selected_provider"] is None
-    assert compacto["score_do_selecionado"] is None
+    assert compacto["score_do_selecionado"] == decisao["score"]["provider"]
     assert reconstruir_sem_evidencias(compacto) == sem_evidencias(decisao)
 
 

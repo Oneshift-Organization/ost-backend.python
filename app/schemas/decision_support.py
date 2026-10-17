@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 from app.schemas.corporate_benefits import CorporateBenefits
 
 Provider = Literal["aws", "azure", "gcp", "oci"]
-DECISION_POLICY_VERSION = "score-7rs-v4"
+DECISION_POLICY_VERSION = "score-7rs-v4.1"
 Strategy = Literal["retain", "retire", "rehost", "relocate", "repurchase", "replatform", "refactor"]
 
 
@@ -123,15 +123,26 @@ class WorkloadStrategy(BaseModel):
     scope: Literal["billing_component"] = "billing_component"
 
 
+class DecisionComparison(BaseModel):
+    provider: str
+    current_monthly_cost: float | None = None
+    target_monthly_cost: float | None = None
+    cost_delta: float | None = None
+    price_coverage: float = Field(ge=0, le=1)
+
+
 class DecisionSupport(BaseModel):
     contract_version: Literal["oneshift-decision-v1"] = "oneshift-decision-v1"
-    policy_version: Literal["score-7rs-v1", "score-7rs-v2", "score-7rs-v3", "score-7rs-v4"] = (
-        DECISION_POLICY_VERSION
-    )
+    policy_version: Literal[
+        "score-7rs-v1", "score-7rs-v2", "score-7rs-v3", "score-7rs-v4", "score-7rs-v4.1"
+    ] = DECISION_POLICY_VERSION
     scale: Literal["0-100"] = "0-100"
     source: Literal["backend_rules"] = "backend_rules"
     input_fingerprint: str
     selected_provider: str | None = None
+    # None preserves historical decisions. Retention is not a migration destination.
+    outcome: Literal["migrate", "retain", "inconclusive"] | None = None
+    comparison_basis: list[DecisionComparison] = Field(default_factory=list)
     selection_reason: str
     score: ScenarioScore | None = None
     provider_scores: list[ScenarioScore] = Field(default_factory=list)

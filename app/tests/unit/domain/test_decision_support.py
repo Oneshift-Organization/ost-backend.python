@@ -113,7 +113,7 @@ def test_lock_in_stays_in_technical_and_coverage_is_ten_percent(decision_payload
     workload["migration"]["lock_in"] = lock
     workload["targets"][0]["metadata"]["vendor_lock_in_level"] = lock
     result = build_decision_support(decision_payload)
-    assert result.policy_version == "score-7rs-v4"
+    assert result.policy_version == "score-7rs-v4.1"
     axes = {a.id: a for a in result.score.axes}
     assert {k: v.weight for k, v in axes.items()} == {
         "financial": 0.5,
@@ -200,7 +200,8 @@ def test_mandatory_constraint_cannot_be_compensated_by_savings(decision_payload,
     decision_payload["decision_context"]["governance"][0][constraint] = False
     result = build_decision_support(decision_payload)
     assert result.selected_provider is None
-    assert result.score is None
+    assert result.score is not None  # score does not override a mandatory blocker
+    assert result.outcome == "inconclusive"
     assert not result.provider_scores[0].eligible
 
 
@@ -212,9 +213,11 @@ def test_insufficient_pricing_does_not_recommend(decision_payload, covered):
 
 def test_no_positive_savings_keeps_current_provider(decision_payload):
     decision_payload["resumo_executivo"]["por_provedor"][0]["economia_mensal"] = -1
+    decision_payload["resumo_executivo"]["por_provedor"][0]["custo_estimado_total"] = 1001
     result = build_decision_support(decision_payload)
     assert result.selected_provider is None
-    assert "manter provisoriamente" in result.selection_reason
+    assert result.outcome == "retain"
+    assert "Permanecer" in result.selection_reason
 
 
 def test_tax_is_not_a_workload(decision_payload):
@@ -317,7 +320,8 @@ def test_ambiguous_equivalents_do_not_choose_by_list_order(decision_payload):
     workload["targets"].append({"provider": "oci", "service_name": "Other"})
     result = build_decision_support(decision_payload)
     assert result.workload_strategies[0].strategy is None
-    assert result.provider_scores[0].status == "not_scored"
+    assert result.provider_scores[0].status == "partial"
+    assert result.provider_scores[0].assessment_method == "conservative_bound"
     assert result.provider_scores[0].axes[1].factors[0].value is None
 
 
@@ -465,7 +469,8 @@ def test_raw_metadata_does_not_inherit_default_false(decision_payload):
 def test_inferred_service_mapping_is_not_confirmed_compatibility(decision_payload):
     decision_payload["decision_workloads"][0]["type_source"] = "inferido"
     result = build_decision_support(decision_payload)
-    assert result.score.status == "not_scored"
+    assert result.score.status == "partial"
+    assert result.score.assessment_method == "conservative_bound"
     assert result.score.axes[1].factors[0].value is None
     assert result.workload_strategies[0].strategy is None
 
