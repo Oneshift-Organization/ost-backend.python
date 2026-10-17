@@ -46,7 +46,8 @@ _TAXA_GB_MES: dict[str, dict[str, str]] = {
     "aws": {"storage_ssd": "0.080", "storage_hdd": "0.045", "object_storage": "0.023"},
     "gcp": {"storage_ssd": "0.100", "storage_hdd": "0.040", "object_storage": "0.020"},
     "azure": {"storage_ssd": "0.088", "storage_hdd": "0.045", "object_storage": "0.018"},
-    "oci": {"storage_ssd": "0.0255", "storage_hdd": "0.0255", "object_storage": "0.0255"},
+    # SSD = Block Volume Balanced, armazenamento + 10 VPU (PLANO_PRECISAO_OCI P1.2)
+    "oci": {"storage_ssd": "0.0425", "storage_hdd": "0.0255", "object_storage": "0.0255"},
 }
 
 # Chaves de `custos_auxiliares` com serviço de rede pago (rede por tipo, PLANO_PRECO_NAO_COMPUTE)
