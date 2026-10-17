@@ -118,6 +118,37 @@ em mock. US$/mês:
 - O plano de migração passou a usar a razão do custo total de cada categoria (não a
   das taxas), para o banco e o egress saírem iguais à análise.
 
+## 4c. Lote B — banco por partes (decidido em 17/10, depois da régua do mock CUR)
+
+**Régua do banco do mock CUR** (US$ 30.035/mês na origem; conta manual com preço e
+especificação oficiais, sem o motor): OCI ~US$ 24.000–24.500. O motor dava 38.508; com a
+correção da taxa de reserva (horas em dobro, `78aa0cf`), 32.753 — ainda ~34% acima. As
+causas e a correção de cada uma:
+
+| # | causa | correção | quem muda |
+|---|---|---|---|
+| B1 | ElastiCache cotado como banco por vCPU-hora | cache pela memória do nó (GB-hora), na taxa de cache de cada nuvem, por faixa de tamanho do nó (OCI Cache: US$ 0,0194 até 10 GB por nó, 0,0136 acima) | as 4 nuvens como destino de cache; OCI desce |
+| B2 | storage, IOPS, backup e cobranças da AWS pela razão de taxas de storage | o banco vira partes: **armazenamento** pelos GB medidos × taxa de storage de banco do destino; **backup** pelos GB × taxa de backup; **sem equivalente** (IOPS provisionado, throughput, créditos de CPU, extended support, requisições de IO do Aurora) a zero no destino, declarado; **outros** ao custo da origem | as 4 nuvens; a parte "sem equivalente" deixa de pesar em todos os destinos |
+| B3 | PostgreSQL da OCI com memória somada (0,055/vCPU) | a calculadora oficial lista só OCPU (US$ 0,098 = 2 vCPU) e storage: **0,049/vCPU** | só OCI, desce |
+| B4 | alta disponibilidade como o dobro em todo destino | réplicas por nuvem e motor: OCI MySQL = **3 instâncias**, cada uma com compute e storage (docs oficiais); OCI PostgreSQL = nós × compute e storage uma vez (premissa: storage otimizado compartilhado); demais = 2 | OCI MySQL com HA sobe 50%; OCI PostgreSQL com HA desce no storage |
+
+**Análise de impacto (escrita antes do código):**
+
+- **Números:** o banco de todos os destinos muda. Origens com muito IOPS provisionado,
+  extended support ou créditos de CPU ficam mais baratas em qualquer destino (essas
+  cobranças não migram). ElastiCache sai mais barato na OCI e no GCP.
+- **Classificação:** pelo tipo de uso, IO antes de storage — o `Aurora:StorageIOUsage`
+  é requisição de IO, não GB (o mock rotulava como GB-mês).
+- **Linhas que não se encaixam** (proxy, backtrack, serverless do Aurora) ficam ao custo
+  da origem, sem fingir cotação.
+- **Payload:** `custos_auxiliares.banco_dados` continua um número só; o equivalente de
+  cada provedor ganha `partes` (instâncias, cache, armazenamento, backup, sem
+  equivalente, outros) — campo novo, aditivo; nota ao MCP.
+- **Plano de migração:** usa a razão do custo total da categoria; acompanha sozinho.
+- **Terraform:** o tamanho do banco não sai deste custo; não muda.
+- **Ambientes:** taxas novas no seed (storage, backup e cache por nuvem, com fonte e
+  data) — `sync_prices --providers categories` no develop.
+
 ## 5. Para as melhorias
 
 - **Tela:** separar "economia por preço oficial" de "economia estimada por premissa",
