@@ -149,6 +149,26 @@ causas e a correção de cada uma:
 - **Ambientes:** taxas novas no seed (storage, backup e cache por nuvem, com fonte e
   data) — `sync_prices --providers categories` no develop.
 
+**Resultado (17/10, develop × lote B nas faturas locais, US$/mês):**
+
+| fatura | atual | OCI | Azure | GCP |
+|---|---|---|---|---|
+| a da tela | 378 | 224 → 217 | 399 → 399 | 423 → 423 |
+| Cost Explorer completo | 92.103 | 58.618 → 60.258 | 108.759 → 114.228 | 126.358 → 119.967 |
+| mock CUR | 92.103 | 65.504 → 56.734 | 120.159 → 114.603 | 125.687 → 120.408 |
+
+- **Régua do banco do mock CUR:** o motor dá US$ 23.983 para a OCI; a conta manual com
+  preço oficial dá US$ 23.983. Partes: instâncias 18.318, cache 2.510, armazenamento
+  2.098 (RDS e Aurora), backup 886, sem equivalente 0, outros 172.
+- **Cost Explorer:** a taxa da reserva vem sem horas e o uso coberto, a custo zero, traz
+  as horas; o motor descartava as linhas a custo zero e perdia as horas cobertas (144 mil
+  vCPU-hora contra 373 mil do CUR, mesmos dados). Agora `HeavyUsage` é sempre taxa da
+  reserva (sem hora), o uso coberto conta, e o storage sem unidade é medido pelo nome,
+  sob a trava de preço plausível. A diferença que resta entre os dois formatos é a
+  premissa do motor desconhecido (o Cost Explorer não diz o motor: vale a maior taxa,
+  com as 3 instâncias do MySQL da OCI em alta disponibilidade).
+- A OCI segue recomendada em todas.
+
 ## 5. Para as melhorias
 
 - **Tela:** separar "economia por preço oficial" de "economia estimada por premissa",

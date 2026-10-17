@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -31,8 +32,24 @@ from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRep
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
 from app.domain.services.alertas import avaliar_cambio, avaliar_regioes
+from app.domain.services.banco_por_uso import (
+    ARMAZENAMENTO,
+    BACKUP,
+    CACHE,
+    CATEGORIA_BACKUP,
+    CATEGORIA_BACKUP_DO_MOTOR,
+    CATEGORIA_DA_FAIXA,
+    CATEGORIA_DO_MOTOR,
+    CATEGORIA_STORAGE,
+    CATEGORIA_STORAGE_DO_MOTOR,
+    OUTROS,
+    SEM_EQUIVALENTE,
+    copias_do_storage,
+    fator_ha,
+    ler_chave_da_parte,
+    ler_chave_do_motor,
+)
 from app.domain.services.banco_por_uso import CATEGORIA as CATEGORIA_BANCO
-from app.domain.services.banco_por_uso import CATEGORIA_DO_MOTOR, CATEGORIA_STORAGE
 from app.domain.services.banco_por_uso import UNIDADE as UNIDADE_DO_BANCO
 from app.domain.services.categoria_por_uso import UNIDADE as UNIDADE_POR_USO
 from app.domain.services.categoria_por_zona import dividir_por_zona
@@ -273,18 +290,118 @@ def _misturar_motores(
     pesos: Mapping[str, Decimal],
 ) -> dict[str, CategoryRate]:
     """Taxa de banco de cada provedor pela vCPU-hora de cada motor na fatura: MySQL na
-    taxa do MySQL, PostgreSQL na do PostgreSQL, sem motor na `base` (a maior das duas,
-    premissa declarada). Sem a taxa do motor no provedor, vale a base."""
+    taxa do MySQL, PostgreSQL na do PostgreSQL. Em alta disponibilidade (chave `:ha`), a
+    vCPU-hora da origem conta 2 instâncias e vale no destino o fator de réplicas dele
+    (OCI MySQL: 3). Sem motor, a maior taxa entre os motores, premissa declarada. Sem a
+    taxa do motor no provedor, vale a base."""
     total = sum(pesos.values(), Decimal(0))
     if total <= 0:
         return base
     misturadas: dict[str, CategoryRate] = {}
     for prov, b in base.items():
-        taxa = sum(
-            (peso / total) * (por_motor.get(m, {}).get(prov) or b).rate for m, peso in pesos.items()
-        )
-        misturadas[prov] = replace(b, rate=Decimal(taxa))
+        taxa = Decimal(0)
+        for chave, peso in pesos.items():
+            motor_, ha = ler_chave_do_motor(chave)
+            taxa += (peso / total) * _taxa_do_motor(prov, b, por_motor, motor_, ha=ha)
+        misturadas[prov] = replace(b, rate=taxa)
     return misturadas
+
+
+def _taxa_do_motor(
+    prov: str,
+    base: CategoryRate,
+    por_motor: Mapping[str, dict[str, CategoryRate]],
+    motor_: str | None,
+    *,
+    ha: bool,
+) -> Decimal:
+    def efetiva(m: str | None) -> Decimal:
+        taxa = por_motor.get(m or "", {}).get(prov)
+        return (taxa or base).rate * (fator_ha(prov, m) if ha else Decimal(1))
+
+    if motor_ is not None:
+        return efetiva(motor_)
+    return max([efetiva(None), *(efetiva(m) for m in CATEGORIA_DO_MOTOR if por_motor.get(m))])
+
+
+def _resto_do_banco(
+    partes: Mapping[str, Mapping[str, Decimal]],
+    *,
+    custos: Mapping[str, Decimal],
+    storage: Mapping[str | None, dict[str, CategoryRate]],
+    backup: Mapping[str | None, dict[str, CategoryRate]],
+    cache: Mapping[str, dict[str, CategoryRate]],
+    provedores: Sequence[str],
+) -> tuple[dict[str, Decimal], dict[str, dict[str, Decimal]]]:
+    """O banco fora das instâncias no destino (PLANO_PRECISAO_OCI B1 a B4): cache pelo
+    GB-hora da faixa do nó; armazenamento pelos GB-mês x cópias da alta disponibilidade
+    do destino; backup pelos GB-mês; o que só a origem cobra (IOPS provisionado,
+    throughput, créditos, extended support, IO) a zero; outros ao custo da origem.
+    Parte sem quantidade, ou sem taxa no destino, fica ao custo da origem.
+
+    `custos`: custo de cada parte na moeda da análise. Devolve, por provedor, a razão
+    destino ÷ origem do resto e o custo de cada tipo de parte no destino."""
+    origem = sum(custos.values(), Decimal(0))
+    fatores: dict[str, Decimal] = {}
+    detalhes: dict[str, dict[str, Decimal]] = {}
+    for prov in provedores:
+        detalhe: dict[str, Decimal] = defaultdict(lambda: Decimal(0))
+        for chave, valores in partes.items():
+            tipo, motor_, ha, faixa = ler_chave_da_parte(chave)
+            custo = custos.get(chave, Decimal(0))
+            qtd = valores.get("quantidade") or Decimal(0)
+            taxa = _taxa_da_parte(
+                prov,
+                tipo,
+                motor_=motor_,
+                ha=ha,
+                faixa=faixa,
+                storage=storage,
+                backup=backup,
+                cache=cache,
+            )
+            if tipo == SEM_EQUIVALENTE:
+                destino = Decimal(0)
+            elif tipo == OUTROS or taxa is None or qtd <= 0:
+                destino = custo
+            else:
+                destino = qtd * taxa
+            detalhe[tipo] += destino
+        detalhes[prov] = dict(detalhe)
+        if origem > 0:
+            fatores[prov] = sum(detalhe.values(), Decimal(0)) / origem
+    return fatores, detalhes
+
+
+def _taxa_da_parte(
+    prov: str,
+    tipo: str,
+    *,
+    motor_: str | None,
+    ha: bool,
+    faixa: str | None,
+    storage: Mapping[str | None, dict[str, CategoryRate]],
+    backup: Mapping[str | None, dict[str, CategoryRate]],
+    cache: Mapping[str, dict[str, CategoryRate]],
+) -> Decimal | None:
+    """Taxa por unidade da parte no destino; sem motor, a maior entre os motores."""
+    if tipo == CACHE:
+        t = cache.get(faixa or "", {}).get(prov)
+        return t.rate if t else None
+    if tipo not in (ARMAZENAMENTO, BACKUP):
+        return None
+    por_motor = storage if tipo == ARMAZENAMENTO else backup
+
+    def taxa(m: str | None) -> Decimal | None:
+        t = por_motor.get(m, {}).get(prov) or por_motor.get(None, {}).get(prov)
+        if t is None:
+            return None
+        return t.rate * (copias_do_storage(prov, m, ha) if tipo == ARMAZENAMENTO else 1)
+
+    if motor_ is not None:
+        return taxa(motor_)
+    candidatas = [v for m in (None, *CATEGORIA_DO_MOTOR) if (v := taxa(m)) is not None]
+    return max(candidatas) if candidatas else None
 
 
 def _taxas_da_parte(
@@ -299,59 +416,97 @@ def _taxas_da_parte(
     )
 
 
+def _taxas_do_resto(
+    pontos: Mapping[str, list[Any]], parte: Any, source_provider: str
+) -> dict[str, Any]:
+    """Taxas de storage, backup e cache da zona da parte, no formato de `_resto_do_banco`."""
+
+    def de(categoria: str) -> dict[str, CategoryRate]:
+        return _taxas_da_parte(pontos.get(categoria, []), categoria, parte, source_provider)
+
+    return {
+        "storage": {
+            None: de(CATEGORIA_STORAGE),
+            **{m: de(c) for m, c in CATEGORIA_STORAGE_DO_MOTOR.items()},
+        },
+        "backup": {
+            None: de(CATEGORIA_BACKUP),
+            **{m: de(c) for m, c in CATEGORIA_BACKUP_DO_MOTOR.items()},
+        },
+        "cache": {f: de(c) for f, c in CATEGORIA_DA_FAIXA.items()},
+    }
+
+
+def _anexar_partes_do_banco(
+    entradas: list[dict[str, Any]],
+    detalhe: Mapping[str, Mapping[str, Decimal]],
+    partes: Mapping[str, Mapping[str, Decimal]],
+    *,
+    instancias_na_origem: Decimal,
+    converter: Any,
+) -> None:
+    """`partes` no equivalente de cada provedor: o custo de cada tipo de parte na origem
+    e no destino (instâncias, cache, armazenamento, backup, sem equivalente, outros).
+    Campo aditivo; mostra de onde vem a diferença do banco."""
+    origem: dict[str, Decimal] = defaultdict(lambda: Decimal(0))
+    origem["instancias"] = instancias_na_origem
+    for chave, valores in partes.items():
+        origem[ler_chave_da_parte(chave)[0]] += converter(valores.get("custo") or Decimal(0))
+    for entrada in entradas:
+        do_provedor = detalhe.get(entrada["provedor"])
+        if do_provedor is None:
+            continue
+        resto = float(sum(do_provedor.values(), Decimal(0)))
+        entrada["partes"] = {
+            "origem": {k: round(float(v), 2) for k, v in origem.items()},
+            "destino": {
+                "instancias": round(entrada["custo_mensal_estimado"] - resto, 2),
+                **{k: round(float(v), 2) for k, v in do_provedor.items()},
+            },
+        }
+
+
 def _cotar_banco(
     *,
     source_provider: str,
     custo: Decimal,
     medido: Decimal,
     quantidade: Decimal,
-    preco_efetivo: Decimal,
+    preco_efetivo: Decimal | None,
     taxas: dict[str, CategoryRate],
-    taxas_storage: dict[str, CategoryRate],
+    fator_do_resto: Mapping[str, Decimal],
 ) -> list[CategoryEquivalent]:
-    """Banco em duas partes (PLANO_PRECISAO_OCI P1.6): a instância pela vCPU-hora x a
-    taxa do destino; o resto (storage, IO, backup) pela razão das taxas de storage de
-    banco. Sem a taxa de storage da origem, o resto segue o preço efetivo das
-    instâncias, como antes."""
+    """Banco em duas partes (PLANO_PRECISAO_OCI P1.6, B1 a B4): a instância pela
+    vCPU-hora x a taxa do destino; o resto (cache, armazenamento, backup, cobranças só
+    da origem) pela razão que `_resto_do_banco` calculou para o destino. Sem vCPU-hora
+    medida, a instância vai pela razão das taxas; destino sem a razão do resto fica com
+    o resto ao custo da origem e a confiança baixa."""
     resto = max(custo - medido, Decimal(0))
-    pelo_storage = (
-        estimate_by_cost_ratio(
-            source_provider=source_provider, source_cost=resto, rates=taxas_storage
-        )
-        if resto > 0
-        else []
-    )
-    if resto > 0 and not pelo_storage:
-        return estimate_by_quantity(
+    instancias = (
+        estimate_by_quantity(
             source_provider=source_provider,
-            source_cost=custo,
+            source_cost=medido,
             quantity=quantidade,
             measured_cost=medido,
             effective_price=preco_efetivo,
             rates=taxas,
             unit=UNIDADE_DO_BANCO,
         )
-    instancias = estimate_by_quantity(
-        source_provider=source_provider,
-        source_cost=medido,
-        quantity=quantidade,
-        measured_cost=medido,
-        effective_price=preco_efetivo,
-        rates=taxas,
-        unit=UNIDADE_DO_BANCO,
+        if preco_efetivo is not None and medido > 0
+        else estimate_by_cost_ratio(
+            source_provider=source_provider, source_cost=medido, rates=taxas
+        )
     )
-    storage = {e.provider: e.estimated_monthly_cost for e in pelo_storage}
     out = []
     for e in instancias:
-        # Destino sem taxa de storage: o resto fica ao custo da origem, declarado na confiança
-        do_resto = storage.get(e.provider)
-        total = e.estimated_monthly_cost + (do_resto if do_resto is not None else resto)
+        fator = fator_do_resto.get(e.provider)
+        total = e.estimated_monthly_cost + (resto * fator if fator is not None else resto)
         out.append(
             CategoryEquivalent(
                 provider=e.provider,
                 estimated_monthly_cost=total,
                 cost_delta=total - custo,
-                pricing_confidence=e.pricing_confidence if do_resto is not None else "low",
+                pricing_confidence=e.pricing_confidence if fator is not None else "low",
             )
         )
     return out
@@ -470,6 +625,19 @@ class BuildMigrationContextUseCase:
         self._aggregator = BillingAggregator(sku_repo) if sku_repo else None
         self._fx_repo = fx_repo
         self._price_repo = price_repo
+
+    async def _pontos_do_banco(self) -> dict[str, list[Any]]:
+        """Taxas do banco além da de `database`: por motor, storage, backup e cache."""
+        assert self._price_repo is not None
+        categorias = [
+            *CATEGORIA_DO_MOTOR.values(),
+            CATEGORIA_STORAGE,
+            *CATEGORIA_STORAGE_DO_MOTOR.values(),
+            CATEGORIA_BACKUP,
+            *CATEGORIA_BACKUP_DO_MOTOR.values(),
+            *CATEGORIA_DA_FAIXA.values(),
+        ]
+        return {c: await self._price_repo.rates_for_category(c) for c in categorias}
 
     async def execute(self, payload: BuildMigrationContextInput) -> MigrationContext:  # noqa: PLR0912, PLR0915
         report = await self._report_repo.get_by_id(payload.report_id, payload.user_id)
@@ -990,18 +1158,10 @@ class BuildMigrationContextUseCase:
                 rate_points = await self._price_repo.rates_for_category(category)
                 if not rate_points:
                     continue
-                # Banco: taxa por motor e taxa de storage de banco (PLANO_PRECISAO_OCI P1.6)
-                pesos_motor = auxiliary.banco_por_motor if category == CATEGORIA_BANCO else {}
-                pontos_motor = {
-                    m: await self._price_repo.rates_for_category(CATEGORIA_DO_MOTOR[m])
-                    for m in pesos_motor
-                    if m in CATEGORIA_DO_MOTOR
-                }
-                pontos_storage = (
-                    await self._price_repo.rates_for_category(CATEGORIA_STORAGE)
-                    if category == CATEGORIA_BANCO
-                    else []
-                )
+                # Banco: taxas por motor, de storage, de backup e de cache (PLANO_PRECISAO_OCI)
+                e_banco = category == CATEGORIA_BANCO
+                pesos_motor = auxiliary.banco_por_motor if e_banco else {}
+                pontos_banco = await self._pontos_do_banco() if e_banco else {}
                 # P1: cada parte da categoria na taxa da zona dela, somadas. Sem região na
                 # linha, a parte vai para a zona dominante (fração declarada em `zonas`).
                 partes = dividir_por_zona(
@@ -1026,6 +1186,20 @@ class BuildMigrationContextUseCase:
                     if unidade_medida and medido_total and quantidade_total > 0
                     else None
                 )
+                fator_do_resto: dict[str, Decimal] = {}
+                detalhe_do_resto: dict[str, dict[str, Decimal]] = {}
+                if e_banco and partes:
+                    fator_do_resto, detalhe_do_resto = _resto_do_banco(
+                        auxiliary.banco_partes,
+                        custos={
+                            k: convert(v["custo"], fx) or Decimal(0)
+                            for k, v in auxiliary.banco_partes.items()
+                        },
+                        **_taxas_do_resto(pontos_banco, partes[0], source_provider),
+                        provedores=sorted(
+                            {p.provider.lower() for p in rate_points} - {source_provider.lower()}
+                        ),
+                    )
                 # Só avisa o que um sync corrige: taxa oficial do provedor
                 # existe, mas não na zona. Taxa que só existe como referência
                 # (banco, disco da Azure) não tem fonte regional para buscar.
@@ -1058,14 +1232,14 @@ class BuildMigrationContextUseCase:
                     custo_da_parte = convert(parte.custo, fx) or Decimal("0")
                     medido_da_parte = convert(parte.custo_medido, fx) or Decimal("0")
                     da_parte: list[CategoryEquivalent]
-                    if category == CATEGORIA_BANCO and preco_efetivo is not None:
+                    if e_banco:
                         rates = _misturar_motores(
                             rates,
                             {
                                 m: _taxas_da_parte(
-                                    pts, CATEGORIA_DO_MOTOR[m], parte, source_provider
+                                    pontos_banco.get(c, []), c, parte, source_provider
                                 )
-                                for m, pts in pontos_motor.items()
+                                for m, c in CATEGORIA_DO_MOTOR.items()
                             },
                             pesos_motor,
                         )
@@ -1076,9 +1250,7 @@ class BuildMigrationContextUseCase:
                             quantidade=parte.quantidade,
                             preco_efetivo=preco_efetivo,
                             taxas=rates,
-                            taxas_storage=_taxas_da_parte(
-                                pontos_storage, CATEGORIA_STORAGE, parte, source_provider
-                            ),
+                            fator_do_resto=fator_do_resto,
                         )
                     elif preco_efetivo is not None and unidade_medida:
                         da_parte = estimate_by_quantity(
@@ -1174,6 +1346,14 @@ class BuildMigrationContextUseCase:
                     }
                     for e in principais
                 ]
+                if e_banco and detalhe_do_resto:
+                    _anexar_partes_do_banco(
+                        category_equivalents[category],
+                        detalhe_do_resto,
+                        auxiliary.banco_partes,
+                        instancias_na_origem=medido_total or Decimal(0),
+                        converter=lambda v: convert(v, fx) or Decimal(0),
+                    )
 
         # ── 10. Ledger de premissas (auditoria) ───────────────────
         mapped_cost = total_spend - (auxiliary.orphan if auxiliary else Decimal("0"))
