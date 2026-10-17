@@ -70,7 +70,14 @@ def test_sem_taxa_de_storage_da_origem_o_resto_segue_o_preco_efetivo() -> None:
     assert out[0].estimated_monthly_cost == D("50.00")
 
 
-def _linha(uso: str, custo: str, horas: str | None, motor: str | None) -> BillingEnriched:
+def _linha(
+    uso: str,
+    custo: str,
+    horas: str | None,
+    motor: str | None,
+    *,
+    cobranca: str | None = None,
+) -> BillingEnriched:
     return BillingEnriched(
         user_id=uuid4(),
         report_id=uuid4(),
@@ -89,7 +96,8 @@ def _linha(uso: str, custo: str, horas: str | None, motor: str | None) -> Billin
         component_type="database",
         mapping_confidence="high",
         region="us-east-1",
-        attributes={"database_engine": motor} if motor else None,
+        attributes={k: v for k, v in (("database_engine", motor), ("charge_kind", cobranca)) if v}
+        or None,
     )
 
 
@@ -105,3 +113,27 @@ async def test_agregador_mede_a_vcpu_hora_do_banco_por_motor() -> None:
     assert aux.quantidade_por_regiao["database"] == {"us-east-1": D("3991.494")}
     assert aux.medido_por_regiao["database"] == {"us-east-1": D("288.57")}
     assert aux.banco_por_motor == {"postgresql": D("1071.494"), "mysql": D("2920")}
+
+
+@pytest.mark.asyncio
+async def test_taxa_de_reserva_nao_soma_horas_e_entra_no_custo_das_instancias() -> None:
+    """Base amortizada: o uso coberto pela reserva vem na linha de uso, com as horas; a
+    taxa da reserva traz a parte não usada com as horas da reserva inteira. Contar as
+    horas dela dobraria a vCPU-hora. Base sem amortização: o uso coberto vem a custo
+    zero e a taxa paga a reserva."""
+    amortizada = [
+        _linha("InstanceUsage:db.r8g.4xl", "1257.06", "744", "PostgreSQL", cobranca="usage"),
+        _linha("HeavyUsage:db.r8g.4xl", "100", "744", None, cobranca="commitment"),
+    ]
+    aux = (await BillingAggregator().aggregate(amortizada, "aws")).auxiliary
+    assert aux.quantidade_por_regiao["database"] == {"us-east-1": D("11904")}  # 744 x 16
+    assert aux.medido_por_regiao["database"] == {"us-east-1": D("1357.06")}
+
+    sem_amortizar = [
+        _linha("InstanceUsage:db.r8g.4xl", "0", "744", "PostgreSQL", cobranca="usage"),
+        _linha("HeavyUsage:db.r8g.4xl", "1357.06", "744", None, cobranca="commitment"),
+    ]
+    aux = (await BillingAggregator().aggregate(sem_amortizar, "aws")).auxiliary
+    assert aux.quantidade_por_regiao["database"] == {"us-east-1": D("11904")}
+    assert aux.medido_por_regiao["database"] == {"us-east-1": D("1357.06")}
+    assert aux.banco_por_motor == {"postgresql": D("11904")}
