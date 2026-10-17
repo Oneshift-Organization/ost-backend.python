@@ -172,6 +172,7 @@ async def test_registry_alias_overrides_block_storage_and_no_usage_does_not_remo
     repo.list_by_provider.return_value = comparisons[:1]
     repo.list_all.return_value = comparisons
     repo.find_equivalents.return_value = comparisons[1:]
+    repo.apelidos_aprovados.return_value = {}
     metas = AsyncMock()
     metas.list_by_providers.side_effect = [[], [metadata]]
     reports = AsyncMock()

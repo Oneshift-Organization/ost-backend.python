@@ -28,6 +28,9 @@ from app.infrastructure.database.models.price_lifecycle import (
     PriceObservationModel,
     PriceSourceWeightModel,
 )
+from app.infrastructure.database.models.service_name_suggestion import (
+    ServiceNameSuggestionModel,
+)
 from app.infrastructure.database.models.service_ontology import ServiceOntologyModel
 from app.infrastructure.database.models.sku_classification_rules import (
     SkuClassificationRuleModel,
@@ -56,6 +59,7 @@ __all__ = [
     "PriceLifecycleRuleModel",
     "PriceObservationModel",
     "PriceSourceWeightModel",
+    "ServiceNameSuggestionModel",
     "ServiceOntologyModel",
     "SkuClassificationRuleModel",
     "TerraformGenerationJobModel",

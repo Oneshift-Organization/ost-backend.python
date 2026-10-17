@@ -1,6 +1,8 @@
+import logging
 from collections.abc import Sequence
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.analysis import ServiceComparison, ServiceMetadata
@@ -13,6 +15,9 @@ from app.infrastructure.database.models.cloud_services_comparation import (
 )
 from app.infrastructure.database.models.cloud_services_metadata import (
     CloudServiceMetadataModel,
+)
+from app.infrastructure.database.models.service_name_suggestion import (
+    ServiceNameSuggestionModel,
 )
 
 
@@ -72,9 +77,28 @@ class PGServiceMetadataRepository(IServiceMetadataRepository):
         ]
 
 
+logger = logging.getLogger(__name__)
+
+
 class PGServiceComparisonRepository(IServiceComparisonRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def apelidos_aprovados(self, provider: str) -> dict[str, str]:
+        # Savepoint: código novo antes da migration não pode derrubar a análise
+        try:
+            async with self._session.begin_nested():
+                linhas = await self._session.execute(
+                    select(ServiceNameSuggestionModel.chave, ServiceNameSuggestionModel.alvo).where(
+                        ServiceNameSuggestionModel.provider == provider.lower(),
+                        ServiceNameSuggestionModel.status == "aprovada",
+                        ServiceNameSuggestionModel.alvo.is_not(None),
+                    )
+                )
+                return {chave: alvo for chave, alvo in linhas.all() if alvo}
+        except SQLAlchemyError:
+            logger.warning("apelidos_aprovados_indisponiveis provider=%s", provider)
+            return {}
 
     async def find_equivalents(
         self, category: str, exclude_provider: str

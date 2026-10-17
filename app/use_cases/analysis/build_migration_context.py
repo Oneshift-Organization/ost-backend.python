@@ -504,9 +504,15 @@ class BuildMigrationContextUseCase:
             return equivalents_cache[key]
 
         # ── 4. Match helpers ─────────────────────────────────────
+        # Apelidos aprovados pela curadoria da OneShift (decisão 2.11): o nome que a
+        # fatura traz → a linha do DE-PARA. Só análises novas: o payload é congelado.
+        aprovados = await self._comparison_repo.apelidos_aprovados(source_provider)
+
         def _canonical_name(name: str) -> str:
             aliases = PROVIDER_SERVICE_ALIASES.get(source_provider, {})
-            return aliases.get(name, name)
+            if name in aliases:
+                return aliases[name]
+            return aprovados.get(service_key(source_provider, name), name)
 
         def _match(svc_name: str, hint_type: str | None = None) -> ServiceComparison | None:
             name = _canonical_name(svc_name)
