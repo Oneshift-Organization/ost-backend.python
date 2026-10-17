@@ -58,7 +58,7 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
     "agent-authority-v4.1": (
-        "a5612c797a2055db93780174fbe0770fcb4c76baabf8db34c823554b1ee4ec3f"
+        "6256a5075dce478331ca1f6092769570cc18167210d373f8bf7af2e47fdf525e"
     ),
     # v4: lote da autoridade (PLANO_AUTORIDADE_V3_E_PRECISAO §2). Atualizado a cada item
     # do lote até a entrega; a versão sobe uma vez só.
