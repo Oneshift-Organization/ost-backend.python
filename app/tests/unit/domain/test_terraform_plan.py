@@ -231,6 +231,30 @@ def test_egresso_e_compromisso_aparecem_como_nao_suportados() -> None:
     assert "Compromisso" in texto or "reserva" in texto
 
 
+def _aviso_do_cluster(plano) -> list[str]:
+    return [item for item in plano.nao_suportado if item.startswith("Kubernetes:")]
+
+
+def test_cluster_do_inventario_avisa_que_vai_inteiro() -> None:
+    """Opção B adiada: as aplicações de dentro do cluster não são separadas."""
+    payload = _payload()
+    payload["topologia"] = {"resumo": {"contagens": {"por_tipo": {"cluster_kubernetes": 1}}}}
+    [aviso] = _aviso_do_cluster(_derivar(payload))
+    assert "cluster inteiro" in aviso
+    assert "Deployment" in aviso
+
+
+def test_plano_de_controle_no_billing_tambem_avisa() -> None:
+    for chave in ("gke_plano_controle", "kubernetes_outros"):
+        payload = _payload()
+        payload["custos_auxiliares"][chave] = 74.4
+        assert len(_aviso_do_cluster(_derivar(payload))) == 1, chave
+
+
+def test_sem_kubernetes_nao_avisa() -> None:
+    assert _aviso_do_cluster(_derivar()) == []
+
+
 def test_rede_e_declarada_como_escolha_do_usuario() -> None:
     p = _premissa(_derivar(), "rede")
     assert p.categoria == "escolha_usuario"
