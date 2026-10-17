@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 
+from app.domain.services.oci_shape import FAMILIA_PADRAO, ler_shape, ocpus_para
 from app.infrastructure.terraform.hcl import (
     atributo,
     bloco,
@@ -51,6 +52,8 @@ SUBNET = "subnet_principal"
 # Proporção usada quando a análise não trouxe RAM: a OCI recomenda 16 GB por
 # OCPU nos shapes flexíveis de propósito geral.
 _GB_POR_VCPU = 16
+# O nome do shape Flex de cada família; o X9 (Intel) é o Standard3
+_SHAPE_DA_FAMILIA = {"X9": "VM.Standard3.Flex"}
 
 
 class AdaptadorOCI:
@@ -182,8 +185,14 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     vcpus = max(1, int(float(cfg.get("vcpus") or 1)))
     ram = float(cfg.get("ram_gb") or 0) or vcpus * _GB_POR_VCPU
     instancias = int(cfg.get("instances") or 1)
-    # A capacidade do pool é o TOTAL; o shape é por instância.
-    por_instancia = max(1, vcpus // max(1, instancias))
+    # A capacidade do pool é o TOTAL; o shape é por instância. O shape é a família
+    # que a análise cotou, e `ocpus` sai da vCPU pela regra da família (x86 e
+    # AmpereOne: 2 vCPU por OCPU; A1: 1). Antes era sempre E4 com OCPU = vCPU, o
+    # dobro do que foi cotado.
+    lido = ler_shape(str(cfg.get("machine_type") or ""))
+    familia = lido[0] if lido else FAMILIA_PADRAO
+    shape = _SHAPE_DA_FAMILIA.get(familia, f"VM.Standard.{familia}.Flex")
+    por_instancia = ocpus_para(vcpus / max(1, instancias), familia)
     ram_instancia = max(1.0, round(ram / max(1, instancias), 1))
     slug = r.logical_name.replace("_", "-")
     texto = (
@@ -208,7 +217,7 @@ def _compute(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("display_name", referencia(
             f'"{nome_cloud(bp.project_name, slug)}-${{count.index}}"'
         )),
-        atributo("shape", "VM.Standard.E4.Flex"),
+        atributo("shape", shape),
         bloco_aninhado("shape_config", [
             atributo("ocpus", por_instancia, nivel=2),
             atributo("memory_in_gbs", ram_instancia, nivel=2),

@@ -6,8 +6,9 @@ por instância como Azure/AWS). Buscamos as duas taxas por família flex e geram
 N OCPUs e M GB) — cada uma com preço por-instância = N*ocpu + M*mem. Assim o
 packer as consome como qualquer candidato, sem lógica OCI espalhada nele.
 
-OCPU = 2 vCPU no x86 (E/X); 1 vCPU no ARM (A, Ampere — sem SMT). Sem dependência
-externa (urllib). Roda offline, nunca no caminho crítico.
+OCPU = 2 vCPU no x86 (E/X) e na AmpereOne (A2/A4); 1 vCPU na A1 — a regra oficial
+fica em `domain/services/oci_shape`. Sem dependência externa (urllib). Roda offline,
+nunca no caminho crítico.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.domain.entities.cloud_price_point import CloudPricePoint
+from app.domain.services.oci_shape import vcpus_por_ocpu
 
 _URL = "https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD"
 _SOURCE = "oci_cetools_api"
@@ -29,13 +31,13 @@ _SOURCE = "oci_cetools_api"
 _FAM = re.compile(r"^(?:OCI - )?Compute - Standard - (E\d|A\d|X\d+)\b", re.IGNORECASE)
 _EXCLUDE = ("Ax", "Cloud@Customer", "Micro", "Windows", "Dense", "Bare Metal")
 
-# Grade de configurações geradas: OCPUs x (GB de RAM por OCPU). O flex aceita de
-# 1 a 64 GB por OCPU; três razões cobrem as três classes. No x86 (2 vCPU por
-# OCPU) dão 2, 4 e 8 GB/vCPU (compute, geral, memória); no ARM (1 vCPU por OCPU)
-# dão 4, 8 e 16. Sem a razão 4, um pool ARM de uso geral (Graviton, 4 GB/vCPU)
-# só achava forma com o dobro da memória.
+# Grade de configurações geradas: OCPUs x (GB de RAM por vCPU). O flex aceita de
+# 1 a 64 GB por OCPU (docs.oracle.com, Compute Shapes); as razões por vCPU cobrem
+# de compute (1-2 GB) a memória (8-16 GB) em toda família, qualquer que seja a vCPU
+# por OCPU dela. Antes a razão era por OCPU (4, 8, 16) e sobrava RAM no x86 pequeno.
 _OCPU_STEPS = (1, 2, 4, 8, 16, 32)
-_GB_PER_OCPU = (4, 8, 16)
+_GB_PER_VCPU = (1, 2, 4, 8, 16)
+_GB_MAX_PER_OCPU = 64
 
 
 def _fetch(timeout: float) -> list[dict[str, Any]]:
@@ -55,10 +57,9 @@ def _flex_rates(items: list[dict[str, Any]]) -> dict[str, dict[str, Decimal]]:
         m = _FAM.match(name)
         if not m or any(x in name for x in _EXCLUDE):
             continue
-        prices = (it.get("currencyCodeLocalizations") or [{}])[0].get("prices") or []
-        if not prices:
+        value = _primeira_faixa_paga(it)
+        if value is None:
             continue
-        value = Decimal(str(prices[0].get("value")))
         metric = it.get("metricName") or ""
         bucket = rates.setdefault(m.group(1).upper(), {})
         if "OCPU" in metric:
@@ -70,6 +71,17 @@ def _flex_rates(items: list[dict[str, Any]]) -> dict[str, dict[str, Decimal]]:
         for fam, r in rates.items()
         if r.get("ocpu", Decimal("0")) > 0 and "mem" in r
     }
+
+
+def _primeira_faixa_paga(item: dict[str, Any]) -> Decimal | None:
+    """A A1 vem com a franquia mensal grátis como primeira faixa (US$ 0 até 3.000
+    OCPU-h); ler a primeira faixa descartava a família inteira."""
+    precos = (item.get("currencyCodeLocalizations") or [{}])[0].get("prices") or []
+    for p in precos:
+        valor = Decimal(str(p.get("value") or 0))
+        if valor > 0:
+            return valor
+    return None
 
 
 def fetch_oci_compute_prices(
@@ -92,10 +104,12 @@ def _configs(
     out: list[CloudPricePoint] = []
     for fam, r in rates.items():
         ocpu_rate, mem_rate = r["ocpu"], r["mem"]
-        vcpu_per_ocpu = 1 if fam.startswith("A") else 2  # ARM não tem SMT
+        vcpu_per_ocpu = vcpus_por_ocpu(fam)
         for ocpu in _OCPU_STEPS:
-            for gb_per in _GB_PER_OCPU:
-                ram_gb = ocpu * gb_per
+            for gb_per_vcpu in _GB_PER_VCPU:
+                ram_gb = ocpu * vcpu_per_ocpu * gb_per_vcpu
+                if ram_gb > ocpu * _GB_MAX_PER_OCPU:
+                    continue
                 price = ocpu * ocpu_rate + ram_gb * mem_rate
                 out.append(
                     CloudPricePoint(
