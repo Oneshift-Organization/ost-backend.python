@@ -66,6 +66,7 @@ from app.use_cases.billing.get_billing_job_status import GetBillingJobStatusUseC
 from app.use_cases.billing.ingest_billing_file import IngestBillingFileUseCase
 from app.use_cases.billing.list_billing_items import ListBillingItemsUseCase
 from app.use_cases.billing.list_billing_reports import ListBillingReportsUseCase
+from app.use_cases.billing.rename_billing_report import RenameBillingReportUseCase
 from app.use_cases.billing.upload_billing_file import UploadBillingFileUseCase
 from app.use_cases.reports.generate_billing_dashboard import (
     GenerateBillingDashboardUseCase,
@@ -167,6 +168,10 @@ def _get_billing_job_status_uc(session: DbSession) -> GetBillingJobStatusUseCase
     return GetBillingJobStatusUseCase(PgBillingReportRepository(session))
 
 
+def _rename_billing_report_uc(session: DbSession) -> RenameBillingReportUseCase:
+    return RenameBillingReportUseCase(PgBillingReportRepository(session))
+
+
 def _list_billing_reports_uc(session: DbSession) -> ListBillingReportsUseCase:
     return ListBillingReportsUseCase(PgBillingReportRepository(session))
 
@@ -186,6 +191,7 @@ UploadBillingFileUC = Annotated[UploadBillingFileUseCase, Depends(_upload_billin
 IngestBillingFileUC = Annotated[IngestBillingFileUseCase, Depends(_ingest_billing_file_uc)]
 GetBillingJobStatusUC = Annotated[GetBillingJobStatusUseCase, Depends(_get_billing_job_status_uc)]
 ListBillingReportsUC = Annotated[ListBillingReportsUseCase, Depends(_list_billing_reports_uc)]
+RenameBillingReportUC = Annotated[RenameBillingReportUseCase, Depends(_rename_billing_report_uc)]
 ListBillingItemsUC = Annotated[ListBillingItemsUseCase, Depends(_list_billing_items_uc)]
 GenerateBillingDashboardUC = Annotated[
     GenerateBillingDashboardUseCase,

@@ -19,11 +19,12 @@ from app.api.deps import (
     GetBillingJobStatusUC,
     ListBillingItemsUC,
     ListBillingReportsUC,
+    RenameBillingReportUC,
     UploadBillingFileUC,
 )
 from app.api.v1.routes.billing_checks import verificar_arquivo
 from app.core.config import get_settings
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.infrastructure.database.session import get_sessionmaker
 from app.infrastructure.repositories.pg_billing_enriched_repo import (
@@ -46,6 +47,7 @@ from app.schemas.billing import (
     BillingItemsPage,
     BillingJobStatusResponse,
     BillingReportSummary,
+    RenameBillingReportRequest,
 )
 from app.schemas.diagnostico_de_entrada import BillingFileCheckResponse
 from app.use_cases.analysis.build_billing_enriched import BuildBillingEnrichedUseCase
@@ -56,6 +58,7 @@ from app.use_cases.billing.ingest_billing_file import (
 )
 from app.use_cases.billing.list_billing_items import ListBillingItemsInput
 from app.use_cases.billing.list_billing_reports import ListBillingReportsInput
+from app.use_cases.billing.rename_billing_report import RenameBillingReportInput
 from app.use_cases.billing.upload_billing_file import UploadBillingFileInput
 
 router = APIRouter(prefix="/billing-files")
@@ -205,18 +208,7 @@ async def get_billing_by_external_id(
     report = await repo.get_by_external_id(external_id, UUID(user.sub))
     if report is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "billing report not found")
-    return BillingJobStatusResponse(
-        job_id=report.id,
-        report_id=report.id,
-        external_id=report.external_id,
-        status=report.status,
-        provider=report.provider,
-        schema_version=report.schema_version,
-        row_count=report.row_count,
-        error_message=report.error_message,
-        created_at=report.created_at,
-        updated_at=report.updated_at,
-    )
+    return BillingJobStatusResponse.from_entity(report)
 
 
 @router.get("/{job_id}", response_model=BillingJobStatusResponse)
@@ -231,18 +223,27 @@ async def get_billing_job_status(
     except NotFoundError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
 
-    return BillingJobStatusResponse(
-        job_id=report.id,
-        report_id=report.id,
-        external_id=report.external_id,
-        status=report.status,
-        provider=report.provider,
-        schema_version=report.schema_version,
-        row_count=report.row_count,
-        error_message=report.error_message,
-        created_at=report.created_at,
-        updated_at=report.updated_at,
-    )
+    return BillingJobStatusResponse.from_entity(report)
+
+
+@router.put("/{job_id}/alias", response_model=BillingReportSummary)
+async def rename_billing_report(
+    job_id: UUID,
+    body: RenameBillingReportRequest,
+    user: CurrentUser,
+    uc: RenameBillingReportUC,
+) -> BillingReportSummary:
+    """Nome dado pelo usuário ao billing (M9); `null` ou vazio volta ao nome do arquivo."""
+    user_uuid = _resolve_user_uuid(user.sub)
+    try:
+        report = await uc.execute(
+            RenameBillingReportInput(user_id=user_uuid, report_id=job_id, alias=body.alias)
+        )
+    except NotFoundError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from e
+    return BillingReportSummary.from_entity(report)
 
 
 @router.get("/{job_id}/items", response_model=BillingItemsPage)

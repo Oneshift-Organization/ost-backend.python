@@ -1,3 +1,4 @@
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -5,6 +6,9 @@ from uuid import UUID, uuid4
 
 from app.core.exceptions import ValidationError
 from app.domain.value_objects.cloud_provider import CloudProvider
+
+# Nome que o usuário dá ao billing (M9): curto o bastante para caber na linha da lista
+ALIAS_MAXIMO = 120
 
 
 class JobStatus(StrEnum):
@@ -28,6 +32,8 @@ class BillingReport:
     provider: CloudProvider | None = None
     schema_version: str | None = None
     source_filename: str | None = None
+    # Nome dado pelo usuário; sem ele, a tela mostra o nome do arquivo
+    alias: str | None = None
     status: JobStatus = JobStatus.QUEUED
     error_message: str | None = None
     row_count: int = 0
@@ -39,6 +45,20 @@ class BillingReport:
     def __post_init__(self) -> None:
         if not isinstance(self.user_id, UUID):
             raise ValidationError("user_id must be UUID")
+
+    @property
+    def nome_exibicao(self) -> str | None:
+        return self.alias or self.source_filename
+
+    def renomear(self, alias: str | None) -> None:
+        """Espaços normalizados; vazio ou None tira o alias e o nome volta ao do arquivo."""
+        texto = " ".join((alias or "").split())
+        if len(texto) > ALIAS_MAXIMO:
+            raise ValidationError(f"o nome tem no máximo {ALIAS_MAXIMO} caracteres")
+        if any(unicodedata.category(c) == "Cc" for c in texto):
+            raise ValidationError("o nome não pode ter caractere de controle")
+        self.alias = texto or None
+        self.updated_at = datetime.now(UTC)
 
     def mark_processing(self) -> None:
         if self.status is not JobStatus.QUEUED:
