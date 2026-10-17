@@ -55,6 +55,23 @@ volta no `GET /v1/analyses`. É isso que faz a operação parecer exclusão.
 
 Cada item da listagem passa a trazer `disp_status`, útil só na visão de lixeira.
 
+## Uma análise por billing (17/10/2026)
+
+Refazer a análise (anexar inventário, reanalisar) cria um job novo do mesmo billing. Antes,
+a lista mostrava os dois. Agora o job novo é uma **revisão**:
+
+- `GET /v1/analyses` devolve **uma linha por billing**:
+  - vigente é a revisão concluída mais recente;
+  - sem nenhuma concluída, vale a mais recente.
+- Se uma revisão mais nova ainda não concluiu (rodando ou falhou), a linha da vigente traz
+  `reanalise_job_id`, `reanalise_status` e `reanalise_erro`. A vigente continua valendo
+  até a nova concluir, e uma reanálise que falha não tira a anterior da tela.
+- As revisões antigas ficam no banco; o link direto de cada uma continua abrindo.
+- `PUT .../disp-status` vale para **todas as revisões do billing**. Senão, excluir a
+  vigente faria a revisão anterior voltar à lista.
+
+A regra está em `app/domain/services/analise_vigente.py`.
+
 ## Fluxo sugerido na tela
 
 1. Usuário clica em excluir → `PUT .../disp-status` com `{"disp_status": 0}`.

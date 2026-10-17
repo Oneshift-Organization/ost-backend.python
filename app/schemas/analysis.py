@@ -135,3 +135,9 @@ class AnalysisJobSummary(BaseModel):
     created_at: datetime
     # O que os arquivos enviados permitem: `nivel` dá a cor do aviso na lista
     diagnostico_de_entrada: DiagnosticoDeEntradaOut | None = None
+    # Uma linha por billing: refazer a análise (anexar inventário, reanalisar) cria
+    # uma revisão, e a lista mostra a vigente. Se uma revisão mais nova ainda não
+    # concluiu, o estado e o erro dela vêm aqui; a vigente segue valendo.
+    reanalise_job_id: UUID | None = None
+    reanalise_status: str | None = None
+    reanalise_erro: str | None = None

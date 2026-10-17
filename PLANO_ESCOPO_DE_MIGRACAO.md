@@ -171,11 +171,14 @@ Do mock aprovado (`BaseMigracao-NAO-APAGUE/README.md`, decisões 1 a 8):
   inventários também;
 - visões Serviços e Aplicações e o painel de plano lendo as rotas do E1.
 
-Ponto do fluxo atual: anexar inventário a uma análise pronta cria **outra
-análise** do mesmo billing (`POST /v1/analyses/start/{report_id}` com
-`inventory_id`), o que roda o LLM de novo e deixa a análise antiga na lista.
-Funciona para a primeira versão; se o custo pesar, o backend pode completar a
-análise existente com o inventário.
+Ponto do fluxo atual: anexar inventário a uma análise pronta cria um job novo do
+mesmo billing (`POST /v1/analyses/start/{report_id}` com `inventory_id`), o que roda
+o LLM de novo.
+
+**Desde 17/10, o job novo é uma revisão:** a lista mostra uma análise por billing
+(`docs/endpoints/disp-status.md`, "Uma análise por billing"). Completar a análise sem
+rodar o LLM de novo está nas melhorias, com prioridade máxima
+(`PLANO_ESTRATEGIA_SPRINT_TERRAFORM` §7, M3).
 
 ## 5. Ordem
 
