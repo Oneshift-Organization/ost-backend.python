@@ -267,22 +267,15 @@ class BillingAggregator:
                 aux_por_servico[_AUX_BUCKET[component_type]][item.service_name] += cost
                 regiao = regiao_da_linha(item.provider, item.region, item.usage_type) or ""
                 aux_por_regiao[_AUX_BUCKET[component_type]][regiao] += cost
-                if _AUX_BUCKET[component_type] == _BANCO and cost > 0:
-                    # Instância de banco: a vCPU-hora dela, para o destino cotar pela
-                    # taxa por vCPU-hora; storage, IO e backup ficam sem quantidade
-                    vcpu_h = vcpu_horas_do_banco(
-                        item.provider, item.usage_type, item.usage_amount, item.usage_unit
+                if _AUX_BUCKET[component_type] == _BANCO:
+                    _medir_banco(
+                        item,
+                        atributos,
+                        regiao,
+                        quantidade=aux_quantidade,
+                        medido=aux_medido,
+                        por_motor=banco_por_motor,
                     )
-                    if vcpu_h is not None:
-                        aux_quantidade[_BANCO][regiao] += vcpu_h
-                        aux_medido[_BANCO][regiao] += cost
-                        chave = motor_do_banco(
-                            item.provider,
-                            item.service_name,
-                            item.usage_type,
-                            atributos.get("database_engine"),
-                        )
-                        banco_por_motor[chave or ""] += vcpu_h
                 if atributos:
                     _medir_auxiliar(item, component_type, armazenamento, bancos)
             else:
@@ -611,6 +604,41 @@ def _medir_auxiliar(
         banco["motor"] = atributos.get("database_engine") or atributos.get("cache_engine")
         implantacao = str(atributos.get("deployment_option") or "")
         banco["multi_az"] = banco["multi_az"] or "multi" in implantacao.casefold()
+
+
+def _medir_banco(
+    item: Any,
+    atributos: dict[str, Any],
+    regiao: str,
+    *,
+    quantidade: dict[str, dict[str, Decimal]],
+    medido: dict[str, dict[str, Decimal]],
+    por_motor: dict[str, Decimal],
+) -> None:
+    """Instância de banco: a vCPU-hora dela, para o destino cotar pela taxa por
+    vCPU-hora; storage, IO e backup ficam sem quantidade (PLANO_PRECISAO_OCI P1.6).
+
+    A taxa da reserva (`charge_kind` commitment) não soma horas: o uso coberto vem na
+    linha de uso, com as horas dele, e a taxa só entra no custo das instâncias. Na base
+    amortizada ela traz a parte não usada com as horas da reserva inteira; contar essas
+    horas dobrava a vCPU-hora. Linha de uso a custo zero (coberta pela reserva, base
+    sem amortização) soma as horas."""
+    vcpu_h = vcpu_horas_do_banco(item.provider, item.usage_type, item.usage_amount, item.usage_unit)
+    if vcpu_h is None:
+        return
+    cobranca = atributos.get("charge_kind")
+    if cobranca == "commitment":
+        if item.cost > 0:
+            medido[_BANCO][regiao] += item.cost
+        return
+    if item.cost <= 0 and cobranca != "usage":
+        return
+    quantidade[_BANCO][regiao] += vcpu_h
+    medido[_BANCO][regiao] += item.cost
+    chave = motor_do_banco(
+        item.provider, item.service_name, item.usage_type, atributos.get("database_engine")
+    )
+    por_motor[chave or ""] += vcpu_h
 
 
 def _bancos_medidos(bancos: dict[str, dict[str, Any]]) -> tuple[BancoMedido, ...]:
