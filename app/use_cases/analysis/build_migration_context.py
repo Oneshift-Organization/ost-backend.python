@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -31,9 +31,13 @@ from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRep
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
 from app.domain.services.alertas import avaliar_cambio, avaliar_regioes
+from app.domain.services.banco_por_uso import CATEGORIA as CATEGORIA_BANCO
+from app.domain.services.banco_por_uso import CATEGORIA_DO_MOTOR, CATEGORIA_STORAGE
+from app.domain.services.banco_por_uso import UNIDADE as UNIDADE_DO_BANCO
 from app.domain.services.categoria_por_uso import UNIDADE as UNIDADE_POR_USO
 from app.domain.services.categoria_por_zona import dividir_por_zona
 from app.domain.services.category_calculator import (
+    CategoryEquivalent,
     CategoryRate,
     estimate_by_cost_ratio,
     estimate_by_quantity,
@@ -261,6 +265,97 @@ def _somar_partes(
 
 
 _PARTE_QUE_PESA = Decimal("0.2")
+
+
+def _misturar_motores(
+    base: dict[str, CategoryRate],
+    por_motor: Mapping[str, dict[str, CategoryRate]],
+    pesos: Mapping[str, Decimal],
+) -> dict[str, CategoryRate]:
+    """Taxa de banco de cada provedor pela vCPU-hora de cada motor na fatura: MySQL na
+    taxa do MySQL, PostgreSQL na do PostgreSQL, sem motor na `base` (a maior das duas,
+    premissa declarada). Sem a taxa do motor no provedor, vale a base."""
+    total = sum(pesos.values(), Decimal(0))
+    if total <= 0:
+        return base
+    misturadas: dict[str, CategoryRate] = {}
+    for prov, b in base.items():
+        taxa = sum(
+            (peso / total) * (por_motor.get(m, {}).get(prov) or b).rate
+            for m, peso in pesos.items()
+        )
+        misturadas[prov] = replace(b, rate=Decimal(taxa))
+    return misturadas
+
+
+def _taxas_da_parte(
+    pontos: list[Any], categoria: str, parte: Any, source_provider: str
+) -> dict[str, CategoryRate]:
+    return _taxas_por_provedor(
+        pontos,
+        categoria,
+        source_provider=source_provider,
+        zona=parte.zona,
+        regiao_origem=parte.regiao_origem,
+    )
+
+
+def _cotar_banco(
+    *,
+    source_provider: str,
+    custo: Decimal,
+    medido: Decimal,
+    quantidade: Decimal,
+    preco_efetivo: Decimal,
+    taxas: dict[str, CategoryRate],
+    taxas_storage: dict[str, CategoryRate],
+) -> list[CategoryEquivalent]:
+    """Banco em duas partes (PLANO_PRECISAO_OCI P1.6): a instância pela vCPU-hora x a
+    taxa do destino; o resto (storage, IO, backup) pela razão das taxas de storage de
+    banco. Sem a taxa de storage da origem, o resto segue o preço efetivo das
+    instâncias, como antes."""
+    resto = max(custo - medido, Decimal(0))
+    pelo_storage = (
+        estimate_by_cost_ratio(
+            source_provider=source_provider, source_cost=resto, rates=taxas_storage
+        )
+        if resto > 0
+        else []
+    )
+    if resto > 0 and not pelo_storage:
+        return estimate_by_quantity(
+            source_provider=source_provider,
+            source_cost=custo,
+            quantity=quantidade,
+            measured_cost=medido,
+            effective_price=preco_efetivo,
+            rates=taxas,
+            unit=UNIDADE_DO_BANCO,
+        )
+    instancias = estimate_by_quantity(
+        source_provider=source_provider,
+        source_cost=medido,
+        quantity=quantidade,
+        measured_cost=medido,
+        effective_price=preco_efetivo,
+        rates=taxas,
+        unit=UNIDADE_DO_BANCO,
+    )
+    storage = {e.provider: e.estimated_monthly_cost for e in pelo_storage}
+    out = []
+    for e in instancias:
+        # Destino sem taxa de storage: o resto fica ao custo da origem, declarado na confiança
+        do_resto = storage.get(e.provider)
+        total = e.estimated_monthly_cost + (do_resto if do_resto is not None else resto)
+        out.append(
+            CategoryEquivalent(
+                provider=e.provider,
+                estimated_monthly_cost=total,
+                cost_delta=total - custo,
+                pricing_confidence=e.pricing_confidence if do_resto is not None else "low",
+            )
+        )
+    return out
 
 
 def _mais_fraca(a: str, b: str) -> str:
@@ -896,6 +991,18 @@ class BuildMigrationContextUseCase:
                 rate_points = await self._price_repo.rates_for_category(category)
                 if not rate_points:
                     continue
+                # Banco: taxa por motor e taxa de storage de banco (PLANO_PRECISAO_OCI P1.6)
+                pesos_motor = auxiliary.banco_por_motor if category == CATEGORIA_BANCO else {}
+                pontos_motor = {
+                    m: await self._price_repo.rates_for_category(CATEGORIA_DO_MOTOR[m])
+                    for m in pesos_motor
+                    if m in CATEGORIA_DO_MOTOR
+                }
+                pontos_storage = (
+                    await self._price_repo.rates_for_category(CATEGORIA_STORAGE)
+                    if category == CATEGORIA_BANCO
+                    else []
+                )
                 # P1: cada parte da categoria na taxa da zona dela, somadas. Sem região na
                 # linha, a parte vai para a zona dominante (fração declarada em `zonas`).
                 partes = dividir_por_zona(
@@ -908,7 +1015,11 @@ class BuildMigrationContextUseCase:
                 )
                 # Rede: a quantidade medida dispensa a taxa da origem. O preço efetivo
                 # (custo medido / quantidade) converte o custo das linhas sem quantidade.
-                unidade_medida = UNIDADE_DA_REDE.get(category) or UNIDADE_POR_USO.get(category)
+                unidade_medida = (
+                    UNIDADE_DA_REDE.get(category)
+                    or UNIDADE_POR_USO.get(category)
+                    or (UNIDADE_DO_BANCO if category == CATEGORIA_BANCO else None)
+                )
                 quantidade_total = sum((p.quantidade for p in partes), Decimal("0"))
                 medido_total = convert(sum((p.custo_medido for p in partes), Decimal("0")), fx)
                 preco_efetivo = (
@@ -946,12 +1057,36 @@ class BuildMigrationContextUseCase:
                                 }
                             )
                     custo_da_parte = convert(parte.custo, fx) or Decimal("0")
-                    equivs = (
-                        estimate_by_quantity(
+                    medido_da_parte = convert(parte.custo_medido, fx) or Decimal("0")
+                    da_parte: list[CategoryEquivalent]
+                    if category == CATEGORIA_BANCO and preco_efetivo is not None:
+                        rates = _misturar_motores(
+                            rates,
+                            {
+                                m: _taxas_da_parte(
+                                    pts, CATEGORIA_DO_MOTOR[m], parte, source_provider
+                                )
+                                for m, pts in pontos_motor.items()
+                            },
+                            pesos_motor,
+                        )
+                        da_parte = _cotar_banco(
+                            source_provider=source_provider,
+                            custo=custo_da_parte,
+                            medido=medido_da_parte,
+                            quantidade=parte.quantidade,
+                            preco_efetivo=preco_efetivo,
+                            taxas=rates,
+                            taxas_storage=_taxas_da_parte(
+                                pontos_storage, CATEGORIA_STORAGE, parte, source_provider
+                            ),
+                        )
+                    elif preco_efetivo is not None and unidade_medida:
+                        da_parte = estimate_by_quantity(
                             source_provider=source_provider,
                             source_cost=custo_da_parte,
                             quantity=parte.quantidade,
-                            measured_cost=convert(parte.custo_medido, fx) or Decimal("0"),
+                            measured_cost=medido_da_parte,
                             effective_price=preco_efetivo,
                             rates=rates,
                             unit=unidade_medida,
@@ -963,14 +1098,13 @@ class BuildMigrationContextUseCase:
                                 else None
                             ),
                         )
-                        if preco_efetivo is not None and unidade_medida
-                        else estimate_by_cost_ratio(
+                    else:
+                        da_parte = estimate_by_cost_ratio(
                             source_provider=source_provider,
                             source_cost=custo_da_parte,
                             rates=rates,
                         )
-                    )
-                    cotadas.append((parte, rates, equivs, custo_da_parte))
+                    cotadas.append((parte, rates, da_parte, custo_da_parte))
                 if not cotadas or not cotadas[0][2]:
                     continue
                 # A parte maior dá as taxas que a resposta mostra; a soma dá o custo

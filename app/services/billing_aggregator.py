@@ -21,6 +21,9 @@ from app.domain.entities.workload_pool import (
     WorkloadPool,
 )
 from app.domain.services.azure_shape import parse_azure_shape
+from app.domain.services.banco_por_uso import CATEGORIA as _BANCO
+from app.domain.services.banco_por_uso import motor as motor_do_banco
+from app.domain.services.banco_por_uso import vcpu_horas as vcpu_horas_do_banco
 from app.domain.services.categoria_por_uso import BALDES as _BALDES_POR_USO
 from app.domain.services.categoria_por_uso import CATEGORIAS as _CATEGORIAS_POR_USO
 from app.domain.services.categoria_por_uso import PLANO_DE_CONTROLE as _PLANO_DE_CONTROLE
@@ -183,6 +186,8 @@ class BillingAggregator:
             lambda: {"gb": _ZERO, "recursos": set(), "custo": defaultdict(lambda: _ZERO)}
         )
         bancos: dict[str, dict[str, Any]] = {}
+        # Banco: vCPU-hora de instância por motor ("" sem motor), PLANO_PRECISAO_OCI P1.6
+        banco_por_motor: dict[str, Decimal] = defaultdict(lambda: _ZERO)
         custo_sob_demanda = _ZERO
         custo_referenciado = _ZERO
         custo_por_base: dict[str, Decimal] = defaultdict(lambda: _ZERO)
@@ -262,6 +267,22 @@ class BillingAggregator:
                 aux_por_servico[_AUX_BUCKET[component_type]][item.service_name] += cost
                 regiao = regiao_da_linha(item.provider, item.region, item.usage_type) or ""
                 aux_por_regiao[_AUX_BUCKET[component_type]][regiao] += cost
+                if _AUX_BUCKET[component_type] == _BANCO and cost > 0:
+                    # Instância de banco: a vCPU-hora dela, para o destino cotar pela
+                    # taxa por vCPU-hora; storage, IO e backup ficam sem quantidade
+                    vcpu_h = vcpu_horas_do_banco(
+                        item.provider, item.usage_type, item.usage_amount, item.usage_unit
+                    )
+                    if vcpu_h is not None:
+                        aux_quantidade[_BANCO][regiao] += vcpu_h
+                        aux_medido[_BANCO][regiao] += cost
+                        chave = motor_do_banco(
+                            item.provider,
+                            item.service_name,
+                            item.usage_type,
+                            atributos.get("database_engine"),
+                        )
+                        banco_por_motor[chave or ""] += vcpu_h
                 if atributos:
                     _medir_auxiliar(item, component_type, armazenamento, bancos)
             else:
@@ -322,6 +343,7 @@ class BillingAggregator:
                 quantidade_por_regiao={c: dict(r) for c, r in aux_quantidade.items()},
                 medido_por_regiao={c: dict(r) for c, r in aux_medido.items()},
                 por_servico={c: dict(s) for c, s in aux_por_servico.items()},
+                banco_por_motor=dict(banco_por_motor),
                 por_uso={
                     c: aux_totals[c]
                     for c in _CATEGORIAS_POR_USO
