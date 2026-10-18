@@ -251,8 +251,9 @@ US$ 55,98 (o do total), MySQL US$ 42,69, Oracle sem cotação. No Cost Explorer,
 mais caro, e a parte em alta disponibilidade vai pelo MySQL (3 réplicas na OCI). A tela diz isso.
 
 **Ainda aberto**
-- A fatura AWS de 09/2026 tem o motor na linha do RDS, mas o agregador não lê
-  (`banco_por_motor` vazio): o motor só vem do inventário ou do export detalhado.
+- ~~A fatura AWS de 09/2026 tem o motor na linha do RDS, mas o agregador não lê.~~ Errado:
+  a linha dela só traz `InstanceUsage:db.t3.medium`. Quem traz o motor é o Cost Explorer de
+  03/2026 (descrição e código da operação); resolvido na Parte 5.
 - O DE-PARA tem opções erradas, para curadoria: Azure Data Factory → Entity Resolution e
   Ground Truth na AWS, Dataprep e Data Labeling no GCP (US$ 14,2 mil, e o tipo virou
   `data_labeling`); VPN Gateway → Transit Gateway; FastConnect e ExpressRoute → PrivateLink;
@@ -260,3 +261,45 @@ mais caro, e a parte em alta disponibilidade vai pelo MySQL (3 réplicas na OCI)
 - "Equivalente não mapeado" ainda aparece para rede genérica, licença e serviço sem par na
   OCI: os três textos novos estão em mockup, aguardando decisão.
 - O Application Gateway não tem metadata curada: o nível de origem fica "a confirmar".
+
+## Parte 5 — Textos para o destino sem equivalente, curadoria e o motor do relatório da AWS
+
+Análise de impacto antes do código em
+[`PLANO_EQUIVALENTES_E_TARIFAS.md`](PLANO_EQUIVALENTES_E_TARIFAS.md) §8, §9 e §10.
+
+**Textos no lugar de "Equivalente não mapeado"** (back `86cee5c`, `f43ce71`; front `87e0cf5`).
+`service-couplings` diz por que o destino não tem opção. Nas faturas do develop:
+
+| caso | serviços | o que a tela mostra |
+|---|---|---|
+| por tipo | Networking da GCP, NETWORK da OCI | cada tipo com o custo de hoje e o do destino (OCI: balanceador US$ 369,79, VPN US$ 0, processamento US$ 0,92 = US$ 370,87) |
+| licença | Virtual Machines Licenses da Azure | vai com Amazon EC2, Compute Engine ou OCI Compute; ao custo de hoje |
+| sem par | Sentinel, Front Door e MWAA na OCI; Cloud Scheduler na OCI | "Sem equivalente na OCI", pelo catálogo; ao custo de hoje |
+
+Só leitura: total, nota e tabela de equivalentes não mudam.
+
+**Curadoria do DE-PARA** (back `db27c07`; 859 linhas, seed e metadata no develop):
+Data Factory → ETL (Glue, Cloud Data Fusion, OCI Data Flow); VPN Gateway → VPN (Site-to-Site
+VPN, Cloud VPN, VPN Connect); link dedicado separado de endpoint privado (ExpressRoute e
+FastConnect → Direct Connect, Cloud Interconnect, FastConnect); OCI Streaming → Kafka
+(Kinesis, MSK, Event Hubs, Pub/Sub); Application Gateway com nota curada. Medido nas 5
+faturas do develop, código `86cee5c` contra `db27c07`: gasto, pools, categorias, custo,
+economia e cobertura por provedor iguais; nenhuma linha perdeu preço (a VPN manteve US$ 36,
+US$ 108 e US$ 0, só trocou de equivalente); notas mudam na segunda casa (Azure: OCI 88,70 →
+88,72; OCI: Azure 55,57 → 55,64); recomendação igual.
+
+**Motor do RDS no relatório detalhado da AWS** (back `187c23e`): o parser lê a descrição e
+o código da operação. Medido na fixture dos gates (Cost Explorer de 03/2026): 364,5 mil das
+373,5 mil vCPU-horas passam a ser PostgreSQL; banco na OCI de US$ 27.506,59 para
+US$ 23.748,45; economia da OCI de US$ 24.912 para US$ 28.670; nota da OCI de 81,72 para
+83,15; recomendação igual; nenhum inventário medido criado. Vale para faturas enviadas de
+agora em diante: a análise já gravada não muda.
+
+**Gates:** 2343 unitários e 215 de integração passando; mypy na linha de base (1161); CI
+verde a cada merge.
+
+**Ainda aberto**
+- O Front Door e o Sentinel ficam "sem par" na OCI: a OCI não tem CDN nem SIEM no catálogo.
+- Na OCI, a rede de saída cotada na AWS, na Azure e no GCP sai de 6 a 8 vezes o custo de hoje
+  (a OCI cobra pouco pelo tráfego): é o preço real do destino, e a tela agora mostra por tipo.
+- Fila de curadoria do develop: Kiro, Azure Bastion e EC2 - Other pendentes.
