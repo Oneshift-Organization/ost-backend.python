@@ -292,6 +292,13 @@ class ResumoValidacao(BaseModel):
     motivo_sem_validacao: str | None = None
 
 
+class TerraformFileOut(BaseModel):
+    """Um arquivo do pacote, para a tela mostrar o código antes do download."""
+
+    path: str
+    content: str
+
+
 class TerraformGenerationOut(BaseModel):
     """Estado da geração. `assumptions` e `unsupported_items` vão para a tela —
     é o que impede o pacote de ser lido como afirmação."""

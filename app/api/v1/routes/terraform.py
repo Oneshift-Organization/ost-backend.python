@@ -36,6 +36,7 @@ from app.schemas.terraform import (
     EscopoIn,
     ResumoValidacao,
     StatusGeracao,
+    TerraformFileOut,
     TerraformGenerationIn,
     TerraformGenerationOut,
 )
@@ -193,14 +194,7 @@ async def baixar_pacote(
     _exigir_flag()
     job = await _buscar(generation_id, UUID(user.sub), session)
 
-    if job.status != StatusGeracao.COMPLETED or not job.generated_files:
-        raise _erro(
-            status.HTTP_409_CONFLICT,
-            "GERACAO_NAO_CONCLUIDA",
-            f"a geração está em {job.status}",
-            retryable=job.status
-            in (StatusGeracao.PENDING, StatusGeracao.PROCESSING),
-        )
+    _exigir_concluida(job)
 
     conteudo = montar_zip(
         dict(job.generated_files), raiz=f"{job.project_name}-terraform"
@@ -214,6 +208,37 @@ async def baixar_pacote(
             )
         },
     )
+
+
+@router.get(
+    "/{generation_id}/files",
+    response_model=list[TerraformFileOut],
+    status_code=status.HTTP_200_OK,
+    summary="Os arquivos do pacote, para ler o código antes de baixar",
+)
+async def listar_arquivos(
+    generation_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+) -> list[TerraformFileOut]:
+    _exigir_flag()
+    job = await _buscar(generation_id, UUID(user.sub), session)
+    _exigir_concluida(job)
+    return [
+        TerraformFileOut(path=path, content=content)
+        for path, content in sorted(job.generated_files.items())
+    ]
+
+
+def _exigir_concluida(job: TerraformGenerationJobModel) -> None:
+    if job.status != StatusGeracao.COMPLETED or not job.generated_files:
+        raise _erro(
+            status.HTTP_409_CONFLICT,
+            "GERACAO_NAO_CONCLUIDA",
+            f"a geração está em {job.status}",
+            retryable=job.status
+            in (StatusGeracao.PENDING, StatusGeracao.PROCESSING),
+        )
 
 
 # ── execução ────────────────────────────────────────────────────────────

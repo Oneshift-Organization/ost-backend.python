@@ -110,6 +110,10 @@ async def test_aplicacoes_e_dependencias_entre_servicos(
     ]
     assert len(ec2["aplicacoes"]) >= 5
     assert any(p["campo"] == "ordem" for p in corpo["premissas"])
+    # Cada serviço traz os recursos do inventário que ele leva, sem repetir
+    assert ec2["recursos"] and all(r["tipo_nativo"] and r["chave"] for r in ec2["recursos"])
+    chaves = [r["chave"] for s in corpo["servicos"] for r in s["recursos"]]
+    assert len(chaves) == len(set(chaves))
 
 
 async def test_plano_de_uma_aplicacao_num_ambiente(app: FastAPI, analise: tuple[str, str]) -> None:

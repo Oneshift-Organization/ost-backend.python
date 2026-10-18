@@ -30,6 +30,23 @@ VERSAO = "escopo-de-migracao-v1"
 Natureza = Literal["dados", "servico", "encaminhamento", "declarada", "administrativo"]
 
 
+def _recursos_do_servico(ctx: ContextoDoEscopo, servico: str) -> list[RecursoDoServicoOut]:
+    """Os recursos que viram esse serviço, na ordem do tipo nativo e da região."""
+    recursos = [
+        ctx.recursos[k] for k, s in ctx.servico_de.items() if s == servico and k in ctx.recursos
+    ]
+    return [
+        RecursoDoServicoOut(
+            chave=r.chave,
+            tipo=r.tipo,
+            tipo_nativo=r.tipo_nativo,
+            regiao=r.regiao,
+            detalhe=" · ".join(x for x in (r.tamanho or r.classe, r.motor) if x) or None,
+        )
+        for r in sorted(recursos, key=lambda r: (r.tipo_nativo, r.regiao or "", r.chave))
+    ]
+
+
 def _dinheiro(valor: Decimal) -> float:
     return float(valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
@@ -129,12 +146,23 @@ class AplicacaoOut(BaseModel):
     )
 
 
+class RecursoDoServicoOut(BaseModel):
+    """Um recurso do inventário que o serviço leva para o destino."""
+
+    chave: str
+    tipo: str
+    tipo_nativo: str
+    regiao: str | None
+    detalhe: str | None = Field(description="tamanho ou classe e motor, como a nuvem escreve")
+
+
 class UsoDoServicoOut(BaseModel):
     nome: str
     aplicacoes: list[CustoPorNome]
     sem_aplicacao: float = Field(description="custo do serviço que não casa com aplicação")
     depende_de: list[ServicoLigadoOut]
     usado_por: list[ServicoLigadoOut]
+    recursos: list[RecursoDoServicoOut] = Field(default_factory=list)
 
 
 class GrupoOut(BaseModel):
@@ -204,6 +232,7 @@ class ApplicationsResponse(BaseModel):
                     sem_aplicacao=_dinheiro(s.sem_aplicacao),
                     depende_de=[ServicoLigadoOut.de(x) for x in s.depende_de],
                     usado_por=[ServicoLigadoOut.de(x) for x in s.usado_por],
+                    recursos=_recursos_do_servico(ctx, s.nome),
                 )
                 for s in c.servicos
             ],
