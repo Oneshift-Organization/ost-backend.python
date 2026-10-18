@@ -115,7 +115,11 @@ async def test_a_soma_dos_baldes_de_rede_e_o_custo_das_linhas() -> None:
         + aux.vpn
         + aux.network_other
     )
-    assert rede == Decimal("74.45")
+    # A consulta de DNS saiu da rede: tem balde próprio (PLANO_EQUIVALENTES_E_TARIFAS §3)
+    assert rede == Decimal("74.05")
+    assert aux.por_uso["dns_queries"] == Decimal("0.40")
+    assert sum(aux.quantidade_por_regiao["dns_queries"].values()) == Decimal(100)
+    assert rede + aux.por_uso["dns_queries"] == Decimal("74.45")
     # Túnel vale meia conexão
     assert aux.quantidade_por_regiao["vpn"] == {"us-central1": Decimal("365.0")}
 

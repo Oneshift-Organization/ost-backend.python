@@ -17,10 +17,19 @@ from app.domain.repositories.i_billing_report_repo import IBillingReportReposito
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
-from app.domain.services.currency import FxRate, convert, identity_rate
 from app.domain.services.categoria_por_uso import CHAVE_NO_PAYLOAD as CHAVE_POR_USO
+from app.domain.services.currency import FxRate, convert, identity_rate
+from app.domain.services.migration_strategy import technical_evidence
+from app.domain.services.qualidade_da_equivalencia import (
+    DESCONHECIDO,
+    FUNCIONAL,
+    HARDWARE,
+    ORIGEM_DO_POOL,
+    classificar,
+)
 from app.domain.services.rede_por_uso import CHAVE_NO_PAYLOAD as CHAVE_DA_REDE
 from app.domain.services.sku_normalization import normalize_provider
+from app.domain.services.technical_assessment import CURATED
 from app.infrastructure.llm.orchestrator import LLMOrchestrator
 from app.infrastructure.repositories.service_repositories import (
     PGServiceComparisonRepository,
@@ -100,7 +109,7 @@ def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
                 "ram_gib": round(float(fp.capacity.ram_gib), 2),
             },
             "custo_computacao": _money(fp.costs.compute_base, fx),
-            "equivalentes": [_serialize_equivalent(e) for e in equivs],
+            "equivalentes": [_com_qualidade_do_pool(_serialize_equivalent(e)) for e in equivs],
         }
         # Campos só quando informam algo (Onda 6/E5): região e licença eram
         # constantes ("global" / 0.0) em 20/20 pools, e a lista de projetos era
@@ -124,6 +133,16 @@ def _serialize_family_pools(ctx, fx: FxRate) -> tuple[list[dict], list[str]]:
         out.append(entry)
 
     return out, missing
+
+
+def _com_qualidade_do_pool(equivalente: dict[str, Any]) -> dict[str, Any]:
+    """Tipo, portabilidade e risco do destino do pool (PLANO_EQUIVALENTES_E_TARIFAS §2)."""
+    metadados = dict(equivalente.get("metadados") or {})
+    refatora, lock_in = technical_evidence(
+        {"source_metadata": ORIGEM_DO_POOL}, {"metadata": metadados}
+    )
+    metadados.update(classificar(refatora, lock_in, tipo=HARDWARE))
+    return {**equivalente, "metadados": metadados}
 
 
 # Tipos de origem por pool no payload: o topo basta para narrar e cabe no
@@ -508,29 +527,46 @@ def build_pipeline_llm_input_payload(
 
 def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
     """Persist catalog evidence before the model can reinterpret any of it."""
-    return [
-        {
-            "name": service.service_name,
-            "category": category.category,
-            "service_type": service.service_type,
-            "cost": _money(service.total_cost, fx),
-            "migration": getattr(service, "migration_expectation", None) or {},
-            "source_metadata": getattr(service, "migration_metadata", None) or {},
-            "type_source": getattr(service, "type_source", "inferido"),
-            "evidence_source": "catalog_snapshot",
-            "targets": [
-                {
-                    "provider": normalize_provider(eq.provider),
-                    "service_name": eq.service_name,
-                    "service_type": eq.service_type,
-                    "metadata": eq.metadata or {},
-                }
+    out = []
+    for category in getattr(ctx, "categories", []) or []:
+        for service in category.services:
+            workload = {
+                "name": service.service_name,
+                "category": category.category,
+                "service_type": service.service_type,
+                "cost": _money(service.total_cost, fx),
+                "migration": getattr(service, "migration_expectation", None) or {},
+                "source_metadata": getattr(service, "migration_metadata", None) or {},
+                "type_source": getattr(service, "type_source", "inferido"),
+                "evidence_source": "catalog_snapshot",
+            }
+            workload["targets"] = [
+                _com_qualidade(
+                    workload,
+                    {
+                        "provider": normalize_provider(eq.provider),
+                        "service_name": eq.service_name,
+                        "service_type": eq.service_type,
+                        "metadata": eq.metadata or {},
+                    },
+                )
                 for eq in service.equivalents
-            ],
-        }
-        for category in getattr(ctx, "categories", []) or []
-        for service in category.services
-    ]
+            ]
+            out.append(workload)
+    return out
+
+
+def _com_qualidade(workload: dict[str, Any], target: dict[str, Any]) -> dict[str, Any]:
+    """Tipo, portabilidade e risco do destino pela evidência da linha
+    (PLANO_EQUIVALENTES_E_TARIFAS §2): a projeção da tabela lê da metadata."""
+    refatora, lock_in = technical_evidence(workload, target)
+    mesmo_tipo = (
+        workload.get("type_source") in CURATED
+        and bool(workload.get("service_type"))
+        and target.get("service_type") == workload.get("service_type")
+    )
+    qualidade = classificar(refatora, lock_in, tipo=FUNCIONAL if mesmo_tipo else DESCONHECIDO)
+    return {**target, "metadata": {**target["metadata"], **qualidade}}
 
 
 def _serialize_financeiro(fin: FinancialEstimate) -> dict[str, object]:
