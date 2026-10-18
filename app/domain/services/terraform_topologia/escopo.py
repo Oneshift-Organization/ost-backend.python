@@ -8,13 +8,20 @@ recortado antes de derivar o plano:
   capacidade do escopo; o posicionamento fica só com as subredes do escopo. Pool sem
   posicionamento (fatura sem ID de recurso, que não liga máquina a pool): a proporção
   é a das máquinas do inventário da mesma família e região, escopo sobre conta;
-- bancos: os do escopo;
+- bancos: os do escopo, na topologia (onde estão) e nos grupos medidos da fatura (o
+  que o pacote cria), pela classe. Sem os grupos medidos o pacote caía num banco
+  genérico, fora da rede nova e com endpoint público (corrigido em 18/10);
 - discos, buckets e banco gerenciado estimado: pelo custo das linhas do escopo. O
   armazenamento medido e os discos do inventário são da conta inteira e saem;
 - o resto dos custos auxiliares (rede, segredos, serverless...) sai: o pacote não os
   provisiona, e a lista do que ficou de fora seria da conta inteira;
 - o README ganha a seção do escopo: aplicações, ordem de migração e a conectividade
   entre nuvens a prever (o que vai antes e o que fica para trás).
+
+Só o serviço (``somente_os_servicos``): o caso de uso já tirou do recorte o que não é
+dos serviços escolhidos. Cada dependência que o recorte corta vai na seção como
+``fronteira``, com o texto do que quebra e do que fazer; o README e os avisos do
+pacote dizem o mesmo.
 
 A fundação de rede (subredes e grupos) vem do espelho, que já cria só o que as
 máquinas e os bancos do pacote usam. Módulo puro, sem I/O.
@@ -32,6 +39,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.domain.services.sku_matcher import extract_family
+from app.domain.services.topologia.escopo import LigacaoNaFronteira, texto_da_fronteira
 
 # Chave de `custos_auxiliares` que o recorte reescreve com o custo do escopo
 CATEGORIAS_DO_ESCOPO = (
@@ -85,6 +93,10 @@ class RecorteDoEscopo:
     antes: tuple[LigacaoEntreNuvens, ...] = ()
     para_tras: tuple[LigacaoEntreNuvens, ...] = ()
     avisos: tuple[str, ...] = field(default_factory=tuple)
+    # Só o serviço: os escolhidos e o que o recorte cortou
+    somente_os_servicos: bool = False
+    servicos: tuple[str, ...] = ()
+    fronteira: tuple[LigacaoNaFronteira, ...] = ()
 
 
 def recortar_ao_escopo(payload: Mapping[str, Any], recorte: RecorteDoEscopo) -> dict[str, Any]:
@@ -105,7 +117,7 @@ def recortar_ao_escopo(payload: Mapping[str, Any], recorte: RecorteDoEscopo) -> 
     fora = _recortar_pools(novo, fracoes)
     _recortar_bancos(detalhe, recorte)
     detalhe["discos"] = {}
-    novo.pop("inventario_medido", None)
+    _recortar_bancos_medidos(novo, recorte)
     auxiliares = novo.get("custos_auxiliares") or {}
     novo["custos_auxiliares"] = {
         **{
@@ -246,6 +258,26 @@ def _recortar_bancos(detalhe: dict[str, Any], recorte: RecorteDoEscopo) -> None:
     ]
 
 
+def _recortar_bancos_medidos(payload: dict[str, Any], recorte: RecorteDoEscopo) -> None:
+    """Os grupos de banco medidos na fatura, na quantidade do escopo (pela classe, como a
+    topologia). O armazenamento medido é da conta inteira e sai."""
+    medido = payload.pop("inventario_medido", None) or {}
+    disponiveis = Counter(recorte.bancos_por_classe)
+    grupos = []
+    for g in medido.get("bancos") or []:
+        classe = g.get("classe")
+        no_escopo = min(int(g.get("quantidade") or 1), disponiveis[classe])
+        if no_escopo <= 0:
+            continue
+        disponiveis[classe] -= no_escopo
+        grupos.append({**g, "quantidade": no_escopo})
+    if grupos:
+        payload["inventario_medido"] = {
+            "bancos": grupos,
+            "total_bancos": sum(g["quantidade"] for g in grupos),
+        }
+
+
 def _secao(recorte: RecorteDoEscopo, fora: list[str]) -> dict[str, Any]:
     def ligacao(g: LigacaoEntreNuvens) -> dict[str, Any]:
         return {"grupo": g.grupo, "ordem": g.ordem, "portas": list(g.portas)}
@@ -258,4 +290,24 @@ def _secao(recorte: RecorteDoEscopo, fora: list[str]) -> dict[str, Any]:
         "para_tras": [ligacao(g) for g in recorte.para_tras],
         "pools_fora": sorted(set(fora)),
         "avisos": list(recorte.avisos),
+        **(
+            {
+                "somente_os_servicos": True,
+                "servicos": list(recorte.servicos),
+                "fronteira": [
+                    {
+                        "sentido": f.sentido,
+                        "de": f.de,
+                        "para": f.para,
+                        "natureza": f.natureza.value,
+                        "portas": list(f.portas),
+                        "forte": f.forte,
+                        "texto": texto_da_fronteira(f),
+                    }
+                    for f in recorte.fronteira
+                ],
+            }
+            if recorte.somente_os_servicos
+            else {}
+        ),
     }

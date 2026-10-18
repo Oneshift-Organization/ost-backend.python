@@ -17,6 +17,7 @@ from app.domain.services.topologia.escopo import (
     GrupoIncluido,
     GrupoVizinho,
     ServicoLigado,
+    texto_da_fronteira,
 )
 from app.use_cases.analysis.escopo_de_migracao import (
     EXPLICACAO_DA_ORDEM,
@@ -226,6 +227,12 @@ class ApplicationsResponse(BaseModel):
 # ── plano ───────────────────────────────────────────────────────────────
 
 
+_SOMENTE_OS_SERVICOS = (
+    "true = migra só os serviços escolhidos, sem as aplicações inteiras que os usam; o que "
+    "o recorte corta volta em `fronteira`. Não combina com `aplicacoes` nem `incluir_grupos`"
+)
+
+
 class MigrationPlanRequest(BaseModel):
     aplicacoes: list[str] = Field(default_factory=list)
     servicos: list[str] = Field(default_factory=list)
@@ -233,6 +240,7 @@ class MigrationPlanRequest(BaseModel):
     incluir_grupos: list[str] = Field(
         default_factory=list, description="ids de grupos de `antes`/`para_tras` incluídos à mão"
     )
+    somente_os_servicos: bool = Field(default=False, description=_SOMENTE_OS_SERVICOS)
 
 
 class EscolhaOut(BaseModel):
@@ -240,6 +248,21 @@ class EscolhaOut(BaseModel):
     servicos: list[str]
     ambiente: str | None
     incluir_grupos: list[str]
+    somente_os_servicos: bool = False
+
+
+class FronteiraOut(BaseModel):
+    """Dependência que o escopo de só o serviço corta: um lado migra, o outro fica."""
+
+    sentido: Literal["sai", "entra"] = Field(
+        description="sai: o que migra chama o que fica; entra: o que fica chama o que migra"
+    )
+    de: str
+    para: str
+    natureza: Natureza
+    portas: list[str]
+    forte: bool = Field(description="dados ou encaminhamento: para a aplicação sem conexão")
+    texto: str = Field(description="o que quebra e o que fazer, pronto para exibir")
 
 
 class UnidadeQueVaiJuntoOut(BaseModel):
@@ -524,6 +547,10 @@ class MigrationPlanResponse(BaseModel):
     etapas_da_conta: int = Field(description="quantas etapas a ordem de migração da conta tem")
     ligacoes: list[LigacaoOut]
     ordens: list[OrdemOut]
+    fronteira: list[FronteiraOut] = Field(
+        default_factory=list,
+        description="só o serviço: cada dependência que o recorte corta, com o que fazer",
+    )
     fora_do_plano: list[CustoPorNome]
     correspondencia: CorrespondenciaOut
     limite_das_dependencias: str = LIMITE_DAS_DEPENDENCIAS
@@ -542,6 +569,7 @@ class MigrationPlanResponse(BaseModel):
                 servicos=sorted(p.escolha.servicos),
                 ambiente=p.escolha.ambiente,
                 incluir_grupos=sorted(p.escolha.incluir_grupos),
+                somente_os_servicos=p.escolha.somente_os_servicos,
             ),
             aplicacoes=list(p.aplicacoes),
             unidades=len(p.unidades),
@@ -589,6 +617,18 @@ class MigrationPlanResponse(BaseModel):
                 for x in p.ligacoes
             ],
             ordens=[OrdemOut(ordem=o.ordem, grupos=list(o.grupos)) for o in p.ordens],
+            fronteira=[
+                FronteiraOut(
+                    sentido=f.sentido,
+                    de=f.de,
+                    para=f.para,
+                    natureza=f.natureza.value,
+                    portas=list(f.portas),
+                    forte=f.forte,
+                    texto=texto_da_fronteira(f),
+                )
+                for f in p.fronteira
+            ],
             fora_do_plano=[CustoPorNome(nome=n, custo=_dinheiro(v)) for n, v in p.fora_do_plano],
             correspondencia=CorrespondenciaOut.de(ctx),
             premissas=_premissas(ctx),

@@ -295,6 +295,7 @@ async def _recortar(
         servicos=frozenset(escopo.servicos),
         ambiente=escopo.ambiente or None,
         incluir_grupos=frozenset(escopo.incluir_grupos),
+        somente_os_servicos=escopo.somente_os_servicos,
     )
     try:
         _, recorte = await escopo_de_migracao_uc(session).recorte(user_id, job_id, escolha)

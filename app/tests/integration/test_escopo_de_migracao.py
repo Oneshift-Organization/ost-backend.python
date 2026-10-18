@@ -9,7 +9,11 @@ da própria aplicação (a ligação EC2 → RDS que a topologia entre unidades 
 from __future__ import annotations
 
 import gzip
+import io
+import os
 import re
+import shutil
+import zipfile
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
@@ -290,3 +294,205 @@ async def test_fatura_sem_id_com_inventario_estima_pelo_tipo_e_planeja_por_servi
     plano = por_aplicacao.json()
     assert {"auth", "checkout", "pagamentos"} <= set(plano["aplicacoes"])
     assert plano["correspondencia"]["status"] == "estimado"
+
+
+# ── só o serviço (pedido de 18/10) ──────────────────────────────────────
+
+_VM = re.compile(
+    r'resource "(aws_instance|google_compute_instance|azurerm_linux_virtual_machine|'
+    r'oci_core_instance)"'
+)
+_BANCO = re.compile(
+    r'resource "(aws_db_instance|google_sql_database_instance|azurerm_postgresql_flexible_server|'
+    r'oci_database_autonomous_database)"'
+)
+_TIPOS = re.compile(r'resource "([a-z_]+)"')
+_TEM_TERRAFORM = shutil.which("terraform") is not None and bool(
+    os.environ.get("TF_PLUGIN_CACHE_DIR")
+)
+
+
+@pytest.fixture
+def app_tf(monkeypatch: pytest.MonkeyPatch) -> Iterator[FastAPI]:
+    monkeypatch.setenv("INVENTORY_ENABLED", "true")
+    monkeypatch.setenv("TERRAFORM_GENERATION_ENABLED", "true")
+    monkeypatch.setenv("TERRAFORM_VALIDATE_ENABLED", "true" if _TEM_TERRAFORM else "false")
+    config.get_settings.cache_clear()
+    yield create_app()
+    config.get_settings.cache_clear()
+
+
+async def _gerar(c: AsyncClient, job: str, destino: str, escopo: dict[str, Any]) -> dict[str, Any]:
+    """Gera o pacote do escopo e devolve o estado, o main.tf e o README."""
+    r = await c.post(
+        "/v1/terraform-generations",
+        json={
+            "analysis_job_id": job,
+            "project_name": "so-o-servico",
+            "environment": "dev",
+            "target_provider": destino,
+            "region": {"gcp": "us-central1", "azure": "eastus", "oci": "us-ashburn-1"}[destino],
+            "network": {"mode": "create", "cidr": "10.60.0.0/16"},
+            "escopo": escopo,
+        },
+    )
+    assert r.status_code == 202, r.text
+    gid = r.json()["generation_id"]
+    estado = (await c.get(f"/v1/terraform-generations/{gid}")).json()
+    assert estado["status"] == "COMPLETED", estado.get("error")
+    dl = await c.get(f"/v1/terraform-generations/{gid}/download")
+    with zipfile.ZipFile(io.BytesIO(dl.content)) as z:
+        tf = "\n".join(z.read(n).decode() for n in z.namelist() if n.endswith(".tf"))
+        readme = next(z.read(n).decode() for n in z.namelist() if n.endswith("README.md"))
+    tipos = sorted(set(_TIPOS.findall(tf)))
+    return {**estado, "tf": tf, "readme": readme, "tipos": tipos}
+
+
+async def test_plano_so_do_banco_nao_leva_as_aplicacoes_e_mostra_a_fronteira(
+    app: FastAPI, analise: tuple[str, str]
+) -> None:
+    com, _ = analise
+    async with _cliente(app) as c:
+        r = await c.post(
+            f"/v1/analyses/{com}/migration-plans",
+            json={"servicos": ["AmazonRDS"], "somente_os_servicos": True},
+        )
+        de_aplicacao = await c.post(
+            f"/v1/analyses/{com}/migration-plans", json={"servicos": ["AmazonRDS"]}
+        )
+    assert r.status_code == 200, r.text
+    p = r.json()
+    assert p["escolha"]["somente_os_servicos"] is True
+    assert {s["nome"] for s in p["servicos"]} == {"AmazonRDS"}
+    assert p["vao_junto"] == [] and p["servicos_que_vem_junto"] == []
+    # A VM do checkout fica na origem e acessa o banco que migra: forte, com o que fazer
+    ligacao = next(
+        f
+        for f in p["fronteira"]
+        if f["de"] == "AmazonEC2 (checkout)" and f["para"] == "AmazonRDS (checkout)"
+    )
+    assert ligacao["sentido"] == "entra"
+    assert ligacao["natureza"] == "dados" and ligacao["forte"] is True
+    assert ligacao["portas"] == ["tcp/5432"]
+    assert "Troque o endereço na configuração de AmazonEC2 (checkout)" in ligacao["texto"]
+    # O monitoramento lê o banco do checkout: também fica do outro lado
+    assert any(
+        f["para"] == "AmazonRDS (checkout)" and f["de"] != "AmazonEC2 (checkout)"
+        for f in p["fronteira"]
+    ), [(f["de"], f["para"]) for f in p["fronteira"]]
+    # Sem a flag, o mesmo serviço continua levando as aplicações inteiras
+    assert de_aplicacao.json()["fronteira"] == []
+    assert any(s["nome"] == "AmazonEC2" for s in de_aplicacao.json()["servicos"])
+    assert p["custo"] < de_aplicacao.json()["custo"]
+
+
+async def test_so_o_servico_nao_combina_com_aplicacao(
+    app: FastAPI, analise: tuple[str, str]
+) -> None:
+    com, _ = analise
+    async with _cliente(app) as c:
+        r = await c.post(
+            f"/v1/analyses/{com}/migration-plans",
+            json={
+                "aplicacoes": ["checkout"],
+                "servicos": ["AmazonRDS"],
+                "somente_os_servicos": True,
+            },
+        )
+    assert r.status_code == 422, r.text
+    assert "só o serviço" in r.text
+
+
+@pytest.mark.parametrize("destino", ["gcp", "azure", "oci"])
+async def test_terraform_so_do_banco_cria_o_banco_sem_as_maquinas(
+    app_tf: FastAPI, analise: tuple[str, str], destino: str
+) -> None:
+    com, _ = analise
+    async with _cliente(app_tf) as c:
+        g = await _gerar(c, com, destino, {"servicos": ["AmazonRDS"], "somente_os_servicos": True})
+    assert _BANCO.search(g["tf"]), (g["tipos"], g["unsupported_items"])
+    assert not _VM.search(g["tf"]), "só o banco: nenhuma máquina virtual"
+    avisos = "\n".join(g["warnings"])
+    assert "atravessam a fronteira" in avisos
+    # A lista inteira está no README; a resposta traz as primeiras e o total
+    assert "AmazonEC2 (checkout) fica na origem e acessa dados em AmazonRDS (checkout)" in g[
+        "readme"
+    ]
+    assert "### O que fica do outro lado (fronteira)" in g["readme"]
+    assert "**forte**" in g["readme"]
+    if _TEM_TERRAFORM:
+        assert g["validation"]["validado"] is True, g["validation"]["erros"]
+
+
+# Sem a Azure: o banco do CI não tem preço de VM dela, e nenhum pool tem SKU da Azure (nem
+# o pacote da conta inteira cria VM lá). As quatro nuvens com SKU estão no teste unitário
+# do pacote (`test_terraform_escopo_pacote`), sobre os payloads congelados.
+@pytest.mark.parametrize("destino", ["gcp", "oci"])
+async def test_terraform_so_da_vm_cria_as_maquinas_sem_o_banco(
+    app_tf: FastAPI, analise: tuple[str, str], destino: str
+) -> None:
+    com, _ = analise
+    async with _cliente(app_tf) as c:
+        g = await _gerar(c, com, destino, {"servicos": ["AmazonEC2"], "somente_os_servicos": True})
+    assert _VM.search(g["tf"]), (g["tipos"], g["unsupported_items"], g["warnings"][:3])
+    assert not _BANCO.search(g["tf"]), "só a VM: o banco fica na origem"
+    assert "atravessam a fronteira" in "\n".join(g["warnings"])
+    assert (
+        "AmazonEC2 (checkout) migra e acessa dados em AmazonRDS (checkout), que fica na origem"
+        in g["readme"]
+    )
+    if _TEM_TERRAFORM:
+        assert g["validation"]["validado"] is True, g["validation"]["erros"]
+
+
+async def test_terraform_da_aplicacao_continua_como_antes(
+    app_tf: FastAPI, analise: tuple[str, str]
+) -> None:
+    com, _ = analise
+    async with _cliente(app_tf) as c:
+        g = await _gerar(c, com, "oci", {"aplicacoes": ["checkout"]})
+    # A aplicação leva máquina e banco, e o README fala de grupos, não de fronteira
+    assert _VM.search(g["tf"]) and _BANCO.search(g["tf"])
+    assert "### O que fica do outro lado (fronteira)" not in g["readme"]
+    assert not any("atravessam a fronteira" in a for a in g["warnings"])
+    if _TEM_TERRAFORM:
+        assert g["validation"]["validado"] is True, g["validation"]["erros"]
+
+
+
+
+
+
+
+
+async def test_fronteira_inclui_quem_nao_tem_linha_na_fatura(
+    app: FastAPI, analise: tuple[str, str]
+) -> None:
+    """O monitoramento lê todos os bancos sem linha própria na fatura: o serviço vem do tipo
+    da VM, e a ligação aparece na fronteira do mesmo jeito."""
+    com, _ = analise
+    async with _cliente(app) as c:
+        p = (
+            await c.post(
+                f"/v1/analyses/{com}/migration-plans",
+                json={"servicos": ["AmazonRDS"], "somente_os_servicos": True},
+            )
+        ).json()
+    monitor = {f["para"] for f in p["fronteira"] if f["de"] == "AmazonEC2 (monitoramento)"}
+    assert {"AmazonRDS (checkout)", "AmazonRDS (auth)"} <= monitor
+
+
+async def test_terraform_so_do_banco_avisa_a_regra_que_falta_no_destino(
+    app_tf: FastAPI, analise: tuple[str, str]
+) -> None:
+    com, _ = analise
+    async with _cliente(app_tf) as c:
+        g = await _gerar(c, com, "oci", {"servicos": ["AmazonRDS"], "somente_os_servicos": True})
+    assert g["warnings"][0].startswith("Só os serviços escolhidos:")
+    assert g["warnings"][1].startswith(
+        "Em OCI o banco do pacote fica na subrede de dados, mas sem a regra de entrada"
+    )
+    assert "libere tcp/5432 a partir da rede de origem" in g["warnings"][1]
+    # O banco fica na subrede privada de dados, não fora da rede nova
+    assert "ficou fora da rede nova" not in "\n".join(g["warnings"])
+    assert "subnet_id" in g["tf"]
