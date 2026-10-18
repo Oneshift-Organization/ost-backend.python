@@ -576,7 +576,9 @@ def _sem_equivalente(
         return SemEquivalente(LICENCA, custo, ao_custo_de_hoje=True, vai_com=maquina)
     tipos = _por_tipo(nome, provedor, auxiliar) if auxiliar else ()
     atual = sum((t.custo_atual for t in tipos), _ZERO)
-    if tipos and custo > 0 and atual >= custo * _COBERTURA_POR_TIPO:
+    # Nenhum tipo cotado no destino (a CDN na OCI): não é "por tipo", é falta de par
+    cotado = any(t.custo_estimado is not None for t in tipos)
+    if cotado and custo > 0 and atual >= custo * _COBERTURA_POR_TIPO:
         estimado = sum(
             (t.custo_atual if t.custo_estimado is None else t.custo_estimado for t in tipos),
             _ZERO,
@@ -584,7 +586,7 @@ def _sem_equivalente(
         return SemEquivalente(
             POR_TIPO,
             estimado.quantize(_CENTAVO),
-            ao_custo_de_hoje=all(t.custo_estimado is None for t in tipos),
+            ao_custo_de_hoje=False,
             tipos=tipos,
         )
     tem_par = any(opcoes.get(outro) for outro in opcoes if outro != provedor)
@@ -606,7 +608,7 @@ def _por_tipo(nome: str, provedor: str, auxiliar: _Auxiliar) -> tuple[TipoNoDest
         tipos.append(
             TipoNoDestino(
                 tipo=chave,
-                rotulo=auxiliar.rotulos.get(chave, chave),
+                rotulo=auxiliar.rotulos.get(chave) or _rotulo_generico(chave),
                 custo_atual=parte,
                 custo_estimado=(parte / base * cotacao).quantize(_CENTAVO)
                 if cotacao is not None
@@ -614,6 +616,11 @@ def _por_tipo(nome: str, provedor: str, auxiliar: _Auxiliar) -> tuple[TipoNoDest
             )
         )
     return tuple(sorted(tipos, key=lambda t: -t.custo_atual))
+
+
+def _rotulo_generico(chave: str) -> str:
+    """Categoria sem nome na tabela ("rede_outros"): o resto do grupo."""
+    return "Outros" if chave.endswith("_outros") else chave.replace("_", " ").capitalize()
 
 
 def _preco_no_motor(
