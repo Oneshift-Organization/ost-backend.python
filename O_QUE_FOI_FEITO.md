@@ -181,3 +181,28 @@ nuvens com VM estão cobertas pelos payloads congelados.
 | Curadoria pelo `/docs` | 19 aprovados, 4 recusados, 4 pendentes; o console do develop precisa da variável `CURADORES` |
 | Terraform de um serviço, de uma aplicação ou de tudo | as três escolhas funcionam no backend, com a fronteira de rede dita na resposta, nos avisos e no README; pacotes válidos no `terraform validate`; um defeito de rede do banco, que vinha do T5, corrigido |
 | O que continua | nota alta pela fórmula (M13), defeitos D1 a D4, regra de entrada do banco fora da AWS, a tela da aba Migração |
+
+## Parte 3 — Depois do print de 18/10 ("Equivalente não mapeado" no RDS)
+
+**Causa:** o RDS tem três equivalentes na Azure (SQL Database, MySQL e PostgreSQL) e três
+na OCI (Oracle, MySQL e PostgreSQL). Sem um único equivalente, a rota de acoplamento
+devolvia vazio, e a tela dizia "Equivalente não mapeado" com o preço ao lado. A fatura do
+print não diz o motor (`InstanceUsage:db.t3.medium`), e a análise não tinha inventário.
+
+**Correção (backend, develop `967c4d6`):**
+- motor conhecido (export detalhado, ou a fatura com todo o banco de motor medido): o
+  destino fica só com o equivalente do motor (RDS PostgreSQL → Azure Database for
+  PostgreSQL e OCI Database with PostgreSQL); destino sem nenhum do motor no nome (Cloud
+  SQL) fica com todos;
+- motor desconhecido: a tela recebe as opções. A análise do print, sem refazer, já mostra
+  "Azure SQL Database, Azure Database for MySQL ou Azure Database for PostgreSQL" e
+  "Oracle Database Cloud Service, MySQL Database Service ou OCI Database with PostgreSQL".
+
+**Tela de Terraform (front, develop `c357674`):** o diálogo "Gerar Terraform" da aba
+Migração (PR #22, de 18/10) mandava os serviços sem `somente_os_servicos`, e o backend
+levava as aplicações inteiras: o pacote tinha mais do que a lista dizia. Agora o pacote é
+exatamente a lista, e os avisos da fronteira aparecem no resultado ("Antes de aplicar",
+os cinco primeiros; o resto no README). Conferido com `tsc` num contêiner Node (o Node
+local da máquina está quebrado).
+
+Testes: suíte unitária e integração (213) verdes; CI do backend verde.
