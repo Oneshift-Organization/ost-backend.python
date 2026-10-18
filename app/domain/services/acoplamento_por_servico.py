@@ -152,6 +152,9 @@ class AcoplamentoDeServico:
     esforco: str | None = None
     # Cada equivalente de cada destino com o preço dele: o banco, pelo motor da opção
     opcoes_por_destino: Mapping[str, tuple[OpcaoNoDestino, ...]] = field(default_factory=dict)
+    # O motor que o nome do banco de origem diz ("Azure Database for PostgreSQL", "SQL
+    # Database"); None quando o nome serve a vários motores (RDS, Cloud SQL)
+    motor_da_origem: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -372,6 +375,9 @@ def _linha(
         classe_migracao=_texto(migracao.get("classe_migracao")) if no_score else None,
         esforco=_texto(migracao.get("esforco")) if no_score else None,
         opcoes_por_destino=opcoes,
+        motor_da_origem=(
+            motor_do_nome(nome) if workload.get("service_type") in _RELACIONAL else None
+        ),
     )
 
 

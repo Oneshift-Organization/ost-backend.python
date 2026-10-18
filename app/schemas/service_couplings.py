@@ -171,6 +171,11 @@ class ServicoOut(BaseModel):
         default_factory=dict,
         description="cada equivalente de cada destino com o preço dele; no banco, pelo motor",
     )
+    motor_da_origem: Literal["mysql", "postgresql", "oracle", "sqlserver"] | None = Field(
+        default=None,
+        description="o motor que o nome do banco de origem diz; null quando o nome serve a "
+        "vários motores (RDS, Cloud SQL) ou fora do banco",
+    )
 
     @classmethod
     def de(cls, s: AcoplamentoDeServico) -> ServicoOut:
@@ -200,6 +205,7 @@ class ServicoOut(BaseModel):
                     destino: [OpcaoOut.de(o) for o in opcoes]
                     for destino, opcoes in s.opcoes_por_destino.items()
                 },
+                "motor_da_origem": s.motor_da_origem,
             }
         )
 

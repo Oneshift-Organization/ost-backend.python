@@ -515,3 +515,24 @@ def test_com_o_motor_conhecido_o_servico_dos_dois_motores_abre_so_nele() -> None
     assert [(o.servico, o.motor) for o in visao.opcoes_por_destino["gcp"]] == [
         ("Cloud SQL", "postgresql")
     ]
+
+
+@pytest.mark.parametrize(
+    ("nome", "esperado"),
+    [
+        ("Azure Database for PostgreSQL", "postgresql"),
+        ("SQL Database", "sqlserver"),
+        ("AUTONOMOUS_DATABASE", "oracle"),
+        ("AmazonRDS", None),
+    ],
+)
+def test_motor_da_origem_pelo_nome_do_banco(nome: str, esperado: str | None) -> None:
+    payload = _rds_com_opcoes()
+    payload["decision_workloads"][0]["name"] = nome
+    visao = _por_nome(montar_acoplamento_por_servico(payload))[nome]
+    assert visao.motor_da_origem == esperado
+
+
+def test_fora_do_banco_nao_tem_motor_da_origem() -> None:
+    visao = _por_nome(montar_acoplamento_por_servico(_payload()))["AmazonS3"]
+    assert visao.motor_da_origem is None
