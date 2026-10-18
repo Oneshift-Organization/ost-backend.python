@@ -40,6 +40,8 @@ GB = "gb"
 MES = "month"
 # Operações e requisições, em lotes de 10 mil (a unidade das tabelas de preço)
 DEZ_MIL = "10k"
+# Armazenamento de log e de imagem (PLANO_EQUIVALENTES_E_TARIFAS §3)
+GB_MES = "gb_month"
 
 # Todas as categorias em que o balde de rede se divide, na ordem de exibição
 CATEGORIAS: tuple[str, ...] = (
@@ -211,13 +213,31 @@ _UNIDADES: Mapping[str, tuple[str, Decimal]] = {
             "mbps per hour", "mbps hours",
         )
     },
+    # A OCI cobra o log pelo armazenamento (GB-mês); com a retenção padrão de 30 dias,
+    # 1 GB-mês é 1 GB ingerido, a dimensão da categoria de ingestão
+    **{rotulo: (GB, _ESCALA_1) for rotulo in ("gigabyte log storage per month",)},
     **{
         rotulo: (MES, _ESCALA_1)
-        for rotulo in ("month", "months", "1/month", "key version per month")
+        for rotulo in (
+            "month", "months", "1/month", "key version per month", "1", "instance per month",
+        )
+    },
+    **{
+        rotulo: (GB_MES, _ESCALA_1)
+        for rotulo in (
+            "gb-mo", "gb-month", "gb/month", "1 gb/month", "gibibyte month", "gigabyte month",
+        )
     },
     **{rotulo: (DEZ_MIL, _ESCALA_1) for rotulo in ("10k", "10,000", "10000")},
     **{rotulo: (DEZ_MIL, _POR_DEZ_MIL) for rotulo in ("count", "requests", "api requests")},
-    **{rotulo: (DEZ_MIL, Decimal(100)) for rotulo in ("1m", "1m/month")},
+    **{
+        rotulo: (DEZ_MIL, Decimal(100))
+        for rotulo in (
+            "1m", "1m/month", "1,000,000 queries", "1,000,000 incoming requests per month",
+            "million datapoints",
+        )
+    },
+    **{rotulo: (DEZ_MIL, Decimal(1000)) for rotulo in ("10m", "10m samples")},
 }
 
 

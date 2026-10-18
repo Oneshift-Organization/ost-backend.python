@@ -30,6 +30,17 @@ _CATEGORIES = {
     "chaves_operacoes": ("Operações de chaves", {"key_management"}),
     "cdn": ("CDN", {"content_delivery_network"}),
     "cdn_requisicoes": ("Requisições da CDN", {"content_delivery_network"}),
+    # PLANO_EQUIVALENTES_E_TARIFAS §3: observabilidade e borda, pela quantidade medida
+    "logs_ingestao": ("Ingestão de logs", set()),
+    "logs_ingestao_basica": ("Ingestão de logs (camada básica)", set()),
+    "logs_retencao": ("Retenção de logs", set()),
+    "dns_consultas": ("Consultas de DNS", set()),
+    "dns_zonas": ("Zonas de DNS", set()),
+    "waf_requisicoes": ("Requisições do WAF", set()),
+    "waf_politicas": ("Políticas do WAF", set()),
+    "waf_regras": ("Regras do WAF", set()),
+    "registro_imagens": ("Registro de imagens", set()),
+    "metricas_amostras": ("Amostras de métricas", set()),
 }
 
 

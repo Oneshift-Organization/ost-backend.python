@@ -98,7 +98,7 @@ PYTHONPATH=. python scripts/sync_prices.py --providers categories
 > despercebidas aqui.
 
 > ⚠️ **`seed_from_csv` tem que ser o último.** Ele carrega
-> `cloud_services_mapping.csv` (857 linhas, a fonte autoritativa do DE-PARA, com
+> `cloud_services_mapping.csv` (858 linhas, a fonte autoritativa do DE-PARA, com
 > tipos finos como `managed_relational_database`) e **limpa e recarrega** a tabela.
 > O `seed_service_metadata` também escreve em `cloud_services_comparation`, mas a
 > partir de uma lista inline de 120 tuplas com tipos grosseiros (`relational`).
