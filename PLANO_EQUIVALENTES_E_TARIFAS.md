@@ -226,3 +226,35 @@ como no total do provedor. A tela troca o texto pelo caso.
 
 Custo total não muda (só tipo, equivalentes e de que linha sai o preço). A nota muda para quem
 tem esses serviços. Medição antes e depois nas faturas do develop, como na §7.
+
+## 10. O motor do banco no relatório detalhado da AWS (18/10)
+
+**Problema:** o relatório detalhado da AWS (Cost Explorer → CSV, Billing → Invoices; o
+`AwsDetailedBillingParser`) traz o motor do RDS em duas colunas que o parser não lê:
+`ItemDescription` ("db.t4g.medium (PostgreSQL)") e `Operation` (`CreateDBInstance:0014`). No
+Cost Explorer de 03/2026 do develop (a mesma fixture dos gates), 66,8 mil das 69 mil
+vCPU-horas de banco são PostgreSQL ou Aurora PostgreSQL, e a análise tratava todas como motor
+desconhecido: cotava cada parte pelo motor mais caro e não escolhia o equivalente do motor. A
+fatura AWS de 09/2026 não traz nenhuma das duas colunas e não muda.
+
+**O que muda:**
+- O parser declara `database_engine` nas linhas do RDS: pelo texto entre parênteses da
+  descrição e, sem ele, pelo código da operação, só os de motor aberto, documentados pela AWS
+  (`0002` MySQL, `0014` PostgreSQL, `0016` Aurora MySQL, `0018` MariaDB, `0021` Aurora
+  PostgreSQL). Oracle e SQL Server (`0020` e os demais) continuam sem motor: no banco, ficam
+  como hoje, pelo motor mais caro, e impedem que a conta inteira seja tratada como PostgreSQL.
+- O agregador passa a ler esse atributo como já lê o do CUR. A linha que só traz o motor não
+  vira "export detalhado" (sem isso, a fatura ganhava um inventário medido vazio).
+
+**Efeito medido (fixture dos gates, o Cost Explorer de 03/2026, código anterior contra o
+novo):** 364,5 mil das 373,5 mil vCPU-horas de banco passam a ter motor (PostgreSQL); sobram
+Oracle (`0020`) e um MySQL em alta disponibilidade. O banco na OCI vai de US$ 27.506,59 para
+US$ 23.748,45 (a instância e o armazenamento pela taxa do PostgreSQL); a economia da OCI, de
+US$ 24.912 para US$ 28.670; a nota da OCI, de 81,72 para 83,15; Azure −US$ 10, GCP igual (as
+duas taxas são iguais lá). Recomendação igual; nenhum inventário medido criado; 215 testes de
+integração passando. Os equivalentes só filtram pelo
+motor quando a conta inteira é conhecida; com o Oracle (`0020`) presente, o filtro não entra.
+Análises antigas não mudam: o atributo nasce na ingestão.
+
+**Risco:** código de operação mal lido declararia o motor errado. Mitigação: a descrição vence
+o código; só os cinco códigos de motor aberto entram; teste com as linhas reais da fixture.

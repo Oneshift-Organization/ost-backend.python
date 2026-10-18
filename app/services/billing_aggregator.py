@@ -215,7 +215,7 @@ class BillingAggregator:
             atributos = item.attributes or {}
             confidence_breakdown[item.mapping_confidence or "missing"] += cost
 
-            if atributos:
+            if _da_linha_detalhada(atributos):
                 detalhado = True
                 if atributos.get("cost_basis"):
                     custo_por_base[atributos["cost_basis"]] += cost
@@ -288,7 +288,7 @@ class BillingAggregator:
                         por_motor=banco_por_motor,
                         partes=banco_partes,
                     )
-                if atributos:
+                if _da_linha_detalhada(atributos):
                     _medir_auxiliar(item, component_type, armazenamento, bancos)
             else:
                 orphan_cost += cost
@@ -575,6 +575,16 @@ def _inventario_do_pool(bucket: dict[str, Any]) -> InventarioDoPool | None:
         vcpu_horas_medidas=bucket["vcpu_med"],
         vcpu_horas_estimadas=bucket["vcpu_est"],
     )
+
+
+# O relatório detalhado legado da AWS só declara o motor do banco (PLANO_EQUIVALENTES_E_
+# TARIFAS §10), e o enriquecimento junta o tipo da linha: sem outro atributo, a linha não é
+# de export detalhado, e a fatura não ganha inventário medido
+_SO_O_MOTOR = frozenset({"database_engine", "instance_type"})
+
+
+def _da_linha_detalhada(atributos: dict[str, Any]) -> bool:
+    return bool(atributos) and not atributos.keys() <= _SO_O_MOTOR
 
 
 def _medir_auxiliar(
