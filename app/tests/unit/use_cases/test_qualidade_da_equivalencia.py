@@ -6,6 +6,7 @@ na preparação do payload; a projeção da tabela não muda.
 """
 
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -58,7 +59,9 @@ def test_portabilidade_pelo_lock_in():
     }
 
 
-def _contexto(type_source: str, *, meta_destino: dict, tipo_destino: str) -> MigrationContext:
+def _contexto(
+    type_source: str, *, meta_destino: dict[str, Any], tipo_destino: str
+) -> MigrationContext:
     destinos = [
         EquivalentService(
             provider=p,
@@ -157,7 +160,7 @@ def test_o_modelo_nao_recebe_os_campos_do_pool():
     nota = _com_qualidade_do_pool(
         {"provedor": "AZURE", "nome_servico": "VMs", "metadados": {"notes": "curado"}}
     )
-    payload = {
+    payload: dict[str, Any] = {
         "pools_computacao": [{"familia": "M7G", "equivalentes": [com, nota]}],
         "decision_support": {"provider_scores": [], "workload_strategies": []},
     }
