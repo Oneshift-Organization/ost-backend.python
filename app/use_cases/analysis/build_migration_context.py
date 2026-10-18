@@ -135,10 +135,16 @@ def _reviewed_billing_identity(item, provider: str):
 
 
 # Serviço com mais de uma linha no DE-PARA, quando o classificador não indica o tipo: sem
-# isto vence a primeira em ordem alfabética. O Cosmos DB é banco de documentos, não SQL
-# distribuído, que a OCI não tem (PLANO_EQUIVALENTES_E_TARIFAS §7)
+# isto vence a primeira em ordem alfabética (PLANO_EQUIVALENTES_E_TARIFAS §7 e §9). O
+# Cosmos DB é banco de documentos, não SQL distribuído; o Data Factory é ETL, não rotulagem
+# de dados; o VPN Gateway é VPN, não roteamento; o OCI Streaming é Kafka, não fila
 TIPO_PREFERIDO: dict[str, dict[str, str]] = {
-    "azure": {"Azure Cosmos DB": "document_nosql"},
+    "azure": {
+        "Azure Cosmos DB": "document_nosql",
+        "Azure Data Factory": "etl_data_integration",
+        "Azure VPN Gateway": "vpn_gateway",
+    },
+    "oci": {"OCI Streaming": "stream_ingestion"},
 }
 
 PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
@@ -788,6 +794,11 @@ class BuildMigrationContextUseCase:
                 return aliases[name]
             return aprovados.get(service_key(source_provider, name), name)
 
+        tipo_preferido = {
+            service_key(source_provider, nome): tipo
+            for nome, tipo in TIPO_PREFERIDO.get(source_provider, {}).items()
+        }
+
         def _match(svc_name: str, hint_type: str | None = None) -> ServiceComparison | None:
             name = _canonical_name(svc_name)
             # Ponte concatenado <-> espaçado. Quando o serviço tem várias
@@ -796,7 +807,7 @@ class BuildMigrationContextUseCase:
             candidates = canonicals_squashed.get(service_key(source_provider, name))
             if candidates:
                 # Sem o tipo do classificador, o tipo curado
-                curado = TIPO_PREFERIDO.get(source_provider, {}).get(name)
+                curado = tipo_preferido.get(service_key(source_provider, name))
                 for preferido in (hint_type, curado):
                     for cand in candidates if preferido else ():
                         if cand.service_type == preferido:

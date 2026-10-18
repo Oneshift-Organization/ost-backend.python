@@ -184,13 +184,13 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,networking,vpc_peering,azure,Azure VNet Peering,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,networking,vpc_peering,gcp,Google VPC Peering,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,networking,vpc_peering,oci,Oracle Dynamic Routing Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/
-,networking,private_connectivity,aws,AWS Direct Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dedicated_interconnect,aws,AWS Direct Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,private_connectivity,aws,AWS PrivateLink,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
-,networking,private_connectivity,azure,Azure ExpressRoute,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dedicated_interconnect,azure,Azure ExpressRoute,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,private_connectivity,azure,Azure Private Link,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
-,networking,private_connectivity,gcp,Cloud Interconnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dedicated_interconnect,gcp,Cloud Interconnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,private_connectivity,gcp,Private Service Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
-,networking,private_connectivity,oci,OCI FastConnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dedicated_interconnect,oci,OCI FastConnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,vpn_gateway,aws,AWS Site-to-Site VPN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,vpn_gateway,aws,AWS Client VPN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,vpn_gateway,azure,Azure VPN Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
@@ -392,10 +392,9 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,ai_ml,fraud_detection,aws,Amazon Fraud Detector,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,ai_ml,fraud_detection,gcp,Anti Money Laundering AI,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,ai_ml,data_labeling,aws,Amazon SageMaker Ground Truth,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
-,ai_ml,data_labeling,aws,AWS Entity Resolution,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
-,ai_ml,data_labeling,azure,Azure Data Factory,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,data_labeling,azure,Azure Machine Learning data labeling,2026-10-18T00:00:00+00:00,https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-image-labeling-projects
 ,ai_ml,data_labeling,gcp,Vertex AI Data Labeling,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
-,ai_ml,data_labeling,gcp,Dataprep,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,analytics,etl_data_integration,gcp,Dataprep,2026-10-18T00:00:00+00:00,https://cloud.google.com/dataprep/docs
 ,ai_ml,data_labeling,oci,OCI Data Labeling,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
 ,ai_ml,intelligent_search,aws,Amazon Kendra,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,ai_ml,intelligent_search,aws,Amazon Bedrock Knowledge Bases,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
