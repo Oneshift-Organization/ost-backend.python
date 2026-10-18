@@ -210,3 +210,53 @@ os cinco primeiros; o resto no README). Conferido com `tsc` num contêiner Node 
 local da máquina está quebrado).
 
 Testes: suíte unitária e integração (213) verdes; CI do backend verde.
+
+## Parte 4 — Preço de cada opção no destino e três correções do DE-PARA
+
+Pedido: implementar a tela A (lista por nuvem que abre as opções), corrigir Application
+Gateway, Cosmos DB e AWS Config no DE-PARA. Análise de impacto antes do código em
+[`PLANO_EQUIVALENTES_E_TARIFAS.md`](PLANO_EQUIVALENTES_E_TARIFAS.md) §6 e §7.
+
+**O que mudou**
+- Backend (develop `cf1f251`, `08c07d9`, `ee7d60c`): o banco é cotado também em cada motor
+  aberto por destino (`equivalentes_banco_dados[].por_motor`), sem mudar a cotação do total;
+  `service-couplings` ganha `opcoes_por_destino` (cada equivalente com o preço dele) e
+  `motor_da_origem`; o modelo não recebe a cotação por motor.
+- DE-PARA (860 linhas): Azure Application Gateway como balanceador, com apelido fixo;
+  Oracle Cloud Guard em `policy_enforcement`; o Cosmos DB resolve para banco de documentos.
+  Seed no develop e a sugestão do Application Gateway aprovada na fila.
+- Front (develop `9286ba4`, `66ecd6f`): a tela A. O preço da nuvem somava as alternativas
+  do destino; agora soma só a que entra no total.
+
+**Teste de regressão (5 faturas do develop, código antigo `0921025` e DE-PARA antigo contra o
+novo, sem IA)**
+- Gasto, pools, soma das categorias e custo, economia e cobertura de cada provedor: iguais nas
+  5 faturas. Nenhuma linha mudou de preço nem perdeu preço; as que saíram foram trocadas pelo
+  equivalente certo (Cosmos DB) ou saíram do agregado para o serviço (Application Gateway e a
+  parte de banco da OCI).
+- Notas: só a fatura Azure (OCI 89,12 → 88,70; GCP 82,85 → 82,89; AWS 81,35 → 81,41) e a
+  fatura AWS de 09/2026 (OCI 91,17 → 91,08), pelo Cosmos DB e pelo AWS Config ganhando par.
+  Recomendação igual em todas.
+- Conexões cotadas: Azure 69 → 71, Cost Explorer 141 → 142, fatura AWS 49 → 50, OCI 40 → 41.
+- Efeito colateral medido: o Elastic Load Balancing da AWS ganhou o Application Gateway como
+  segunda opção na Azure (os dois balanceiam); o nível na Azure segue alto e a nota não mudou.
+- Tela, em 60 análises do develop: 113 pares serviço × nuvem tinham o preço somado; todos
+  eram alternativas do mesmo destino (70 do RDS: OCI US$ 167,94 → 55,98, Azure
+  US$ 302,73 → 100,91). Nenhum serviço com pools mudou.
+- Gates: 2327 unitários e 214 de integração passando, mypy na linha de base (1161), CI verde.
+
+**Preço por motor, conferido no develop:** RDS da fatura AWS de 09/2026 na OCI: PostgreSQL
+US$ 55,98 (o do total), MySQL US$ 42,69, Oracle sem cotação. No Cost Explorer, o total da OCI
+(US$ 27.506,59) fica acima das duas opções: sem motor, cada parte do banco vai pelo motor
+mais caro, e a parte em alta disponibilidade vai pelo MySQL (3 réplicas na OCI). A tela diz isso.
+
+**Ainda aberto**
+- A fatura AWS de 09/2026 tem o motor na linha do RDS, mas o agregador não lê
+  (`banco_por_motor` vazio): o motor só vem do inventário ou do export detalhado.
+- O DE-PARA tem opções erradas, para curadoria: Azure Data Factory → Entity Resolution e
+  Ground Truth na AWS, Dataprep e Data Labeling no GCP (US$ 14,2 mil, e o tipo virou
+  `data_labeling`); VPN Gateway → Transit Gateway; FastConnect e ExpressRoute → PrivateLink;
+  OCI Streaming → Amazon MQ.
+- "Equivalente não mapeado" ainda aparece para rede genérica, licença e serviço sem par na
+  OCI: os três textos novos estão em mockup, aguardando decisão.
+- O Application Gateway não tem metadata curada: o nível de origem fica "a confirmar".
