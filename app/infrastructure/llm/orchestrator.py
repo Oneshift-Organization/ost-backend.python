@@ -322,6 +322,10 @@ def _compact_decision_payload(billing_data: dict) -> dict:
                     metadados.pop(campo, None)
                 if not metadados:
                     equivalente.pop("metadados")
+    # O banco cotado em cada motor é das opções da tela (§6 do mesmo plano); o modelo narra o total
+    for cotacao in (payload.get("custos_auxiliares") or {}).get("equivalentes_banco_dados") or []:
+        if isinstance(cotacao, dict):
+            cotacao.pop("por_motor", None)
     decision = payload["decision_support"]
     for scenario in [*decision.get("provider_scores", []), decision.get("score")]:
         if scenario:

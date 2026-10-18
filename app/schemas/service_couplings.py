@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.domain.services.acoplamento_por_servico import (
     AcoplamentoDeServico,
     AcoplamentoPorServico,
+    OpcaoNoDestino,
     PoolDoServico,
     Sugestao,
 )
@@ -100,6 +101,35 @@ class DependenciasOut(BaseModel):
     exclusividade: ExclusividadeOut | None = None
 
 
+class OpcaoOut(BaseModel):
+    servico: str
+    motor: Literal["mysql", "postgresql", "oracle", "sqlserver"] | None = Field(
+        description="motor do banco desta opção; null fora do banco"
+    )
+    custo_estimado: float | None = Field(description="preço por mês no destino; null sem cotação")
+    cotacao: Literal["motor", "servico", "sem_cotacao"] = Field(
+        description="motor: o banco cotado no motor da opção; servico: o preço do serviço no "
+        "destino, o mesmo para todas as opções; sem_cotacao: o catálogo não tem a tarifa"
+    )
+    no_total: bool = Field(description="o preço desta opção é o que entrou no total do destino")
+    motivo: str | None = Field(default=None, description="por que a opção não tem cotação")
+
+    @classmethod
+    def de(cls, o: OpcaoNoDestino) -> OpcaoOut:
+        return cls.model_validate(
+            {
+                "servico": o.servico,
+                "motor": o.motor,
+                "custo_estimado": _dinheiro(o.custo_estimado)
+                if o.custo_estimado is not None
+                else None,
+                "cotacao": o.cotacao,
+                "no_total": o.no_total,
+                "motivo": o.motivo,
+            }
+        )
+
+
 class ServicoOut(BaseModel):
     id: str
     nome: str
@@ -137,6 +167,10 @@ class ServicoOut(BaseModel):
     )
     classe_migracao: str | None = Field(description="classe 7R de partida no catálogo")
     esforco: str | None = Field(description="esforço de migração no catálogo")
+    opcoes_por_destino: dict[str, list[OpcaoOut]] = Field(
+        default_factory=dict,
+        description="cada equivalente de cada destino com o preço dele; no banco, pelo motor",
+    )
 
     @classmethod
     def de(cls, s: AcoplamentoDeServico) -> ServicoOut:
@@ -162,6 +196,10 @@ class ServicoOut(BaseModel):
                 "refatoracao_por_destino": dict(s.refatoracao_por_destino),
                 "classe_migracao": s.classe_migracao,
                 "esforco": s.esforco,
+                "opcoes_por_destino": {
+                    destino: [OpcaoOut.de(o) for o in opcoes]
+                    for destino, opcoes in s.opcoes_por_destino.items()
+                },
             }
         )
 

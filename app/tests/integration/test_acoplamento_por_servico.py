@@ -8,6 +8,7 @@ sai do mesmo payload da análise e tem de fechar com o gasto.
 from __future__ import annotations
 
 from collections import Counter
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -15,6 +16,7 @@ import pytest
 from app.domain.analysis import MigrationContext
 from app.domain.services.acoplamento_por_servico import montar_acoplamento_por_servico
 from app.domain.services.decision_support import build_decision_support
+from app.use_cases.analysis.consultar_acoplamento import precos_por_servico
 from app.use_cases.analysis.equivalence_projection import project_equivalences
 from app.use_cases.analysis.run_analysis_pipeline import build_pipeline_llm_input_payload
 
@@ -86,3 +88,27 @@ async def test_a_tabela_de_equivalencia_continua_igual(aws_context: MigrationCon
     antes = [r.model_dump() for r in project_equivalences(payload)]
     montar_acoplamento_por_servico(payload)
     assert [r.model_dump() for r in project_equivalences(payload)] == antes
+
+
+async def test_banco_cotado_em_cada_motor_e_opcoes_com_preco(
+    aws_context: MigrationContext, gcp_context: MigrationContext
+) -> None:
+    """PLANO_EQUIVALENTES_E_TARIFAS §6: cada destino do banco cotado em MySQL e em
+    PostgreSQL, e a opção marcada no total com o preço da tabela de equivalentes."""
+    for ctx in (aws_context, gcp_context):
+        payload = _payload(ctx)
+        cotacoes = payload["custos_auxiliares"].get("equivalentes_banco_dados") or []
+        for cotacao in cotacoes:
+            assert set(cotacao["por_motor"]) == {"mysql", "postgresql"}, cotacao["provedor"]
+            assert all(v > 0 for v in cotacao["por_motor"].values())
+        precos = precos_por_servico(r.model_dump() for r in project_equivalences(payload))
+        visao = montar_acoplamento_por_servico(payload, precos)
+        for servico in visao.servicos:
+            for destino, opcoes in servico.opcoes_por_destino.items():
+                preco = precos.get((servico.nome, destino))
+                for opcao in opcoes:
+                    if opcao.no_total:
+                        assert opcao.custo_estimado is not None and preco is not None
+                        assert abs(opcao.custo_estimado - preco) <= Decimal("0.01")
+                    if opcao.custo_estimado is not None:
+                        assert opcao.custo_estimado >= 0

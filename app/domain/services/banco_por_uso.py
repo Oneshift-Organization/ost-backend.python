@@ -231,6 +231,35 @@ def ler_chave_do_motor(chave: str) -> tuple[str | None, bool]:
     return (motor_ or None), ha
 
 
+def pesos_no_motor(pesos: Mapping[str, Decimal], motor_: str) -> dict[str, Decimal]:
+    """Os mesmos pesos, com a alta disponibilidade de cada um, como se todo o banco fosse
+    do motor dado: a cotação de cada opção do destino. Sem peso medido, instância simples."""
+    saida: dict[str, Decimal] = defaultdict(Decimal)
+    for chave, peso in pesos.items():
+        saida[chave_do_motor(motor_, ha=ler_chave_do_motor(chave)[1])] += peso
+    if sum(saida.values(), Decimal(0)) <= 0:
+        return {chave_do_motor(motor_, ha=False): Decimal(1)}
+    return dict(saida)
+
+
+# O motor que o nome do equivalente diz. O serviço que serve a mais de um motor aberto
+# (Cloud SQL, RDS, Aurora) não diz nenhum; Oracle e SQL Server não têm taxa no catálogo.
+ORACLE = "oracle"
+SQL_SERVER = "sqlserver"
+MOTORES_ABERTOS = (POSTGRESQL, MYSQL)
+_NOME_DO_MOTOR_PROPRIETARIO = {
+    ORACLE: re.compile(r"oracle|autonomous", re.IGNORECASE),
+    SQL_SERVER: re.compile(r"sql database|sql server|sql managed instance", re.IGNORECASE),
+}
+
+
+def motor_do_nome(nome: str) -> str | None:
+    for motor_, padrao in (*_NOME_DO_MOTOR.items(), *_NOME_DO_MOTOR_PROPRIETARIO.items()):
+        if padrao.search(nome):
+            return motor_
+    return None
+
+
 def chave_da_parte(parte: ParteDoBanco) -> str:
     """Chave das partes fora da instância: `cache:ate_4gb`, `armazenamento:mysql:ha`..."""
     if parte.tipo == CACHE:

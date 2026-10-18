@@ -857,3 +857,5 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,generative_ai,model_catalog,oci,OCI Generative AI,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
 ,migration,data_transfer_appliance_petabyte,oci,OCI Data Transfer Appliance,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
 ,migration,server_migration,oci,Oracle Cloud Migrations,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,networking,load_balancer,azure,Azure Application Gateway,2026-10-18T00:00:00+00:00,https://learn.microsoft.com/en-us/azure/application-gateway/overview
+,management_tools,policy_enforcement,oci,Oracle Cloud Guard,2026-10-18T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/cloud-guard/home.htm
