@@ -121,6 +121,36 @@ class OpcaoNoDestino:
     motivo: str | None = None
 
 
+# Por que o destino não tem equivalente (PLANO_EQUIVALENTES_E_TARIFAS §8)
+POR_TIPO = "por_tipo"  # linhas de rede ou de uso sob um nome genérico, cotadas tipo a tipo
+LICENCA = "licenca"  # licença do software das máquinas: vai com elas
+SEM_PAR = "sem_par"  # o tipo tem serviço em outra nuvem, e nenhum neste destino no catálogo
+NAO_MAPEADO = "nao_mapeado"
+_LICENCA = frozenset({"os_license"})
+# Fração do custo do serviço que precisa estar nas categorias cotadas para ser "por tipo"
+_COBERTURA_POR_TIPO = Decimal("0.9")
+
+
+@dataclass(frozen=True, slots=True)
+class TipoNoDestino:
+    tipo: str  # chave da categoria (balanceador, vpn)
+    rotulo: str
+    custo_atual: Decimal
+    # A parte do serviço na categoria x a cotação dela no destino; None sem cotação
+    custo_estimado: Decimal | None
+
+
+@dataclass(frozen=True, slots=True)
+class SemEquivalente:
+    caso: str  # POR_TIPO | LICENCA | SEM_PAR | NAO_MAPEADO
+    # O que entra no total do destino; sem cotação, o custo de hoje
+    custo_estimado: Decimal
+    ao_custo_de_hoje: bool
+    tipos: tuple[TipoNoDestino, ...] = ()
+    # Licença: o equivalente de máquina virtual no destino
+    vai_com: str | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class AcoplamentoDeServico:
     id: str
@@ -155,6 +185,20 @@ class AcoplamentoDeServico:
     # O motor que o nome do banco de origem diz ("Azure Database for PostgreSQL", "SQL
     # Database"); None quando o nome serve a vários motores (RDS, Cloud SQL)
     motor_da_origem: str | None = None
+    # O destino sem nenhuma opção: por quê, e o que entra no total dele
+    sem_equivalente_por_destino: Mapping[str, SemEquivalente] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class _Auxiliar:
+    """As categorias cotadas pela quantidade: custo na origem, parte de cada serviço,
+    cotação por destino e o rótulo; e a máquina virtual equivalente em cada destino."""
+
+    custos: Mapping[str, Decimal]
+    partes: Mapping[str, Mapping[str, Any]]
+    cotacoes: Mapping[str, Mapping[str, Decimal]]
+    rotulos: Mapping[str, str]
+    maquina: Mapping[str, str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,9 +251,11 @@ class AcoplamentoPorServico:
 def montar_acoplamento_por_servico(
     payload: Mapping[str, Any],
     precos: Mapping[tuple[str, str], Decimal] | None = None,
+    rotulos: Mapping[str, str] | None = None,
 ) -> AcoplamentoPorServico:
     """`precos`: o preço de cada serviço em cada destino, (nome, destino) → valor, da
-    tabela de equivalentes; sem ele as opções saem sem preço."""
+    tabela de equivalentes; sem ele as opções saem sem preço. `rotulos`: o nome de cada
+    categoria cotada ("balanceador" → "Balanceador de carga"), da mesma tabela."""
     if "decision_workloads" not in payload and "workloads" not in payload:
         raise PayloadSemServicosError(
             "a análise não tem a lista de serviços (decision_workloads); gere a análise de novo"
@@ -229,6 +275,7 @@ def montar_acoplamento_por_servico(
     }
     estimado = any(e.get("cost_estimated") for e in inventory_services(dados).values())
     banco = _banco(dados)
+    auxiliar = _auxiliar(dados, rotulos or {})
 
     linhas = [
         _linha(
@@ -240,6 +287,7 @@ def montar_acoplamento_por_servico(
             estimado=estimado,
             precos=precos or {},
             banco=banco,
+            auxiliar=auxiliar,
         )
         for w in all_workloads(dados)
         if _listado(w)
@@ -295,6 +343,7 @@ def _linha(
     estimado: bool = False,
     precos: Mapping[tuple[str, str], Decimal] | None = None,
     banco: _Banco | None = None,
+    auxiliar: _Auxiliar | None = None,
 ) -> AcoplamentoDeServico:
     nome = str(workload.get("name") or "Serviço não identificado")
     categoria = normalized(workload.get("category"))
@@ -333,6 +382,11 @@ def _linha(
                 (precos or {}).get((nome, provedor)),
                 banco or _Banco(custo=None, partes={}, cotacoes={}),
             )
+    sem_equivalente = {
+        provedor: _sem_equivalente(workload, provedor, opcoes, auxiliar)
+        for provedor in opcoes
+        if not opcoes[provedor]
+    }
     migracao = workload.get("migration") or {}
 
     dependencias = (por_servico or {}).get(nome)
@@ -378,6 +432,7 @@ def _linha(
         motor_da_origem=(
             motor_do_nome(nome) if workload.get("service_type") in _RELACIONAL else None
         ),
+        sem_equivalente_por_destino=sem_equivalente,
     )
 
 
@@ -470,6 +525,95 @@ def _opcoes(
                 )
             )
     return tuple(opcoes)
+
+
+def _auxiliar(dados: Mapping[str, Any], rotulos: Mapping[str, str]) -> _Auxiliar:
+    auxiliar = dados.get("custos_auxiliares") or {}
+    custos = {
+        k: v
+        for k, bruto in auxiliar.items()
+        if not isinstance(bruto, (dict, list)) and (v := number(bruto)) is not None and v > 0
+    }
+    cotacoes: dict[str, dict[str, Decimal]] = {}
+    for chave in custos:
+        for cotacao in auxiliar.get(f"equivalentes_{chave}") or []:
+            preco = number(cotacao.get("custo_mensal_estimado"))
+            if preco is not None and preco >= 0:
+                cotacoes.setdefault(chave, {})[_provedor(cotacao.get("provedor"))] = preco
+    # A máquina virtual de maior custo dá o equivalente de cada destino
+    maquinas = sorted(
+        (w for w in decision_workloads(dict(dados)) if w.get("service_type") == "virtual_server"),
+        key=lambda w: -(number(w.get("cost")) or _ZERO),
+    )
+    maquina: dict[str, str] = {}
+    for w in maquinas:
+        for provedor, alvo in unique_targets(w).items():
+            if alvo.get("service_name"):
+                maquina.setdefault(provedor, str(alvo["service_name"]))
+    por_servico = auxiliar.get("por_servico") or {}
+    return _Auxiliar(
+        custos=custos,
+        partes={k: v for k, v in por_servico.items() if isinstance(v, Mapping)},
+        cotacoes=cotacoes,
+        rotulos=rotulos,
+        maquina=maquina,
+    )
+
+
+def _sem_equivalente(
+    workload: Mapping[str, Any],
+    provedor: str,
+    opcoes: Mapping[str, Sequence[OpcaoNoDestino]],
+    auxiliar: _Auxiliar | None,
+) -> SemEquivalente:
+    """Licença vai com a máquina; o nome genérico com o custo nas categorias cotadas é
+    cotado tipo a tipo; o tipo com par em outra nuvem (ou curado) não tem par aqui; o
+    resto não está mapeado. Fora do "por tipo", o destino fica com o custo de hoje."""
+    nome = str(workload.get("name") or "")
+    custo = number(workload.get("cost")) or _ZERO
+    if workload.get("service_type") in _LICENCA:
+        maquina = auxiliar.maquina.get(provedor) if auxiliar else None
+        return SemEquivalente(LICENCA, custo, ao_custo_de_hoje=True, vai_com=maquina)
+    tipos = _por_tipo(nome, provedor, auxiliar) if auxiliar else ()
+    atual = sum((t.custo_atual for t in tipos), _ZERO)
+    if tipos and custo > 0 and atual >= custo * _COBERTURA_POR_TIPO:
+        estimado = sum(
+            (t.custo_atual if t.custo_estimado is None else t.custo_estimado for t in tipos),
+            _ZERO,
+        ) + max(custo - atual, _ZERO)
+        return SemEquivalente(
+            POR_TIPO,
+            estimado.quantize(_CENTAVO),
+            ao_custo_de_hoje=all(t.custo_estimado is None for t in tipos),
+            tipos=tipos,
+        )
+    tem_par = any(opcoes.get(outro) for outro in opcoes if outro != provedor)
+    inferido = workload.get("type_source") == "inferido"
+    caso = SEM_PAR if tem_par or not inferido else NAO_MAPEADO
+    return SemEquivalente(caso, custo, ao_custo_de_hoje=True)
+
+
+def _por_tipo(nome: str, provedor: str, auxiliar: _Auxiliar) -> tuple[TipoNoDestino, ...]:
+    """A parte do serviço em cada categoria cotada x a cotação da categoria no destino: a
+    mesma conta das linhas "(agregado)" da tabela de equivalentes."""
+    tipos = []
+    for chave, por_nome in auxiliar.partes.items():
+        parte = number(por_nome.get(nome))
+        base = auxiliar.custos.get(chave)
+        if parte is None or parte <= 0 or not base:
+            continue
+        cotacao = auxiliar.cotacoes.get(chave, {}).get(provedor)
+        tipos.append(
+            TipoNoDestino(
+                tipo=chave,
+                rotulo=auxiliar.rotulos.get(chave, chave),
+                custo_atual=parte,
+                custo_estimado=(parte / base * cotacao).quantize(_CENTAVO)
+                if cotacao is not None
+                else None,
+            )
+        )
+    return tuple(sorted(tipos, key=lambda t: -t.custo_atual))
 
 
 def _preco_no_motor(

@@ -190,3 +190,39 @@ novo, aditivo, só na rota de acoplamento).
 A regra geral "vence o tipo com par em mais nuvens" foi medida e descartada: mudaria 8 dos 79
 serviços com mais de um tipo, alguns para pior (GuardDuty viraria central de segurança,
 BigQuery deixaria de ser data lake).
+
+## 8. O que a tela diz quando o destino não tem equivalente (18/10)
+
+**Problema:** "Equivalente não mapeado" aparecia para quatro situações diferentes, e só uma é
+falta de mapeamento:
+
+| caso | exemplo (develop) | o que é |
+|---|---|---|
+| `por_tipo` | Networking da GCP (US$ 1.634), NETWORK da OCI | não é um serviço: são linhas que a fatura agrupa num nome genérico; o custo já é cotado tipo a tipo (balanceador, VPN, IP) pela quantidade medida, nas linhas "(agregado)" |
+| `licenca` | Virtual Machines Licenses da Azure (US$ 14,3 mil) | licença do software das máquinas; vai com elas |
+| `sem_par` | Sentinel, MWAA e Cloud Scheduler na OCI | o tipo tem serviço em outra nuvem e nenhum neste destino, no catálogo |
+| `nao_mapeado` | tipo inferido sem par em nenhuma nuvem | falta de mapeamento de fato |
+
+**O que muda:** `service-couplings` ganha `sem_equivalente_por_destino` para o destino sem
+opção, com o caso, o preço e, em `por_tipo`, cada tipo com o custo de hoje e o do destino (a
+parte do serviço em cada categoria × a cotação da categoria no destino, a mesma conta das
+linhas "(agregado)"). Tipo sem cotação no destino, licença e `sem_par` ficam ao custo de hoje,
+como no total do provedor. A tela troca o texto pelo caso.
+
+**O que não muda:** total, economia, nota, `por_destino` e a tabela de equivalentes. É leitura.
+
+**Risco:** `sem_par` também aparece quando a falta é do catálogo (o Cosmos DB na OCI antes da
+§7). Por isso o texto diz "o catálogo não tem", não "a nuvem não tem".
+
+## 9. Curadoria das opções erradas do DE-PARA (18/10)
+
+| caso | causa | correção | efeito nas análises novas |
+|---|---|---|---|
+| Azure Data Factory → Entity Resolution, Ground Truth, Dataprep, Data Labeling | cinco linhas no DE-PARA; vencia a primeira em ordem alfabética, `ai_ml/data_labeling`, que estava errada | tipo curado `etl_data_integration`; a linha da Azure em `data_labeling` passa a ser o Azure Machine Learning data labeling; Dataprep vai para ETL; Entity Resolution sai (casamento de registros não é rotulagem) | AWS Glue ou Data Pipeline, Cloud Data Fusion ou Dataprep, OCI Data Flow ou Oracle Integration. O Data Factory sai de rotulagem de dados para ETL na nota e no tipo |
+| Azure VPN Gateway → Transit Gateway e Direct Connect | duas linhas; vencia `dynamic_routing` | tipo curado `vpn_gateway` | AWS Site-to-Site VPN ou Client VPN, Cloud VPN, Oracle VPN Connect; a cotação da VPN sai da linha "(agregado)" para o serviço |
+| ExpressRoute e FastConnect → PrivateLink, Private Link, Private Service Connect | o tipo `private_connectivity` juntava link dedicado com endpoint privado | link dedicado vira `dedicated_interconnect` (Direct Connect, ExpressRoute, Cloud Interconnect, FastConnect); endpoint privado fica | ExpressRoute → Direct Connect, Cloud Interconnect, FastConnect (um por nuvem). Efeito colateral: o Direct Connect como origem passa de `dynamic_routing` para link dedicado (melhora); o PrivateLink perde a OCI (o FastConnect estava errado) e cai em `sem_par` |
+| OCI Streaming → Amazon MQ | três linhas; vencia `messaging` | tipo curado `stream_ingestion` | Kinesis Data Streams ou MSK, Event Hubs, Pub/Sub |
+| Application Gateway sem nota de origem | sem metadata curada | nota baixa, sem refatoração, como o balanceador da AWS | nível de origem sai de "a confirmar" |
+
+Custo total não muda (só tipo, equivalentes e de que linha sai o preço). A nota muda para quem
+tem esses serviços. Medição antes e depois nas faturas do develop, como na §7.

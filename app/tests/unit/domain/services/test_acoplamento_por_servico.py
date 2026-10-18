@@ -536,3 +536,87 @@ def test_motor_da_origem_pelo_nome_do_banco(nome: str, esperado: str | None) -> 
 def test_fora_do_banco_nao_tem_motor_da_origem() -> None:
     visao = _por_nome(montar_acoplamento_por_servico(_payload()))["AmazonS3"]
     assert visao.motor_da_origem is None
+
+
+# ── destino sem equivalente (PLANO_EQUIVALENTES_E_TARIFAS §8) ──────────────
+
+
+def _com(*workloads: dict[str, Any], auxiliar: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = _payload()
+    payload["decision_workloads"] += list(workloads)
+    payload["custos_auxiliares"] = auxiliar or {}
+    return payload
+
+
+def test_licenca_vai_com_a_maquina_virtual_do_destino() -> None:
+    licenca = _workload(
+        "Virtual Machines Licenses", 14284.8, categoria="compute", tipo="os_license", inferido=True
+    )
+    visao = _por_nome(montar_acoplamento_por_servico(_com(licenca)))["Virtual Machines Licenses"]
+    oci = visao.sem_equivalente_por_destino["oci"]
+    assert (oci.caso, oci.custo_estimado, oci.ao_custo_de_hoje, oci.vai_com) == (
+        "licenca",
+        Decimal("14284.8"),
+        True,
+        "oci-svc",
+    )
+
+
+def test_nome_generico_de_rede_e_cotado_tipo_a_tipo() -> None:
+    """O Networking da GCP: balanceador e VPN cotados no destino, a VPN sem tarifa na Azure."""
+    rede = _workload("Networking", 1632.86, categoria="networking", tipo="network", inferido=True)
+    auxiliar = {
+        "balanceador": 995.81,
+        "vpn": 637.05,
+        "equivalentes_balanceador": [
+            {"provedor": "OCI", "custo_mensal_estimado": 369.79},
+            {"provedor": "AZURE", "custo_mensal_estimado": 818.11},
+        ],
+        "equivalentes_vpn": [{"provedor": "OCI", "custo_mensal_estimado": 0.0}],
+        "por_servico": {"balanceador": {"Networking": 995.81}, "vpn": {"Networking": 637.05}},
+    }
+    visao = _por_nome(
+        montar_acoplamento_por_servico(
+            _com(rede, auxiliar=auxiliar), rotulos={"balanceador": "Balanceador de carga"}
+        )
+    )["Networking"]
+    oci = visao.sem_equivalente_por_destino["oci"]
+    assert oci.caso == "por_tipo" and not oci.ao_custo_de_hoje
+    assert oci.custo_estimado == Decimal("369.79")
+    assert [(t.rotulo, t.custo_atual, t.custo_estimado) for t in oci.tipos] == [
+        ("Balanceador de carga", Decimal("995.81"), Decimal("369.79")),
+        ("vpn", Decimal("637.05"), Decimal("0.00")),
+    ]
+    # Sem a tarifa da VPN na Azure: a VPN fica ao custo de hoje no total
+    azure = visao.sem_equivalente_por_destino["azure"]
+    assert azure.custo_estimado == Decimal("1455.16")  # 818,11 + 637,05
+    assert azure.tipos[1].custo_estimado is None
+
+
+def test_tipo_com_par_em_outra_nuvem_nao_tem_par_neste_destino() -> None:
+    siem = _workload(
+        "Microsoft Sentinel",
+        8259.23,
+        categoria="security_identity",
+        tipo="siem",
+        alvos=[_alvo("gcp"), _alvo("azure")],
+    )
+    visao = _por_nome(montar_acoplamento_por_servico(_com(siem)))["Microsoft Sentinel"]
+    assert set(visao.sem_equivalente_por_destino) == {"oci"}
+    oci = visao.sem_equivalente_por_destino["oci"]
+    assert (oci.caso, oci.custo_estimado, oci.ao_custo_de_hoje) == (
+        "sem_par",
+        Decimal("8259.23"),
+        True,
+    )
+
+
+def test_tipo_inferido_sem_par_em_nenhuma_nuvem_nao_esta_mapeado() -> None:
+    estranho = _workload("Kiro", 30, categoria="ai_ml", tipo="unknown_tool", inferido=True)
+    visao = _por_nome(montar_acoplamento_por_servico(_com(estranho)))["Kiro"]
+    assert {x.caso for x in visao.sem_equivalente_por_destino.values()} == {"nao_mapeado"}
+
+
+def test_destino_com_opcao_nao_tem_motivo_de_falta() -> None:
+    visao = _por_nome(montar_acoplamento_por_servico(_payload()))["AmazonEC2"]
+    assert visao.sem_equivalente_por_destino == {}

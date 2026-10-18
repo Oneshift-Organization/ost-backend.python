@@ -16,7 +16,7 @@ import pytest
 from app.domain.analysis import MigrationContext
 from app.domain.services.acoplamento_por_servico import montar_acoplamento_por_servico
 from app.domain.services.decision_support import build_decision_support
-from app.use_cases.analysis.consultar_acoplamento import precos_por_servico
+from app.use_cases.analysis.consultar_acoplamento import _ROTULOS, precos_por_servico
 from app.use_cases.analysis.equivalence_projection import project_equivalences
 from app.use_cases.analysis.run_analysis_pipeline import build_pipeline_llm_input_payload
 
@@ -112,3 +112,23 @@ async def test_banco_cotado_em_cada_motor_e_opcoes_com_preco(
                         assert abs(opcao.custo_estimado - preco) <= Decimal("0.01")
                     if opcao.custo_estimado is not None:
                         assert opcao.custo_estimado >= 0
+
+
+async def test_destino_sem_equivalente_diz_o_caso_e_o_que_entra_no_total(
+    aws_context: MigrationContext, gcp_context: MigrationContext
+) -> None:
+    """PLANO_EQUIVALENTES_E_TARIFAS §8: o destino sem opção diz por quê; ao custo de hoje,
+    o valor é o custo do serviço; por tipo, a soma dos tipos mais o que sobra fora deles."""
+    for ctx in (aws_context, gcp_context):
+        payload = _payload(ctx)
+        precos = precos_por_servico(r.model_dump() for r in project_equivalences(payload))
+        visao = montar_acoplamento_por_servico(payload, precos, _ROTULOS)
+        for servico in visao.servicos:
+            for destino, falta in servico.sem_equivalente_por_destino.items():
+                assert not servico.opcoes_por_destino.get(destino)
+                assert falta.caso in {"por_tipo", "licenca", "sem_par", "nao_mapeado"}
+                assert falta.custo_estimado >= 0
+                if falta.ao_custo_de_hoje:
+                    assert abs(falta.custo_estimado - servico.custo) <= Decimal("0.01")
+                if falta.caso == "por_tipo":
+                    assert falta.tipos and all(t.rotulo != t.tipo for t in falta.tipos)
