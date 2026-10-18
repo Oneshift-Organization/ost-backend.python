@@ -585,7 +585,7 @@ def test_nome_generico_de_rede_e_cotado_tipo_a_tipo() -> None:
     assert oci.custo_estimado == Decimal("369.79")
     assert [(t.rotulo, t.custo_atual, t.custo_estimado) for t in oci.tipos] == [
         ("Balanceador de carga", Decimal("995.81"), Decimal("369.79")),
-        ("vpn", Decimal("637.05"), Decimal("0.00")),
+        ("Vpn", Decimal("637.05"), Decimal("0.00")),
     ]
     # Sem a tarifa da VPN na Azure: a VPN fica ao custo de hoje no total
     azure = visao.sem_equivalente_por_destino["azure"]
@@ -620,3 +620,27 @@ def test_tipo_inferido_sem_par_em_nenhuma_nuvem_nao_esta_mapeado() -> None:
 def test_destino_com_opcao_nao_tem_motivo_de_falta() -> None:
     visao = _por_nome(montar_acoplamento_por_servico(_payload()))["AmazonEC2"]
     assert visao.sem_equivalente_por_destino == {}
+
+
+
+def test_sem_nenhum_tipo_cotado_no_destino_e_falta_de_par() -> None:
+    """O Front Door na OCI: o custo está nas categorias de CDN, que a OCI não cota."""
+    cdn = _workload(
+        "Azure Front Door Service",
+        10360.76,
+        categoria="networking",
+        tipo="content_delivery_network",
+        alvos=[_alvo("gcp")],
+    )
+    auxiliar = {
+        "cdn": 8023.98,
+        "rede_outros": 2336.78,
+        "equivalentes_cdn": [{"provedor": "GCP", "custo_mensal_estimado": 6178.31}],
+        "por_servico": {
+            "cdn": {"Azure Front Door Service": 8023.98},
+            "rede_outros": {"Azure Front Door Service": 2336.78},
+        },
+    }
+    visao = _por_nome(montar_acoplamento_por_servico(_com(cdn, auxiliar=auxiliar)))
+    oci = visao["Azure Front Door Service"].sem_equivalente_por_destino["oci"]
+    assert (oci.caso, oci.custo_estimado, oci.tipos) == ("sem_par", Decimal("10360.76"), ())
