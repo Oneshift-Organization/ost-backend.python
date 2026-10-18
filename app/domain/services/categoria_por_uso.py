@@ -218,8 +218,8 @@ REGRAS: Mapping[str, Mapping[str, _Regras]] = {
             (_r(r"log storage cost"), LOGS_INGESTAO, _1),
             (_r(r"log retention cost"), LOGS_RETENCAO, _1),
         ),
-        # A OCI cobra o armazenamento do log, e a unidade dele vale como GB ingerido
-        "oci": ((_r(r"logging - storage"), LOGS_INGESTAO, _1),),
+        # A OCI cobra o armazenamento do log (GB-mês), não a ingestão: como origem, sem a
+        # retenção do cliente não há como voltar ao GB ingerido, e o log fica ao custo atual
     },
     "dns": {
         "aws": (
@@ -234,7 +234,7 @@ REGRAS: Mapping[str, Mapping[str, _Regras]] = {
             (_r(r"dns query \(port 53\)"), DNS_CONSULTAS, _1),
             (_r(r"managedzone|managed zone"), DNS_ZONAS, _1),
         ),
-        "oci": ((_r(r"networking - dns$"), DNS_CONSULTAS, _1),),
+        "oci": ((_r(r"dns - queries$|networking - dns$"), DNS_CONSULTAS, _1),),
     },
     "waf": {
         "aws": (
@@ -273,8 +273,8 @@ REGRAS: Mapping[str, Mapping[str, _Regras]] = {
         "aws": ((_r(r"amp:metricsamplecount"), METRICAS, _POR_DEZ_MIL),),
         "azure": ((_r(r"metric samples ingested|metrics ingestion"), METRICAS, _1),),
         "gcp": ((_r(r"prometheus samples ingested"), METRICAS, _1),),
-        # A OCI não tem Prometheus gerenciado: a amostra vai como ponto do Monitoring
-        "oci": ((_r(r"monitoring - ingestion"), METRICAS, _1),),
+        # A OCI não tem Prometheus gerenciado: o ponto do Monitoring não é amostra de
+        # Prometheus e fica ao custo atual
     },
 }
 

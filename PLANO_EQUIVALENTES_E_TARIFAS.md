@@ -68,12 +68,16 @@ sem região), como as taxas do banco.
 | `waf_politicas` | política-mês | 5 | 5 | 5 | 5 |
 | `waf_regras` | regra-mês | 1 | 1 | 1 | 0 ³ |
 | `registro_imagens` | GB-mês | 0,10 | 0,10 | 0,10 | 0,0255 ⁴ |
-| `metricas_amostras` | 10 mil amostras | 0,0009 | 0,00011 | 0,0006 | 0,000025 ⁵ |
+| `metricas_amostras` | 10 mil amostras | 0,0009 | 0,00011 | 0,0006 | — ⁵ |
 
-¹ A OCI cobra o armazenamento do log (GB-mês, 10 GB grátis), não a ingestão; com a retenção
-padrão de 30 dias, 1 GB ingerido ≈ 1 GB-mês. ² A GCP não tem camada básica. ³ Sem cobrança na
-lista oficial. ⁴ O Container Registry da OCI é grátis; a imagem paga o Object Storage. ⁵ A OCI
-não tem Prometheus gerenciado; a amostra vai como ponto do Monitoring (aproximação declarada).
+¹ A OCI cobra o armazenamento do log (GB-mês, 10 GB grátis), não a ingestão. Como destino, com
+a retenção padrão dela (30 dias), 1 GB ingerido ≈ 1 GB-mês (premissa declarada). Como origem, o
+log da OCI fica ao custo atual: sem a retenção do cliente, o GB-mês não volta a GB ingerido.
+² A GCP não tem camada básica. ³ Sem cobrança na lista oficial. ⁴ O Container Registry da OCI é
+grátis; a imagem paga o Object Storage. ⁵ A OCI não tem Prometheus gerenciado: sem cotação. A
+primeira versão cotava o ponto do Monitoring dela como amostra, e a fatura OCI real mostrou o
+erro: o ponto custa 1/36 da amostra da AWS, e 558 dólares de Monitoring viravam 20 mil na AWS
+(corrigido em 18/10, mesmo dia).
 
 Fontes: AWS Price List bulk (`AmazonCloudWatch`, `AmazonRoute53`, `awswaf`, `AmazonECR`,
 `AmazonPrometheus`, us-east-1); Azure Retail Prices API (eastus e global); Cloud Billing

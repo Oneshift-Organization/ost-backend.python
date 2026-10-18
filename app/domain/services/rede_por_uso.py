@@ -213,13 +213,11 @@ _UNIDADES: Mapping[str, tuple[str, Decimal]] = {
             "mbps per hour", "mbps hours",
         )
     },
-    # A OCI cobra o log pelo armazenamento (GB-mês); com a retenção padrão de 30 dias,
-    # 1 GB-mês é 1 GB ingerido, a dimensão da categoria de ingestão
-    **{rotulo: (GB, _ESCALA_1) for rotulo in ("gigabyte log storage per month",)},
     **{
         rotulo: (MES, _ESCALA_1)
         for rotulo in (
             "month", "months", "1/month", "key version per month", "1", "instance per month",
+            "instance months",
         )
     },
     **{
@@ -234,7 +232,7 @@ _UNIDADES: Mapping[str, tuple[str, Decimal]] = {
         rotulo: (DEZ_MIL, Decimal(100))
         for rotulo in (
             "1m", "1m/month", "1,000,000 queries", "1,000,000 incoming requests per month",
-            "million datapoints",
+            "million requests",
         )
     },
     **{rotulo: (DEZ_MIL, Decimal(1000)) for rotulo in ("10m", "10m samples")},

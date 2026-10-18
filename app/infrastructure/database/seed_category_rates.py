@@ -188,8 +188,9 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     # E505-1604-58F8, 149C-F9EC-3994, 58CD-E7C3-72CA); OCI cetools (B92593, B88525,
     # B94277, B94579, B90925).
     # Ingestão de log por GB: CloudWatch Standard, Log Analytics (Analytics Logs), Cloud
-    # Logging. A OCI cobra o armazenamento (GB-mês, 10 GB grátis), não a ingestão: com a
-    # retenção padrão de 30 dias, 1 GB ingerido é 1 GB-mês
+    # Logging. A OCI cobra o armazenamento (GB-mês, 10 GB grátis), não a ingestão: como
+    # destino, com a retenção padrão dela (30 dias), 1 GB ingerido é 1 GB-mês (premissa
+    # declarada). Como origem, o log da OCI fica ao custo atual (`categoria_por_uso`)
     ("aws", "logs_ingestion", "gb", "0.50"),
     ("azure", "logs_ingestion", "gb", "2.30"),
     ("gcp", "logs_ingestion", "gb", "0.50"),
@@ -234,12 +235,11 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("gcp", "container_registry_storage", "gb_month", "0.10"),
     ("oci", "container_registry_storage", "gb_month", "0.0255"),
     # Amostra de Prometheus gerenciado, por 10 mil (AWS 0,90 e GCP 0,60 por 10 milhões;
-    # Azure 0,11). A OCI não tem Prometheus gerenciado: ponto do Monitoring, 0,0025 por
-    # milhão (aproximação declarada)
+    # Azure 0,11). A OCI não tem Prometheus gerenciado: sem linha, fica sem cotação (o
+    # ponto do Monitoring dela custa 1/36 da amostra da AWS e não é o mesmo produto)
     ("aws", "metric_samples", "10k", "0.0009"),
     ("azure", "metric_samples", "10k", "0.00011"),
     ("gcp", "metric_samples", "10k", "0.0006"),
-    ("oci", "metric_samples", "10k", "0.000025"),
 )
 
 
