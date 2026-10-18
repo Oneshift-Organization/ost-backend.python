@@ -211,6 +211,11 @@ _CURADORIA_16_10: list[_Linha] = [
     ("oci", "database", "OCI Database with PostgreSQL", _curado(
         "medium", True, "Motor aberto gerenciado, como o RDS e o Cloud SQL",
     )),
+    # 18/10 (PLANO_EQUIVALENTES_E_TARIFAS §9): o Application Gateway entrou no DE-PARA
+    # como balanceador; a mesma nota do balanceador da AWS
+    ("azure", "networking", "Azure Application Gateway", _curado(
+        "low", False, "Balanceador de camada 7: as regras se reconfiguram, a aplicação não muda",
+    )),
     # Transferência de dados: o "Bandwidth" da Azure era o único serviço dos seis
     # relatórios sem linha no DE-PARA. Tráfego cobrado por GB, sem dado a migrar.
     *(
