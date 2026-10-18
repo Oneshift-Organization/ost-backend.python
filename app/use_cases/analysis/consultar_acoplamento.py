@@ -21,7 +21,11 @@ from app.domain.services.acoplamento_por_servico import (
 )
 from app.domain.services.decision_support import number
 from app.use_cases.agent.consultar_envios import ConsultarEnviosUseCase
+from app.use_cases.analysis.equivalence_pricing import _CATEGORIES
 from app.use_cases.analysis.equivalence_projection import project_equivalences
+
+# O nome de cada categoria cotada, o mesmo das linhas "(agregado)" da tabela
+_ROTULOS = {chave: rotulo for chave, (rotulo, _tipos) in _CATEGORIES.items()}
 
 
 class AnaliseNaoConcluidaError(ConflictError):
@@ -69,7 +73,7 @@ def _montar(
     try:
         if linhas is None:
             linhas = [r.model_dump() for r in project_equivalences(dict(payload))]
-        return montar_acoplamento_por_servico(payload, precos_por_servico(linhas))
+        return montar_acoplamento_por_servico(payload, precos_por_servico(linhas), _ROTULOS)
     except PayloadSemServicosError as e:
         raise AnaliseSemServicosError(str(e)) from e
 

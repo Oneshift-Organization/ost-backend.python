@@ -17,6 +17,7 @@ from app.domain.services.acoplamento_por_servico import (
     AcoplamentoPorServico,
     OpcaoNoDestino,
     PoolDoServico,
+    SemEquivalente,
     Sugestao,
 )
 
@@ -130,6 +131,49 @@ class OpcaoOut(BaseModel):
         )
 
 
+class TipoOut(BaseModel):
+    tipo: str = Field(description="chave da categoria cotada (balanceador, vpn)")
+    rotulo: str
+    custo_atual: float
+    custo_estimado: float | None = Field(description="no destino; null sem cotação")
+
+
+class SemEquivalenteOut(BaseModel):
+    caso: Literal["por_tipo", "licenca", "sem_par", "nao_mapeado"] = Field(
+        description="por_tipo: linhas sob um nome genérico, cotadas tipo a tipo; licenca: vai "
+        "com as máquinas; sem_par: o tipo tem serviço em outra nuvem e nenhum neste destino, no "
+        "catálogo; nao_mapeado: sem mapeamento"
+    )
+    custo_estimado: float = Field(description="o que entra no total do destino")
+    ao_custo_de_hoje: bool = Field(description="o destino fica com o custo de hoje")
+    tipos: list[TipoOut] = Field(default_factory=list)
+    vai_com: str | None = Field(
+        default=None, description="licença: o equivalente de máquina virtual no destino"
+    )
+
+    @classmethod
+    def de(cls, s: SemEquivalente) -> SemEquivalenteOut:
+        return cls.model_validate(
+            {
+                "caso": s.caso,
+                "custo_estimado": _dinheiro(s.custo_estimado),
+                "ao_custo_de_hoje": s.ao_custo_de_hoje,
+                "tipos": [
+                    {
+                        "tipo": t.tipo,
+                        "rotulo": t.rotulo,
+                        "custo_atual": _dinheiro(t.custo_atual),
+                        "custo_estimado": _dinheiro(t.custo_estimado)
+                        if t.custo_estimado is not None
+                        else None,
+                    }
+                    for t in s.tipos
+                ],
+                "vai_com": s.vai_com,
+            }
+        )
+
+
 class ServicoOut(BaseModel):
     id: str
     nome: str
@@ -176,6 +220,10 @@ class ServicoOut(BaseModel):
         description="o motor que o nome do banco de origem diz; null quando o nome serve a "
         "vários motores (RDS, Cloud SQL) ou fora do banco",
     )
+    sem_equivalente_por_destino: dict[str, SemEquivalenteOut] = Field(
+        default_factory=dict,
+        description="o destino sem nenhuma opção: por quê, e o que entra no total dele",
+    )
 
     @classmethod
     def de(cls, s: AcoplamentoDeServico) -> ServicoOut:
@@ -206,6 +254,10 @@ class ServicoOut(BaseModel):
                     for destino, opcoes in s.opcoes_por_destino.items()
                 },
                 "motor_da_origem": s.motor_da_origem,
+                "sem_equivalente_por_destino": {
+                    destino: SemEquivalenteOut.de(x)
+                    for destino, x in s.sem_equivalente_por_destino.items()
+                },
             }
         )
 
