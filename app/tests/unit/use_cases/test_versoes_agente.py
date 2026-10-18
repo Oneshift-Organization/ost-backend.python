@@ -57,8 +57,12 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 #   AUTHORITY_VERSION em `use_cases/agent/versoes.py` e registre o hash novo;
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
+    # Hash trocado sem subir a versão (PLANO_EQUIVALENTES_E_TARIFAS §3):
+    # `equivalence_pricing._CATEGORIES` ganhou logs, DNS, WAF, registro e métricas. As
+    # chaves só existem em payload preparado depois da mudança; snapshot antigo anexa os
+    # mesmos preços.
     "agent-authority-v4.3": (
-        "0c06a661ded4d225259d5df44cfad27351e6eda078028ff9d24fbb4c30cd9230"
+        "c1028d92be731488c9ca97728b34146c185b4b7347f6c097a9ff9ea5424763b2"
     ),
     # v4.2: rebalanceamento global 35/50/15, sem reinterpretar snapshots antigos.
     "agent-authority-v4.2": (

@@ -172,7 +172,12 @@ class EscopoDeMigracaoUseCase:
         plano = fechar_plano(ctx.catalogo, escolha)
         unidades = set(plano.unidades)
         cotacao = cotar_escopo(
-            (linha for linha in ctx.linhas if linha.unidade in unidades),
+            (
+                linha
+                for linha in ctx.linhas
+                if linha.unidade in unidades
+                and (not escolha.somente_os_servicos or linha.servico in escolha.servicos)
+            ),
             ctx.pools,
             ctx.taxas_de_categoria,
             ctx.provedores,
@@ -263,6 +268,14 @@ class EscopoDeMigracaoUseCase:
             for chave, servicos in servicos_do_recurso.items()
         }
         deps = dependencias_de_servico(indice, analise.unidade_de, servico_de)
+        # Recurso sem linha na fatura fica com o serviço do tipo dele (o bucket gera S3):
+        # é o que recorta o escopo de "só o serviço"
+        servico_do_recurso = dict(servico_de)
+        for chave, recurso in indice.recursos.items():
+            if chave not in servico_do_recurso and (
+                pelo_tipo := servicos_pelo_tipo(conteudo.provedor, (recurso,))
+            ):
+                servico_do_recurso[chave] = min(pelo_tipo)
         chave_aplicacao = next(
             (p.valor for p in analise.premissas if p.campo == "chave_aplicacao"), None
         )
@@ -282,7 +295,16 @@ class EscopoDeMigracaoUseCase:
             )
         }
         catalogo = montar_catalogo(
-            analise, por_unidade, sem_unidade, deps, chave_aplicacao, servicos_presentes=presentes
+            analise,
+            por_unidade,
+            sem_unidade,
+            deps,
+            chave_aplicacao,
+            servicos_presentes=presentes,
+            servico_do_recurso=servico_do_recurso,
+            deps_da_fronteira=dependencias_de_servico(
+                indice, analise.unidade_de, servico_do_recurso
+            ),
         )
 
         pools = tuple(_pools(payload))
@@ -445,8 +467,15 @@ def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:
     """As unidades do plano → máquinas por (subrede, família), bancos e custo por categoria."""
     ctx, plano = cotado.contexto, cotado.plano
     unidades = set(plano.unidades)
+    so_o_servico = plano.escolha.somente_os_servicos
+    escolhidos = plano.escolha.servicos
+    servico_de = ctx.catalogo.servico_do_recurso
     chaves = {
-        chave for u in ctx.catalogo.analise.unidades if u.id in unidades for chave in u.recursos
+        chave
+        for u in ctx.catalogo.analise.unidades
+        if u.id in unidades
+        for chave in u.recursos
+        if not so_o_servico or servico_de.get(chave) in escolhidos
     }
     recursos = [ctx.recursos[c] for c in sorted(chaves) if c in ctx.recursos]
     maquinas: Counter[tuple[str | None, str]] = Counter()
@@ -465,6 +494,8 @@ def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:
     custos: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     for linha in ctx.linhas:
         if linha.unidade not in unidades or linha.recurso is None:
+            continue
+        if so_o_servico and linha.servico not in escolhidos:
             continue
         recurso = ctx.recursos.get(linha.recurso)
         if linha.tipo is TipoDeRecurso.DISCO:
@@ -490,4 +521,34 @@ def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:
         ordens=tuple((o.ordem, tuple(nomes.get(g, g) for g in o.grupos)) for o in plano.ordens),
         antes=ligacoes(plano.antes),
         para_tras=ligacoes(plano.para_tras),
+        avisos=_fora_do_pacote(escolhidos, recursos, servico_de) if so_o_servico else (),
+        somente_os_servicos=so_o_servico,
+        servicos=tuple(sorted(escolhidos)) if so_o_servico else (),
+        fronteira=plano.fronteira,
     )
+
+
+# O que o pacote Terraform cria; o resto de um serviço escolhido fica de fora
+_PROVISIONADOS = frozenset(
+    {TipoDeRecurso.INSTANCIA, TipoDeRecurso.DISCO, TipoDeRecurso.BANCO, TipoDeRecurso.BUCKET}
+)
+
+
+def _fora_do_pacote(
+    escolhidos: frozenset[str], recursos: list[RecursoDoEscopo], servico_de: Mapping[str, str]
+) -> tuple[str, ...]:
+    """Serviço escolhido que o pacote não cria: dito na resposta e no README."""
+    avisos = []
+    for servico in sorted(escolhidos):
+        tipos = {r.tipo for r in recursos if servico_de.get(r.chave) == servico}
+        if not tipos:
+            avisos.append(
+                f"{servico}: nenhum recurso dele no inventário das unidades do escopo; o "
+                "pacote não o cria."
+            )
+        elif not tipos & _PROVISIONADOS:
+            avisos.append(
+                f"{servico} não vira recurso neste pacote (o Terraform cria máquina, disco, "
+                "banco e bucket): crie o equivalente dele no destino à parte."
+            )
+    return tuple(avisos)

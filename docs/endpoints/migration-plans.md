@@ -70,6 +70,33 @@ Corpo:
 - `ambiente`: `null` = todos.
 - `incluir_grupos`: ids de grupos de `antes`/`para_tras` que o usuário incluiu
   (botão **Incluir**).
+- `somente_os_servicos` (padrão `false`, 18/10): `true` migra **só os serviços
+  escolhidos**, nas unidades que os usam, sem o resto das aplicações nem os grupos.
+  Não combina com `aplicacoes` nem com `incluir_grupos` (422 com o motivo). Cada
+  dependência que o recorte corta volta em `fronteira`.
+
+As três escolhas da tela:
+
+| a tela escolhe | corpo |
+|---|---|
+| tudo | sem plano (o Terraform sem `escopo`) |
+| uma aplicação (ou várias) | `{"aplicacoes": ["checkout"]}`: a aplicação com o que migra junto |
+| um serviço sozinho | `{"servicos": ["AmazonRDS"], "somente_os_servicos": true}` |
+
+`fronteira[]` (só com `somente_os_servicos`): uma entrada por dependência cortada.
+
+```json
+{ "sentido": "entra", "de": "AmazonEC2 (checkout)", "para": "AmazonRDS (checkout)",
+  "natureza": "dados", "portas": ["tcp/5432"], "forte": true,
+  "texto": "AmazonEC2 (checkout) fica na origem e acessa dados em AmazonRDS (checkout), que migra (tcp/5432): o endereço de AmazonRDS (checkout) muda, e sem conexão privada entre as nuvens ela para. Troque o endereço na configuração de AmazonEC2 (checkout) e garanta que o destino aceite a entrada a partir da rede de origem." }
+```
+
+- `sentido`: `sai` (o que migra chama o que fica) ou `entra` (o que fica chama o que
+  migra). `forte`: dados ou encaminhamento, que param a aplicação sem conexão
+  privada entre as nuvens. `texto`: pronto para exibir; os fortes vêm primeiro.
+- A dependência vem das regras de rede do inventário, no nível do recurso, também
+  para recurso sem linha própria na fatura (o serviço pelo tipo: a VM do
+  monitoramento que lê o banco).
 
 Resposta (campos principais):
 
@@ -138,8 +165,8 @@ sempre foi.
 }
 ```
 
-`escopo` aceita `aplicacoes`, `servicos`, `ambiente` e `incluir_grupos`; campo
-desconhecido é 422. O plano é fechado pelas mesmas regras da tela, e o payload da
+`escopo` aceita `aplicacoes`, `servicos`, `ambiente`, `incluir_grupos` e
+`somente_os_servicos`; campo desconhecido é 422. O plano é fechado pelas mesmas regras da tela, e o payload da
 análise é recortado antes de derivar o pacote
 (`app/domain/services/terraform_topologia/escopo.py`):
 
@@ -154,6 +181,24 @@ análise é recortado antes de derivar o pacote
 O README do pacote ganha a seção **Escopo deste pacote**: aplicações, ordem de
 migração, **conectividade entre nuvens a prever** (os grupos que vão `antes` e os
 que ficam `para_tras`, com ordem e portas) e os pools da análise que não entraram.
+
+Bancos do escopo (corrigido em 18/10): o recorte mantém os grupos de banco medidos
+na fatura, na quantidade do escopo. Antes ele os tirava junto com o armazenamento
+medido, e o pacote caía num banco genérico, fora da rede nova e com endpoint
+público.
+
+Com `"somente_os_servicos": true` no `escopo`, o pacote tem só os recursos dos
+serviços escolhidos, e a fronteira volta de três jeitos:
+
+- `warnings` da geração, **no topo**: o resumo (quantas dependências atravessam,
+  quantas fortes), o que liberar na origem a partir da rede do destino, o aviso do
+  banco fora da AWS (só a AWS anexa ao banco o grupo espelhado: nas outras nuvens o
+  banco fica na subrede de dados, e a porta precisa ser liberada a partir da rede de
+  origem) e as primeiras oito ligações;
+- `unsupported_items`: serviço escolhido que o pacote não cria (balanceador, cache,
+  Kubernetes: o Terraform cria máquina, disco, banco e bucket);
+- README, seção **O que fica do outro lado (fronteira)**: todas as ligações, as
+  fortes marcadas.
 
 Erros: os mesmos da tabela [Erros](#erros) (o escopo usa o inventário), mais os da
 geração. `INVENTARIO_DESLIGADO` também quando `INVENTORY_ENABLED=false`.

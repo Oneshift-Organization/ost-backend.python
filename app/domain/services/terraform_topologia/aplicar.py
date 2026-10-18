@@ -75,7 +75,67 @@ def aplicar_topologia(
     medido = (payload.get("inventario_medido") or {}).get("armazenamento") or {}
     _discos_avulsos(novo, medido, detalhe.get("discos") or {})
     _versoes(novo, detalhe.get("bancos") or [], destino)
+    _fronteira_do_escopo(novo, topologia.get("escopo") or {}, destino=destino, rede=rede)
     return novo
+
+
+# Ligações da fronteira listadas uma a uma nos avisos; o resto, no README
+_MAX_NA_FRONTEIRA = 8
+
+
+def _fronteira_do_escopo(
+    plano: PlanoDerivado, escopo: Mapping[str, Any], *, destino: str, rede: str
+) -> None:
+    """Só o serviço: o que o recorte cortou abre os avisos da resposta, além do README.
+    Vem primeiro porque é o que quebra a aplicação sem conexão entre as nuvens."""
+    if not escopo.get("somente_os_servicos"):
+        return
+    fronteira = list(escopo.get("fronteira") or [])
+    fortes = sum(1 for f in fronteira if f.get("forte"))
+    # Só a AWS anexa ao banco o grupo de segurança espelhado (`grupos._anexos`): nas outras
+    # nuvens o banco fica na subrede de dados, sem a regra de entrada de quem ficou
+    tem_banco = any(r.resource_type == "managed_database" for r in plano.recursos)
+    portas_no_banco = sorted(
+        {
+            p
+            for f in fronteira
+            if f.get("sentido") == "entra" and f.get("natureza") == "dados"
+            for p in f.get("portas") or []
+        }
+    )
+    sai = [f for f in fronteira if f.get("sentido") == "sai"]
+    if not fronteira:
+        novos = [
+            "Só os serviços escolhidos: nenhuma dependência de rede atravessa a fronteira "
+            "pelas regras do inventário."
+        ]
+    else:
+        novos = [
+            f"Só os serviços escolhidos: {len(fronteira)} dependência(s) atravessam a fronteira "
+            f"({fortes} forte(s), de dados ou encaminhamento). Sem conexão privada entre as "
+            "nuvens elas quebram; cada uma está abaixo e no README.",
+            *(str(f.get("texto")) for f in fronteira[:_MAX_NA_FRONTEIRA]),
+        ]
+        if len(fronteira) > _MAX_NA_FRONTEIRA:
+            novos.append(
+                f"E mais {len(fronteira) - _MAX_NA_FRONTEIRA} na seção de escopo do README."
+            )
+        if tem_banco and portas_no_banco and destino != "aws":
+            novos.insert(
+                1,
+                f"Em {destino.upper()} o banco do pacote fica na subrede de dados, mas sem a "
+                "regra de entrada espelhada da origem (só a AWS anexa grupo ao banco): libere "
+                f"{', '.join(portas_no_banco)} a partir da rede de origem na subrede de dados, "
+                "ou quem ficou na origem não alcança o banco.",
+            )
+        if sai:
+            novos.insert(
+                1,
+                f"O que migra chama {len({f.get('para') for f in sai})} serviço(s) que ficam "
+                f"na origem: libere neles a entrada a partir da rede do destino ({rede}).",
+            )
+    plano.avisos[:0] = novos
+    plano.nao_suportado += [str(a) for a in escopo.get("avisos") or []]
 
 
 # ── disco raiz ──────────────────────────────────────────────────────────

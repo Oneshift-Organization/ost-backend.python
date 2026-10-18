@@ -23,6 +23,17 @@ PLANO_PRECO_NAO_COMPUTE R4:
   no balde de rede. O nome do serviço separa a da CloudFront da requisição do S3, que
   tem o mesmo jeito de UsageType.
 
+PLANO_EQUIVALENTES_E_TARIFAS §3:
+- **logs** (CloudWatch Logs, Log Analytics, Cloud Logging, Logging da OCI): saíam não
+  classificados ou como egress (o log entregue da CloudWatch);
+- **DNS** (Route 53, Azure DNS, Cloud DNS, DNS da OCI): saíam não classificados ou como
+  rede (a consulta da Azure);
+- **WAF** (AWS WAF, política e regra do WAF do Front Door, Cloud Armor, WAF da OCI);
+- **registro de imagens** (armazenamento do ECR, do Artifact Registry e do ACR): o do
+  Artifact Registry era cotado como objeto, a um quarto do preço do registro;
+- **métricas** (CloudWatch fora dos logs, Prometheus gerenciado, Cloud Monitoring,
+  Monitoring da OCI).
+
 Corrigir aqui, e não só nas regras de SKU, vale para faturas já processadas sem
 reenriquecer. Tabela de dados por nuvem, sem ``if``. Módulo puro, sem I/O.
 """
@@ -39,6 +50,14 @@ SERVERLESS = "serverless"
 SEGREDOS = "secrets"
 REDE = "network_egress"
 ARQUIVOS = "file_storage"
+LOGS = "logging"
+DNS = "dns"
+WAF = "waf"
+REGISTRO = "container_registry"
+METRICAS = "metrics"
+
+# Uso de log da CloudWatch; o resto do serviço é métrica, alarme e painel
+_LOG_DA_CLOUDWATCH = r"(dataprocessing|vendedlog|timedstorage|datascanned|logs?\b)"
 
 
 def _r(texto: str) -> re.Pattern[str]:
@@ -54,6 +73,12 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^aws ?lambda[^|]*\|(?!.*(datatransfer|-bytes))"), SERVERLESS),
         (_r(r"^(aws ?secrets ?manager|aws ?key ?management|awskms)"), SEGREDOS),
         (_r(r"^(amazon ?efs|amazon elastic file system)"), ARQUIVOS),
+        (_r(r"^amazon ?cloudwatch[^|]*\|.*" + _LOG_DA_CLOUDWATCH), LOGS),
+        (_r(r"^amazon ?cloudwatch"), METRICAS),
+        (_r(r"^(amazon ?prometheus|amazon managed service for prometheus)"), METRICAS),
+        (_r(r"^amazon ?route ?53"), DNS),
+        (_r(r"^(aws ?waf|awswaf)"), WAF),
+        (_r(r"^(amazon ?ecr|amazon elastic container registry)[^|]*\|.*timedstorage"), REGISTRO),
     ),
     "gcp": (
         (_r(r"source repositor[^|]*\| *storage$"), "object_storage"),
@@ -61,6 +86,11 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^(secret manager|cloud key management)"), SEGREDOS),
         (_r(r"\|.*cdn.*lookup"), REDE),
         (_r(r"filestore"), ARQUIVOS),
+        (_r(r"^cloud logging"), LOGS),
+        (_r(r"^cloud monitoring"), METRICAS),
+        (_r(r"^cloud dns"), DNS),
+        (_r(r"\|.*cloud armor"), WAF),
+        (_r(r"^artifact registry[^|]*\|.*storage"), REGISTRO),
     ),
     "azure": (
         (
@@ -69,11 +99,20 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         ),
         (_r(r"^key vault"), SEGREDOS),
         (_r(r"^(storage|azure files)[^|]*\|.*\bfiles?\b"), ARQUIVOS),
+        (_r(r"^log analytics|^azure monitor[^|]*\|.*\blogs\b"), LOGS),
+        (_r(r"^azure monitor"), METRICAS),
+        (_r(r"^azure dns"), DNS),
+        (_r(r"^azure front door service[^|]*\|.*\b(policy|rule)\b"), WAF),
+        (_r(r"^container registry"), REGISTRO),
     ),
     "oci": (
         (_r(r"^functions"), SERVERLESS),
         (_r(r"^(key[ _]management|vault|kms)|\|.*key management"), SEGREDOS),
         (_r(r"file storage"), ARQUIVOS),
+        (_r(r"^logging|\|.*\blogging\b"), LOGS),
+        (_r(r"^monitoring|\|.*\bmonitoring\b"), METRICAS),
+        (_r(r"^dns|\|.*networking - dns"), DNS),
+        (_r(r"^waf|\|.*web application firewall"), WAF),
     ),
 }
 

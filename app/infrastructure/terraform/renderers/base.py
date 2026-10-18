@@ -265,6 +265,8 @@ def _secao_escopo(escopo: dict[str, Any]) -> str:
         return f"- {g['grupo']}{ordem}{portas}"
 
     aplicacoes = ", ".join(escopo.get("aplicacoes") or []) or "—"
+    if escopo.get("somente_os_servicos"):
+        return _secao_so_dos_servicos(escopo, aplicacoes)
     linhas = [
         "## Escopo deste pacote",
         "",
@@ -306,6 +308,40 @@ def _secao_escopo(escopo: dict[str, Any]) -> str:
             "Pools de compute da análise sem máquina no escopo não entram: "
             + ", ".join(escopo["pools_fora"])
             + ".",
+            "",
+        ]
+    linhas += [f"- {a}" for a in escopo.get("avisos") or []]
+    return "\n".join(linhas).rstrip() + "\n"
+
+
+def _secao_so_dos_servicos(escopo: dict[str, Any], aplicacoes: str) -> str:
+    """Só os serviços escolhidos: o resto das aplicações fica na origem, e cada
+    dependência cortada aparece com o que quebra e o que fazer."""
+    servicos = ", ".join(escopo.get("servicos") or []) or "—"
+    linhas = [
+        "## Escopo deste pacote",
+        "",
+        f"Só os serviços escolhidos: **{servicos}**, nas aplicações {aplicacoes} "
+        f"({escopo.get('unidades', 0)} unidade(s)). O resto dessas aplicações fica na "
+        "origem. Máquinas, bancos, subredes e grupos de segurança são só os desses "
+        "serviços; discos e buckets saem do custo deles na fatura.",
+        "",
+        "### O que fica do outro lado (fronteira)",
+        "",
+    ]
+    fronteira = escopo.get("fronteira") or []
+    if fronteira:
+        linhas += [
+            "Cada item é uma dependência que este pacote corta. Sem conexão privada entre as "
+            "nuvens (VPN ou interconexão) e sem os ajustes abaixo, ela quebra:",
+            "",
+            *[f"- {'**forte** — ' if f.get('forte') else ''}{f['texto']}" for f in fronteira],
+            "",
+        ]
+    else:
+        linhas += [
+            "Nenhuma dependência de rede atravessa a fronteira: pelas regras do inventário, "
+            "os serviços escolhidos não conversam com o que fica.",
             "",
         ]
     linhas += [f"- {a}" for a in escopo.get("avisos") or []]

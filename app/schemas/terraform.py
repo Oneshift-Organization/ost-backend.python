@@ -125,6 +125,13 @@ class EscopoIn(BaseModel):
     servicos: list[str] = Field(default_factory=list)
     ambiente: str | None = Field(default=None, description="null = todos os ambientes")
     incluir_grupos: list[str] = Field(default_factory=list)
+    somente_os_servicos: bool = Field(
+        default=False,
+        description=(
+            "true = só os recursos dos serviços escolhidos, sem as aplicações inteiras; as "
+            "dependências cortadas voltam em `warnings` e no README"
+        ),
+    )
 
 
 class TerraformGenerationIn(BaseModel):

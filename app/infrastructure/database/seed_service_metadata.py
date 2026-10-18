@@ -206,6 +206,11 @@ _CURADORIA_16_10: list[_Linha] = [
         "medium", False, "Como EC2, VMs da Azure e Compute Engine",
     )),
     ("oci", "database", "MySQL Database Service", _curado("medium", True, "Como o RDS")),
+    # 18/10 (PLANO_EQUIVALENTES_E_TARIFAS §4): o PostgreSQL da OCI entrou em
+    # `managed_relational_database`, ao lado do MySQL; mesma nota do PostgreSQL da Azure
+    ("oci", "database", "OCI Database with PostgreSQL", _curado(
+        "medium", True, "Motor aberto gerenciado, como o RDS e o Cloud SQL",
+    )),
     # Transferência de dados: o "Bandwidth" da Azure era o único serviço dos seis
     # relatórios sem linha no DE-PARA. Tráfego cobrado por GB, sem dado a migrar.
     *(

@@ -139,6 +139,7 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,database,managed_relational_database,gcp,Cloud SQL,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,database,managed_relational_database,oci,Oracle Database Cloud Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,database,managed_relational_database,oci,MySQL Database Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,oci,OCI Database with PostgreSQL,2026-10-18T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/postgresql/home.htm
 ,database,postgresql_compatible_db,aws,Amazon Aurora PostgreSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,database,postgresql_compatible_db,azure,Azure Cosmos DB for PostgreSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,database,postgresql_compatible_db,gcp,AlloyDB for PostgreSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
@@ -769,7 +770,7 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,application_services,ipaas_integration,gcp,Integration Connectors,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,application_services,step_functions,aws,AWS Step Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,application_services,step_functions,azure,Azure Logic Apps,2026-05-24T00:00:00+00:00,https://comparecloud.in/
-,application_services,step_functions,azure,Azure Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,step_functions,azure,Azure Durable Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,application_services,step_functions,gcp,Workflows,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,application_services,step_functions,oci,Oracle Application Express (APEX),2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,application_services,step_functions,oci,Oracle Visual Builder,2026-05-24T00:00:00+00:00,https://comparecloud.in/

@@ -50,6 +50,8 @@ _ANTHROPIC_SPEND_LIMIT_ERROR_CODE = "enforced_spend_limit_reached"
 
 _ANTHROPIC_BAD_REQUEST_STATUS = 400
 
+_QUALIDADE_DA_EQUIVALENCIA = ("equivalence_type", "portability", "migration_risk")
+
 
 class LLMOrchestrator:
     def __init__(
@@ -310,6 +312,16 @@ def _compact_decision_payload(billing_data: dict) -> dict:
 
     payload = deepcopy(billing_data)
     payload.pop("decision_workloads", None)
+    # Tipo, portabilidade e risco dos destinos dos pools vão para a tabela que o backend
+    # monta depois (PLANO_EQUIVALENTES_E_TARIFAS §2); o modelo não precisa deles
+    for pool in payload.get("pools_computacao") or []:
+        for equivalente in pool.get("equivalentes") or []:
+            metadados = equivalente.get("metadados")
+            if isinstance(metadados, dict):
+                for campo in _QUALIDADE_DA_EQUIVALENCIA:
+                    metadados.pop(campo, None)
+                if not metadados:
+                    equivalente.pop("metadados")
     decision = payload["decision_support"]
     for scenario in [*decision.get("provider_scores", []), decision.get("score")]:
         if scenario:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
@@ -12,12 +13,15 @@ from app.domain.services.topologia.dependencias_de_servico import dependencias_d
 from app.domain.services.topologia.escopo import (
     ANTES,
     DEPOIS,
+    ENTRA,
+    SAI,
     SEM_LIGACAO,
     CatalogoDeAplicacoes,
     Escolha,
     EscolhaInvalidaError,
     fechar_plano,
     montar_catalogo,
+    texto_da_fronteira,
 )
 from app.domain.services.topologia.indice import Indice
 from app.domain.services.topologia.modelo import Natureza
@@ -218,3 +222,93 @@ def test_servico_sem_custo_ligado_chega_a_unidade_pelo_tipo_do_recurso() -> None
     plano = fechar_plano(catalogo, Escolha(servicos=frozenset({"AmazonS3"})))
     assert len(plano.unidades) == 2
     assert plano.fora_do_plano == (("AmazonS3", Decimal("3.82")),)
+
+
+# ── só o serviço (pedido de 18/10) ──────────────────────────────────────
+
+
+def _so(servicos: set[str], ambiente: str | None = None) -> Escolha:
+    return Escolha(servicos=frozenset(servicos), ambiente=ambiente, somente_os_servicos=True)
+
+
+def _cenario_com_recursos() -> CatalogoDeAplicacoes:
+    catalogo = _cenario()
+    return replace(
+        catalogo, servico_do_recurso={k: s for k, (s, _) in _CUSTOS.items()}
+    )
+
+
+def test_so_o_banco_nao_leva_as_aplicacoes_e_diz_quem_fica_do_outro_lado() -> None:
+    plano = fechar_plano(_cenario_com_recursos(), _so({"RDS"}))
+    # Só o RDS: nenhuma VM vai junto, nenhum grupo inteiro
+    assert dict(plano.servicos) == {"RDS": Decimal("625")}
+    assert plano.vao_junto == ()
+    assert plano.servicos_que_vem_junto == ()
+    assert plano.recursos == 4
+    # Cada VM fica na origem e acessa o banco que migra: ligação forte cortada
+    entradas = [f for f in plano.fronteira if f.sentido == ENTRA]
+    assert {(f.de, f.para) for f in entradas} >= {
+        ("EC2 (auth)", "RDS (auth)"),
+        ("EC2 (checkout)", "RDS (checkout)"),
+        ("EC2 (checkout)", "RDS (auth)"),
+    }
+    assert all(f.forte and f.natureza is Natureza.DADOS for f in entradas)
+    assert all(f.portas == ("tcp/5432",) for f in entradas)
+    # Nada sai: o banco não chama ninguém
+    assert not [f for f in plano.fronteira if f.sentido == SAI]
+    # O RDS sem aplicação continua declarado
+    assert plano.fora_do_plano == (("RDS", Decimal("9")),)
+
+
+def test_so_a_vm_corta_o_banco_e_as_chamadas_entre_aplicacoes() -> None:
+    plano = fechar_plano(_cenario_com_recursos(), _so({"EC2"}))
+    saidas = {(f.de, f.para, f.natureza) for f in plano.fronteira if f.sentido == SAI}
+    # A VM migra e acessa o banco que fica
+    assert ("EC2 (checkout)", "RDS (checkout)", Natureza.DADOS) in saidas
+    assert ("EC2 (checkout)", "RDS (auth)", Natureza.DADOS) in saidas
+    # VM chamando VM (checkout → catalogo): as duas migram, nada atravessa a fronteira
+    assert not any(f.para.startswith("EC2") for f in plano.fronteira)
+    assert len(plano.fronteira) == 5
+    # Fortes primeiro
+    assert plano.fronteira[0].forte
+
+
+def test_so_o_servico_num_ambiente_so_leva_aquele_ambiente() -> None:
+    catalogo = _cenario_com_recursos()
+    ambientes = {u.ambiente for u in catalogo.analise.unidades} - {None}
+    for ambiente in ambientes:
+        plano = fechar_plano(catalogo, _so({"RDS"}, ambiente))
+        unidades = {u.id: u for u in catalogo.analise.unidades}
+        assert all(unidades[u].ambiente == ambiente for u in plano.unidades)
+
+
+def test_texto_da_fronteira_diz_o_que_quebra_e_o_que_fazer() -> None:
+    plano = fechar_plano(_cenario_com_recursos(), _so({"RDS"}))
+    texto = texto_da_fronteira(next(f for f in plano.fronteira if f.de == "EC2 (auth)"))
+    assert texto.startswith("EC2 (auth) fica na origem e acessa dados em RDS (auth), que migra")
+    assert "(tcp/5432)" in texto
+    assert "ela para" in texto
+    assert "Troque o endereço na configuração de EC2 (auth)" in texto
+
+
+@pytest.mark.parametrize(
+    "escolha",
+    [
+        Escolha(
+            aplicacoes=frozenset({"auth"}), servicos=frozenset({"RDS"}), somente_os_servicos=True
+        ),
+        Escolha(
+            servicos=frozenset({"RDS"}), incluir_grupos=frozenset({"x"}), somente_os_servicos=True
+        ),
+        Escolha(aplicacoes=frozenset({"auth"}), somente_os_servicos=True),
+    ],
+)
+def test_so_o_servico_nao_combina_com_aplicacao_nem_grupo(escolha: Escolha) -> None:
+    with pytest.raises(EscolhaInvalidaError, match="só o serviço"):
+        fechar_plano(_cenario_com_recursos(), escolha)
+
+
+def test_sem_a_flag_o_servico_continua_levando_as_aplicacoes() -> None:
+    plano = fechar_plano(_cenario_com_recursos(), Escolha(servicos=frozenset({"RDS"})))
+    assert plano.fronteira == ()
+    assert any(s == "EC2" for s, _ in plano.servicos)

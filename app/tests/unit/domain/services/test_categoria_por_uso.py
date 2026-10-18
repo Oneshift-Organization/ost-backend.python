@@ -8,13 +8,29 @@ from app.domain.services.categoria_por_uso import (
     CHAVE,
     CHAVE_NO_PAYLOAD,
     CHAVE_OPERACOES,
+    DNS_CONSULTAS,
+    DNS_OUTROS,
+    DNS_ZONAS,
     KUBERNETES_OUTROS,
+    LOGS_INGESTAO,
+    LOGS_INGESTAO_BASICA,
+    LOGS_OUTROS,
+    LOGS_RETENCAO,
+    METRICAS,
+    METRICAS_OUTROS,
+    OBSERVABILIDADE_E_BORDA,
     PLANO_DE_CONTROLE,
+    REGISTRO,
+    REGISTRO_OUTROS,
     SEGREDO,
     SEGREDO_OPERACOES,
     SEGURANCA_OUTROS,
     SERVERLESS,
     UNIDADE,
+    WAF_OUTROS,
+    WAF_POLITICAS,
+    WAF_REGRAS,
+    WAF_REQUISICOES,
     quantidade_por_uso,
     tipo_por_uso,
 )
@@ -108,6 +124,11 @@ def test_balde_desconhecido_ou_sem_uso_vai_para_o_resto_do_balde():
         "secrets": SEGURANCA_OUTROS,
         "serverless": SERVERLESS,
         "file_storage": ARQUIVOS,
+        "logging": LOGS_OUTROS,
+        "dns": DNS_OUTROS,
+        "waf": WAF_OUTROS,
+        "container_registry": REGISTRO_OUTROS,
+        "metrics": METRICAS_OUTROS,
     }
 
 
@@ -118,9 +139,22 @@ def test_unidade_de_cada_categoria_cotada():
         SEGREDO_OPERACOES: "10k",
         CHAVE: "month",
         CHAVE_OPERACOES: "10k",
+        LOGS_INGESTAO: "gb",
+        LOGS_INGESTAO_BASICA: "gb",
+        LOGS_RETENCAO: "gb_month",
+        DNS_CONSULTAS: "10k",
+        DNS_ZONAS: "month",
+        WAF_REQUISICOES: "10k",
+        WAF_POLITICAS: "month",
+        WAF_REGRAS: "month",
+        REGISTRO: "gb_month",
+        METRICAS: "10k",
     }
     # O resto de cada balde fica ao custo atual
-    for categoria in (KUBERNETES_OUTROS, SEGURANCA_OUTROS, SERVERLESS, ARQUIVOS):
+    for categoria in (
+        KUBERNETES_OUTROS, SEGURANCA_OUTROS, SERVERLESS, ARQUIVOS, LOGS_OUTROS, DNS_OUTROS,
+        WAF_OUTROS, REGISTRO_OUTROS, METRICAS_OUTROS,
+    ):
         assert categoria not in UNIDADE
 
 
@@ -137,6 +171,7 @@ def test_chave_no_payload():
         SEGURANCA_OUTROS,
         SERVERLESS,
         ARQUIVOS,
+        *OBSERVABILIDADE_E_BORDA,
     }
 
 

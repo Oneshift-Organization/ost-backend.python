@@ -17,6 +17,12 @@ Escolher um serviço leva as aplicações inteiras que o usam: uma VM sem o banc
 da própria aplicação não funciona no destino. O plano diz quais serviços vieram
 junto e por quê.
 
+Com ``somente_os_servicos`` (pedido do usuário em 18/10), o escopo é só o serviço:
+os recursos dele nas unidades que o usam, sem o resto da aplicação nem o grupo. Toda
+dependência que o recorte corta vira uma ligação na **fronteira**, com o sentido
+(quem migra chama quem fica, ou o contrário), a natureza e as portas: é o que precisa
+de conexão entre as nuvens, e o que quebra sem ela.
+
 Ferramenta de acesso (bastion) não é aplicação: fica fora do catálogo e do plano,
 como fica fora das ondas. Dependência administrativa não restringe nada.
 
@@ -103,6 +109,12 @@ class CatalogoDeAplicacoes:
     # Unidade → serviços da fatura que o tipo dos recursos dela gera (o bucket gera
     # S3). Liga serviço a unidade quando o custo não pôde ser dividido.
     servicos_presentes: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    # Recurso do inventário → serviço da fatura (o que mais custa nele, ou o do tipo).
+    # Recorta o escopo de "só o serviço"
+    servico_do_recurso: Mapping[str, str] = field(default_factory=dict)
+    # As dependências também dos recursos sem linha na fatura (o serviço pelo tipo): a
+    # VM do monitoramento que lê o banco quebra do mesmo jeito sem conexão
+    deps_da_fronteira: tuple[DependenciaDeServico, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +123,8 @@ class Escolha:
     servicos: frozenset[str] = frozenset()
     ambiente: str | None = None
     incluir_grupos: frozenset[str] = frozenset()
+    # Só os recursos dos serviços escolhidos, sem as aplicações inteiras que os usam
+    somente_os_servicos: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +194,26 @@ class LigacaoNoEscopo:
     portas: tuple[str, ...]
 
 
+# Sentido da ligação na fronteira do escopo de "só o serviço"
+SAI = "sai"  # o serviço que migra chama o que fica na origem
+ENTRA = "entra"  # o que fica na origem chama o serviço que migra
+
+
+@dataclass(frozen=True, slots=True)
+class LigacaoNaFronteira:
+    """Dependência que o escopo corta: um lado migra, o outro fica na origem.
+
+    ``de`` e ``para`` são "serviço (aplicação)". ``forte``: dados ou encaminhamento,
+    que param a aplicação sem conexão privada entre as nuvens."""
+
+    sentido: str
+    de: str
+    para: str
+    natureza: Natureza
+    portas: tuple[str, ...]
+    forte: bool
+
+
 @dataclass(frozen=True, slots=True)
 class OrdemDoEscopo:
     ordem: int | None
@@ -204,6 +238,8 @@ class PlanoDeMigracao:
     fora_do_plano: tuple[tuple[str, Decimal], ...]
     # Os grupos postos à mão, cada um com o lado (pré ou pós-migração)
     incluidos: tuple[GrupoIncluido, ...] = ()
+    # Só o serviço: as dependências que o recorte corta
+    fronteira: tuple[LigacaoNaFronteira, ...] = ()
 
 
 # ── catálogo ────────────────────────────────────────────────────────────
@@ -221,6 +257,8 @@ def montar_catalogo(
     chave_aplicacao: str | None,
     *,
     servicos_presentes: Mapping[str, Iterable[str]] | None = None,
+    servico_do_recurso: Mapping[str, str] | None = None,
+    deps_da_fronteira: Iterable[DependenciaDeServico] = (),
 ) -> CatalogoDeAplicacoes:
     """``custo_por_unidade``: unidade → serviço → custo. ``sem_unidade``: serviço → custo
     das linhas da fatura que não casaram com nenhuma unidade. ``servicos_presentes``:
@@ -317,6 +355,8 @@ def montar_catalogo(
         recursos_por_unidade=recursos,
         deps_de_servico=deps,
         servicos_presentes=presentes,
+        servico_do_recurso=dict(servico_do_recurso or {}),
+        deps_da_fronteira=tuple(deps_da_fronteira),
     )
 
 
@@ -360,6 +400,8 @@ def fechar_plano(catalogo: CatalogoDeAplicacoes, escolha: Escolha) -> PlanoDeMig
     }
     if escolha.ambiente:
         semente = {x for x in semente if unidades[x].ambiente == escolha.ambiente}
+    if escolha.somente_os_servicos:
+        return _plano_so_dos_servicos(catalogo, escolha, semente, unidades)
 
     grupos = {analise.grupo_de[x] for x in semente if x in analise.grupo_de}
     grupos |= escolha.incluir_grupos
@@ -466,6 +508,13 @@ def fechar_plano(catalogo: CatalogoDeAplicacoes, escolha: Escolha) -> PlanoDeMig
 def _validar(escolha: Escolha, apps: set[str], servicos: set[str], grupos: set[str]) -> None:
     if not escolha.aplicacoes and not escolha.servicos:
         raise EscolhaInvalidaError("escolha ao menos uma aplicação ou um serviço")
+    if escolha.somente_os_servicos and (escolha.aplicacoes or escolha.incluir_grupos):
+        raise EscolhaInvalidaError(
+            "só o serviço migra os serviços escolhidos sozinhos: não combina com aplicação "
+            "nem com grupo incluído (escolha os serviços, ou desligue somente_os_servicos)"
+        )
+    if escolha.somente_os_servicos and not escolha.servicos:
+        raise EscolhaInvalidaError("só o serviço exige ao menos um serviço")
     erros = [
         *(f"aplicação {a!r} não existe nesta análise" for a in sorted(escolha.aplicacoes - apps)),
         *(f"serviço {s!r} não existe nesta análise" for s in sorted(escolha.servicos - servicos)),
@@ -473,6 +522,88 @@ def _validar(escolha: Escolha, apps: set[str], servicos: set[str], grupos: set[s
     ]
     if erros:
         raise EscolhaInvalidaError("; ".join(erros))
+
+
+def _plano_so_dos_servicos(
+    catalogo: CatalogoDeAplicacoes,
+    escolha: Escolha,
+    semente: set[str],
+    unidades: Mapping[str, Unidade],
+) -> PlanoDeMigracao:
+    """Os serviços escolhidos sozinhos, nas unidades que os usam. Nada vai junto: o que
+    o recorte corta fica na fronteira, para a tela e o Terraform dizerem."""
+    custo = catalogo.custo_por_unidade
+    escolhidos = escolha.servicos
+    lados = {
+        (u, s)
+        for u in semente
+        for s in escolhidos
+        if custo.get(u, {}).get(s, _ZERO) > 0
+        or s in catalogo.servicos_presentes.get(u, frozenset())
+    }
+    servicos_escopo: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+    for u, s in lados:
+        servicos_escopo[s] += custo.get(u, {}).get(s, _ZERO)
+
+    def rotulo(unidade: str, servico: str) -> str:
+        return f"{servico} ({_aplicacao_de(unidades[unidade])})"
+
+    dentro: list[DependenciaDeServico] = []
+    cortadas: dict[tuple[str, str, str, Natureza], set[str]] = defaultdict(set)
+    for d in catalogo.deps_da_fronteira or catalogo.deps_de_servico:
+        de, para = (d.unidade_de, d.servico_de), (d.unidade_para, d.servico_para)
+        if de in lados and para in lados:
+            dentro.append(d)
+        elif de in lados or para in lados:
+            sentido = SAI if de in lados else ENTRA
+            chave = (sentido, rotulo(*de), rotulo(*para), d.natureza)
+            cortadas[chave].update(d.portas)
+    fronteira = tuple(
+        LigacaoNaFronteira(
+            sentido=sentido,
+            de=de,
+            para=para,
+            natureza=natureza,
+            portas=tuple(sorted(portas)),
+            forte=natureza in (Natureza.DADOS, Natureza.ENCAMINHAMENTO),
+        )
+        for (sentido, de, para, natureza), portas in sorted(
+            cortadas.items(),
+            key=lambda kv: (
+                kv[0][3] not in (Natureza.DADOS, Natureza.ENCAMINHAMENTO),
+                kv[0][0],
+                kv[0][1],
+                kv[0][2],
+            ),
+        )
+    )
+    ligacoes = tuple(
+        LigacaoNoEscopo(de, para, n, portas)
+        for (de, para), (n, portas, _) in agrupar_por_par(tuple(dentro)).items()
+    )
+    recursos = sum(
+        1
+        for u in semente
+        for chave in unidades[u].recursos
+        if catalogo.servico_do_recurso.get(chave) in escolhidos
+    )
+    sem = {s.nome: s.sem_aplicacao for s in catalogo.servicos}
+    return PlanoDeMigracao(
+        escolha=escolha,
+        unidades=tuple(sorted({u for u, _ in lados})),
+        aplicacoes=tuple(sorted({_aplicacao_de(unidades[u]) for u, _ in lados})),
+        servicos=tuple(sorted(servicos_escopo.items(), key=lambda kv: (-kv[1], kv[0]))),
+        recursos=recursos,
+        custo=sum(servicos_escopo.values(), _ZERO),
+        vao_junto=(),
+        servicos_que_vem_junto=(),
+        antes=(),
+        para_tras=(),
+        ligacoes=ligacoes,
+        ordens=(),
+        fora_do_plano=tuple((s, sem[s]) for s in sorted(escolhidos) if sem.get(s, _ZERO) > 0),
+        fronteira=fronteira,
+    )
 
 
 _VERBO = {
@@ -484,6 +615,25 @@ _VERBO = {
 
 def _verbo(n: Natureza) -> str:
     return _VERBO.get(n, "depende de")
+
+
+def texto_da_fronteira(ligacao: LigacaoNaFronteira) -> str:
+    """O que quebra e o que fazer, pronto para a tela, o README e o aviso do Terraform."""
+    portas = f" ({', '.join(ligacao.portas)})" if ligacao.portas else ""
+    para_sem = "ela para" if ligacao.forte else "a chamada falha"
+    if ligacao.sentido == SAI:
+        return (
+            f"{ligacao.de} migra e {_verbo(ligacao.natureza)} {ligacao.para}, que fica na "
+            f"origem{portas}: sem conexão privada entre as nuvens (VPN ou interconexão), "
+            f"{para_sem}. Libere na origem a entrada a partir da rede do destino e garanta "
+            f"que o endereço de {ligacao.para} resolva no destino."
+        )
+    return (
+        f"{ligacao.de} fica na origem e {_verbo(ligacao.natureza)} {ligacao.para}, que "
+        f"migra{portas}: o endereço de {ligacao.para} muda, e sem conexão privada entre as "
+        f"nuvens {para_sem}. Troque o endereço na configuração de {ligacao.de} e garanta "
+        "que o destino aceite a entrada a partir da rede de origem."
+    )
 
 
 def _motivo(

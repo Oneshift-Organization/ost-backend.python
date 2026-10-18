@@ -181,6 +181,65 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("aws", "cdn_requests", "10k", "0.01"),
     ("azure", "cdn_requests", "10k", "0.009"),
     ("gcp", "cdn_requests", "10k", "0.0075"),
+    # Observabilidade e borda (PLANO_EQUIVALENTES_E_TARIFAS §3), conferidos nas fontes
+    # oficiais em 18/10/2026, primeira faixa paga: AWS Price List bulk (AmazonCloudWatch,
+    # AmazonRoute53, awswaf, AmazonECR, AmazonPrometheus, us-east-1); Azure Retail Prices
+    # (eastus e global); Cloud Billing Catalog (5490-F7B7-8DF6, FA26-5236-B8B5,
+    # E505-1604-58F8, 149C-F9EC-3994, 58CD-E7C3-72CA); OCI cetools (B92593, B88525,
+    # B94277, B94579, B90925).
+    # Ingestão de log por GB: CloudWatch Standard, Log Analytics (Analytics Logs), Cloud
+    # Logging. A OCI cobra o armazenamento (GB-mês, 10 GB grátis), não a ingestão: como
+    # destino, com a retenção padrão dela (30 dias), 1 GB ingerido é 1 GB-mês (premissa
+    # declarada). Como origem, o log da OCI fica ao custo atual (`categoria_por_uso`)
+    ("aws", "logs_ingestion", "gb", "0.50"),
+    ("azure", "logs_ingestion", "gb", "2.30"),
+    ("gcp", "logs_ingestion", "gb", "0.50"),
+    ("oci", "logs_ingestion", "gb", "0.05"),
+    # Camada básica: CloudWatch Infrequent Access, Basic Logs. A GCP e a OCI não têm
+    ("aws", "logs_ingestion_basic", "gb", "0.25"),
+    ("azure", "logs_ingestion_basic", "gb", "0.50"),
+    ("gcp", "logs_ingestion_basic", "gb", "0.50"),
+    ("oci", "logs_ingestion_basic", "gb", "0.05"),
+    # Retenção além da incluída, por GB-mês
+    ("aws", "logs_retention", "gb_month", "0.03"),
+    ("azure", "logs_retention", "gb_month", "0.10"),
+    ("gcp", "logs_retention", "gb_month", "0.01"),
+    ("oci", "logs_retention", "gb_month", "0.05"),
+    # DNS: consulta (US$ 0,40 por milhão; OCI 0,85) e zona-mês (a OCI não cobra zona)
+    ("aws", "dns_queries", "10k", "0.004"),
+    ("azure", "dns_queries", "10k", "0.004"),
+    ("gcp", "dns_queries", "10k", "0.004"),
+    ("oci", "dns_queries", "10k", "0.0085"),
+    ("aws", "dns_zones", "month", "0.50"),
+    ("azure", "dns_zones", "month", "0.50"),
+    ("gcp", "dns_zones", "month", "0.20"),
+    ("oci", "dns_zones", "month", "0"),
+    # WAF: requisição (por milhão: AWS, WAF do Front Door e OCI 0,60; Cloud Armor 0,75),
+    # política-mês e regra-mês (a OCI não cobra regra)
+    ("aws", "waf_requests", "10k", "0.006"),
+    ("azure", "waf_requests", "10k", "0.006"),
+    ("gcp", "waf_requests", "10k", "0.0075"),
+    ("oci", "waf_requests", "10k", "0.006"),
+    ("aws", "waf_policies", "month", "5"),
+    ("azure", "waf_policies", "month", "5"),
+    ("gcp", "waf_policies", "month", "5"),
+    ("oci", "waf_policies", "month", "5"),
+    ("aws", "waf_rules", "month", "1"),
+    ("azure", "waf_rules", "month", "1"),
+    ("gcp", "waf_rules", "month", "1"),
+    ("oci", "waf_rules", "month", "0"),
+    # Imagem de contêiner por GB-mês. O registro da OCI é grátis: a imagem paga o Object
+    # Storage. A taxa diária do ACR fica ao custo atual
+    ("aws", "container_registry_storage", "gb_month", "0.10"),
+    ("azure", "container_registry_storage", "gb_month", "0.10"),
+    ("gcp", "container_registry_storage", "gb_month", "0.10"),
+    ("oci", "container_registry_storage", "gb_month", "0.0255"),
+    # Amostra de Prometheus gerenciado, por 10 mil (AWS 0,90 e GCP 0,60 por 10 milhões;
+    # Azure 0,11). A OCI não tem Prometheus gerenciado: sem linha, fica sem cotação (o
+    # ponto do Monitoring dela custa 1/36 da amostra da AWS e não é o mesmo produto)
+    ("aws", "metric_samples", "10k", "0.0009"),
+    ("azure", "metric_samples", "10k", "0.00011"),
+    ("gcp", "metric_samples", "10k", "0.0006"),
 )
 
 
@@ -199,6 +258,12 @@ _CONFERIDO_EM: dict[tuple[str, str], date] = {
            "database_storage_mysql", "database_storage_postgresql", "database_backup",
            "database_backup_mysql", "database_backup_postgresql", "cache_ate_4gb",
            "cache_de_4_a_10gb", "cache_acima_10gb",
+       )},
+    **{(p, c): date(2026, 10, 18) for p in ("aws", "gcp", "azure", "oci")
+       for c in (
+           "logs_ingestion", "logs_ingestion_basic", "logs_retention", "dns_queries",
+           "dns_zones", "waf_requests", "waf_policies", "waf_rules",
+           "container_registry_storage", "metric_samples",
        )},
 }
 _REDE_CONFERIDA_EM = date(2026, 10, 16)

@@ -144,6 +144,7 @@ async def post_migration_plan(
         servicos=frozenset(corpo.servicos),
         ambiente=corpo.ambiente or None,
         incluir_grupos=frozenset(corpo.incluir_grupos),
+        somente_os_servicos=corpo.somente_os_servicos,
     )
     try:
         cotado = await escopo_de_migracao_uc(session).plano(UUID(user.sub), job_id, escolha)

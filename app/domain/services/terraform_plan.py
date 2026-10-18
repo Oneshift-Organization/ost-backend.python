@@ -36,6 +36,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.domain.services.categoria_por_uso import CHAVE_NO_PAYLOAD as CHAVE_POR_USO
+from app.domain.services.categoria_por_uso import OBSERVABILIDADE_E_BORDA
 from app.domain.services.instance_shape import parse_instance_shape
 
 # Taxas de referência por GB-mês, usadas para voltar de dinheiro para tamanho.
@@ -950,6 +952,12 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "Armazenamento de arquivos (Filestore, EFS, Azure Files, File Storage da OCI) "
             "aparece no custo e não vira disco: o pacote não cria compartilhamento NFS. "
             "Crie o serviço de arquivos do destino à parte e monte nas máquinas."
+        )
+    if any(_decimal(auxiliares.get(CHAVE_POR_USO[c])) for c in OBSERVABILIDADE_E_BORDA):
+        plano.nao_suportado.append(
+            "Logs, DNS, WAF, registro de imagens e métricas aparecem no custo e não viram "
+            "recurso: crie no destino a retenção de log, as zonas de DNS, as regras do WAF e "
+            "o repositório de imagens."
         )
     nao_classificado = auxiliares.get("nao_classificado") or {}
     if _decimal(nao_classificado.get("custo")):

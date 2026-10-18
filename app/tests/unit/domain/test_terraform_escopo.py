@@ -265,3 +265,24 @@ def test_regiao_do_pool_e_do_recurso(
     payload["pools_computacao"][0]["regiao"] = do_pool
     recorte = _recorte(maquinas={}, por_familia={(do_recurso, "C7G"): (1, 2)})
     assert bool(recortar_ao_escopo(payload, recorte)["pools_computacao"]) is casa
+
+
+def test_grupos_de_banco_medidos_ficam_na_quantidade_do_escopo() -> None:
+    """Sem eles o pacote caía num banco genérico, fora da rede nova (18/10)."""
+    payload = _payload()
+    payload["inventario_medido"] = {
+        "armazenamento": {"storage_ssd": {"gb": 999}},
+        "bancos": [
+            {"classe": "db.t4g.small", "motor": "PostgreSQL", "quantidade": 38, "multi_az": True},
+            {"classe": "db.r8g.4xlarge", "motor": "Aurora PostgreSQL", "quantidade": 2},
+        ],
+        "total_bancos": 165,
+    }
+    novo = recortar_ao_escopo(payload, _recorte())
+    # O recorte tem 3 db.t4g.small e nenhum db.r8g.4xlarge; o armazenamento medido sai
+    assert novo["inventario_medido"] == {
+        "bancos": [
+            {"classe": "db.t4g.small", "motor": "PostgreSQL", "quantidade": 3, "multi_az": True}
+        ],
+        "total_bancos": 3,
+    }

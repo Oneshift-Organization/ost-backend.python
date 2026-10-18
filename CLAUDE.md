@@ -45,6 +45,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Lock-in pelo inventário e pela classe no score (V4.4 e V4.5): regra `lock_in_efetivo`, metadata curada pelo nome do DE-PARA, tarefas do `score-7rs-v5` para o autor do #32, curadoria pendente | [`PLANO_SCORE_V5_LOCKIN.md`](PLANO_SCORE_V5_LOCKIN.md) |
 | Ciclo de vida do preço (VIVO → ADUBO, duração de cada estado, agente não revive preço, revitalização por billing, quórum) — P3.0–P3.2 feitos | [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) |
 | Rede por tipo (balanceador, NAT, IP, VPN, tráfego entre zonas, CDN) cotada pela quantidade medida / destino grátis / taxas oficiais / plano de controle do Kubernetes, segredos e chaves (R4) / Cloud Run como serverless | [`PLANO_PRECO_NAO_COMPUTE.md`](PLANO_PRECO_NAO_COMPUTE.md) |
+| Tabela de equivalentes: tipo, portabilidade e risco / logs, DNS, WAF, registro de imagens e métricas cotados pela quantidade / DE-PARA (Functions da Azure, PostgreSQL da OCI) e curadoria | [`PLANO_EQUIVALENTES_E_TARIFAS.md`](PLANO_EQUIVALENTES_E_TARIFAS.md) |
 | Cenários de entrada (Cost Explorer, fatura sem ID, CUR, com ou sem inventário) / custo estimado pelo tipo / diagnóstico de entrada da análise | [`PLANO_CENARIOS_DE_ENTRADA.md`](PLANO_CENARIOS_DE_ENTRADA.md) |
 | Curadoria de nomes de serviço das faturas (fila de sugestões, aprovação pela OneShift, apelido do DE-PARA) | [`docs/endpoints/curadoria.md`](docs/endpoints/curadoria.md) |
 | Mudanças de tela decididas, para o front (premissa 1 vCPU = 1 vCPU, estado da reanálise na lista) | [`PLANO_ALTERACOES_DE_TELA.md`](PLANO_ALTERACOES_DE_TELA.md) |
@@ -182,7 +183,7 @@ existe").
   sobrescreve custo, economia e provedor recomendado da resposta do LLM com o
   cálculo determinístico de `resumo_executivo`. O qualitativo do modelo é
   preservado. Sem isso a resposta da API poderia contradizer a reconciliação.
-- **Seeds têm ordem.** `seed_from_csv` (857 linhas, DE-PARA autoritativo) roda
+- **Seeds têm ordem.** `seed_from_csv` (858 linhas, DE-PARA autoritativo) roda
   **por último** — ver [`docs/dev-setup.md`](docs/dev-setup.md#41-seeds-de-referência--a-ordem-importa).
   Na ordem errada o ambiente novo fica com `service_type` grosseiro.
 - **Gates de integração:** `app/tests/integration/` roda a pipeline inteira sobre
