@@ -196,7 +196,11 @@ print não diz o motor (`InstanceUsage:db.t3.medium`), e a análise não tinha i
   SQL) fica com todos;
 - motor desconhecido: a tela recebe as opções. A análise do print, sem refazer, já mostra
   "Azure SQL Database, Azure Database for MySQL ou Azure Database for PostgreSQL" e
-  "Oracle Database Cloud Service, MySQL Database Service ou OCI Database with PostgreSQL".
+  "Oracle Database Cloud Service, MySQL Database Service ou OCI Database with PostgreSQL";
+- motor pelo inventário: quando a fatura não diz o motor e a análise tem inventário, o
+  motor vem dele. O `inventario-aws.json` real traz o `rds-kitconta-prd` com motor
+  `postgres` (conferido nas análises do develop): a próxima análise dessa fatura com o
+  inventário já sai com o PostgreSQL de cada nuvem.
 
 **Tela de Terraform (front, develop `c357674`):** o diálogo "Gerar Terraform" da aba
 Migração (PR #22, de 18/10) mandava os serviços sem `somente_os_servicos`, e o backend

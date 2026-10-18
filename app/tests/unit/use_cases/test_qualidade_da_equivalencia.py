@@ -24,6 +24,7 @@ from app.use_cases.analysis.equivalence_projection import project_equivalences
 from app.use_cases.analysis.run_analysis_pipeline import (
     _com_qualidade_do_pool,
     _decision_workloads,
+    alvos_pelo_motor_do_inventario,
     build_pipeline_llm_input_payload,
 )
 
@@ -225,3 +226,34 @@ def test_banco_de_motor_conhecido_fica_com_o_equivalente_do_motor() -> None:
 def test_banco_de_motor_desconhecido_mantem_as_opcoes() -> None:
     # A fatura de 18/10 (InstanceUsage:db.t3.medium, sem motor)
     assert len(_alvos(_rds_com_tres_por_destino({"": Decimal(1071)}))) == 6
+
+
+def test_motor_do_inventario_escolhe_o_equivalente_quando_a_fatura_nao_diz() -> None:
+    ctx = _rds_com_tres_por_destino({"": Decimal(1071)})
+    [rds] = _decision_workloads(ctx, identity_rate("USD"))
+    payload: dict[str, Any] = {
+        "decision_workloads": [rds],
+        "topologia": {
+            "detalhe": {
+                # AWS Config escreve o motor do jeito dele; o cache não conta
+                "bancos": [{"classe": "db.t3.medium", "motor": "postgres"}],
+                "bancos_sem_grupo": [{"chave": "c1", "motor": "redis"}],
+            }
+        },
+    }
+    alvos_pelo_motor_do_inventario(payload)
+    assert [t["service_name"] for t in payload["decision_workloads"][0]["targets"]] == [
+        "Azure Database for PostgreSQL",
+        "OCI Database with PostgreSQL",
+        "Cloud SQL",
+    ]
+    # A qualidade calculada antes continua na metadata do destino
+    assert payload["decision_workloads"][0]["targets"][0]["metadata"]["equivalence_type"]
+
+
+def test_sem_banco_no_inventario_nada_muda() -> None:
+    ctx = _rds_com_tres_por_destino({"": Decimal(1071)})
+    [rds] = _decision_workloads(ctx, identity_rate("USD"))
+    payload: dict[str, Any] = {"decision_workloads": [rds], "topologia": {"detalhe": {}}}
+    alvos_pelo_motor_do_inventario(payload)
+    assert len(payload["decision_workloads"][0]["targets"]) == 6

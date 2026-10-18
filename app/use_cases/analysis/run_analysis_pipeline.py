@@ -539,6 +539,19 @@ def _motores(ctx: Any) -> frozenset[str] | None:
     )
 
 
+def alvos_pelo_motor_do_inventario(payload: dict[str, Any]) -> None:
+    """O inventário diz o motor de cada banco mesmo quando a fatura não diz (fatura sem
+    ID, `InstanceUsage:db.t3.medium`): o banco relacional fica com o equivalente dele."""
+    detalhe = (payload.get("topologia") or {}).get("detalhe") or {}
+    bancos = [*(detalhe.get("bancos") or []), *(detalhe.get("bancos_sem_grupo") or [])]
+    motores = motores_da_conta({}, (b.get("motor") for b in bancos))
+    if not motores:
+        return
+    for workload in payload.get("decision_workloads") or []:
+        if workload.get("service_type") in _RELACIONAL:
+            workload["targets"] = [dict(a) for a in alvos_do_motor(workload["targets"], motores)]
+
+
 def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
     """Persist catalog evidence before the model can reinterpret any of it."""
     out = []
@@ -869,6 +882,7 @@ class RunAnalysisPipelineUseCase:
                     ctx=ctx,
                     converter=conversor_da_analise(ctx),
                 )
+                alvos_pelo_motor_do_inventario(llm_input)
 
             llm_input = prepare_decision_payload(llm_input)
             ui_report = await self._orchestrator.generate_report(
