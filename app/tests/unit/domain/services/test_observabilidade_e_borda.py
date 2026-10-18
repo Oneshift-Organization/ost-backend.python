@@ -57,7 +57,8 @@ def _categoria(provedor: str, servico: str, uso: str) -> str:
         ("gcp", "Cloud Logging", "Log Storage cost", LOGS_INGESTAO),
         ("gcp", "Cloud Logging", "Vended Logs Storage", LOGS_INGESTAO_BASICA),
         ("gcp", "Cloud Logging", "Log Retention cost", LOGS_RETENCAO),
-        ("oci", "LOGGING", "OCI - Logging - Storage", LOGS_INGESTAO),
+        # A OCI cobra o armazenamento do log: como origem, fica ao custo atual
+        ("oci", "LOGGING", "Logging - Log Storage", LOGS_OUTROS),
         # DNS: consulta e zona; a consulta interna da AWS (grátis) fica
         ("aws", "AmazonRoute53", "DNS-Queries", DNS_CONSULTAS),
         ("aws", "Amazon Route 53", "HostedZone", DNS_ZONAS),
@@ -67,6 +68,7 @@ def _categoria(provedor: str, servico: str, uso: str) -> str:
         ("gcp", "Cloud DNS", "DNS Query (port 53)", DNS_CONSULTAS),
         ("gcp", "Cloud DNS", "ManagedZone", DNS_ZONAS),
         ("oci", "DNS", "Networking - DNS", DNS_CONSULTAS),
+        ("oci", "DNS", "DNS - Queries", DNS_CONSULTAS),
         # WAF: requisição, política e regra; Bot Control é complemento e fica
         ("aws", "AWS WAF", "USE1-RequestV2-Tier1", WAF_REQUISICOES),
         ("aws", "awswaf", "USE1-ShieldProtected-RequestV2-Tier6-4000WCU", WAF_REQUISICOES),
@@ -92,7 +94,8 @@ def _categoria(provedor: str, servico: str, uso: str) -> str:
          METRICAS),
         ("gcp", "Cloud Monitoring", "Prometheus Samples Ingested", METRICAS),
         ("gcp", "Cloud Monitoring", "Time series billed count", METRICAS_OUTROS),
-        ("oci", "MONITORING", "Monitoring - Ingestion", METRICAS),
+        # O ponto do Monitoring da OCI não é amostra de Prometheus
+        ("oci", "MONITORING", "Monitoring - Ingestion", METRICAS_OUTROS),
     ],
 )
 def test_categoria_de_cada_linha(provedor, servico, uso, esperado):
@@ -133,10 +136,10 @@ def test_linha_de_fora_nao_muda_de_balde(provedor, servico, uso):
         # GCP: contagem vira 10 mil
         ("gcp", "Cloud DNS", "DNS Query (port 53)", ("30000", "count"), "3"),
         ("gcp", "Artifact Registry", "Artifact Registry Storage", ("12", "gibibyte month"), "12"),
-        # OCI: o GB-mês do log vale como GB ingerido
-        ("oci", "LOGGING", "OCI - Logging - Storage", ("120", "Gigabyte Log Storage Per Month"),
-         "120"),
+        # OCI: a escala vem no rótulo
         ("oci", "DNS", "Networking - DNS", ("3", "1,000,000 Queries"), "300"),
+        ("oci", "DNS", "DNS - Queries", ("4701.7", "Million Requests"), "470170"),
+        ("oci", "WAF", "Web Application Firewall - Instance", ("1", "Instance Months"), "1"),
         # Unidade de outra dimensão: sem quantidade (cai na razão de taxas)
         ("gcp", "Cloud Logging", "Log Retention cost", ("5", "gibibyte"), None),
     ],
