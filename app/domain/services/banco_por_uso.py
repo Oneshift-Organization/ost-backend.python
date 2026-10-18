@@ -25,8 +25,11 @@ Módulo puro, sem I/O.
 from __future__ import annotations
 
 import re
+from collections import defaultdict
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.domain.services.instance_shape import parse_instance_shape
 from app.domain.services.memoria_de_cache import MEMORIA_DO_NO_GIB
@@ -146,6 +149,52 @@ def motor(provedor: str, servico: str | None, uso: str | None, declarado: str | 
     if "mysql" in texto or "mariadb" in texto:
         return MYSQL
     return None
+
+
+# Motor de cache não é banco relacional: fica fora da escolha do equivalente
+_CACHE_NO_MOTOR = ("redis", "memcached", "valkey")
+_NOME_DO_MOTOR = {
+    POSTGRESQL: re.compile(r"postgres", re.IGNORECASE),
+    MYSQL: re.compile(r"mysql|mariadb", re.IGNORECASE),
+}
+
+
+def motores_da_conta(
+    pesos: Mapping[str, Decimal], medidos: Iterable[str | None]
+) -> frozenset[str] | None:
+    """Os motores relacionais da conta, ou None quando algum é desconhecido.
+
+    O export detalhado (instância a instância, ``medidos``) vence; sem ele, o peso por
+    motor que a agregação mediu na fatura, e só quando todo ele tem motor (a chave vazia
+    é o banco sem motor conhecido)."""
+    relacionais = [m for m in medidos if not any(c in (m or "").lower() for c in _CACHE_NO_MOTOR)]
+    if relacionais:
+        motores = {motor("", None, None, m) for m in relacionais}
+        return None if None in motores else frozenset(m for m in motores if m)
+    conhecidos = {m for m, peso in pesos.items() if peso > 0}
+    if not conhecidos or "" in conhecidos:
+        return None
+    return frozenset(conhecidos)
+
+
+def alvos_do_motor(
+    alvos: Sequence[Mapping[str, Any]], motores: frozenset[str]
+) -> list[Mapping[str, Any]]:
+    """Por destino, só os equivalentes dos motores da conta (o RDS PostgreSQL vira o
+    PostgreSQL da Azure, não o SQL Database). Destino sem nenhum do motor no nome (o
+    Cloud SQL serve aos dois) fica com todos."""
+    por_destino: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for alvo in alvos:
+        por_destino[str(alvo.get("provider") or "").lower()].append(alvo)
+    saida: list[Mapping[str, Any]] = []
+    for do_destino in por_destino.values():
+        do_motor = [
+            a
+            for a in do_destino
+            if any(_NOME_DO_MOTOR[m].search(str(a.get("service_name") or "")) for m in motores)
+        ]
+        saida += do_motor or do_destino
+    return saida
 
 
 def fator_ha(provedor: str, motor_: str | None) -> Decimal:

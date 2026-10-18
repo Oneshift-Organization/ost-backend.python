@@ -244,6 +244,7 @@ def _linha(
         _, lock = technical_evidence(workload, None)
         nivel = lock if lock in _ORDEM else None
         alvos = unique_targets(workload)
+        alternativas = _alternativas_por_destino(workload)
         for provedor in cenarios:
             alvo = alvos.get(provedor)
             refatora, lock = technical_evidence(workload, alvo) if alvo else (None, None)
@@ -253,7 +254,9 @@ def _linha(
             por_destino[provedor] = lock if lock in _ORDEM else None
             refatoracao[provedor] = refatora
             equivalentes[provedor] = (
-                str(alvo["service_name"]) if alvo and alvo.get("service_name") else None
+                str(alvo["service_name"])
+                if alvo and alvo.get("service_name")
+                else _ou(alternativas.get(provedor, []))
             )
     migracao = workload.get("migration") or {}
 
@@ -301,6 +304,27 @@ def _linha(
 
 def _texto(valor: object) -> str | None:
     return str(valor) if valor else None
+
+
+def _alternativas_por_destino(workload: Mapping[str, Any]) -> dict[str, list[str]]:
+    """Os equivalentes de cada destino, na ordem do catálogo, sem repetir."""
+    nomes: dict[str, list[str]] = {}
+    for alvo in workload.get("targets") or []:
+        nome = str(alvo.get("service_name") or "")
+        lista = nomes.setdefault(normalized(alvo.get("provider")), [])
+        if nome and nome not in lista:
+            lista.append(nome)
+    return nomes
+
+
+def _ou(nomes: Sequence[str]) -> str | None:
+    """Mais de um equivalente no destino (o motor do banco não é conhecido): os nomes,
+    e não "não mapeado". O serviço está mapeado; falta escolher entre as opções."""
+    if not nomes:
+        return None
+    if len(nomes) == 1:
+        return nomes[0]
+    return f"{', '.join(nomes[:-1])} ou {nomes[-1]}"
 
 
 def _sugestoes_de_dependencia(dependencias: Any) -> tuple[Sugestao, ...]:

@@ -17,6 +17,7 @@ from app.domain.repositories.i_billing_report_repo import IBillingReportReposito
 from app.domain.repositories.i_cloud_price_point_repo import ICloudPricePointRepository
 from app.domain.repositories.i_cloud_sku_repo import ICloudSkuRepository
 from app.domain.repositories.i_exchange_rate_repo import IExchangeRateRepository
+from app.domain.services.banco_por_uso import alvos_do_motor, motores_da_conta
 from app.domain.services.categoria_por_uso import CHAVE_NO_PAYLOAD as CHAVE_POR_USO
 from app.domain.services.currency import FxRate, convert, identity_rate
 from app.domain.services.migration_strategy import technical_evidence
@@ -525,9 +526,23 @@ def build_pipeline_llm_input_payload(
     return prepare_decision_payload(context_payload), missing_equiv_ids
 
 
+# O banco relacional escolhe o equivalente pelo motor da conta, quando ele é conhecido
+_RELACIONAL = frozenset({"managed_relational_database", "relational_database"})
+
+
+def _motores(ctx: Any) -> frozenset[str] | None:
+    auxiliar = getattr(ctx, "auxiliary", None)
+    inventario = getattr(ctx, "inventario", None)
+    return motores_da_conta(
+        getattr(auxiliar, "banco_por_motor", None) or {},
+        (b.motor for b in getattr(inventario, "bancos", ()) or ()),
+    )
+
+
 def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
     """Persist catalog evidence before the model can reinterpret any of it."""
     out = []
+    motores = _motores(ctx)
     for category in getattr(ctx, "categories", []) or []:
         for service in category.services:
             workload = {
@@ -540,18 +555,18 @@ def _decision_workloads(ctx, fx: FxRate) -> list[dict]:
                 "type_source": getattr(service, "type_source", "inferido"),
                 "evidence_source": "catalog_snapshot",
             }
-            workload["targets"] = [
-                _com_qualidade(
-                    workload,
-                    {
-                        "provider": normalize_provider(eq.provider),
-                        "service_name": eq.service_name,
-                        "service_type": eq.service_type,
-                        "metadata": eq.metadata or {},
-                    },
-                )
+            alvos = [
+                {
+                    "provider": normalize_provider(eq.provider),
+                    "service_name": eq.service_name,
+                    "service_type": eq.service_type,
+                    "metadata": eq.metadata or {},
+                }
                 for eq in service.equivalents
             ]
+            if motores and service.service_type in _RELACIONAL:
+                alvos = [dict(a) for a in alvos_do_motor(alvos, motores)]
+            workload["targets"] = [_com_qualidade(workload, alvo) for alvo in alvos]
             out.append(workload)
     return out
 

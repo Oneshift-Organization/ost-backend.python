@@ -19,9 +19,11 @@ from app.domain.services.banco_por_uso import (
     OUTROS,
     POSTGRESQL,
     SEM_EQUIVALENTE,
+    alvos_do_motor,
     copias_do_storage,
     fator_ha,
     motor,
+    motores_da_conta,
     parte_do_banco,
     vcpu_horas,
 )
@@ -230,3 +232,39 @@ def test_alta_disponibilidade_por_nuvem_e_motor() -> None:
     assert copias_do_storage("oci", POSTGRESQL, True) == D(1)
     assert copias_do_storage("azure", POSTGRESQL, True) == D(2)
     assert copias_do_storage("oci", MYSQL, False) == D(1)
+
+
+# ── equivalente pelo motor (18/10) ──────────────────────────────────────
+
+_ALVOS = [
+    {"provider": "azure", "service_name": "Azure SQL Database"},
+    {"provider": "azure", "service_name": "Azure Database for MySQL"},
+    {"provider": "azure", "service_name": "Azure Database for PostgreSQL"},
+    {"provider": "oci", "service_name": "Oracle Database Cloud Service"},
+    {"provider": "oci", "service_name": "MySQL Database Service"},
+    {"provider": "oci", "service_name": "OCI Database with PostgreSQL"},
+    {"provider": "gcp", "service_name": "Cloud SQL"},
+]
+
+
+def test_motores_da_conta_pelo_export_detalhado_ou_pela_fatura() -> None:
+    # Export detalhado: cada instância diz o motor; o cache não conta
+    assert motores_da_conta({}, ["PostgreSQL", "Aurora PostgreSQL", "Redis"]) == frozenset(
+        {"postgresql"}
+    )
+    assert motores_da_conta({}, ["PostgreSQL", "MySQL"]) == frozenset({"postgresql", "mysql"})
+    # Uma instância de motor desconhecido (Oracle, SQL Server) deixa a conta sem escolha
+    assert motores_da_conta({}, ["PostgreSQL", "oracle-ee"]) is None
+    # Só a fatura: o peso medido, e só quando todo ele tem motor
+    assert motores_da_conta({"postgresql": Decimal(10)}, []) == frozenset({"postgresql"})
+    assert motores_da_conta({"postgresql": Decimal(10), "": Decimal(5)}, []) is None
+    assert motores_da_conta({"": Decimal(1071)}, []) is None
+    assert motores_da_conta({}, []) is None
+
+
+def test_alvos_do_motor_escolhe_o_equivalente_do_motor_em_cada_destino() -> None:
+    nomes = [a["service_name"] for a in alvos_do_motor(_ALVOS, frozenset({"postgresql"}))]
+    assert nomes == ["Azure Database for PostgreSQL", "OCI Database with PostgreSQL", "Cloud SQL"]
+    nomes = [a["service_name"] for a in alvos_do_motor(_ALVOS, frozenset({"postgresql", "mysql"}))]
+    assert "Azure SQL Database" not in nomes and "Oracle Database Cloud Service" not in nomes
+    assert "Azure Database for MySQL" in nomes and "Azure Database for PostgreSQL" in nomes
