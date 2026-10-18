@@ -183,7 +183,7 @@ existe").
   sobrescreve custo, economia e provedor recomendado da resposta do LLM com o
   cálculo determinístico de `resumo_executivo`. O qualitativo do modelo é
   preservado. Sem isso a resposta da API poderia contradizer a reconciliação.
-- **Seeds têm ordem.** `seed_from_csv` (858 linhas, DE-PARA autoritativo) roda
+- **Seeds têm ordem.** `seed_from_csv` (860 linhas, DE-PARA autoritativo) roda
   **por último** — ver [`docs/dev-setup.md`](docs/dev-setup.md#41-seeds-de-referência--a-ordem-importa).
   Na ordem errada o ambiente novo fica com `service_type` grosseiro.
 - **Gates de integração:** `app/tests/integration/` roda a pipeline inteira sobre

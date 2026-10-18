@@ -36,6 +36,14 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 
+from app.domain.services.banco_por_uso import (
+    MOTORES_ABERTOS,
+    MYSQL,
+    ORACLE,
+    POSTGRESQL,
+    SQL_SERVER,
+    motor_do_nome,
+)
 from app.domain.services.decision_support import (
     UNCLASSIFIED,
     all_workloads,
@@ -86,6 +94,33 @@ class PoolDoServico:
     sugestoes: tuple[Sugestao, ...]
 
 
+# Como o preço da opção foi obtido (PLANO_EQUIVALENTES_E_TARIFAS §6)
+PELO_MOTOR = "motor"  # o banco do serviço cotado no motor da opção
+DO_SERVICO = "servico"  # o preço do serviço no destino, o mesmo para todas as opções
+SEM_COTACAO = "sem_cotacao"
+
+_RELACIONAL = frozenset({"managed_relational_database", "relational_database"})
+_ROTULO_DO_MOTOR = {
+    MYSQL: "MySQL",
+    POSTGRESQL: "PostgreSQL",
+    ORACLE: "Oracle",
+    SQL_SERVER: "SQL Server",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class OpcaoNoDestino:
+    """Um equivalente do destino, com o preço dele."""
+
+    servico: str
+    motor: str | None  # mysql | postgresql | oracle | sqlserver; None fora do banco
+    custo_estimado: Decimal | None
+    cotacao: str  # PELO_MOTOR | DO_SERVICO | SEM_COTACAO
+    # O preço desta opção é o que entrou no total do destino
+    no_total: bool
+    motivo: str | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class AcoplamentoDeServico:
     id: str
@@ -115,6 +150,18 @@ class AcoplamentoDeServico:
     # Do catálogo: classe 7R de partida (rehost, replatform, refactor) e esforço.
     classe_migracao: str | None = None
     esforco: str | None = None
+    # Cada equivalente de cada destino com o preço dele: o banco, pelo motor da opção
+    opcoes_por_destino: Mapping[str, tuple[OpcaoNoDestino, ...]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class _Banco:
+    """A categoria de banco da análise: custo na origem, a parte de cada serviço nela e,
+    por destino, a cotação usada no total e a de cada motor aberto."""
+
+    custo: Decimal | None
+    partes: Mapping[str, Any]
+    cotacoes: Mapping[str, tuple[Decimal, Mapping[str, Decimal]]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +201,12 @@ class AcoplamentoPorServico:
     eixo_de_dependencia: bool = False
 
 
-def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPorServico:
+def montar_acoplamento_por_servico(
+    payload: Mapping[str, Any],
+    precos: Mapping[tuple[str, str], Decimal] | None = None,
+) -> AcoplamentoPorServico:
+    """`precos`: o preço de cada serviço em cada destino, (nome, destino) → valor, da
+    tabela de equivalentes; sem ele as opções saem sem preço."""
     if "decision_workloads" not in payload and "workloads" not in payload:
         raise PayloadSemServicosError(
             "a análise não tem a lista de serviços (decision_workloads); gere a análise de novo"
@@ -173,9 +225,19 @@ def montar_acoplamento_por_servico(payload: Mapping[str, Any]) -> AcoplamentoPor
         "score-7rs-v4.2",
     }
     estimado = any(e.get("cost_estimated") for e in inventory_services(dados).values())
+    banco = _banco(dados)
 
     linhas = [
-        _linha(w, cenarios, custo_atual, por_servico, policy_v4=policy_v4, estimado=estimado)
+        _linha(
+            w,
+            cenarios,
+            custo_atual,
+            por_servico,
+            policy_v4=policy_v4,
+            estimado=estimado,
+            precos=precos or {},
+            banco=banco,
+        )
         for w in all_workloads(dados)
         if _listado(w)
     ]
@@ -228,6 +290,8 @@ def _linha(
     *,
     policy_v4: bool = False,
     estimado: bool = False,
+    precos: Mapping[tuple[str, str], Decimal] | None = None,
+    banco: _Banco | None = None,
 ) -> AcoplamentoDeServico:
     nome = str(workload.get("name") or "Serviço não identificado")
     categoria = normalized(workload.get("category"))
@@ -238,6 +302,7 @@ def _linha(
     por_destino: dict[str, str | None] = {}
     equivalentes: dict[str, str | None] = {}
     refatoracao: dict[str, bool | None] = {}
+    opcoes: dict[str, tuple[OpcaoNoDestino, ...]] = {}
     if no_score:
         # Sem destino, `technical_evidence` devolve exatamente o lado da origem:
         # é o ponto de partida do score, e o inferido sai desconhecido como lá.
@@ -257,6 +322,13 @@ def _linha(
                 str(alvo["service_name"])
                 if alvo and alvo.get("service_name")
                 else _ou(alternativas.get(provedor, []))
+            )
+            opcoes[provedor] = _opcoes(
+                workload,
+                alternativas.get(provedor, []),
+                provedor,
+                (precos or {}).get((nome, provedor)),
+                banco or _Banco(custo=None, partes={}, cotacoes={}),
             )
     migracao = workload.get("migration") or {}
 
@@ -299,11 +371,110 @@ def _linha(
         refatoracao_por_destino=refatoracao,
         classe_migracao=_texto(migracao.get("classe_migracao")) if no_score else None,
         esforco=_texto(migracao.get("esforco")) if no_score else None,
+        opcoes_por_destino=opcoes,
     )
 
 
 def _texto(valor: object) -> str | None:
     return str(valor) if valor else None
+
+
+# ── opções de cada destino, com preço (PLANO_EQUIVALENTES_E_TARIFAS §6) ──────
+
+
+def _banco(dados: Mapping[str, Any]) -> _Banco:
+    auxiliar = dados.get("custos_auxiliares") or {}
+    cotacoes: dict[str, tuple[Decimal, Mapping[str, Decimal]]] = {}
+    for cotacao in auxiliar.get("equivalentes_banco_dados") or []:
+        usada = number(cotacao.get("custo_mensal_estimado"))
+        por_motor = {
+            m: valor
+            for m, bruto in (cotacao.get("por_motor") or {}).items()
+            if (valor := number(bruto)) is not None
+        }
+        if usada is not None and por_motor:
+            cotacoes[_provedor(cotacao.get("provedor"))] = (usada, por_motor)
+    return _Banco(
+        custo=number(auxiliar.get("banco_dados")),
+        partes=(auxiliar.get("por_servico") or {}).get("banco_dados") or {},
+        cotacoes=cotacoes,
+    )
+
+
+def _opcoes(
+    workload: Mapping[str, Any],
+    nomes: Sequence[str],
+    provedor: str,
+    preco: Decimal | None,
+    banco: _Banco,
+) -> tuple[OpcaoNoDestino, ...]:
+    """Fora do banco, ou sem a cotação por motor (análise antiga), cada opção leva o preço
+    do serviço. No banco, o motor da opção: o serviço que serve aos dois motores abertos
+    vira uma opção por motor; Oracle e SQL Server ficam sem cotação, salvo quando são a
+    única opção do destino (aí vale o preço do serviço)."""
+    relacional = workload.get("service_type") in _RELACIONAL
+    if not relacional or provedor not in banco.cotacoes:
+        return tuple(
+            OpcaoNoDestino(
+                servico=n,
+                motor=motor_do_nome(n) if relacional else None,
+                custo_estimado=preco,
+                cotacao=DO_SERVICO if preco is not None else SEM_COTACAO,
+                no_total=preco is not None and len(nomes) == 1,
+            )
+            for n in nomes
+        )
+    nome = str(workload.get("name") or "")
+    opcoes: list[OpcaoNoDestino] = []
+    for n in nomes:
+        motor_ = motor_do_nome(n)
+        if motor_ is not None and motor_ not in MOTORES_ABERTOS:
+            opcoes.append(
+                OpcaoNoDestino(n, motor_, preco, DO_SERVICO, no_total=preco is not None)
+                if len(nomes) == 1
+                else OpcaoNoDestino(
+                    n,
+                    motor_,
+                    None,
+                    SEM_COTACAO,
+                    no_total=False,
+                    motivo=f"O catálogo não tem tarifa do motor {_ROTULO_DO_MOTOR[motor_]}.",
+                )
+            )
+            continue
+        for aberto in [motor_] if motor_ else MOTORES_ABERTOS:
+            custo = _preco_no_motor(banco, nome, provedor, preco, aberto)
+            opcoes.append(
+                OpcaoNoDestino(
+                    n,
+                    aberto,
+                    custo,
+                    PELO_MOTOR if custo is not None else SEM_COTACAO,
+                    no_total=custo is not None
+                    and preco is not None
+                    and abs(custo - preco) <= _CENTAVO,
+                )
+            )
+    return tuple(opcoes)
+
+
+def _preco_no_motor(
+    banco: _Banco, nome: str, provedor: str, preco: Decimal | None, motor_: str
+) -> Decimal | None:
+    """O preço do serviço no destino com a parte dele no banco cotada no motor dado. Sem a
+    parte do serviço na categoria, pela razão entre as cotações."""
+    cotacao = banco.cotacoes.get(provedor)
+    if preco is None or cotacao is None or motor_ not in cotacao[1]:
+        return None
+    usada, por_motor = cotacao
+    parte = number(banco.partes.get(nome))
+    if parte is not None and banco.custo:
+        novo = preco + parte / banco.custo * (por_motor[motor_] - usada)
+    elif usada > 0:
+        novo = preco * por_motor[motor_] / usada
+    else:
+        return None
+    return max(novo, _ZERO).quantize(_CENTAVO)
 
 
 def _alternativas_por_destino(workload: Mapping[str, Any]) -> dict[str, list[str]]:

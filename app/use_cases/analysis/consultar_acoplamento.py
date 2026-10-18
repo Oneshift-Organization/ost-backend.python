@@ -6,7 +6,8 @@ também as análises feitas antes desta visão existir. Não chama LLM e não gr
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -18,7 +19,9 @@ from app.domain.services.acoplamento_por_servico import (
     PayloadSemServicosError,
     montar_acoplamento_por_servico,
 )
+from app.domain.services.decision_support import number
 from app.use_cases.agent.consultar_envios import ConsultarEnviosUseCase
+from app.use_cases.analysis.equivalence_projection import project_equivalences
 
 
 class AnaliseNaoConcluidaError(ConflictError):
@@ -48,7 +51,9 @@ class ConsultarAcoplamentoUseCase:
             raise AnaliseNaoConcluidaError(
                 f"a análise {job_id} ainda não foi concluída (status {job.status})"
             )
-        return _montar(job.llm_input_payload)
+        # O preço das opções é o da tabela de equivalentes gravada, a mesma que a tela mostra
+        linhas = (job.ai_structured_output or {}).get("cross_cloud_equivalents")
+        return _montar(job.llm_input_payload, linhas)
 
     async def do_envio(self, user_id: UUID, submission_id: UUID) -> AcoplamentoPorServico:
         encontrado = await self._envios.obter(user_id, submission_id)
@@ -58,8 +63,26 @@ class ConsultarAcoplamentoUseCase:
         return _montar(snapshot.payload)
 
 
-def _montar(payload: Mapping[str, Any]) -> AcoplamentoPorServico:
+def _montar(
+    payload: Mapping[str, Any], linhas: Iterable[Mapping[str, Any]] | None = None
+) -> AcoplamentoPorServico:
     try:
-        return montar_acoplamento_por_servico(payload)
+        if linhas is None:
+            linhas = [r.model_dump() for r in project_equivalences(dict(payload))]
+        return montar_acoplamento_por_servico(payload, precos_por_servico(linhas))
     except PayloadSemServicosError as e:
         raise AnaliseSemServicosError(str(e)) from e
+
+
+def precos_por_servico(linhas: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], Decimal]:
+    """(serviço, destino) → o preço que entrou no total. As alternativas de um destino
+    dividem o mesmo orçamento: só a linha marcada conta; tabela antiga, sem a marca, a
+    primeira com preço."""
+    precos: dict[tuple[str, str], Decimal] = {}
+    for linha in linhas:
+        custo = number(linha.get("estimated_monthly_cost"))
+        if custo is None or linha.get("included_in_estimate") is False:
+            continue
+        chave = (str(linha.get("workload") or ""), str(linha.get("target_provider") or "").lower())
+        precos.setdefault(chave, custo)
+    return precos

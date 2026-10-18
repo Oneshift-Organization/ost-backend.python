@@ -176,6 +176,19 @@ def test_o_modelo_nao_recebe_os_campos_do_pool():
     assert payload["pools_computacao"][0]["equivalentes"][0]["metadados"]
 
 
+def test_o_modelo_nao_recebe_o_banco_cotado_por_motor():
+    cotacao = {"provedor": "OCI", "custo_mensal_estimado": 55.98, "por_motor": {"mysql": 41.81}}
+    payload: dict[str, Any] = {
+        "custos_auxiliares": {"equivalentes_banco_dados": [cotacao]},
+        "decision_support": {"provider_scores": [], "workload_strategies": []},
+    }
+    enviado = _compact_decision_payload(payload)
+    assert enviado["custos_auxiliares"]["equivalentes_banco_dados"] == [
+        {"provedor": "OCI", "custo_mensal_estimado": 55.98}
+    ]
+    assert cotacao["por_motor"] == {"mysql": 41.81}
+
+
 def _rds_com_tres_por_destino(motores: dict[str, Decimal], medidos: tuple[str, ...] = ()) -> Any:
     alvos = [
         EquivalentService(

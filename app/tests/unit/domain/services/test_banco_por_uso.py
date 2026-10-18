@@ -23,8 +23,10 @@ from app.domain.services.banco_por_uso import (
     copias_do_storage,
     fator_ha,
     motor,
+    motor_do_nome,
     motores_da_conta,
     parte_do_banco,
+    pesos_no_motor,
     vcpu_horas,
 )
 
@@ -268,3 +270,29 @@ def test_alvos_do_motor_escolhe_o_equivalente_do_motor_em_cada_destino() -> None
     nomes = [a["service_name"] for a in alvos_do_motor(_ALVOS, frozenset({"postgresql", "mysql"}))]
     assert "Azure SQL Database" not in nomes and "Oracle Database Cloud Service" not in nomes
     assert "Azure Database for MySQL" in nomes and "Azure Database for PostgreSQL" in nomes
+
+
+@pytest.mark.parametrize(
+    ("nome", "esperado"),
+    [
+        ("OCI Database with PostgreSQL", POSTGRESQL),
+        ("Azure Database for MySQL", MYSQL),
+        ("Oracle MySQL HeatWave", MYSQL),
+        ("Oracle Database Cloud Service", "oracle"),
+        ("Autonomous Database", "oracle"),
+        ("Azure SQL Database", "sqlserver"),
+        ("Azure SQL Managed Instance", "sqlserver"),
+        ("Cloud SQL", None),
+        ("Amazon RDS", None),
+        ("Amazon Aurora", None),
+    ],
+)
+def test_motor_do_nome_do_equivalente(nome: str, esperado: str | None) -> None:
+    assert motor_do_nome(nome) == esperado
+
+
+def test_pesos_no_motor_mantem_a_alta_disponibilidade() -> None:
+    pesos = {"": Decimal(10), "mysql:ha": Decimal(30), "postgresql": Decimal(5)}
+    assert pesos_no_motor(pesos, MYSQL) == {"mysql": Decimal(15), "mysql:ha": Decimal(30)}
+    # Sem peso medido: uma instância simples do motor
+    assert pesos_no_motor({}, POSTGRESQL) == {"postgresql": Decimal(1)}

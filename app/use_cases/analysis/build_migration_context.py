@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from functools import partial
 from typing import Any
 from uuid import UUID
 
@@ -48,6 +49,7 @@ from app.domain.services.banco_por_uso import (
     fator_ha,
     ler_chave_da_parte,
     ler_chave_do_motor,
+    pesos_no_motor,
 )
 from app.domain.services.banco_por_uso import CATEGORIA as CATEGORIA_BANCO
 from app.domain.services.banco_por_uso import UNIDADE as UNIDADE_DO_BANCO
@@ -132,6 +134,13 @@ def _reviewed_billing_identity(item, provider: str):
     return item
 
 
+# Serviço com mais de uma linha no DE-PARA, quando o classificador não indica o tipo: sem
+# isto vence a primeira em ordem alfabética. O Cosmos DB é banco de documentos, não SQL
+# distribuído, que a OCI não tem (PLANO_EQUIVALENTES_E_TARIFAS §7)
+TIPO_PREFERIDO: dict[str, dict[str, str]] = {
+    "azure": {"Azure Cosmos DB": "document_nosql"},
+}
+
 PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
     "aws": {
         "EC2-Instances": "Amazon EC2",
@@ -208,6 +217,7 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         "NAT Gateway": "Azure NAT Gateway",
         "VPN Gateway": "Azure VPN Gateway",
         "Content Delivery Network": "Azure CDN",
+        "Application Gateway": "Azure Application Gateway",
     },
     # Descrição do serviço (Cost Table, BigQuery). "Networking" fica de fora: é
     # balanceador, NAT, IP ou VPN, e o classificador decide pelo SKU.
@@ -785,9 +795,11 @@ class BuildMigrationContextUseCase:
             # sugeriu; senão a primeira em ordem determinística.
             candidates = canonicals_squashed.get(service_key(source_provider, name))
             if candidates:
-                if hint_type:
-                    for cand in candidates:
-                        if cand.service_type == hint_type:
+                # Sem o tipo do classificador, o tipo curado
+                curado = TIPO_PREFERIDO.get(source_provider, {}).get(name)
+                for preferido in (hint_type, curado):
+                    for cand in candidates if preferido else ():
+                        if cand.service_type == preferido:
                             return cand
                 return candidates[0]
             return None
@@ -1207,6 +1219,11 @@ class BuildMigrationContextUseCase:
                     p.provider.lower() for p in rate_points if p.confidence == "official"
                 }
                 cotadas: list[tuple[Any, dict[str, CategoryRate], list[Any], Decimal]] = []
+                # Banco: a cotação em cada motor aberto, o preço de cada opção do destino
+                # (PLANO_EQUIVALENTES_E_TARIFAS §6). O total segue a mistura medida
+                por_motor_no_destino: dict[str, dict[str, Decimal]] = defaultdict(
+                    lambda: defaultdict(Decimal)
+                )
                 for parte in partes:
                     rates = _taxas_por_provedor(
                         rate_points,
@@ -1233,25 +1250,29 @@ class BuildMigrationContextUseCase:
                     medido_da_parte = convert(parte.custo_medido, fx) or Decimal("0")
                     da_parte: list[CategoryEquivalent]
                     if e_banco:
-                        rates = _misturar_motores(
-                            rates,
-                            {
-                                m: _taxas_da_parte(
-                                    pontos_banco.get(c, []), c, parte, source_provider
-                                )
-                                for m, c in CATEGORIA_DO_MOTOR.items()
-                            },
-                            pesos_motor,
-                        )
-                        da_parte = _cotar_banco(
+                        taxas_dos_motores = {
+                            m: _taxas_da_parte(pontos_banco.get(c, []), c, parte, source_provider)
+                            for m, c in CATEGORIA_DO_MOTOR.items()
+                        }
+                        cotar = partial(
+                            _cotar_banco,
                             source_provider=source_provider,
                             custo=custo_da_parte,
                             medido=medido_da_parte,
                             quantidade=parte.quantidade,
                             preco_efetivo=preco_efetivo,
-                            taxas=rates,
                             fator_do_resto=fator_do_resto,
                         )
+                        for m in CATEGORIA_DO_MOTOR:
+                            no_motor = _misturar_motores(
+                                rates, taxas_dos_motores, pesos_no_motor(pesos_motor, m)
+                            )
+                            for cotado in cotar(taxas=no_motor):
+                                por_motor_no_destino[cotado.provider][m] += (
+                                    cotado.estimated_monthly_cost
+                                )
+                        rates = _misturar_motores(rates, taxas_dos_motores, pesos_motor)
+                        da_parte = cotar(taxas=rates)
                     elif preco_efetivo is not None and unidade_medida:
                         da_parte = estimate_by_quantity(
                             source_provider=source_provider,
@@ -1343,6 +1364,16 @@ class BuildMigrationContextUseCase:
                             else {}
                         ),
                         **({"zonas": zonas} if zonas else {}),
+                        **(
+                            {
+                                "por_motor": {
+                                    m: round(float(v), 2)
+                                    for m, v in por_motor_no_destino[e.provider].items()
+                                }
+                            }
+                            if e.provider in por_motor_no_destino
+                            else {}
+                        ),
                     }
                     for e in principais
                 ]

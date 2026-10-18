@@ -405,3 +405,98 @@ def test_varios_equivalentes_no_destino_mostram_as_opcoes_e_nao_nao_mapeado() ->
     )
     assert visao.equivalente_por_destino["gcp"] == "Cloud SQL"
     assert visao.equivalente_por_destino["oci"] is None
+
+
+# ── opções de cada destino com preço (PLANO_EQUIVALENTES_E_TARIFAS §6) ──────
+
+
+def _rds_com_opcoes(*, por_motor: bool = True, parte: float | None = None) -> dict[str, Any]:
+    """O RDS da c31d09cc: US$ 44,12, motor fora da fatura, a OCI cotada em US$ 55,98."""
+    payload = _payload()
+    rds = payload["decision_workloads"][0]
+    rds["cost"] = 44.12
+    rds["targets"] = [
+        {"provider": "oci", "service_name": nome}
+        for nome in (
+            "Oracle Database Cloud Service",
+            "MySQL Database Service",
+            "OCI Database with PostgreSQL",
+        )
+    ] + [{"provider": "gcp", "service_name": "Cloud SQL"}]
+    cotacoes: list[dict[str, Any]] = [
+        {"provedor": "OCI", "custo_mensal_estimado": 55.98},
+        {"provedor": "GCP", "custo_mensal_estimado": 82.45},
+    ]
+    if por_motor:
+        cotacoes[0]["por_motor"] = {"mysql": 41.81, "postgresql": 55.98}
+        cotacoes[1]["por_motor"] = {"mysql": 82.45, "postgresql": 82.45}
+    payload["custos_auxiliares"] = {"banco_dados": 44.12, "equivalentes_banco_dados": cotacoes}
+    if parte is not None:
+        payload["custos_auxiliares"]["por_servico"] = {"banco_dados": {"AmazonRDS": parte}}
+    return payload
+
+
+_PRECOS = {("AmazonRDS", "oci"): Decimal("55.98"), ("AmazonRDS", "gcp"): Decimal("82.45")}
+
+
+def test_cada_opcao_do_banco_tem_o_preco_do_motor_dela() -> None:
+    visao = _por_nome(montar_acoplamento_por_servico(_rds_com_opcoes(), _PRECOS))["AmazonRDS"]
+    oci = {o.servico: o for o in visao.opcoes_por_destino["oci"]}
+    pg = oci["OCI Database with PostgreSQL"]
+    assert (pg.motor, pg.custo_estimado, pg.cotacao, pg.no_total) == (
+        "postgresql",
+        Decimal("55.98"),
+        "motor",
+        True,
+    )
+    mysql = oci["MySQL Database Service"]
+    assert (mysql.custo_estimado, mysql.no_total) == (Decimal("41.81"), False)
+    oracle = oci["Oracle Database Cloud Service"]
+    assert (oracle.motor, oracle.custo_estimado, oracle.cotacao) == ("oracle", None, "sem_cotacao")
+    assert oracle.motivo and "Oracle" in oracle.motivo
+
+
+def test_servico_dos_dois_motores_vira_uma_opcao_por_motor() -> None:
+    visao = _por_nome(montar_acoplamento_por_servico(_rds_com_opcoes(), _PRECOS))["AmazonRDS"]
+    gcp = visao.opcoes_por_destino["gcp"]
+    assert [(o.servico, o.motor, o.custo_estimado) for o in gcp] == [
+        ("Cloud SQL", "postgresql", Decimal("82.45")),
+        ("Cloud SQL", "mysql", Decimal("82.45")),
+    ]
+
+
+def test_so_a_parte_do_servico_no_banco_muda_com_o_motor() -> None:
+    """RDS de US$ 44,12 com US$ 22,06 no banco: na OCI, metade da diferença do motor."""
+    payload = _rds_com_opcoes(parte=22.06)
+    visao = _por_nome(montar_acoplamento_por_servico(payload, _PRECOS))["AmazonRDS"]
+    mysql = next(o for o in visao.opcoes_por_destino["oci"] if o.motor == "mysql")
+    assert mysql.custo_estimado == Decimal("48.90")  # 55,98 + 0,5 x (41,81 - 55,98)
+
+
+def test_analise_antiga_sem_cotacao_por_motor_leva_o_preco_do_servico() -> None:
+    payload = _rds_com_opcoes(por_motor=False)
+    visao = _por_nome(montar_acoplamento_por_servico(payload, _PRECOS))["AmazonRDS"]
+    oci = visao.opcoes_por_destino["oci"]
+    assert {o.custo_estimado for o in oci} == {Decimal("55.98")}
+    assert {o.cotacao for o in oci} == {"servico"}
+    assert not any(o.no_total for o in oci)
+    # Uma opção só no destino: o preço dela é o que entra no total
+    assert [o.no_total for o in visao.opcoes_por_destino["gcp"]] == [True]
+
+
+def test_fora_do_banco_as_opcoes_levam_o_preco_do_servico() -> None:
+    payload = _payload()
+    s3 = payload["decision_workloads"][1]
+    s3["targets"] = [{"provider": "gcp", "service_name": n} for n in ("Cloud Storage", "Filestore")]
+    precos = {("AmazonS3", "gcp"): Decimal("90")}
+    visao = _por_nome(montar_acoplamento_por_servico(payload, precos))["AmazonS3"]
+    assert [(o.motor, o.custo_estimado, o.cotacao) for o in visao.opcoes_por_destino["gcp"]] == [
+        (None, Decimal("90"), "servico"),
+        (None, Decimal("90"), "servico"),
+    ]
+
+
+def test_sem_preco_do_servico_as_opcoes_saem_sem_cotacao() -> None:
+    visao = _por_nome(montar_acoplamento_por_servico(_rds_com_opcoes()))["AmazonRDS"]
+    assert {o.cotacao for o in visao.opcoes_por_destino["oci"]} == {"sem_cotacao"}
+    assert {o.custo_estimado for o in visao.opcoes_por_destino["oci"]} == {None}

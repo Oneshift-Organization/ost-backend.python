@@ -141,3 +141,52 @@ novas (as antigas são congeladas). O custo total não muda.
 3. Foto antes e depois das faturas do develop (sem IA): custo, economia, cobertura, nota e
    linhas sem preço.
 4. Curadoria no develop.
+
+## 6. Preço de cada opção no destino (tela A, 18/10)
+
+**Problema medido (develop, código atual):** 50 destinos têm mais de um equivalente (RDS para
+a Azure: SQL Database, MySQL ou PostgreSQL). Em todos, as opções saem com o mesmo preço,
+porque a cotação é do serviço e não da opção; em 29 nenhuma tem preço. A tela ainda soma as
+opções: o RDS da c31d09cc aparecia com 3× o preço na OCI e na Azure (`estimateIn` ignora
+`included_in_estimate`, que o backend marca em uma linha por destino).
+
+**O que muda:**
+- `build_migration_context` cota o banco também em cada motor aberto (MySQL e PostgreSQL),
+  com as mesmas partes, zonas e alta disponibilidade da cotação usada, e grava `por_motor`
+  em cada cotação de `equivalentes_banco_dados`. A cotação usada no total não muda (motor
+  medido, ou o mais caro quando a fatura não diz).
+- `service-couplings` ganha `opcoes_por_destino`: cada equivalente com motor, preço próprio,
+  se é o preço que entrou no total e o motivo quando não tem cotação. No banco relacional, o
+  preço da opção é o do serviço no destino trocando a parte de banco pela cotação no motor
+  dela; serviço que serve aos dois motores (Cloud SQL, RDS, Aurora) vira uma opção por motor.
+  Motor proprietário (Oracle, SQL Server) não tem taxa no catálogo: sai sem cotação, exceto
+  quando é a única opção do destino (fica o preço do serviço, como hoje). Fora do banco, as
+  opções levam o preço do serviço, marcado como cotação do serviço: o catálogo não diferencia
+  o produto (KMS ou HSM).
+- `por_motor` não vai para o modelo (como os metadados de qualidade): o modelo narra o total.
+- Front: a tela A (lista por nuvem que abre as opções) e `estimateIn` somando só a linha que
+  entra no total.
+
+**O que não muda:** custo por provedor, economia, nota, recomendação, a tabela de
+equivalentes (a projeção travada não é tocada), o Terraform e o snapshot do agente (campo
+novo, aditivo, só na rota de acoplamento).
+
+**Riscos e mitigação:**
+- O painel mostra o preço de cada motor e o total da nuvem segue a premissa: a opção cujo
+  preço entrou no total vem marcada, e a tela diz a premissa quando o motor não é conhecido.
+- Análise antiga, sem `por_motor`: as opções ficam com o preço do serviço, marcado como
+  cotação do serviço. Nada é inventado; uma análise nova traz o preço por motor.
+- RDS e Aurora saem com o mesmo preço no mesmo motor: o catálogo não tem tarifa por produto.
+  A tela diz "preço pelo motor".
+
+## 7. DE-PARA: Application Gateway, Cosmos DB e AWS Config (18/10)
+
+| caso | correção | efeito nas análises novas |
+|---|---|---|
+| Application Gateway (Azure, US$ 2,4 mil no develop) sem destino | linha `networking,load_balancer,azure,Azure Application Gateway` e apelido fixo "Application Gateway" (é o nome de toda fatura da Azure, como "Load Balancer"; o apelido fixo vale em todos os ambientes). A sugestão pendente no develop é aprovada para a linha nova | vira balanceador: Elastic Load Balancing, Cloud Load Balancing, OCI Load Balancing; entra no score pela nota do tipo |
+| Cosmos DB sem destino na OCI | o Cosmos DB tem três linhas (SQL distribuído, chave-valor, documento) e vencia a primeira em ordem alfabética, SQL distribuído, que a OCI não tem. Passa a valer o tipo curado (`TIPO_PREFERIDO`, ao lado dos apelidos fixos; `service_identity` é regra travada do agente e fica como está) quando o classificador não indica: documento | AWS: Amazon DocumentDB (era Aurora DSQL); GCP: Firestore ou Datastore (era Spanner); OCI: Oracle NoSQL Database Cloud Service ou Autonomous JSON Database (era nenhum). Muda a nota de quem tem Cosmos DB; o custo total não muda |
+| AWS Config sem destino na OCI | linha `management_tools,policy_enforcement,oci,Oracle Cloud Guard` | AWS Config → Oracle Cloud Guard. Efeito colateral: uma fatura da OCI cujo nome resolva para "Oracle Cloud Guard" passa de `trusted_advisor` para `policy_enforcement` (AWS Config, Azure Policy, Organization Policy). Hoje nenhum apelido da OCI leva a esse nome |
+
+A regra geral "vence o tipo com par em mais nuvens" foi medida e descartada: mudaria 8 dos 79
+serviços com mais de um tipo, alguns para pior (GuardDuty viraria central de segurança,
+BigQuery deixaria de ser data lake).
