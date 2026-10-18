@@ -425,6 +425,14 @@ def _opcoes(
             for n in nomes
         )
     nome = str(workload.get("name") or "")
+    # Com o motor da conta conhecido, os equivalentes já chegam filtrados (só o PostgreSQL da
+    # Azure): o Cloud SQL abre só nos motores que os outros nomeiam; sem nenhum, nos dois
+    nomeados = {
+        m
+        for alvo in workload.get("targets") or []
+        if (m := motor_do_nome(str(alvo.get("service_name") or ""))) in MOTORES_ABERTOS
+    }
+    abertos = tuple(m for m in MOTORES_ABERTOS if m in nomeados) or MOTORES_ABERTOS
     opcoes: list[OpcaoNoDestino] = []
     for n in nomes:
         motor_ = motor_do_nome(n)
@@ -442,7 +450,7 @@ def _opcoes(
                 )
             )
             continue
-        for aberto in [motor_] if motor_ else MOTORES_ABERTOS:
+        for aberto in [motor_] if motor_ else abertos:
             custo = _preco_no_motor(banco, nome, provedor, preco, aberto)
             opcoes.append(
                 OpcaoNoDestino(

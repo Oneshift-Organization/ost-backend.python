@@ -500,3 +500,18 @@ def test_sem_preco_do_servico_as_opcoes_saem_sem_cotacao() -> None:
     visao = _por_nome(montar_acoplamento_por_servico(_rds_com_opcoes()))["AmazonRDS"]
     assert {o.cotacao for o in visao.opcoes_por_destino["oci"]} == {"sem_cotacao"}
     assert {o.custo_estimado for o in visao.opcoes_por_destino["oci"]} == {None}
+
+
+def test_com_o_motor_conhecido_o_servico_dos_dois_motores_abre_so_nele() -> None:
+    """O inventário disse PostgreSQL: a OCI chega só com o PostgreSQL, e o Cloud SQL não
+    pode reabrir o MySQL."""
+    payload = _rds_com_opcoes()
+    rds = payload["decision_workloads"][0]
+    rds["targets"] = [
+        {"provider": "oci", "service_name": "OCI Database with PostgreSQL"},
+        {"provider": "gcp", "service_name": "Cloud SQL"},
+    ]
+    visao = _por_nome(montar_acoplamento_por_servico(payload, _PRECOS))["AmazonRDS"]
+    assert [(o.servico, o.motor) for o in visao.opcoes_por_destino["gcp"]] == [
+        ("Cloud SQL", "postgresql")
+    ]
