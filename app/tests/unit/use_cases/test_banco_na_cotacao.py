@@ -195,6 +195,18 @@ async def test_agregador_mede_a_vcpu_hora_do_banco_por_motor() -> None:
 
 
 @pytest.mark.asyncio
+async def test_motor_do_relatorio_detalhado_nao_vira_export_detalhado() -> None:
+    """PLANO_EQUIVALENTES_E_TARIFAS §10: a linha do relatório legado só traz o motor (e o
+    tipo que o enriquecimento junta). O motor entra na vCPU-hora; a fatura não ganha
+    inventário medido."""
+    linha = _linha("Multi-AZUsage:db.r6g.large", "100", "744", "PostgreSQL")
+    linha.attributes = {"database_engine": "PostgreSQL", "instance_type": linha.usage_type}
+    resultado = await BillingAggregator().aggregate([linha], "aws")
+    assert resultado.auxiliary.banco_por_motor == {"postgresql:ha": D("2976")}
+    assert resultado.inventario is None
+
+
+@pytest.mark.asyncio
 async def test_taxa_de_reserva_nao_soma_horas_e_entra_no_custo_das_instancias() -> None:
     """Base amortizada: o uso coberto pela reserva vem na linha de uso, com as horas; a
     taxa da reserva traz a parte não usada com as horas da reserva inteira. Contar as

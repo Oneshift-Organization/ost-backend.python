@@ -34,6 +34,18 @@ _SIGNATURE_COLS = ("ProductCode", "CostBeforeTax")
 # US$ 1,7 mil de Spot viravam compromisso.
 _HORA_DE_INSTANCIA = re.compile(r"(?:^|-)(?:BoxUsage|SpotUsage|DedicatedUsage|HostUsage):")
 
+# Motor do RDS (PLANO_EQUIVALENTES_E_TARIFAS §10): o que a descrição diz ("db.t4g.medium
+# (PostgreSQL)") e, sem ele, o código da operação. Só os códigos de motor aberto, que a AWS
+# documenta; Oracle e SQL Server ficam sem motor, como antes
+_MOTOR_DA_OPERACAO = {
+    "0002": "MySQL",
+    "0014": "PostgreSQL",
+    "0016": "Aurora MySQL",
+    "0018": "MariaDB",
+    "0021": "Aurora PostgreSQL",
+}
+_MOTOR_NA_DESCRICAO = re.compile(r"(?:aurora[ -])?(?:postgresql|postgres|mysql|mariadb)", re.I)
+
 
 def _clean(value: object) -> str:
     """Return stripped string, or '' if value is NaN/None/empty."""
@@ -82,6 +94,7 @@ class AwsDetailedBillingParser(BaseParser):
                 for k, v in row.items()
                 if _clean(v)
             }
+            motor = _motor_do_rds(row)
 
             record = {
                 "user_id": str(self.user_id),
@@ -106,6 +119,7 @@ class AwsDetailedBillingParser(BaseParser):
                     "hours" if usage_type and _HORA_DE_INSTANCIA.search(usage_type) else None
                 ),
                 "tags": {},
+                "attributes": {"database_engine": motor} if motor else {},
                 "is_correction": False,
                 "is_estimate": False,
                 "raw_payload": raw_payload,
@@ -115,6 +129,16 @@ class AwsDetailedBillingParser(BaseParser):
             records.append(record)
 
         return pd.DataFrame(records)
+
+
+def _motor_do_rds(row: pd.Series) -> str | None:
+    if _clean(row.get("ProductCode", "")) != "AmazonRDS":
+        return None
+    descricao = _MOTOR_NA_DESCRICAO.search(_clean(row.get("ItemDescription", "")))
+    if descricao:
+        return descricao.group(0)
+    operacao, _, codigo = _clean(row.get("Operation", "")).partition(":")
+    return _MOTOR_DA_OPERACAO.get(codigo) if operacao == "CreateDBInstance" else None
 
 
 def _parse_dt_invoice(value: object):
