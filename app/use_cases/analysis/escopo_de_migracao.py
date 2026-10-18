@@ -119,6 +119,7 @@ class RecursoDoEscopo:
     categoria_disco: str | None = None
     classe: str | None = None
     motor: str | None = None
+    tamanho: str | None = None  # o tipo de máquina como a nuvem escreve (t3.large)
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +140,8 @@ class ContextoDoEscopo:
     gasto_total: Decimal | None = None
     # Unidade com cluster → prováveis aplicações dentro dele (indício, não unidade)
     cargas_no_cluster: Mapping[str, CargasDoCluster] = field(default_factory=dict)
+    # Recurso → serviço da fatura que ele vira: a lista de recursos de cada serviço na tela
+    servico_de: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,6 +315,7 @@ class EscopoDeMigracaoUseCase:
                     categoria_disco=_texto(r.atributos.get("categoria_disco")),
                     classe=_texto_cru(r.atributos.get("classe")),
                     motor=_texto_cru(r.atributos.get("motor")),
+                    tamanho=_texto_cru(r.atributos.get("tipo_maquina")),
                 )
                 for u in analise.unidades
                 for chave in u.recursos
@@ -320,6 +324,9 @@ class EscopoDeMigracaoUseCase:
             periodo=_texto_cru(payload.get("periodo_faturamento")),
             cargas_no_cluster=cargas_no_cluster(conteudo, analise),
             gasto_total=_decimal(payload.get("gasto_total")),
+            servico_de=_servico_de_cada_recurso(
+                servico_de, analise, indice, conteudo.provedor, servicos_da_fatura
+            ),
         )
 
     async def _job(self, user_id: UUID, job_id: UUID) -> AnalysisJob:
@@ -333,6 +340,27 @@ class EscopoDeMigracaoUseCase:
                 f"a análise {job_id} ainda não foi concluída (status {job.status})"
             )
         return job
+
+
+def _servico_de_cada_recurso(
+    pela_fatura: Mapping[str, str],
+    analise: Any,
+    indice: Indice,
+    provedor: str | None,
+    servicos_da_fatura: set[str],
+) -> dict[str, str]:
+    """O serviço de cada recurso das unidades: o da fatura quando ela cita o recurso,
+    senão o do tipo, se o serviço estiver na fatura (fatura sem ID de recurso)."""
+    servico_de: dict[str, str] = {}
+    for u in analise.unidades:
+        for chave in u.recursos:
+            if chave in pela_fatura:
+                servico_de[chave] = pela_fatura[chave]
+            elif (r := indice.recursos.get(chave)) is not None:
+                pelo_tipo = sorted(servicos_pelo_tipo(provedor, [r]) & servicos_da_fatura)
+                if pelo_tipo:
+                    servico_de[chave] = pelo_tipo[0]
+    return servico_de
 
 
 def _texto(valor: object) -> str | None:

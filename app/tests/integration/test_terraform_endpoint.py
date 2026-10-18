@@ -178,7 +178,11 @@ async def test_gera_e_baixa_o_pacote(_app_ligado, _db_ready) -> None:
             assert estado.json()["status"] == "COMPLETED", estado.json().get("error")
 
             dl = await c.get(f"/v1/terraform-generations/{gid}/download")
+            arquivos = await c.get(f"/v1/terraform-generations/{gid}/files")
 
+        # Os mesmos arquivos do ZIP, para a tela ler o código antes de baixar
+        assert arquivos.status_code == 200, arquivos.text
+        assert any(a["path"].endswith("main.tf") and a["content"] for a in arquivos.json())
         assert dl.status_code == 200
         assert dl.headers["content-type"] == "application/zip"
 
