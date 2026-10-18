@@ -6,6 +6,7 @@ na preparação do payload; a projeção da tabela não muda.
 """
 
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -16,11 +17,13 @@ from app.domain.analysis import (
     MigrationContext,
     ServiceCategoryGroup,
 )
+from app.domain.services.currency import identity_rate
 from app.domain.services.qualidade_da_equivalencia import classificar, portabilidade, risco
 from app.infrastructure.llm.orchestrator import _compact_decision_payload
 from app.use_cases.analysis.equivalence_projection import project_equivalences
 from app.use_cases.analysis.run_analysis_pipeline import (
     _com_qualidade_do_pool,
+    _decision_workloads,
     build_pipeline_llm_input_payload,
 )
 
@@ -170,3 +173,55 @@ def test_o_modelo_nao_recebe_os_campos_do_pool():
     assert com_nota["metadados"] == {"notes": "curado"}
     # O payload persistido continua com os campos
     assert payload["pools_computacao"][0]["equivalentes"][0]["metadados"]
+
+
+def _rds_com_tres_por_destino(motores: dict[str, Decimal], medidos: tuple[str, ...] = ()) -> Any:
+    alvos = [
+        EquivalentService(
+            provider=p,
+            service_name=n,
+            category="database",
+            service_type="managed_relational_database",
+        )
+        for p, n in (
+            ("azure", "Azure SQL Database"),
+            ("azure", "Azure Database for MySQL"),
+            ("azure", "Azure Database for PostgreSQL"),
+            ("oci", "MySQL Database Service"),
+            ("oci", "OCI Database with PostgreSQL"),
+            ("gcp", "Cloud SQL"),
+        )
+    ]
+    rds = BillingItemSummary(
+        service_name="AmazonRDS",
+        provider="aws",
+        total_cost=Decimal(100),
+        service_type="managed_relational_database",
+        equivalents=alvos,
+    )
+    return SimpleNamespace(
+        categories=[ServiceCategoryGroup("database", Decimal(100), [rds])],
+        auxiliary=SimpleNamespace(banco_por_motor=motores),
+        inventario=SimpleNamespace(bancos=[SimpleNamespace(motor=m) for m in medidos]),
+    )
+
+
+def _alvos(ctx: Any) -> list[str]:
+    [rds] = _decision_workloads(ctx, identity_rate("USD"))
+    return [t["service_name"] for t in rds["targets"]]
+
+
+def test_banco_de_motor_conhecido_fica_com_o_equivalente_do_motor() -> None:
+    assert _alvos(_rds_com_tres_por_destino({"postgresql": Decimal(744)})) == [
+        "Azure Database for PostgreSQL",
+        "OCI Database with PostgreSQL",
+        "Cloud SQL",
+    ]
+    # O export detalhado vence o peso da fatura
+    ctx = _rds_com_tres_por_destino({"": Decimal(744)}, medidos=("MySQL",))
+    assert _alvos(ctx) == ["Azure Database for MySQL", "MySQL Database Service", "Cloud SQL"]
+
+
+def test_banco_de_motor_desconhecido_mantem_as_opcoes() -> None:
+    # A fatura de 18/10 (InstanceUsage:db.t3.medium, sem motor)
+    assert len(_alvos(_rds_com_tres_por_destino({"": Decimal(1071)}))) == 6

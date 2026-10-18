@@ -162,7 +162,8 @@ def test_v4_alternatives_match_score_without_choosing_service_or_changing_histor
     payload["decision_support"] = build_decision_support(payload).model_dump(mode="json")
     after = _por_nome(montar_acoplamento_por_servico(payload))["AmazonRDS"]
     assert after.por_destino["azure"] == "medium"
-    assert after.equivalente_por_destino["azure"] is None
+    # Ambíguo continua sem escolher serviço no score; na tela, os nomes (aqui, o mesmo)
+    assert after.equivalente_por_destino["azure"] == "azure-svc"
     assert after.refatoracao_por_destino["azure"] is None
 
 
@@ -178,9 +179,9 @@ def test_adaptacao_e_equivalente_por_destino_sao_os_do_score() -> None:
     assert vm.refatoracao_por_destino == {"azure": True, "gcp": False, "oci": None}
     assert vm.equivalente_por_destino == {"azure": "azure-svc", "gcp": "gcp-svc", "oci": "oci-svc"}
     assert (vm.classe_migracao, vm.esforco) == ("replatform", "medio")
-    # Mapeamento ambíguo (dois no azure) ou ausente (oci): sem equivalente, como no score.
+    # Ambíguo (dois no azure, com o mesmo nome) mostra o nome; ausente (oci) fica None.
     assert visao["AmazonRDS"].equivalente_por_destino == {
-        "azure": None,
+        "azure": "azure-svc",
         "gcp": "gcp-svc",
         "oci": None,
     }
@@ -383,3 +384,24 @@ def test_classe_mista_nao_sugere_e_pede_curadoria() -> None:
     pg = _por_nome(montar_acoplamento_por_servico(payload))["Azure Database for PostgreSQL"]
     assert (pg.nivel, pg.nivel_sugerido, pg.sugestoes) == (None, None, ())
     assert "de médio a alto" in pg.alertas[-1]
+
+
+def test_varios_equivalentes_no_destino_mostram_as_opcoes_e_nao_nao_mapeado() -> None:
+    """18/10: o RDS sem motor conhecido tinha três equivalentes na Azure e na OCI, e a tela
+    dizia "Equivalente não mapeado" com o preço ao lado."""
+    payload = _payload()
+    rds = payload["decision_workloads"][0]
+    rds["targets"] = [
+        {"provider": "azure", "service_name": nome}
+        for nome in (
+            "Azure SQL Database",
+            "Azure Database for MySQL",
+            "Azure Database for PostgreSQL",
+        )
+    ] + [{"provider": "gcp", "service_name": "Cloud SQL"}]
+    visao = _por_nome(montar_acoplamento_por_servico(payload))["AmazonRDS"]
+    assert visao.equivalente_por_destino["azure"] == (
+        "Azure SQL Database, Azure Database for MySQL ou Azure Database for PostgreSQL"
+    )
+    assert visao.equivalente_por_destino["gcp"] == "Cloud SQL"
+    assert visao.equivalente_por_destino["oci"] is None
