@@ -99,6 +99,24 @@ class PgAnalysisJobRepository(IAnalysisJobRepository):
         )
         await self._session.commit()
 
+    async def ultima_concluida_por_report(
+        self, report_id: UUID, user_id: UUID, *, exceto: UUID
+    ) -> AnalysisJob | None:
+        """A análise concluída mais recente deste report, fora a do job atual (M3)."""
+        stmt = (
+            select(AnalysisJobModel)
+            .where(
+                AnalysisJobModel.report_id == report_id,
+                AnalysisJobModel.user_id == user_id,
+                AnalysisJobModel.job_id != exceto,
+                AnalysisJobModel.status == AnalysisStatus.COMPLETED.value,
+            )
+            .order_by(AnalysisJobModel.created_at.desc())
+            .limit(1)
+        )
+        model = (await self._session.execute(stmt)).scalars().first()
+        return self._to_entity(model) if model else None
+
     async def buscar_ativo_por_report(
         self, report_id: UUID, user_id: UUID
     ) -> AnalysisJob | None:

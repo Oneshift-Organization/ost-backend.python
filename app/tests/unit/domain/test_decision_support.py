@@ -573,3 +573,82 @@ async def test_real_pipeline_persists_authoritative_snapshot_and_scores(
     assert saved["decision_support"] == job.llm_input_payload["decision_support"]
     assert job.llm_input_payload["decision_context"] == decision_payload["decision_context"]
     assert "96.05/100" in job.llm_output
+
+
+class _RepoComAnterior:
+    """Repositório com a busca da última análise concluída (M3)."""
+
+    def __init__(self, anterior: AnalysisJob | None) -> None:
+        self.anterior = anterior
+
+    async def marcar_processando(self, job_id) -> None:
+        return None
+
+    async def update(self, job: AnalysisJob) -> None:
+        return None
+
+    async def ultima_concluida_por_report(self, report_id, user_id, *, exceto):
+        return self.anterior
+
+
+async def _pipeline_m3(decision_payload, monkeypatch, *, anterior, nova=False):
+    context = MigrationContext(
+        source_provider="aws",
+        billing_period="2026-09",
+        total_spend=Decimal(1000),
+        categories=[],
+        resumo_executivo=decision_payload["resumo_executivo"],
+        premissas=decision_payload["premissas"],
+    )
+    monkeypatch.setattr(
+        "app.use_cases.analysis.run_analysis_pipeline.BuildMigrationContextUseCase.execute",
+        AsyncMock(return_value=context),
+    )
+    job = AnalysisJob(job_id=uuid4(), user_id=uuid4(), report_id=uuid4())
+    orchestrator = AsyncMock()
+    orchestrator.generate_report.return_value = AnalysisV2Response(
+        viability_score=1, recommendation_rationale="narrativa nova"
+    )
+    pipeline = RunAnalysisPipelineUseCase(
+        _RepoComAnterior(anterior), None, None, None, None, None, orchestrator
+    )
+    await pipeline.execute(
+        job, decision_context=decision_payload["decision_context"], nova_narrativa=nova
+    )
+    return job, orchestrator
+
+
+@pytest.mark.asyncio
+async def test_reanalise_com_os_mesmos_numeros_reaproveita_a_narrativa(
+    decision_payload, monkeypatch
+):
+    """M3: os números citados não mudaram, então o LLM não roda."""
+    primeira, _ = await _pipeline_m3(decision_payload, monkeypatch, anterior=None)
+    primeira.ai_structured_output = {
+        **primeira.ai_structured_output,
+        "recommendation_rationale": "narrativa antiga",
+    }
+    job, orchestrator = await _pipeline_m3(decision_payload, monkeypatch, anterior=primeira)
+    assert job.status == "COMPLETED", job.error
+    orchestrator.generate_report.assert_not_called()
+    assert job.ai_structured_output["recommendation_rationale"] == "narrativa antiga"
+    [aviso] = job.ai_structured_output["flags"]["narrative"]
+    assert aviso["code"] == "NARRATIVA_REAPROVEITADA"
+    assert str(primeira.job_id) in aviso["message"]
+
+
+@pytest.mark.asyncio
+async def test_numero_citado_diferente_ou_pedido_roda_o_llm(decision_payload, monkeypatch):
+    primeira, _ = await _pipeline_m3(decision_payload, monkeypatch, anterior=None)
+    # A pedido: roda mesmo com os números iguais
+    _, orchestrator = await _pipeline_m3(
+        decision_payload, monkeypatch, anterior=primeira, nova=True
+    )
+    orchestrator.generate_report.assert_called_once()
+    # Um número citado mudou: roda
+    mudou = AnalysisJob(job_id=uuid4(), user_id=primeira.user_id, report_id=primeira.report_id)
+    mudou.ai_structured_output = primeira.ai_structured_output
+    resumo = {**primeira.llm_input_payload["resumo_executivo"], "custo_mensal_atual": 1}
+    mudou.llm_input_payload = {**primeira.llm_input_payload, "resumo_executivo": resumo}
+    _, orchestrator = await _pipeline_m3(decision_payload, monkeypatch, anterior=mudou)
+    orchestrator.generate_report.assert_called_once()

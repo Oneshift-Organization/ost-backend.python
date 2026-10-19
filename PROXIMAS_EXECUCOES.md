@@ -531,6 +531,22 @@ linhas: precisa do `seed_from_csv` em cada ambiente. As três sugestões da fila
 aprovadas (Bastion e Kiro pelo nome novo) ou recusadas (EC2 - Other, resolvido pelo uso):
 decisão do usuário. `CURADORES` no deploy do develop segue com o Luiz.
 
+### Item 8 — M3: reanálise sem rodar o LLM quando os números não mudam
+
+**O que muda:** antes de chamar o LLM, o pipeline compara os números que a narrativa cita
+(custo atual, recomendado, custo, economia, cobertura e confiança de cada destino, e a nota
+e a política do `decision_support`) com os da última análise concluída do mesmo billing.
+Iguais: a narrativa anterior é reaproveitada (a autoridade do backend e a decisão são
+reaplicadas sobre o payload novo, como sempre), e a análise ganha o aviso
+`NARRATIVA_REAPROVEITADA` com o id de onde veio. Diferentes, ou `?nova_narrativa=true` na
+rota de início: o LLM roda. O payload gravado é sempre o novo (topologia, preços).
+
+**Quem é afetado:** anexar inventário e reanalisar sem mudança de número deixam de gastar
+LLM e terminam em segundos (menos risco de o job morrer num deploy). A narrativa nunca cita
+número que mudou: qualquer diferença nos números citados força o LLM. O agente (MCP) não
+muda: o snapshot é montado do payload, não da narrativa. O `AnalysisStartOptions` é arquivo
+travado da autoridade; por isso a opção entra como parâmetro da rota.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |
