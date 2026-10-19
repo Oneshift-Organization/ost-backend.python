@@ -53,6 +53,8 @@ from app.domain.services.banco_por_uso import (
 )
 from app.domain.services.banco_por_uso import CATEGORIA as CATEGORIA_BANCO
 from app.domain.services.banco_por_uso import UNIDADE as UNIDADE_DO_BANCO
+from app.domain.services.categoria_por_uso import CHAVE as CATEGORIA_CHAVE
+from app.domain.services.categoria_por_uso import FRANQUIA_DE_CHAVES
 from app.domain.services.categoria_por_uso import UNIDADE as UNIDADE_POR_USO
 from app.domain.services.categoria_por_zona import dividir_por_zona
 from app.domain.services.category_calculator import (
@@ -114,6 +116,9 @@ from app.domain.services.service_identity import (
 from app.domain.services.servico_pelo_uso import servico_pelo_uso
 from app.services.billing_aggregator import BillingAggregator
 from app.use_cases.analysis.leitura_completa import listar_todos
+
+# Quantidade que o destino não cobra por mês, por categoria cotada pela quantidade
+_FRANQUIAS = {CATEGORIA_EGRESS: FRANQUIA_DE_EGRESS_GB, CATEGORIA_CHAVE: FRANQUIA_DE_CHAVES}
 
 
 @dataclass(frozen=True)
@@ -1294,7 +1299,7 @@ class BuildMigrationContextUseCase:
                             rates=rates,
                             unit=unidade_medida,
                             # A franquia é mensal e da conta toda: cada zona fica com a
-                            # parte dela pelos GB medidos (pelo custo, sem medida)
+                            # parte dela pela quantidade medida (pelo custo, sem medida)
                             franquia=(
                                 {
                                     p: g
@@ -1303,9 +1308,9 @@ class BuildMigrationContextUseCase:
                                         if quantidade_total > 0
                                         else parte.fracao
                                     )
-                                    for p, g in FRANQUIA_DE_EGRESS_GB.items()
+                                    for p, g in _FRANQUIAS[category].items()
                                 }
-                                if category == CATEGORIA_EGRESS
+                                if category in _FRANQUIAS
                                 else None
                             ),
                         )

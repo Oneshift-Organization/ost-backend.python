@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from app.domain.services.categoria_por_uso import FRANQUIA_DE_CHAVES
 from app.domain.services.category_calculator import (
     CategoryRate,
     estimate_by_cost_ratio,
@@ -173,3 +174,27 @@ def test_franquia_maior_que_a_parte_nao_fica_negativa() -> None:
     )
     assert out[0].estimated_monthly_cost == Decimal("0")
     assert out[0].cost_delta == Decimal("-9")
+
+
+def test_franquia_de_chaves_da_oci() -> None:
+    """Item 16: a OCI não cobra as primeiras 20 versões de chave HSM; acima, 0,5334 cada."""
+
+    def cotar(chaves: str) -> Decimal:
+        out = estimate_by_quantity(
+            source_provider="aws",
+            source_cost=Decimal(chaves),
+            quantity=Decimal(chaves),
+            measured_cost=Decimal(chaves),
+            effective_price=Decimal("1"),
+            rates={
+                "oci": CategoryRate(
+                    provider="oci", rate=Decimal("0.5334"), unit="month", confidence="official"
+                )
+            },
+            unit="month",
+            franquia=FRANQUIA_DE_CHAVES,
+        )
+        return out[0].estimated_monthly_cost
+
+    assert cotar("12") == Decimal("0")
+    assert cotar("25") == Decimal("2.6670")  # (25 - 20) x 0,5334

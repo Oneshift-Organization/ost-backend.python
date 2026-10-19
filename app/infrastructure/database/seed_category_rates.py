@@ -168,7 +168,8 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("aws", "key_management", "month", "1.00"),
     ("azure", "key_management", "month", "0"),
     ("gcp", "key_management", "month", "0.06"),
-    ("oci", "key_management", "month", "0"),
+    # Acima das 20 versões grátis (franquia na cotação, `FRANQUIA_DE_CHAVES`)
+    ("oci", "key_management", "month", "0.5334"),
     ("aws", "key_management_operations", "10k", "0.03"),
     ("azure", "key_management_operations", "10k", "0.03"),
     ("gcp", "key_management_operations", "10k", "0.03"),

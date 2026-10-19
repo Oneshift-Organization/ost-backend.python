@@ -395,6 +395,21 @@ de boot de nós e 4 volumes persistentes do Kubernetes (PVC); nenhum deles é di
 **Quem é afetado:** só o pacote do escopo com discos no inventário, nos quatro destinos.
 Caracterização igual. O custo da análise não muda.
 
+### Item 16 — franquia das chaves na OCI (ponto 1 do MCP)
+
+**O defeito:** a taxa de chave da OCI é zero sempre. O cofre padrão da OCI não cobra as
+primeiras 20 versões de chave protegida por HSM; acima disso, US$ 0,5334 por versão por
+mês (lista de preços da Oracle, conferida em 16/10, já anotada no seed).
+
+**O que muda:** a franquia deixa de ser regra só do egress e vira tabela por categoria
+(egress: 10 TB na OCI, 100 GB na AWS e na Azure; chaves: 20 na OCI). A taxa de chave da
+OCI passa a 0,5334 por mês, com as 20 primeiras grátis. Premissa: cada chave da origem é
+uma versão (a fatura não diz quantas versões cada chave tem).
+
+**Quem é afetado:** só a OCI como destino, e só faturas com mais de 20 chaves. Precisa
+gravar a taxa nova (`seed_category_rates`) em cada ambiente, com autorização. Análises
+gravadas não mudam.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |
