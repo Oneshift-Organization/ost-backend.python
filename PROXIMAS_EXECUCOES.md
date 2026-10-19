@@ -14,11 +14,11 @@
 
 | # | item | resumo | de quem | estado |
 |---|---|---|---|---|
-| 1 | Terraform: banco do destino pelo motor medido | Conferidos os quatro geradores (§5). Só o da OCI erra: escreve todo banco como Oracle Autonomous Database, com 1 OCPU por vCPU (o dobro), e a análise cotou OCI PostgreSQL. PostgreSQL passa a `oci_psql_db_system` e MySQL a HeatWave; o Autonomous fica para Oracle. Some o aviso falso "versão 16 fora do que o destino aceita" | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
-| 2 | Terraform: buckets do escopo | O bucket só nasce do custo dele; a fatura não liga o custo do S3 ao bucket, e o pacote sai sem bucket e sem aviso (bucket conta como "tipo que o pacote cria"). Passa a sair do inventário, pelo nome | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
-| 3 | Terraform: avisos verdadeiros | "AmazonVPC: nenhum recurso no inventário" com 3 VPCs e 15 subredes, e a rede criada; idem Route53 com a zona no inventário. Cost Explorer e Config passam a ser "gestão da conta, não infraestrutura" | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
-| 4 | Terraform: ocupação de origem burstable | O empacotador dimensiona burstable pela linha de base; o aviso compara com a vCPU nominal e pede "uma máquina a mais" sem motivo (146% na `f67fcd01`). Mesma base nos dois, dizendo que a origem é burstable | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
-| 5 | D1: memória da série B v1 da Azure | B1ls com 2 GiB (real 0,5), B1s 2 (real 1), B1ms 4 (real 2): o Terraform da Azure cria ¼ da memória (9× B1ls para 17,5 GiB). Tabela pela especificação oficial | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
+| 1 | Terraform: banco do destino pelo motor medido | Conferidos os quatro geradores (§5). Só o da OCI erra: escreve todo banco como Oracle Autonomous Database, com 1 OCPU por vCPU (o dobro), e a análise cotou OCI PostgreSQL. PostgreSQL passa a `oci_psql_db_system` e MySQL a HeatWave; o Autonomous fica para Oracle. Some o aviso falso "versão 16 fora do que o destino aceita" | nós | ✅ feito (develop `ba92bce`) |
+| 2 | Terraform: buckets do escopo | O bucket só nasce do custo dele; a fatura não liga o custo do S3 ao bucket, e o pacote sai sem bucket e sem aviso (bucket conta como "tipo que o pacote cria"). Passa a sair do inventário, pelo nome | nós | ✅ feito (develop `ba92bce`) |
+| 3 | Terraform: avisos verdadeiros | "AmazonVPC: nenhum recurso no inventário" com 3 VPCs e 15 subredes, e a rede criada; idem Route53 com a zona no inventário. Cost Explorer e Config passam a ser "gestão da conta, não infraestrutura" | nós | ✅ feito (develop `ba92bce`) |
+| 4 | Terraform: ocupação de origem burstable | O empacotador dimensiona burstable pela linha de base; o aviso compara com a vCPU nominal e pede "uma máquina a mais" sem motivo (146% na `f67fcd01`). Mesma base nos dois, dizendo que a origem é burstable | nós | ✅ feito (develop `ba92bce`) |
+| 5 | D1: memória da série B v1 da Azure | B1ls com 2 GiB (real 0,5), B1s 2 (real 1), B1ms 4 (real 2): o Terraform da Azure cria ¼ da memória (9× B1ls para 17,5 GiB). Tabela pela especificação oficial | nós | ✅ feito (develop `ba92bce`) |
 | 6 | M13: score v4.3 | Tabela de antes e depois pronta (§5, item 6), sobre a política v5 que o MCP pôs na develop (PR #37). Falta a decisão | usuário com o MCP; a tabela é nossa | decisão (tabela pronta) |
 | 7 | M1: segurança | Revogar a chave da service account do GCP que vazou nas branches órfãs; trocar `MCP_TOKEN`, o token do inspector e a `GCP_BILLING_API_KEY` | usuário (console e segredos do cluster) | decisão |
 
@@ -276,4 +276,6 @@ completa: `m13_saida.json` (scratchpad da sessão), gerada por `m13_pod.py`.
 
 | data | item | o que foi feito | commit |
 |---|---|---|---|
+| 18/10 | Itens 1 a 5 | Banco da OCI pelo motor; buckets do escopo pelo inventário; avisos do que fica fora do pacote; ocupação burstable pela base gravada; especificação oficial das máquinas fora da regra (Azure B1, AWS geração anterior). Caso real `f67fcd01` conferido no develop: PostgreSQL 16 na subrede de dados, 3 buckets, VPC e Route53 com a frase certa, T4G a 73% sem aviso. Bateria completa: 2634 testes; CI verde | `ba92bce` |
+| 18/10 | Sync da Azure no develop | `sync_prices --providers azure --zonas todas`: 8650 preços; B1ls 2 → 0,5 GiB, B1s 2 → 1, B1ms 4 → 2 (9 regiões) | — |
 | 18/10 | Auditoria do MCP | Conferida ponto a ponto: banco por partes, SSD com VPU, DE-PARA da OCI (139 linhas), VPN da Azure e "sem equivalente na OCI" já estavam na develop depois do `684029c` que ela leu; seis pontos seguem abertos (itens 6, 9, 10, 16, 20, 22) | — |
