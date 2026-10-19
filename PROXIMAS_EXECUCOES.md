@@ -189,6 +189,37 @@ lida pela nominal, sem reinterpretar o que já foi feito.
 máquina escolhida, o número de instâncias e o custo não mudam (vêm da análise). A
 caracterização muda só onde há pool burstable com destino sem crédito.
 
+### Item 5 — D1: especificação das máquinas pequenas (Azure e AWS)
+
+**O defeito:** o parser estrutural (a letra da família dá a memória por vCPU) erra onde a
+tabela oficial foge da regra:
+
+- Azure B v1 de 1 vCPU: B1ls 0,5 GiB (dava 2), B1s 1 (dava 2), B1ms 2 (dava 4). As
+  demais B v1 e toda a B v2 (Bsv2, Basv2, Bpsv2) conferem.
+- AWS, geração anterior: t1.micro (1 vCPU, 0,613 GiB; dava 2 vCPU e 8), m1 (small 1/1,7,
+  medium 1/3,75, large 2/7,5, xlarge 4/15), c1 (medium 2/1,7, xlarge 8/7), m2 (xlarge
+  2/17,1, 2xlarge 4/34,2, 4xlarge 8/68,4) e m3 (medium 1/3,75, large 2/7,5, xlarge 4/15,
+  2xlarge 8/30). A família T atual já foi corrigida em 17/10.
+- GCP: a fatura cobra vCPU e memória separadas, sem nome de máquina para interpretar; o
+  núcleo compartilhado (e2-micro, f1-micro, g1-small) já tem a tabela própria. OCI: a
+  forma flexível traz OCPU e memória no nome.
+
+**O que muda:** tabelas com a especificação oficial dessas máquinas, consultadas antes
+da regra estrutural.
+
+**Quem é afetado:**
+
+- **Azure como destino:** a memória do catálogo é gravada no sync de preços. Depois do
+  sync, o empacotador deixa de escolher B1ls para pool que precisa de memória (o caso do
+  D1: 9× B1ls para 17,5 GiB) e o Terraform da Azure cria a memória que o pool mede. A
+  cotação da Azure sobe onde a B1 era escolhida. **Precisa de sync da Azure em cada
+  ambiente** (develop e local), que só rodo com autorização.
+- **Azure como origem** (fatura com B1s, B1ls, B1ms) e **AWS como origem** (m1, c1, m2,
+  m3, t1, também nas classes de banco `db.m1.*`, `db.m3.*`): a capacidade medida fica
+  certa; cai a memória desses pools e o destino é cotado pelo que a origem tem.
+- Análises gravadas não mudam; reanalisar recalcula.
+- Caracterização: muda só se algum payload congelado tiver essas máquinas.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |

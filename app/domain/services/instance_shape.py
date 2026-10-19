@@ -80,6 +80,24 @@ _T2_UMA_VCPU = frozenset({"nano", "micro", "small"})
 _FAMILIAS_T = frozenset({"t2", "t3", "t3a", "t4g"})
 # Fora da família T, o medium tem 1 vCPU (m7g.medium, c6g.medium, r7g.medium)
 _MEDIUM_VCPU = Decimal("1")
+# Geração anterior da AWS (página "Previous Generation Instances"): (vCPU, GiB) que a
+# regra estrutural não deriva. t1.micro e m1.small davam 2 vCPU e 8 GiB
+_GERACAO_ANTERIOR = {
+    "t1.micro": (Decimal("1"), Decimal("0.613")),
+    "m1.small": (Decimal("1"), Decimal("1.7")),
+    "m1.medium": (Decimal("1"), Decimal("3.75")),
+    "m1.large": (Decimal("2"), Decimal("7.5")),
+    "m1.xlarge": (Decimal("4"), Decimal("15")),
+    "c1.medium": (Decimal("2"), Decimal("1.7")),
+    "c1.xlarge": (Decimal("8"), Decimal("7")),
+    "m2.xlarge": (Decimal("2"), Decimal("17.1")),
+    "m2.2xlarge": (Decimal("4"), Decimal("34.2")),
+    "m2.4xlarge": (Decimal("8"), Decimal("68.4")),
+    "m3.medium": (Decimal("1"), Decimal("3.75")),
+    "m3.large": (Decimal("2"), Decimal("7.5")),
+    "m3.xlarge": (Decimal("4"), Decimal("15")),
+    "m3.2xlarge": (Decimal("8"), Decimal("30")),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +123,8 @@ def parse_instance_shape(text: str | None) -> InstanceShape | None:
     class_letter = m.group(2)[0].lower()
     mult, size = m.group(3), m.group(4).lower()
 
+    if (anterior := _GERACAO_ANTERIOR.get(f"{familia}.{mult}{size}")) is not None:
+        return InstanceShape(vcpus=anterior[0], ram_gib=anterior[1])
     if familia in _FAMILIAS_T and size in _FAMILIA_T:
         vcpus, ram = _FAMILIA_T[size]
         if familia == "t2" and size in _T2_UMA_VCPU:
