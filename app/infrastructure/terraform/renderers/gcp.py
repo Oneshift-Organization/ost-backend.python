@@ -296,7 +296,18 @@ def _acesso_privado(bp: TerraformBlueprint) -> str:
         atributo("reserved_peering_ranges", referencia(
             f"[google_compute_global_address.{_PSA}_faixa.name]"
         )),
-    ])
+    ]) + (
+        # Item 13: com a rede espelhada, a origem chega ao banco pela VPN; o peering do
+        # serviço precisa das rotas personalizadas da VPC
+        "\n\n" + bloco("resource", ["google_compute_network_peering_routes_config", _PSA], [
+            atributo("peering", referencia(f"google_service_networking_connection.{_PSA}.peering")),
+            atributo("network", referencia(f"google_compute_network.{REDE}.name")),
+            atributo("import_custom_routes", True),
+            atributo("export_custom_routes", True),
+        ])
+        if any(r.configuration.get("mirror_of") for r in bp.resources)
+        else ""
+    )
 
 
 def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:

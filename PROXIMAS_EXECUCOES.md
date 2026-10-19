@@ -351,6 +351,30 @@ recebe tráfego. A origem tem os dois (`f67fcd01`: 3 internet gateways e 1 NAT).
   criar o que foi cotado.
 - `terraform validate` nos quatro destinos.
 
+### Item 13 — entrada do banco fora da AWS
+
+**O defeito:** só a AWS anexava ao banco os grupos de segurança espelhados da origem. Nos
+outros destinos o pacote avisava "libere a porta a partir da rede de origem", e quem
+ficou na origem não alcançava o banco.
+
+**O que muda, destino por destino:**
+
+- **OCI:** o banco recebe os NSGs espelhados dos grupos dele na origem (PostgreSQL pelo
+  `network_details.nsg_ids`, Autonomous pelo `nsg_ids`). A regra da origem chega como
+  ela era: de outro grupo do pacote vira NSG → NSG; de grupo que ficou na origem vira o
+  CIDR dele, que é a liberação que o aviso pedia. Os nós do OKE também levam os NSGs do
+  pool, senão a regra "5432 a partir do grupo dos nós" não casaria. O HeatWave (MySQL)
+  não aceita NSG no provider fixado: para ele o aviso continua.
+- **Azure:** o banco delegado já aceita a entrada da `VirtualNetwork`, que inclui a rede de
+  origem ligada por VPN. O aviso vira essa informação.
+- **GCP:** o Cloud SQL fica na rede do serviço (acesso privado). O pacote passa a exportar
+  e importar as rotas personalizadas no peering desse acesso; com a VPN, quem ficou na
+  origem alcança o banco.
+- **AWS:** como está.
+
+**Quem é afetado:** pacotes com topologia e banco, na OCI e no GCP. A caracterização não
+muda (sem topologia). `terraform validate` nos quatro destinos.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |

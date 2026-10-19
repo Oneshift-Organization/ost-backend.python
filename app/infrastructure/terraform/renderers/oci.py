@@ -447,6 +447,14 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     return gerar(r, bp)
 
 
+def _nsgs(cfg: dict[str, Any]) -> str:
+    return referencia(
+        "["
+        + ", ".join(f"oci_core_network_security_group.{g}.id" for g in cfg["security_groups"])
+        + "]"
+    )
+
+
 def _subnet_do_banco(cfg: dict[str, Any]) -> str:
     """A subrede de dados espelhada (T3) ou, sem ela, a principal: o PostgreSQL e o
     HeatWave só existem dentro de uma subrede."""
@@ -486,6 +494,8 @@ def _postgresql(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("instance_count", nos),
         bloco_aninhado("network_details", [
             atributo("subnet_id", _subnet_do_banco(cfg), nivel=2),
+            # Item 13: os NSGs espelhados dos grupos do banco na origem
+            *([atributo("nsg_ids", _nsgs(cfg), nivel=2)] if cfg.get("security_groups") else []),
         ], nivel=1),
         bloco_aninhado("storage_details", [
             atributo("is_regionally_durable", True, nivel=2),
@@ -548,6 +558,7 @@ def _autonomous(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             # T3: endpoint privado na subrede de dados espelhada
             *([atributo("subnet_id", referencia(f"oci_core_subnet.{subredes[0]}.id"))]
               if subredes else []),
+            *([atributo("nsg_ids", _nsgs(cfg))] if cfg.get("security_groups") else []),
         ],
     )
 
@@ -607,6 +618,11 @@ def _cluster(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
                     ], nivel=1),
                     bloco_aninhado("node_config_details", [
                         atributo("size", n, nivel=2),
+                        *(
+                            [atributo("nsg_ids", _nsgs(g), nivel=2)]
+                            if g.get("security_groups")
+                            else []
+                        ),
                         bloco_aninhado("placement_configs", [
                             atributo(
                                 "availability_domain",

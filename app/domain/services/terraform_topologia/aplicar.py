@@ -201,6 +201,12 @@ def _kubernetes_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> No
                     "ram_gb": _parte(primeiro.get("ram_gb"), nos, _instancias(primeiro)),
                     "source_family": familia,
                     **({"subnet": primeiro["subnet"]} if primeiro.get("subnet") else {}),
+                    # Os grupos espelhados do pool: a regra "a partir do grupo dos nós" casa
+                    **(
+                        {"security_groups": list(primeiro["security_groups"])}
+                        if primeiro.get("security_groups")
+                        else {}
+                    ),
                 }
             )
             falta = nos
@@ -449,14 +455,9 @@ def _fronteira_do_escopo(
             novos.append(
                 f"E mais {len(fronteira) - _MAX_NA_FRONTEIRA} na seção de escopo do README."
             )
-        if tem_banco and portas_no_banco and destino != "aws":
-            novos.insert(
-                1,
-                f"Em {destino.upper()} o banco do pacote fica na subrede de dados, mas sem a "
-                "regra de entrada espelhada da origem (só a AWS anexa grupo ao banco): libere "
-                f"{', '.join(portas_no_banco)} a partir da rede de origem na subrede de dados, "
-                "ou quem ficou na origem não alcança o banco.",
-            )
+        aviso_do_banco = _aviso_da_entrada_do_banco(plano, destino, portas_no_banco)
+        if tem_banco and portas_no_banco and aviso_do_banco:
+            novos.insert(1, aviso_do_banco)
         if sai:
             novos.insert(
                 1,
@@ -465,6 +466,42 @@ def _fronteira_do_escopo(
             )
     plano.avisos[:0] = novos
     plano.nao_suportado += [str(a) for a in escopo.get("avisos") or []]
+
+
+def _aviso_da_entrada_do_banco(
+    plano: PlanoDerivado, destino: str, portas: list[str]
+) -> str | None:
+    """Como quem ficou na origem chega ao banco no destino (item 13)."""
+    lista = ", ".join(portas)
+    if destino == "oci":
+        sem_grupo = [
+            r.configuration.get("engine_family")
+            for r in plano.recursos
+            if r.resource_type == "managed_database" and not r.configuration.get("security_groups")
+        ]
+        if not sem_grupo:
+            return None
+        motivo = (
+            "o MySQL HeatWave não aceita NSG"
+            if "mysql" in sem_grupo
+            else "o banco não tinha grupo de segurança na origem"
+        )
+        return (
+            f"Na OCI {motivo}: libere {lista} a partir da rede de origem na lista de "
+            "segurança da subrede de dados, ou quem ficou na origem não alcança o banco."
+        )
+    if destino == "azure":
+        return (
+            f"Na Azure o banco aceita {lista} de toda a rede virtual (VirtualNetwork), que "
+            "inclui a rede de origem ligada por VPN: falta só a VPN entre as nuvens."
+        )
+    if destino == "gcp":
+        return (
+            "No GCP o Cloud SQL fica na rede do serviço (acesso privado); o pacote exporta as "
+            f"rotas da VPC para esse peering, então {lista} chega da origem pela VPN entre as "
+            "nuvens."
+        )
+    return None
 
 
 # ── disco raiz ──────────────────────────────────────────────────────────

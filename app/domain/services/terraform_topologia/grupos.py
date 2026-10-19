@@ -143,7 +143,8 @@ def espelhar_grupos(
 
 def _anexos(plano: PlanoDerivado, detalhe: Mapping[str, Any], destino: str) -> dict[str, list[str]]:
     """Recurso gerado → grupos de origem que ele herda (VM: a união da subrede;
-    banco na AWS com grupo de subredes: os grupos dele na origem)."""
+    banco na AWS e na OCI na subrede de dados: os grupos dele na origem; o HeatWave da
+    OCI não aceita NSG no provider fixado e fica fora)."""
     por_banco = {
         (b.get("classe"), b.get("motor"), bool(b.get("multi_az")), b.get("regiao")): b
         for b in detalhe.get("bancos") or []
@@ -153,7 +154,11 @@ def _anexos(plano: PlanoDerivado, detalhe: Mapping[str, Any], destino: str) -> d
         cfg = r.configuration
         if r.resource_type == "compute" and not cfg.get("disk_only"):
             grupos = _lista(cfg.get("placement_groups"))
-        elif r.resource_type == "managed_database" and destino == "aws" and cfg.get("db_subnets"):
+        elif (
+            r.resource_type == "managed_database"
+            and cfg.get("db_subnets")
+            and (destino == "aws" or (destino == "oci" and cfg.get("engine_family") != "mysql"))
+        ):
             grupos = _lista(cfg.get("source_groups"))
             if not grupos:
                 chave = (
