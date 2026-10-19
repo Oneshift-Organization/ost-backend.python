@@ -31,7 +31,8 @@ CONTRACT_VERSION = "agent-snapshot-v1"
 # v4.2: global weights 35/50/15; historical snapshots keep their original weights.
 # v4.3: a ordem de migração da topologia sai em etapas (nome, duração, detalhe) e os
 # riscos em alertas estruturados (título e tema), no contrato de `agent_views`.
-AUTHORITY_VERSION = "agent-authority-v4.3"
+# v5: lock-in efetivo da origem com proveniência e evidências provisórias.
+AUTHORITY_VERSION = "agent-authority-v5"
 
 
 def politica_de_decisao_atual() -> str:

@@ -158,3 +158,24 @@ async def test_com_inventario_grava_o_marcador() -> None:
     assert p.snapshot.inventory_marker == marcador_do_inventario(
         "fp-inv", inventarios.declaracoes_em
     )
+
+
+async def test_v2_optional_keeps_full_payload_and_has_separate_identity() -> None:
+    uc, _, _, _ = _uc(_COM_TOPOLOGIA)
+    v1 = await uc.execute(USER, REPORT)
+    v2 = await uc.execute(USER, REPORT, contract="agent-snapshot-v2")
+    again = await uc.execute(USER, REPORT, contract="agent-snapshot-v2")
+    assert v2.snapshot.payload == v1.snapshot.payload
+    assert v2.snapshot.fingerprint != v1.snapshot.fingerprint
+    assert v2.snapshot.versions["contract"] == "agent-snapshot-v2"
+    assert v2.snapshot.payload_fingerprint == hash_canonico(v2.payload)
+    assert "detalhe" in v2.payload["decision_support"]
+    assert "detalhe" not in v2.payload["topologia"]
+    assert again.reaproveitado and again.snapshot.id == v2.snapshot.id
+
+
+async def test_unknown_contract_fails_before_building_payload() -> None:
+    uc, snapshots, _, _ = _uc(_PAYLOAD)
+    with pytest.raises(ValueError, match="contrato"):
+        await uc.execute(USER, REPORT, contract="future")
+    assert not snapshots.linhas

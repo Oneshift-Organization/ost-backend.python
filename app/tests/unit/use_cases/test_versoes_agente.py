@@ -42,6 +42,7 @@ _ARQUIVOS_DA_AUTORIDADE = (
     "app/schemas/corporate_benefits.py",
     "app/domain/services/corporate_benefits.py",
     "app/domain/services/technical_assessment.py",
+    "app/domain/services/lock_in_efetivo.py",
     "app/domain/services/contestacao.py",
 )
 # Do `topologia_no_payload`, só o que roda no envio. O resto do arquivo monta o
@@ -57,6 +58,10 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 #   AUTHORITY_VERSION em `use_cases/agent/versoes.py` e registre o hash novo;
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
 _HASH_POR_VERSAO = {
+    # v5: lock-in da origem efetiva; classe/inventário estimado são provisórios.
+    "agent-authority-v5": (
+        "aaa89c0d5f5896e671ed9c92780e2435965a0b7a2082ef8420b382756cc00931"
+    ),
     # Hash trocado sem subir a versão (PLANO_EQUIVALENTES_E_TARIFAS §3):
     # `equivalence_pricing._CATEGORIES` ganhou logs, DNS, WAF, registro e métricas. As
     # chaves só existem em payload preparado depois da mudança; snapshot antigo anexa os

@@ -185,7 +185,7 @@ class ServicoOut(BaseModel):
     nivel: Nivel | None = Field(
         description="lado da origem, o mesmo de onde o score parte; null = a confirmar"
     )
-    fonte: Literal["catalogo", "informado"] | None
+    fonte: Literal["catalogo", "informado", "inventario", "classe"] | None
     nivel_sugerido: Nivel | None = Field(
         description="maior sugestão, só quando subiria ou preencheria o nível"
     )

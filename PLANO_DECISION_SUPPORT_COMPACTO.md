@@ -110,6 +110,10 @@ payload 158,9 → 99,6 KB (−37%); GCP 55,5 → 20,2 KB (payload 88,2 → 53,0 
 
 ## 7. Estado
 
+- 18/10/2026: K2 e K3 implementados com aceite no MCP: v2 opt-in e detalhe
+  congelado autenticado. V1 segue padrão. Testes de contrato sem banco e de
+  equivalência de submissão adicionados; validação conjunta no develop e
+  medição dos seis relatórios continuam pendentes. Não confundir PR com deploy.
 - 13/10/2026: plano e proposta ao MCP (`MCP.PLAN/11`). **K1 feito**:
   `use_cases/agent/representacao_v2.py`, com testes de propriedade nos dois bills
   reais (reconstrução exata sem as evidências; bloco menor que a metade). Nada

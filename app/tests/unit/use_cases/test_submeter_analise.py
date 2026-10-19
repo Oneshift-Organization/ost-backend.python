@@ -146,6 +146,15 @@ async def test_grava_a_revisao_com_hash_do_corpo() -> None:
     assert envios.gravados == [r.envio]
 
 
+async def test_representation_version_does_not_change_authoritative_submission() -> None:
+    v1 = _snapshot()
+    v2 = replace(v1, id=uuid4(), versions={**v1.versions, "contract": "agent-snapshot-v2"})
+    a = await _uc(v1)[0].execute(USER, v1.id, _ENTRADA)
+    b = await _uc(v2)[0].execute(USER, v2.id, _ENTRADA)
+    assert a.envio.analysis == b.envio.analysis
+    assert a.envio.request_hash == b.envio.request_hash
+
+
 async def test_parecer_fica_fora_da_autoridade_e_volta_intacto(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

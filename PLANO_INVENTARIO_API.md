@@ -13,6 +13,11 @@ invariantes têm teste.
 
 **Regras que continuam valendo:**
 
+- Na `score-7rs-v5` (18/10), o inventário também participa do lock-in da origem:
+  exclusividade maior sobe a nota de acoplamento; descer exige cobertura ≥90%
+  sem estimativa por tipo. Classe e inventário estimado são provisórios quando
+  decidem o fator. Fonte e motivo ficam na evidência. Custos e 7R não mudam;
+  históricos não são reinterpretados. Ver `docs/decision-support.md`.
 - O inventário é **opcional e aditivo**. Sem inventário, billing, análise e
   Terraform produzem exatamente o que produzem hoje.
 - Com inventário, a análise **não muda custo nem economia** (RI14).

@@ -36,7 +36,7 @@ Monta o payload determinístico (o mesmo do `GET /v1/analyses/{id}/request`
 recalculado, sem LLM), grava e devolve. **Grava: não é uma leitura.**
 
 ```json
-{"report_id": "…", "inventory_id": null}
+{"report_id": "…", "inventory_id": null, "contract": "agent-snapshot-v1"}
 ```
 
 **`201`** cria; **`200`** reaproveita (mesmo corpo de resposta):
@@ -47,8 +47,8 @@ recalculado, sem LLM), grava e devolve. **Grava: não é uma leitura.**
     "snapshot_id": "…", "report_id": "…", "inventory_id": null,
     "fingerprint": "…",           // SHA-256 de {versions, payload completo}
     "payload_fingerprint": "…",   // SHA-256 do JSON canônico do "payload" abaixo
-    "versions": {"contract": "agent-snapshot-v1", "decision_policy": "score-7rs-v3",
-                 "topology": null, "authority": "agent-authority-v2"},
+    "versions": {"contract": "agent-snapshot-v1", "decision_policy": "score-7rs-v5",
+                 "topology": null, "authority": "agent-authority-v5"},
     "created_at": "…", "expires_at": "…", "reused": false
   },
   "payload": { /* as chaves do /request; topologia compacta */ },
@@ -77,6 +77,28 @@ recalculado, sem LLM), grava e devolve. **Grava: não é uma leitura.**
 | 409 | `INVENTARIO_NAO_PROCESSADO` | sim |
 | 422 | `INVENTARIO_DE_OUTRA_NUVEM` | não |
 | 422 | `INVENTARIO_NAO_CORRESPONDE` | não |
+
+## Representação v2 opcional e detalhe congelado
+
+`contract` aceita `agent-snapshot-v1` (padrão) ou `agent-snapshot-v2`.
+Na v2, `decision_support` usa dicionário de textos, referência ao cenário do
+score e distribuição das evidências, sem alterar números, elegibilidade ou
+bloqueios. O backend persiste o mesmo payload completo; a representação entra
+no fingerprint e gera identidade própria. A submissão sempre usa o completo.
+`score_do_selecionado` é referência da nota exibida, não uma recomendação:
+respeitar `selected_provider` e `outcome`, inclusive `retain`.
+
+`GET /v1/agent/snapshots/{snapshot_id}/decision-support` funciona para v1/v2:
+
+```jsonc
+{"snapshot_id": "…", "decision_support": {/* completo */}, "sha256": "…"}
+```
+
+Usa as mesmas duas flags e o usuário autenticado. Não recalcula, renova validade
+ou grava. Snapshot expirado ainda existente pode ser consultado. Retorna 404
+para inexistente/de outro usuário; 409 `DECISAO_INDISPONIVEL` se não há decisão
+estruturada. `sha256` é o hash canônico apenas do bloco completo, diferente dos
+dois fingerprints do envelope. A consulta não autoriza envio.
 
 ## `POST /v1/agent/snapshots/{snapshot_id}/submissions`
 

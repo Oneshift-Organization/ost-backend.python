@@ -33,7 +33,9 @@ from app.api.v1.envelope import erro, erro_do_payload
 from app.core.config import get_settings
 from app.core.exceptions import ConflictError, NotFoundError
 from app.domain.entities.agent_snapshot import AgentSnapshot, AgentSubmission
+from app.domain.services.fingerprint_payload import hash_canonico
 from app.schemas.agent_snapshot import (
+    DecisionSupportSnapshotOut,
     EnvioDoAgenteIn,
     EnvioOut,
     EnvioRegistradoOut,
@@ -81,7 +83,7 @@ async def preparar_snapshot(
     _exigir_flags()
     try:
         preparado = await preparar_snapshot_uc(session).execute(
-            UUID(user.sub), entrada.report_id, entrada.inventory_id
+            UUID(user.sub), entrada.report_id, entrada.inventory_id, contract=entrada.contract
         )
     except PayloadDoAgenteError as e:
         raise erro_do_payload(e) from e
@@ -104,6 +106,28 @@ async def preparar_snapshot(
         ),
         payload=preparado.payload,
         pools_sem_equivalente=s.pools_sem_equivalente,
+    )
+
+
+@router.get(
+    "/snapshots/{snapshot_id}/decision-support",
+    response_model=DecisionSupportSnapshotOut,
+    summary="Decisão completa e congelada do snapshot, com hash canônico",
+)
+async def obter_decisao_snapshot(
+    snapshot_id: UUID, user: CurrentUser, session: DbSession
+) -> DecisionSupportSnapshotOut:
+    _exigir_flags()
+    snapshot = await consultar_envios_uc(session).obter_snapshot(UUID(user.sub), snapshot_id)
+    if snapshot is None:
+        raise erro(
+            404, "SNAPSHOT_NAO_ENCONTRADO", "snapshot não existe para este usuário", retryable=False
+        )
+    decision = snapshot.payload.get("decision_support")
+    if not isinstance(decision, dict):
+        raise erro(409, "DECISAO_INDISPONIVEL", "snapshot sem decisão estruturada", retryable=False)
+    return DecisionSupportSnapshotOut(
+        snapshot_id=snapshot.id, decision_support=decision, sha256=hash_canonico(decision)
     )
 
 
@@ -222,9 +246,7 @@ async def obter_acoplamento_do_envio(
             status.HTTP_404_NOT_FOUND, "ENVIO_NAO_ENCONTRADO", str(e), retryable=False
         ) from e
     except ConflictError as e:
-        raise erro(
-            status.HTTP_409_CONFLICT, "ANALISE_SEM_SERVICOS", str(e), retryable=False
-        ) from e
+        raise erro(status.HTTP_409_CONFLICT, "ANALISE_SEM_SERVICOS", str(e), retryable=False) from e
     return ServiceCouplingsResponse.de(visao)
 
 

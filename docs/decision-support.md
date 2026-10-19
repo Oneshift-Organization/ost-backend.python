@@ -1,4 +1,30 @@
-# Score determinístico e 7 Rs — política v4.2
+# Score determinístico e 7 Rs — política v5
+
+## Lock-in efetivo (v5, 18/10/2026)
+
+`score-7rs-v5` / `agent-authority-v5` mantêm os pesos **35/50/15**,
+os fatores internos e todas as regras 7R. A origem do fator lock-in passa por
+`lock_in_da_origem(workload, inventory_services(payload)[nome])`:
+
+- catálogo curado; inventário com exclusividade maior pode elevar o nível;
+- diminuir exige cobertura ≥90% e correlação não estimada;
+- sem evidência direta, classe unânime pode formar hipótese, nunca fato;
+- classe ou inventário estimado que decide o par torna a amostra provisória
+  e a nota parcial. Destino comprovadamente mais restritivo prevalece;
+- pior nível conhecido entre origem e destino; alternativas continuam sujeitas
+  à mesma capacidade curada. Ausência não vira nível baixo.
+
+Cada evidência expõe `lock_in_origem`, `lock_in_fonte` e `lock_in_motivo`, além
+do `lock_in` efetivo do par. "Migra junto" permanece no fator dependências,
+não duplica exclusividade da nuvem. O acoplamento v5 mostra a mesma origem e
+os mesmos níveis por destino; só arquitetura altera `nivel_sugerido` além dela.
+Históricos seguem o caminho da própria política e não são recalculados.
+
+A trava de autoridade inclui `lock_in_efetivo.py`, preservando hashes anteriores.
+Envios novos de snapshots anteriores são recusados por versão; repetição já
+gravada continua recuperável mesmo após expiração ou troca de versão.
+Não há migration, reanálise automática nem alteração nos preços da OCI.
+Esta entrega não implementa a proposta separada de portão financeiro/score v4.3.
 
 ## Rebalanceamento (v4.2)
 
@@ -25,9 +51,8 @@ desempatada pelo provedor, e `selected_provider` permanece nulo. Nenhum score
 anula bloqueios. O campo compacto legado `score_do_selecionado` referencia a
 nota exibida; não implica provedor recomendado. Histórico não é recalculado.
 
-Autoridade atual `agent-authority-v4.2`: snapshots anteriores não são reinterpretados
-no envio; repetições já persistidas mantêm idempotência. Esta versão é separada
-do lote futuro `score-7rs-v5` de lock-in por inventário: não o declara entregue.
+Na versão histórica `agent-authority-v4.2`, snapshots anteriores não eram reinterpretados
+no envio. A v5 mantém essa proteção e a idempotência de repetições já persistidas.
 
 ## Escopo e compatibilidade
 
@@ -38,7 +63,7 @@ Análises já persistidas não são recalculadas. Não requer migration de banco
 o snapshot e o resultado usam os campos JSON existentes.
 
 `decision_support` é um campo aditivo de `AnalysisV2Response`. Contrato
-`oneshift-decision-v1`, política `score-7rs-v4.2`, escala 0–100. O backend o
+`oneshift-decision-v1`, política `score-7rs-v5`, escala 0–100. O backend o
 recalcula após inferência, inclusive no fallback e na submissão do agente.
 Entradas do agente não podem substituir scores nem estratégias.
 
@@ -68,7 +93,8 @@ conservam seus eixos, notas e versão originais; não são recalculadas.
   Sem esse metadado, uma classe curada pode formar hipótese explícita:
   rehost=80, replatform=60, refactor=30. Hipótese mantém o score preliminar e
   nunca altera o fato de refatoração ou confirma uma estratégia 7 Rs.
-- Lock-in: baixo=100, médio=50, alto=0; vale a restrição conhecida mais forte.
+- Lock-in: baixo=100, médio=50, alto=0; vale a restrição conhecida mais forte,
+  com origem efetiva e proveniência descritas na seção v5.
 - Dependências: baixo=100, médio=50, alto=0 na fração de custo correlacionada
   pelo inventário (`topologia.detalhe.servicos`). Ausência de inventário é
   desconhecida, nunca dependência baixa. Não substitui lock-in do catálogo.
@@ -148,8 +174,8 @@ sem benefício após o prazo. Não tratar oferta potencial como economia permane
 O novo eixo usa `id=coverage`; `enterprise` continua significando governança
 em históricos. `enterprise_score` legado fica em zero nas novas respostas (não
 participa da fórmula); consumidores devem ler os eixos de `decision_support`.
-O contrato de snapshot usa `agent-authority-v4.2` (rebalanceamento sobre
-a permanência da v4.1; a v3 foi a do score normalizado): envios novos
+O contrato de snapshot usa `agent-authority-v5` (lock-in efetivo sobre
+o rebalanceamento e a permanência existentes): envios novos
 sobre snapshots de política/autoridade anterior são recusados por versão. Repetições já gravadas
 mantêm a idempotência existente. Nenhuma allowlist ou flag de envio é liberada.
 

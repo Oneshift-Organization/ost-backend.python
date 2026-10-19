@@ -331,6 +331,40 @@ async def test_relatorio_sem_analise_previa_recebe_o_envio(app: FastAPI, oci: UU
         await _apagar_snapshots(oci)
 
 
+async def test_v2_detail_and_submission_match_v1_without_rewriting_the_snapshot(
+    app: FastAPI, oci: UUID
+) -> None:
+    try:
+        async with _cliente(app) as c:
+            v1 = await _preparar(c, oci)
+            response = await c.post(
+                "/v1/agent/snapshots", json={"report_id": str(oci), "contract": "agent-snapshot-v2"}
+            )
+            assert response.status_code == 201, response.text
+            v2 = response.json()
+            sid = v2["snapshot"]["snapshot_id"]
+            assert sid != v1["snapshot"]["snapshot_id"]
+            assert v2["snapshot"]["versions"]["contract"] == "agent-snapshot-v2"
+            assert v2["snapshot"]["payload_fingerprint"] == hash_canonico(v2["payload"])
+            detail = await c.get(f"/v1/agent/snapshots/{sid}/decision-support")
+            assert detail.status_code == 200, detail.text
+            decision = v1["payload"]["decision_support"]
+            assert detail.json() == {
+                "snapshot_id": sid,
+                "decision_support": decision,
+                "sha256": hash_canonico(decision),
+            }
+            a = await _enviar(c, v1["snapshot"]["snapshot_id"], _ENVIO)
+            b = await _enviar(c, sid, _ENVIO)
+            assert a.status_code == b.status_code == 201
+            assert a.json()["analysis"] == b.json()["analysis"]
+            assert (
+                await c.get(f"/v1/agent/snapshots/{sid}/decision-support")
+            ).json() == detail.json()
+    finally:
+        await _apagar_snapshots(oci)
+
+
 async def test_mesmo_corpo_e_repeticao_e_corpo_novo_e_revisao(app: FastAPI, oci: UUID) -> None:
     try:
         async with _cliente(app) as c:

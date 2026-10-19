@@ -258,7 +258,8 @@ def _technical(workloads: list[dict], provider: str, inventory: dict) -> ScoreAx
             "lock_in",
             "Portabilidade",
             "0.2",
-            "lock-in baixo: 100; médio: 50; alto: 0; pior alternativa conhecida",
+            "lock-in baixo: 100; médio: 50; alto: 0; pior nível conhecido entre origem efetiva "
+            "(catálogo, inventário ou classe) e destino; hipótese decisiva mantém a nota parcial",
         ),
         (
             "dependencies",
