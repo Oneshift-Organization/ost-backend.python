@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -43,6 +43,7 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextUseCase,
 )
 from app.use_cases.analysis.decision_support import impose_decision, prepare_decision_payload
+from app.use_cases.analysis.equivalence_pricing import _CATEGORIES
 from app.use_cases.analysis.topologia_no_payload import MontarTopologiaUseCase
 
 # Shorthand used inside _add_financials to silently ignore bad Decimal conversions
@@ -298,6 +299,35 @@ _CHAVE_DA_CATEGORIA = {
 }
 
 
+def _com_rotulos_do_gratis(resumo: Mapping[str, Any]) -> dict[str, Any]:
+    """M11: o nome da categoria de cada item que custa zero no destino, para a tela."""
+    linhas = []
+    for linha in resumo.get("por_provedor") or []:
+        itens = linha.get("itens_gratis") if isinstance(linha, Mapping) else None
+        linhas.append(
+            {
+                **linha,
+                "itens_gratis": [
+                    {
+                        **item,
+                        "rotulo": _ROTULO_DA_CATEGORIA.get(
+                            _CHAVE_DA_CATEGORIA.get(str(item.get("categoria")), ""),
+                            str(item.get("categoria")),
+                        ),
+                    }
+                    for item in itens
+                ],
+            }
+            if itens
+            else linha
+        )
+    return {**resumo, "por_provedor": linhas} if "por_provedor" in resumo else dict(resumo)
+
+
+# Chave do payload → nome da categoria (o mesmo da tela de equivalentes)
+_ROTULO_DA_CATEGORIA = {chave: rotulo for chave, (rotulo, _) in _CATEGORIES.items()}
+
+
 def _por_servico(auxiliary: Any, fx: Any) -> dict[str, object]:
     """Quanto de cada categoria é de cada serviço da fatura. Com isso o preço da
     categoria chega ao serviço pela parte dele (equivalence_pricing)."""
@@ -513,7 +543,7 @@ def build_pipeline_llm_input_payload(
     if servicos:
         context_payload["servicos"] = servicos
     # Roll-up por provedor + recomendação, já calculado no backend. A IA narra.
-    resumo = getattr(ctx, "resumo_executivo", {}) or {}
+    resumo = _com_rotulos_do_gratis(getattr(ctx, "resumo_executivo", {}) or {})
     if resumo:
         context_payload["resumo_executivo"] = resumo
     # Fatos medidos de export detalhado. O bill agregado não ganha a chave.
