@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,6 +16,7 @@ class PrepararSnapshotIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     report_id: UUID = Field(description="O `report_id` de `GET /v1/billing-files`.")
+    contract: Literal["agent-snapshot-v1", "agent-snapshot-v2"] = "agent-snapshot-v1"
     inventory_id: UUID | None = Field(
         default=None, description="Com inventário, o payload ganha `topologia`."
     )
@@ -43,6 +44,12 @@ class SnapshotPreparadoOut(BaseModel):
         description="O payload determinístico, com a topologia compacta."
     )
     pools_sem_equivalente: list[str]
+
+
+class DecisionSupportSnapshotOut(BaseModel):
+    snapshot_id: UUID
+    decision_support: dict[str, Any]
+    sha256: str
 
 
 class PosicaoDoParecer(StrEnum):

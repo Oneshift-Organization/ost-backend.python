@@ -27,6 +27,10 @@ class ConsultarEnviosUseCase:
         snapshot = await self._snapshots.obter(envio.snapshot_id, user_id)
         return (envio, snapshot) if snapshot is not None else None
 
+    async def obter_snapshot(self, user_id: UUID, snapshot_id: UUID) -> AgentSnapshot | None:
+        """Leitura isolada por usuário; não renova nem reinterpreta o snapshot."""
+        return await self._snapshots.obter(snapshot_id, user_id)
+
     async def listar(
         self,
         user_id: UUID,

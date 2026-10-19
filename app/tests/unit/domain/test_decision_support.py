@@ -115,7 +115,7 @@ def test_lock_in_and_global_weights(decision_payload, lock, expected):
     workload["migration"]["lock_in"] = lock
     workload["targets"][0]["metadata"]["vendor_lock_in_level"] = lock
     result = build_decision_support(decision_payload)
-    assert result.policy_version == "score-7rs-v4.2"
+    assert result.policy_version == "score-7rs-v5"
     axes = {a.id: a for a in result.score.axes}
     assert {k: v.weight for k, v in axes.items()} == {
         "financial": 0.35,

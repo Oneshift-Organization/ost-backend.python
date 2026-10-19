@@ -15,7 +15,11 @@ gasto por construção, e o nível é o que o score usa:
 - ``por_destino``: o que o eixo técnico usa em cada cenário (pior entre origem
   e destino; desconhecido quando o mapeamento é ambíguo ou falta).
 
-O que o score não usa — a nota herdada do tipo de serviço, um pool sem a mesma
+Na v5, ``nivel`` e ``fonte`` vêm de ``lock_in_da_origem`` com inventário;
+``por_destino`` usa o mesmo ``assess`` do score. ``nivel_sugerido`` acrescenta
+somente arquitetura. O caminho abaixo é preservado para análises históricas.
+
+Nos históricos, o que o score não usa — a nota herdada do tipo de serviço, um pool sem a mesma
 arquitetura no destino, a exclusividade e a dependência do inventário — vai em
 ``sugestoes``, nunca em ``nivel``. ``nivel_sugerido`` é o nível que essa evidência
 daria pela regra do lote v4 (`lock_in_efetivo`: o inventário sobe, só desce com
@@ -161,7 +165,7 @@ class AcoplamentoDeServico:
     custo: Decimal
     fracao: Decimal | None
     nivel: str | None
-    fonte: str | None  # catalogo | informado
+    fonte: str | None  # catalogo | informado | inventario | classe
     nivel_sugerido: str | None
     sugestoes: tuple[Sugestao, ...]
     por_destino: Mapping[str, str | None]
@@ -273,6 +277,7 @@ def montar_acoplamento_por_servico(
         "score-7rs-v4.1",
         "score-7rs-v4.2",
     }
+    policy_v5 = (dados.get("decision_support") or {}).get("policy_version") == "score-7rs-v5"
     estimado = any(e.get("cost_estimated") for e in inventory_services(dados).values())
     banco = _banco(dados)
     auxiliar = _auxiliar(dados, rotulos or {})
@@ -284,6 +289,7 @@ def montar_acoplamento_por_servico(
             custo_atual,
             por_servico,
             policy_v4=policy_v4,
+            policy_v5=policy_v5,
             estimado=estimado,
             precos=precos or {},
             banco=banco,
@@ -340,6 +346,7 @@ def _linha(
     por_servico: Mapping[str, Any] | None,
     *,
     policy_v4: bool = False,
+    policy_v5: bool = False,
     estimado: bool = False,
     precos: Mapping[tuple[str, str], Decimal] | None = None,
     banco: _Banco | None = None,
@@ -355,18 +362,28 @@ def _linha(
     equivalentes: dict[str, str | None] = {}
     refatoracao: dict[str, bool | None] = {}
     opcoes: dict[str, tuple[OpcaoNoDestino, ...]] = {}
+    dependencias = (por_servico or {}).get(nome)
+    entrada = {**dependencias, "cost_estimated": estimado} if dependencias else None
+    origem_efetiva = lock_in_da_origem(workload, entrada)
     if no_score:
         # Sem destino, `technical_evidence` devolve exatamente o lado da origem:
         # é o ponto de partida do score, e o inferido sai desconhecido como lá.
         _, lock = technical_evidence(workload, None)
         nivel = lock if lock in _ORDEM else None
+        if policy_v5:
+            nivel = origem_efetiva.nivel
         alvos = unique_targets(workload)
         alternativas = _alternativas_por_destino(workload)
         for provedor in cenarios:
             alvo = alvos.get(provedor)
             refatora, lock = technical_evidence(workload, alvo) if alvo else (None, None)
-            if policy_v4:
-                evidence = assess(workload, provedor, {})["evidence"]
+            if policy_v4 or policy_v5:
+                evidence = assess(
+                    workload,
+                    provedor,
+                    {nome: entrada or {}} if policy_v5 else {},
+                    effective_lock=policy_v5,
+                )["evidence"]
                 refatora, lock = evidence["requires_refactoring"], evidence["lock_in"]
             por_destino[provedor] = lock if lock in _ORDEM else None
             refatoracao[provedor] = refatora
@@ -389,10 +406,12 @@ def _linha(
     }
     migracao = workload.get("migration") or {}
 
-    dependencias = (por_servico or {}).get(nome)
     sugestoes = (*_sugestoes_de_classe(workload), *_sugestoes_de_dependencia(dependencias))
-    entrada = {**dependencias, "cost_estimated": estimado} if dependencias else None
-    pela_evidencia = lock_in_da_origem(workload, entrada, aceitar_tipo_inferido=True).nivel
+    pela_evidencia = (
+        nivel
+        if policy_v5
+        else lock_in_da_origem(workload, entrada, aceitar_tipo_inferido=True).nivel
+    )
     alertas: tuple[str, ...] = ()
     if not no_score:
         alertas = ("Categoria não identificada: fica fora do score até ser classificada.",)
@@ -416,7 +435,7 @@ def _linha(
         custo=custo,
         fracao=_fracao(custo, custo_atual),
         nivel=nivel,
-        fonte=_fonte(workload) if nivel else None,
+        fonte=(origem_efetiva.fonte if policy_v5 else _fonte(workload)) if nivel else None,
         nivel_sugerido=_nivel_sugerido(nivel, pela_evidencia, sugestoes),
         sugestoes=sugestoes,
         por_destino=por_destino,

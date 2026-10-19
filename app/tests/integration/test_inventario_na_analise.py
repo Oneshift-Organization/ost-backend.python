@@ -96,7 +96,7 @@ async def test_payload_e_neutro_e_o_agente_recebe_a_topologia_compacta(
     assert "topologia" not in sem
     assert _sem_meta(com) == _sem_meta(sem)
     antes, depois = sem["decision_support"], com["decision_support"]
-    assert antes["policy_version"] == depois["policy_version"] == "score-7rs-v4.2"
+    assert antes["policy_version"] == depois["policy_version"] == "score-7rs-v5"
     assert antes["input_fingerprint"] != depois["input_fingerprint"]
     assert antes["workload_strategies"] == depois["workload_strategies"]
     cenarios_antes = {c["provider"]: c for c in antes["provider_scores"]}

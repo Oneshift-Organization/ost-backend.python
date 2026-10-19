@@ -17,6 +17,7 @@ from app.domain.entities.agent_snapshot import AgentSnapshot, agora, marcador_do
 from app.domain.repositories.i_agent_snapshot_repo import IAgentSnapshotRepository
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
 from app.domain.services.fingerprint_payload import hash_canonico
+from app.use_cases.agent.representacao_v2 import CONTRATO_V2, compactar_decision_support
 from app.use_cases.agent.versoes import versoes_do_payload
 from app.use_cases.analysis.payload_do_agente import MontarPayloadDoAgenteUseCase
 from app.use_cases.analysis.topologia_no_payload import compactar_topologia
@@ -47,12 +48,25 @@ class PrepararSnapshotUseCase:
         self._relogio = relogio
 
     async def execute(
-        self, user_id: UUID, report_id: UUID, inventario_id: UUID | None = None
+        self,
+        user_id: UUID,
+        report_id: UUID,
+        inventario_id: UUID | None = None,
+        *,
+        contract: str = "agent-snapshot-v1",
     ) -> SnapshotPreparado:
         """Levanta `PayloadDoAgenteError` nas mesmas condições do `/request`."""
+        if contract not in {"agent-snapshot-v1", CONTRATO_V2}:
+            raise ValueError("contrato de snapshot não suportado")
         montado = await self._montador.execute(user_id, report_id, inventario_id)
         versoes = versoes_do_payload(montado.payload)
+        versoes["contract"] = contract
         entregue = compactar_topologia(montado.payload)
+        if contract == CONTRATO_V2 and isinstance(entregue.get("decision_support"), dict):
+            entregue = {
+                **entregue,
+                "decision_support": compactar_decision_support(entregue["decision_support"]),
+            }
         snapshot = AgentSnapshot(
             user_id=user_id,
             report_id=report_id,

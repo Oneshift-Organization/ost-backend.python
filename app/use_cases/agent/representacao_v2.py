@@ -14,7 +14,7 @@ que decidem, e o MCP pediu que nada disso saia (revisão de 11/10, itens 5 e 6).
 `reconstruir_sem_evidencias` desfaz a compactação. É a prova, nos testes, de
 que só a evidência por item saiu, e o MCP pode fazer a mesma conta.
 
-Funções puras, sem I/O. Ainda não ligadas à preparação do snapshot (K2).
+Funções puras, sem I/O. Preparação opcional por contract=agent-snapshot-v2 (K2).
 """
 
 from __future__ import annotations
