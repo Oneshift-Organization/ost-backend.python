@@ -14,11 +14,11 @@
 
 | # | item | resumo | de quem | estado |
 |---|---|---|---|---|
-| 1 | Terraform: banco do destino pelo motor medido | Conferidos os quatro geradores (§5). Só o da OCI erra: escreve todo banco como Oracle Autonomous Database, com 1 OCPU por vCPU (o dobro), e a análise cotou OCI PostgreSQL. PostgreSQL passa a `oci_psql_db_system` e MySQL a HeatWave; o Autonomous fica para Oracle. Some o aviso falso "versão 16 fora do que o destino aceita" | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
-| 2 | Terraform: buckets do escopo | O bucket só nasce do custo dele; a fatura não liga o custo do S3 ao bucket, e o pacote sai sem bucket e sem aviso (bucket conta como "tipo que o pacote cria"). Passa a sair do inventário, pelo nome | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
-| 3 | Terraform: avisos verdadeiros | "AmazonVPC: nenhum recurso no inventário" com 3 VPCs e 15 subredes, e a rede criada; idem Route53 com a zona no inventário. Cost Explorer e Config passam a ser "gestão da conta, não infraestrutura" | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
-| 4 | Terraform: ocupação de origem burstable | O empacotador dimensiona burstable pela linha de base; o aviso compara com a vCPU nominal e pede "uma máquina a mais" sem motivo (146% na `f67fcd01`). Mesma base nos dois, dizendo que a origem é burstable | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
-| 5 | D1: memória da série B v1 da Azure | B1ls com 2 GiB (real 0,5), B1s 2 (real 1), B1ms 4 (real 2): o Terraform da Azure cria ¼ da memória (9× B1ls para 17,5 GiB). Tabela pela especificação oficial | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
+| 1 | Terraform: banco do destino pelo motor medido | Conferidos os quatro geradores (§5). Só o da OCI erra: escreve todo banco como Oracle Autonomous Database, com 1 OCPU por vCPU (o dobro), e a análise cotou OCI PostgreSQL. PostgreSQL passa a `oci_psql_db_system` e MySQL a HeatWave; o Autonomous fica para Oracle. Some o aviso falso "versão 16 fora do que o destino aceita" | nós | ✅ feito (develop `ba92bce`) |
+| 2 | Terraform: buckets do escopo | O bucket só nasce do custo dele; a fatura não liga o custo do S3 ao bucket, e o pacote sai sem bucket e sem aviso (bucket conta como "tipo que o pacote cria"). Passa a sair do inventário, pelo nome | nós | ✅ feito (develop `ba92bce`) |
+| 3 | Terraform: avisos verdadeiros | "AmazonVPC: nenhum recurso no inventário" com 3 VPCs e 15 subredes, e a rede criada; idem Route53 com a zona no inventário. Cost Explorer e Config passam a ser "gestão da conta, não infraestrutura" | nós | ✅ feito (develop `ba92bce`) |
+| 4 | Terraform: ocupação de origem burstable | O empacotador dimensiona burstable pela linha de base; o aviso compara com a vCPU nominal e pede "uma máquina a mais" sem motivo (146% na `f67fcd01`). Mesma base nos dois, dizendo que a origem é burstable | nós | ✅ feito (develop `ba92bce`) |
+| 5 | D1: memória da série B v1 da Azure | B1ls com 2 GiB (real 0,5), B1s 2 (real 1), B1ms 4 (real 2): o Terraform da Azure cria ¼ da memória (9× B1ls para 17,5 GiB). Tabela pela especificação oficial | nós | ✅ feito (develop `ba92bce`) |
 | 6 | M13: score v4.3 | Tabela de antes e depois pronta (§5, item 6), sobre a política v5 que o MCP pôs na develop (PR #37). Falta a decisão | usuário com o MCP; a tabela é nossa | decisão (tabela pronta) |
 | 7 | M1: segurança | Revogar a chave da service account do GCP que vazou nas branches órfãs; trocar `MCP_TOKEN`, o token do inspector e a `GCP_BILLING_API_KEY` | usuário (console e segredos do cluster) | decisão |
 
@@ -26,23 +26,23 @@
 
 | # | item | resumo | de quem | estado |
 |---|---|---|---|---|
-| 8 | M3: completar a análise sem rodar o LLM | Anexar inventário ou reanalisar recalcula o determinístico e reaproveita a narrativa; o LLM só roda se o resultado mudar. A narrativa antiga não pode citar número que mudou | nós | a fazer |
-| 9 | M11 / ponto 2 do MCP: economia comprovada × estimada | Somar por provedor a economia por preço oficial e a por premissa, com fonte e data de cada zero. Campo aditivo, fora dos arquivos travados; aviso ao MCP; a tela é do front | nós (back), front | a fazer |
-| 10 | Ponto 5 do MCP: caso Azure de US$ 471.870 | 55,66% de cobertura de preço; conferir capacidade, horas e licença dos dois pools que fazem a maior parte da economia | nós | a fazer |
-| 11 | D3 e D4: rótulos errados | Confiança do banco "low" com resto zero; `catalog_alias` contado como tipo inferido (alerta falso na OCI; Azure 27,8%) | nós | a fazer |
-| 12 | Terraform: gateways | Nenhum gerador cria internet gateway nem NAT; sem NAT a subrede do destino não sai para a internet | nós | a fazer |
-| 13 | Terraform: entrada do banco fora da AWS | Criar no destino a regra de entrada do banco (tcp/5432 a partir da rede de origem); hoje só o aviso | nós | a fazer |
-| 14 | Terraform: discos pelo inventário | O tamanho de cada volume do inventário, no lugar de custo ÷ taxa (78 GB estimados na `f67fcd01`) | nós | a fazer |
-| 15 | Terraform: EKS → OKE (e AKS, GKE) | Cluster e node pool. Na `f67fcd01` tudo roda no EKS e o pacote entrega VMs soltas. Reverte o "plano de controle fora do MVP" | usuário decide; nós | decisão |
-| 16 | Ponto 1 do MCP: franquia das chaves da OCI | 20 versões de chave HSM grátis, depois US$ 0,5334 por versão por mês. Premissa: 1 chave da origem = 1 versão | nós | a fazer |
-| 17 | Curadoria no develop | Fila: Kiro, Azure Bastion, EC2 - Other. Falta `CURADORES` no deploy do develop (Swagger dá 403) | usuário aprova; Luiz (infra) | decisão |
-| 18 | D2: critério do empacotador | Penalidade de desperdício sobre o custo pela fração ocupada (F1 a 52,41 no lugar de D2as_v5 a 25,18). Medir antes fração × máquina inteira | nós | a fazer |
+| 8 | M3: completar a análise sem rodar o LLM | Anexar inventário ou reanalisar recalcula o determinístico e reaproveita a narrativa; o LLM só roda se o resultado mudar. A narrativa antiga não pode citar número que mudou | nós | ✅ feito, em branch local (aguarda liberação) |
+| 9 | M11 / ponto 2 do MCP: economia comprovada × estimada | Somar por provedor a economia por preço oficial e a por premissa, com fonte e data de cada zero. Campo aditivo, fora dos arquivos travados; aviso ao MCP; a tela é do front | nós (back), front | ✅ feito (back e front), em branch local (aguarda liberação) |
+| 10 | Ponto 5 do MCP: caso Azure de US$ 471.870 | 55,66% de cobertura de preço; conferir capacidade, horas e licença dos dois pools que fazem a maior parte da economia | nós | ✅ feito (VM pelo medidor; licença ao custo de hoje), em branch local |
+| 11 | D3 e D4: rótulos errados | Confiança do banco "low" com resto zero; `catalog_alias` contado como tipo inferido (alerta falso na OCI; Azure 27,8%) | nós | ✅ feito, em branch local (aguarda liberação) |
+| 12 | Terraform: gateways | Nenhum gerador cria internet gateway nem NAT; sem NAT a subrede do destino não sai para a internet | nós | ✅ feito, em branch local (aguarda liberação) |
+| 13 | Terraform: entrada do banco fora da AWS | Criar no destino a regra de entrada do banco (tcp/5432 a partir da rede de origem); hoje só o aviso | nós | ✅ feito (OCI e GCP; HeatWave segue com aviso), em branch local |
+| 14 | Terraform: discos pelo inventário | O tamanho de cada volume do inventário, no lugar de custo ÷ taxa (78 GB estimados na `f67fcd01`) | nós | ✅ feito, em branch local (aguarda liberação) |
+| 15 | Terraform: EKS → OKE (e AKS, GKE) | Cluster e node pool. Na `f67fcd01` tudo roda no EKS e o pacote entrega VMs soltas. Reverte o "plano de controle fora do MVP" | usuário decide; nós | ✅ feito (decidido pelo usuário em 19/10), em branch local |
+| 16 | Ponto 1 do MCP: franquia das chaves da OCI | 20 versões de chave HSM grátis, depois US$ 0,5334 por versão por mês. Premissa: 1 chave da origem = 1 versão | nós | ✅ feito, em branch local; taxa nova pede seed_category_rates |
+| 17 | Curadoria no develop | Fila: Kiro, Azure Bastion, EC2 - Other. Falta `CURADORES` no deploy do develop (Swagger dá 403) | usuário aprova; Luiz (infra) | código feito (DE-PARA e EC2 - Other), em branch local; fila e CURADORES: decisão |
+| 18 | D2: critério do empacotador | Penalidade de desperdício sobre o custo pela fração ocupada (F1 a 52,41 no lugar de D2as_v5 a 25,18). Medir antes fração × máquina inteira | nós; a decisão é do usuário | medido (§5, item 18); decisão |
 
 ## 3. Se não der: a apresentação do MVP não precisa disso
 
 | # | item | resumo | de quem | estado |
 |---|---|---|---|---|
-| 19 | Terraform: balanceador, Vault, OCIR e zona DNS | Hoje o pacote diz "crie à parte". O conteúdo (segredos, imagens, registros DNS) não viaja pelo Terraform de jeito nenhum | nós | a fazer |
+| 19 | Terraform: balanceador, Vault, OCIR e zona DNS | Hoje o pacote diz "crie à parte". O conteúdo (segredos, imagens, registros DNS) não viaja pelo Terraform de jeito nenhum | nós | ✅ registro, cofre e zona DNS feitos (com o item 15); balanceador avulso: a fazer |
 | 20 | Ponto 4 do MCP + M4: compromisso vigente, transição e payback | Ler a data de fim da reserva e do Savings Plan (o CUR 2.0 traz) e mostrar à parte o que falta pagar; custo de transição; payback com o custo da migração informado | usuário decide; nós | decisão |
 | 21 | M12: resto da precisão da OCI | E3/E4/E5 com burst como destino de origem burstable; sync de banco por API; faturas GCP sem região | nós | a fazer |
 | 22 | Ponto 6 do MCP: `in_memory` no seed | A lista inicial do `seed_service_metadata.py` usa `in_memory`; o seed do DE-PARA a regrava com `in_memory_database`. Sem efeito | nós | a fazer |
@@ -272,8 +272,285 @@ eixo de cobertura, e se a v4.3 entra sobre a v5 (como simulado) ou a substitui. 
 mudança exige subir `AUTHORITY_VERSION` (arquivo travado) e aviso ao MCP. Tabela
 completa: `m13_saida.json` (scratchpad da sessão), gerada por `m13_pod.py`.
 
+### Itens 15 e 19 — Kubernetes, registro de imagens, segredos e DNS no Terraform do escopo
+
+Decidido pelo usuário em 19/10: o Kubernetes é essencial e não pode ficar fora do pacote,
+assim como os outros serviços gerenciados que o inventário mostra. Referência: o pacote da
+análise `b01f59da` (o mesmo inventário da `f67fcd01`, 11 serviços marcados).
+
+**O que o inventário já traz (AWS, Azure, GCP):** o cluster com versão e subredes; cada
+nó ligado ao cluster ("membro de") e ao grupo de nós (tag `eks:nodegroup-name`,
+`kubernetes.azure.com/agentpool`, `goog-k8s-node-pool-name`); o balanceador que o
+controlador do cluster cria para um Service, também ligado ao cluster; registro de imagens
+e segredos marcados como componente; a zona de DNS pelo tipo nativo. Na `f67fcd01`:
+`eks-kitconta-prd` 1.35, grupos `ng-infra-arm` (t4g.xlarge) e `ng-microservices-arm`
+(r7g.large), o NLB do Kong (Service `LoadBalancer`, 80 e 443), 18 repositórios, 18
+segredos e a zona `kitconta.internal.`.
+
+**O que muda:**
+
+- **Cluster:** um cluster gerenciado por cluster do escopo, com os grupos de nós dele
+  (OKE, EKS, AKS, GKE). Os pools de máquinas que são nós do cluster deixam de virar VM
+  avulsa e viram o grupo de nós, com a máquina e a quantidade que a análise cotou; pool
+  só em parte no cluster é dividido pela contagem de nós. A versão medida vira o default
+  da variável quando o destino aceita o formato; senão a variável fica sem default.
+  Some a frase "plano de controle fora do MVP".
+- **Balanceador do cluster:** não vira recurso. Ele nasce do Service do cluster no destino;
+  o pacote diz qual Service e quais portas.
+- **Registro de imagens:** um repositório por repositório de origem (OCI, AWS); na Azure um
+  registro; no GCP um repositório Docker. As imagens não viajam pelo Terraform (copiar com
+  `skopeo`/`crane`).
+- **Segredos:** na AWS e no GCP, o segredo vazio com o nome da origem; na Azure e na OCI,
+  o cofre (o segredo exige valor na criação), com os nomes no README. Valor de segredo
+  nunca viaja.
+- **Zona de DNS:** uma por zona de origem; privada, ligada à rede do pacote, salvo quando
+  o inventário diz que é pública. Os registros não viajam.
+- **"Só o serviço":** registro, segredo e zona sem aplicação (sem tag) vão junto quando o
+  serviço deles foi escolhido: eles só migram pela escolha do serviço.
+
+**Quem é afetado:**
+
+- Só o pacote do escopo com cluster ou com esses componentes, nos quatro destinos. O
+  pacote sem escopo e a caracterização não mudam.
+- Custo e análise: não mudam (o Terraform não tem preço). As VMs que viram nós somem da
+  lista de máquinas; a capacidade é a mesma.
+- `unsupported_items` encolhe; o diálogo do front, que mostrava a lista inteira, fica
+  menor (o botão escondido pelo excesso de avisos é do front, item à parte).
+- Variáveis novas sem default onde a análise não sabe (versão do Kubernetes quando o
+  destino exige formato próprio, papel IAM na AWS).
+- Validação: `terraform validate` com os providers fixados nos quatro destinos.
+
+### Item 12 — saída para a internet: gateway de internet e NAT
+
+**O defeito, nos quatro destinos:** o pacote com a rede espelhada cria a rede e as
+subredes, mas nenhuma saída. Subrede privada sem NAT não baixa imagem, pacote nem
+atualização; o nó do Kubernetes não sobe. Subrede pública sem gateway de internet não
+recebe tráfego. A origem tem os dois (`f67fcd01`: 3 internet gateways e 1 NAT).
+
+**O que muda (só no pacote com topologia, onde as subredes vêm do espelho):**
+
+- Recurso novo de saída da rede: subrede privada sai pela NAT; subrede pública, pelo
+  gateway de internet.
+- OCI: internet gateway e NAT gateway; a tabela de rotas padrão da VCN aponta para a NAT;
+  a subrede pública ganha a tabela com o gateway de internet.
+- AWS: internet gateway, NAT gateway com IP elástico numa subrede pública própria (/28
+  livre no fim da faixa da rede: o NAT da AWS só funciona em subrede pública) e as
+  tabelas de rotas privada e pública associadas às subredes.
+- Azure: NAT gateway com IP público, associado às subredes privadas (menos a delegada ao
+  banco); a Azure não tem gateway de internet à parte (IP público na VM).
+- GCP: Cloud Router com Cloud NAT para todas as subredes; a rota padrão para a internet
+  já vem com a VPC.
+- A frase da VPC no "o que fica fora" passa a dizer que internet e NAT são recriados e
+  que a VPN não é.
+
+**Quem é afetado:**
+
+- Pacotes com topologia, nos quatro destinos. Sem topologia, nada muda (caracterização).
+- Custo: o NAT do destino tem preço (OCI grátis; AWS, Azure e GCP cobram por hora e por
+  GB). A análise já cota o NAT da origem pela quantidade medida; o pacote só passa a
+  criar o que foi cotado.
+- `terraform validate` nos quatro destinos.
+
+### Item 13 — entrada do banco fora da AWS
+
+**O defeito:** só a AWS anexava ao banco os grupos de segurança espelhados da origem. Nos
+outros destinos o pacote avisava "libere a porta a partir da rede de origem", e quem
+ficou na origem não alcançava o banco.
+
+**O que muda, destino por destino:**
+
+- **OCI:** o banco recebe os NSGs espelhados dos grupos dele na origem (PostgreSQL pelo
+  `network_details.nsg_ids`, Autonomous pelo `nsg_ids`). A regra da origem chega como
+  ela era: de outro grupo do pacote vira NSG → NSG; de grupo que ficou na origem vira o
+  CIDR dele, que é a liberação que o aviso pedia. Os nós do OKE também levam os NSGs do
+  pool, senão a regra "5432 a partir do grupo dos nós" não casaria. O HeatWave (MySQL)
+  não aceita NSG no provider fixado: para ele o aviso continua.
+- **Azure:** o banco delegado já aceita a entrada da `VirtualNetwork`, que inclui a rede de
+  origem ligada por VPN. O aviso vira essa informação.
+- **GCP:** o Cloud SQL fica na rede do serviço (acesso privado). O pacote passa a exportar
+  e importar as rotas personalizadas no peering desse acesso; com a VPN, quem ficou na
+  origem alcança o banco.
+- **AWS:** como está.
+
+**Quem é afetado:** pacotes com topologia e banco, na OCI e no GCP. A caracterização não
+muda (sem topologia). `terraform validate` nos quatro destinos.
+
+### Item 14 — discos do escopo pelo inventário
+
+**O defeito, nas quatro nuvens:** no pacote do escopo o disco sai do custo das linhas
+(custo ÷ taxa), num disco único estimado (78 GB na `f67fcd01`), embora o inventário traga
+cada volume com tamanho, tipo e se é de boot. Pior: os volumes da `f67fcd01` são 2 discos
+de boot de nós e 4 volumes persistentes do Kubernetes (PVC); nenhum deles é disco avulso.
+
+**O que muda (pacote do escopo com inventário):**
+
+- O recorte leva os discos do escopo com tamanho, categoria, boot e cluster.
+- Disco de boot não vira disco: é o disco raiz da máquina (ou do nó).
+- Volume persistente do cluster não vira disco: nasce do driver de armazenamento (CSI) do
+  cluster no destino; o pacote diz quantos e quantos GB, para recriar a StorageClass.
+- O resto vira disco pelo tamanho medido, agrupado por categoria e tamanho (`count`), no
+  lugar do disco estimado pelo custo.
+- Escopo sem disco no inventário: o disco pelo custo, como hoje.
+
+**Quem é afetado:** só o pacote do escopo com discos no inventário, nos quatro destinos.
+Caracterização igual. O custo da análise não muda.
+
+### Item 16 — franquia das chaves na OCI (ponto 1 do MCP)
+
+**O defeito:** a taxa de chave da OCI é zero sempre. O cofre padrão da OCI não cobra as
+primeiras 20 versões de chave protegida por HSM; acima disso, US$ 0,5334 por versão por
+mês (lista de preços da Oracle, conferida em 16/10, já anotada no seed).
+
+**O que muda:** a franquia deixa de ser regra só do egress e vira tabela por categoria
+(egress: 10 TB na OCI, 100 GB na AWS e na Azure; chaves: 20 na OCI). A taxa de chave da
+OCI passa a 0,5334 por mês, com as 20 primeiras grátis. Premissa: cada chave da origem é
+uma versão (a fatura não diz quantas versões cada chave tem).
+
+**Quem é afetado:** só a OCI como destino, e só faturas com mais de 20 chaves. Precisa
+gravar a taxa nova (`seed_category_rates`) em cada ambiente, com autorização. Análises
+gravadas não mudam.
+
+### Item 11 — D3 e D4: dois rótulos errados
+
+- **D3:** a cotação do banco marcava confiança "low" sempre que o destino não tinha a
+  razão do resto (armazenamento, backup), mesmo com resto zero (banco todo em instância,
+  como no mock da Azure). Passa a "low" só quando há resto e ele fica ao custo da origem.
+- **D4:** `premissas.tipo_servico_inferido` contava o apelido do catálogo
+  (`catalog_alias`) como tipo inferido, enquanto o resto do sistema (`CURATED`, o score e
+  a portabilidade) o trata como curado. O alerta "tipo inferido concentrado" acusava
+  falso (OCI; Azure 27,8%). Passa a usar a mesma regra.
+
+**Quem é afetado:** só rótulos. D3 pode subir a confiança do banco (e a da análise, que
+pesa pelo valor cotado) onde o resto é zero; D4 tira o alerta falso da reconciliação. Os
+números de custo, economia e nota não mudam. Análises gravadas só mudam ao reanalisar.
+
+### Item 9 — M11 (ponto 2 do MCP): economia comprovada × estimada
+
+**O que muda (backend, aditivo):** cada linha de `resumo_executivo.por_provedor` ganha
+`economia_por_fonte` — a economia de cada parte cotada somada pela confiança da cotação:
+`preco_oficial` (preço da API do provedor, ou taxa oficial gravada com fonte e data) e
+`estimada` (taxa de referência, razão de taxas, premissa e o compromisso de compute que
+sai da origem) — e `itens_gratis`, a lista do que custa zero no destino (NAT, IP, segredos
+na OCI) com a categoria, a economia, a fonte e a data da taxa. A soma das duas partes é a
+`economia_mensal` de sempre.
+
+**Quem é afetado:** o payload ganha campos; nenhum número muda. O agente (MCP) recebe os
+campos no snapshot: nota ao MCP. A tela é do front (passo seguinte). Análises gravadas só
+ganham os campos ao reanalisar.
+
+### Item 10 — caso Azure de US$ 471.870 (ponto 5 do MCP): VM pelo nome do medidor
+
+**O que a auditoria achou (develop, só leitura, análise `d2993418`):** o pool "general"
+de brazilsouth custa US$ 77.487/mês e entra com 126 vCPU e **0 GB** de memória; a OCI o
+cota a US$ 1.428. São US$ 614 por vCPU-mês na origem, dez vezes o normal. Sozinho, ele faz
+~US$ 76 mil dos US$ 164 mil de economia da OCI.
+
+**Causa, geral:** a exportação da Azure traz a VM só pelo nome do medidor
+(`Virtual Machines | Edsv5 Series | E16ds v5`), sem o SKU (`Standard_E16ds_v5`) nem a
+vCPU. O agregador lê a vCPU pelo parser da AWS no tipo de uso e pelo da Azure só no SKU:
+nenhum entende "E16ds v5". As horas de 22 mil instâncias E16ds v5 (16 vCPU cada) ficam
+sem capacidade, e a família vira "general". Vale para toda fatura da Azure exportada com o
+medidor no lugar do SKU.
+
+**O que muda:** o tamanho da VM sai também do nome do medidor ("E16ds v5" →
+`Standard_E16ds_v5`, "D16s v5 Spot" → `Standard_D16s_v5`, "B2ms" → `Standard_B2ms`), com
+as regras de sempre do parser da Azure (geração v1/v2 de D e E recusada, tabela da B v1).
+Só para linha da Azure. A família do pool sai do mesmo tamanho (`EDSV5`, `DSV5`).
+
+**Quem é afetado:** análises de origem Azure cuja fatura não traz o SKU. A capacidade da
+origem passa a ser a real; o destino é cotado por ela: o custo de destino sobe e a
+economia falsa some. Os pools passam a se chamar pela família. Precisa só reanalisar (o
+agregador relê as linhas). Medido antes e depois nas faturas do develop, abaixo.
+
+**Achado na medição, também geral:** a licença (SQL Server, sistema operacional) entrava
+no custo de origem do pool que o destino substitui, mas o destino é cotado só pela
+capacidade: a licença virava economia. Antes isso aparecia pouco porque a licença caía num
+pool sem máquina, descartado da cotação (e o custo dela sumia da conservação). Agora:
+
+- licença sem máquina no próprio pool vai para o pool de maior capacidade do mesmo projeto
+  e região (a conservação fecha);
+- o custo de origem que o destino substitui é só o de máquina: a licença fica no saldo
+  mantido ao custo de hoje, a regra que a tela de equivalentes já mostra ("vai com a
+  máquina, ao custo de hoje").
+
+Afeta toda análise com licença cobrada à parte (Azure, GCP): o destino sobe pelo valor da
+licença, e a economia cai dele.
+
+**Medido no develop (mesmo banco; código da develop × branch; nada gravado), US$/mês:**
+
+| fatura | destino | economia antes | economia depois | cobertura |
+|---|---|---|---|---|
+| azure_billing_2026-09 (US$ 471.870) | OCI | 205.524 | 167.771 | 0,64 → 0,61 |
+| | GCP | 119.448 | 21.770 | 0,67 → 0,64 |
+| | AWS | 102.177 | 2.321 | 0,67 → 0,64 |
+| Cost Explorer AWS, CUR, GCP, fatura AWS, OCI | todos | iguais | iguais | iguais |
+
+Na Azure, os pools passam de "general" (126 vCPU, 0 GB) às famílias reais (EDSV5, DSV5,
+ESV5, DDSV5, LSV3); somem os alertas `familia_generica_concentrada` e
+`preco_vcpu_implausivel`; a conservação fecha; a nota da OCI vai de 88,9 a 85,9 e a
+recomendação segue OCI.
+
+### Item 18 — D2, medição (sem mudança de código)
+
+**Pergunta do council (L2):** quanto a cotação pela fração ocupada (capacidade-hora, a
+base que o usuário decidiu no PLANO_EMPACOTAMENTO) difere das máquinas inteiras que o
+Terraform cria?
+
+**Medido nas análises do develop (19/10, só leitura):** 18 pools, em 8 faturas, têm as
+máquinas inteiras custando mais de 1,5 vez o cotado. Todos são pools quase ociosos (0,0 a
+0,05 vCPU de média): cotados a centavos, provisionados como uma máquina de ~US$ 70/mês.
+Diferença por fatura: de US$ 131 a US$ 1.521/mês (menos de 2% de uma fatura de US$ 92 mil).
+Ressalva: só AWS e Azure gravam o preço por hora no payload, e muitos equivalentes não
+gravam a quantidade de instâncias; a escolha do SKU (F1 a US$ 52 no lugar de D2as_v5 a
+US$ 25) só se mede rodando o empacotador com os candidatos, não pelo payload.
+
+**Decisão do usuário, antes de mudar:** (a) manter a capacidade-hora e só avisar no
+Terraform quando a máquina inteira passa de 1,5 vez o cotado (barato, já há o aviso de
+ocupação baixa); (b) escolher o SKU pela máquina inteira e cotar pela fração (o council:
+"escolher e cotar pela mesma base"); (c) um piso de cotação de uma máquina por pool
+ligado. Recomendação: (a) agora e (b) depois de rodar o empacotador com os candidatos de
+cada fatura.
+
+### Item 17 — curadoria: o que dá para resolver no código (a aprovação segue com o usuário)
+
+Fila do develop em 19/10: Kiro (AWS), Azure Bastion, EC2 - Other (AWS).
+
+- **Azure Bastion:** o DE-PARA não tinha bastion em nenhuma nuvem. Linhas novas, tipo
+  `bastion_host`: Azure Bastion, OCI Bastion, AWS Systems Manager Session Manager e
+  Identity-Aware Proxy do GCP (docs oficiais de cada um).
+- **Kiro:** IDE com agente de IA da AWS; entra no tipo que já existe,
+  `ai_coding_assistant` (Amazon Q Developer, GitHub Copilot, Gemini Code Assist).
+- **EC2 - Other:** não é um serviço, é o agrupamento do Cost Explorer para EBS, snapshot,
+  NAT, IP elástico e tráfego. Resolvido pelo uso de cada linha (`servico_pelo_uso`), como o
+  "Storage" da Azure e o "Networking" do GCP: o tipo vale para o serviço quando um alvo
+  tem 60% ou mais do custo; mistura de verdade fica sem tipo.
+
+**Quem é afetado:** faturas com esses nomes passam a ter tipo e equivalentes (Portabilidade,
+lock-in, tela de equivalentes); o custo não muda (sai por categoria). O DE-PARA vai a 864
+linhas: precisa do `seed_from_csv` em cada ambiente. As três sugestões da fila podem ser
+aprovadas (Bastion e Kiro pelo nome novo) ou recusadas (EC2 - Other, resolvido pelo uso):
+decisão do usuário. `CURADORES` no deploy do develop segue com o Luiz.
+
+### Item 8 — M3: reanálise sem rodar o LLM quando os números não mudam
+
+**O que muda:** antes de chamar o LLM, o pipeline compara os números que a narrativa cita
+(custo atual, recomendado, custo, economia, cobertura e confiança de cada destino, e a nota
+e a política do `decision_support`) com os da última análise concluída do mesmo billing.
+Iguais: a narrativa anterior é reaproveitada (a autoridade do backend e a decisão são
+reaplicadas sobre o payload novo, como sempre), e a análise ganha o aviso
+`NARRATIVA_REAPROVEITADA` com o id de onde veio. Diferentes, ou `?nova_narrativa=true` na
+rota de início: o LLM roda. O payload gravado é sempre o novo (topologia, preços).
+
+**Quem é afetado:** anexar inventário e reanalisar sem mudança de número deixam de gastar
+LLM e terminam em segundos (menos risco de o job morrer num deploy). A narrativa nunca cita
+número que mudou: qualquer diferença nos números citados força o LLM. O agente (MCP) não
+muda: o snapshot é montado do payload, não da narrativa. O `AnalysisStartOptions` é arquivo
+travado da autoridade; por isso a opção entra como parâmetro da rota.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |
 |---|---|---|---|
+| 18/10 | Itens 1 a 5 | Banco da OCI pelo motor; buckets do escopo pelo inventário; avisos do que fica fora do pacote; ocupação burstable pela base gravada; especificação oficial das máquinas fora da regra (Azure B1, AWS geração anterior). Caso real `f67fcd01` conferido no develop: PostgreSQL 16 na subrede de dados, 3 buckets, VPC e Route53 com a frase certa, T4G a 73% sem aviso. Bateria completa: 2634 testes; CI verde | `ba92bce` |
+| 18/10 | Sync da Azure no develop | `sync_prices --providers azure --zonas todas`: 8650 preços; B1ls 2 → 0,5 GiB, B1s 2 → 1, B1ms 4 → 2 (9 regiões) | — |
 | 18/10 | Auditoria do MCP | Conferida ponto a ponto: banco por partes, SSD com VPU, DE-PARA da OCI (139 linhas), VPN da Azure e "sem equivalente na OCI" já estavam na develop depois do `684029c` que ela leu; seis pontos seguem abertos (itens 6, 9, 10, 16, 20, 22) | — |

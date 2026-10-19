@@ -42,6 +42,10 @@ SEGREDO = "secrets"
 SEGREDO_OPERACOES = "secrets_operations"
 CHAVE = "key_management"
 CHAVE_OPERACOES = "key_management_operations"
+# Chaves que o destino não cobra por mês: a OCI não cobra as primeiras 20 versões de chave
+# protegida por HSM no cofre padrão (lista de preços da Oracle, conferida em 16/10/2026).
+# Premissa: cada chave da origem é uma versão
+FRANQUIA_DE_CHAVES: Mapping[str, Decimal] = {"oci": Decimal("20")}
 SEGURANCA_OUTROS = "security_other"
 SERVERLESS = "serverless_compute"
 ARQUIVOS = "file_storage"

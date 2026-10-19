@@ -47,7 +47,8 @@ def test_fundacao_de_rede_vira_a_rede_do_pacote() -> None:
     aviso = _avisos()["AmazonVPC"]
     assert "vira a rede do pacote pelo espelho" in aviso
     assert "15 AWS::EC2::Subnet" in aviso
-    assert "gateways" in aviso
+    assert "gateway de internet e NAT" in aviso
+    assert "a VPN entre as nuvens não é criada" in aviso
     assert "nenhum recurso" not in aviso
 
 

@@ -19,7 +19,7 @@ from uuid import UUID
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.domain.entities.analysis_job import AnalysisJob, AnalysisStatus
-from app.domain.entities.topologia import FUNDACAO, TipoDeRecurso
+from app.domain.entities.topologia import FUNDACAO, TipoDeRecurso, TipoDeRelacao
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.domain.repositories.i_custo_por_recurso import ILeitorDeCustoPorRecurso
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
@@ -45,6 +45,10 @@ from app.domain.services.currency import FxRate, convert, identity_rate
 from app.domain.services.sku_matcher import extract_family
 from app.domain.services.terraform_topologia.escopo import (
     BucketDoEscopo,
+    ClusterDoEscopo,
+    ComponenteDoEscopo,
+    DiscoDoEscopo,
+    GrupoDeNos,
     LigacaoEntreNuvens,
     RecorteDoEscopo,
     familia_da_maquina,
@@ -120,6 +124,79 @@ class RecursoDoEscopo:
     categoria_disco: str | None = None
     classe: str | None = None
     motor: str | None = None
+    # Kubernetes e serviços gerenciados no Terraform do escopo (itens 15 e 19): o
+    # cluster de que o recurso é membro, o grupo de nós, a versão e o componente
+    cluster: str | None = None
+    grupo_de_nos: str | None = None
+    versao: str | None = None
+    componente: str | None = None
+    # Disco: o tamanho medido e se é o de boot (item 14)
+    tamanho_gb: int | None = None
+    boot: bool = False
+
+
+# Tag do grupo de nós em cada nuvem: grupo gerenciado do EKS (e do eksctl), pool do
+# AKS, pool do GKE. Sem tag, os nós se agrupam pela família da máquina
+_TAGS_DO_GRUPO_DE_NOS = (
+    "eks:nodegroup-name",
+    "alpha.eksctl.io/nodegroup-name",
+    "kubernetes.azure.com/agentpool",
+    "aks-managed-poolname",
+    "poolname",
+    "goog-k8s-node-pool-name",
+)
+# Zona de DNS pelo tipo nativo: o inventário não a marca como componente
+_ZONAS_DNS = frozenset(
+    {
+        "AWS::Route53::HostedZone",
+        "microsoft.network/dnszones",
+        "microsoft.network/privatednszones",
+        "dns.googleapis.com/ManagedZone",
+        "oci_dns_zone",
+    }
+)
+ZONA_DNS = "zona_dns"
+
+
+def _grupo_de_nos(tags: Mapping[str, str]) -> str | None:
+    minusculas = {k.lower(): v for k, v in tags.items()}
+    return next((minusculas[k] for k in _TAGS_DO_GRUPO_DE_NOS if minusculas.get(k)), None)
+
+
+def _componente(recurso: Any) -> str | None:
+    if recurso.tipo_nativo in _ZONAS_DNS:
+        return ZONA_DNS
+    return _texto_cru(recurso.atributos.get("componente"))
+
+
+def _recurso_do_escopo(chave: str, r: Any, indice: Indice, custo: Decimal) -> RecursoDoEscopo:
+    cluster = next(
+        (
+            c
+            for c in indice.para(chave, TipoDeRelacao.MEMBRO_DE)
+            if indice.tipo(c) is TipoDeRecurso.CLUSTER_KUBERNETES
+        ),
+        None,
+    )
+    return RecursoDoEscopo(
+        chave=chave,
+        nome=r.nome,
+        tipo=str(r.tipo),
+        tipo_nativo=r.tipo_nativo,
+        regiao=r.regiao,
+        custo=custo,
+        subredes=tuple(sorted(indice.subredes_de(chave))),
+        familia=familia_da_maquina(_texto(r.atributos.get("tipo_maquina"))),
+        categoria_disco=_texto(r.atributos.get("categoria_disco")),
+        classe=_texto_cru(r.atributos.get("classe")),
+        motor=_texto_cru(r.atributos.get("motor")),
+        cluster=cluster,
+        grupo_de_nos=_grupo_de_nos(r.tags) if cluster else None,
+        versao=_texto_cru(r.atributos.get("versao")),
+        componente=_componente(r),
+        tamanho_gb=tamanho if isinstance(tamanho := r.atributos.get("tamanho_gb"), int) else None,
+        boot=bool(r.atributos.get("boot")),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +228,8 @@ class ContextoDoEscopo:
     cargas_no_cluster: Mapping[str, CargasDoCluster] = field(default_factory=dict)
     # Serviço → o que o inventário tem dele: diz o que fica fora do pacote sem mentir
     no_inventario: Mapping[str, ServicoNoInventario] = field(default_factory=dict)
+    # Registro, segredo e zona de DNS fora das aplicações, com o serviço da fatura
+    sem_aplicacao: Mapping[str, RecursoDoEscopo] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -334,22 +413,18 @@ class EscopoDeMigracaoUseCase:
             correspondencia=correspondencia,
             premissas=tuple((p.campo, p.valor, p.base) for p in analise.premissas),
             recursos={
-                chave: RecursoDoEscopo(
-                    chave=chave,
-                    nome=r.nome,
-                    tipo=str(r.tipo),
-                    tipo_nativo=r.tipo_nativo,
-                    regiao=r.regiao,
-                    custo=custo_do_recurso.get(chave, _ZERO),
-                    subredes=tuple(sorted(indice.subredes_de(chave))),
-                    familia=familia_da_maquina(_texto(r.atributos.get("tipo_maquina"))),
-                    categoria_disco=_texto(r.atributos.get("categoria_disco")),
-                    classe=_texto_cru(r.atributos.get("classe")),
-                    motor=_texto_cru(r.atributos.get("motor")),
-                )
+                chave: _recurso_do_escopo(chave, r, indice, custo_do_recurso.get(chave, _ZERO))
                 for u in analise.unidades
                 for chave in u.recursos
                 if (r := indice.recursos.get(chave)) is not None
+            },
+            # Componente e zona sem aplicação: só migram pela escolha do serviço deles
+            sem_aplicacao={
+                chave: _recurso_do_escopo(chave, r, indice, _ZERO)
+                for chave, r in indice.recursos.items()
+                if chave not in analise.unidade_de
+                and chave in servico_do_recurso
+                and _componente(r) is not None
             },
             periodo=_texto_cru(payload.get("periodo_faturamento")),
             cargas_no_cluster=cargas_no_cluster(conteudo, analise),
@@ -507,7 +582,15 @@ def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:
         antes=ligacoes(plano.antes),
         para_tras=ligacoes(plano.para_tras),
         avisos=(
-            _fora_do_pacote(escolhidos, recursos, servico_de, ctx.no_inventario)
+            _fora_do_pacote(
+                escolhidos,
+                [
+                    *recursos,
+                    *(r for c, r in ctx.sem_aplicacao.items() if servico_de.get(c) in escolhidos),
+                ],
+                servico_de,
+                ctx.no_inventario,
+            )
             if so_o_servico
             else ()
         ),
@@ -519,13 +602,102 @@ def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:
             for r in recursos
             if r.tipo == TipoDeRecurso.BUCKET
         ),
+        clusters=_clusters(recursos),
+        discos=tuple(
+            DiscoDoEscopo(
+                nome=r.nome or r.chave,
+                gb=r.tamanho_gb,
+                categoria=r.categoria_disco,
+                boot=r.boot,
+                do_cluster=r.cluster is not None,
+            )
+            for r in recursos
+            if r.tipo == TipoDeRecurso.DISCO
+        ),
+        componentes=_componentes(
+            recursos,
+            [r for c, r in ctx.sem_aplicacao.items() if servico_de.get(c) in escolhidos]
+            if so_o_servico
+            else [],
+            servico_de,
+        ),
     )
+
+
+# O que o pacote cria como serviço gerenciado (itens 15 e 19)
+_COMPONENTES_DO_PACOTE = frozenset({"registro_de_imagens", "segredo", ZONA_DNS})
+
+
+def _clusters(recursos: list[RecursoDoEscopo]) -> tuple[ClusterDoEscopo, ...]:
+    """Os clusters do escopo com os nós dele agrupados pelo grupo de nós (ou pela família)."""
+    clusters = []
+    for c in sorted(
+        (r for r in recursos if r.tipo == TipoDeRecurso.CLUSTER_KUBERNETES), key=lambda r: r.chave
+    ):
+        grupos: Counter[tuple[str, str, str | None]] = Counter()
+        da_familia: Counter[str] = Counter(
+            r.familia.upper() for r in recursos if r.tipo == TipoDeRecurso.INSTANCIA and r.familia
+        )
+        for r in recursos:
+            if r.cluster == c.chave and r.tipo == TipoDeRecurso.INSTANCIA and r.familia:
+                familia = r.familia.upper()
+                grupos[(r.grupo_de_nos or familia.lower(), familia, r.regiao)] += 1
+        clusters.append(
+            ClusterDoEscopo(
+                nome=c.nome or c.chave,
+                versao=c.versao,
+                grupos=tuple(
+                    GrupoDeNos(nome=n, familia=f, regiao=reg, maquinas=q, da_familia=da_familia[f])
+                    for (n, f, reg), q in sorted(grupos.items(), key=lambda kv: kv[0][:2])
+                ),
+                balanceadores=tuple(
+                    sorted(
+                        r.nome or r.chave
+                        for r in recursos
+                        if r.cluster == c.chave and r.tipo == TipoDeRecurso.BALANCEADOR
+                    )
+                ),
+            )
+        )
+    return tuple(clusters)
+
+
+def _componentes(
+    recursos: list[RecursoDoEscopo],
+    sem_aplicacao: list[RecursoDoEscopo],
+    servico_de: Mapping[str, str],
+) -> tuple[ComponenteDoEscopo, ...]:
+    vistos: set[str] = set()
+    componentes = []
+    for r in [*recursos, *sem_aplicacao]:
+        if r.componente in _COMPONENTES_DO_PACOTE and r.chave not in vistos:
+            vistos.add(r.chave)
+            componentes.append(
+                ComponenteDoEscopo(r.componente, r.nome or r.chave, servico_de.get(r.chave))
+            )
+    return tuple(componentes)
 
 
 # O que o pacote Terraform cria; o resto de um serviço escolhido fica de fora
 _PROVISIONADOS = frozenset(
-    {TipoDeRecurso.INSTANCIA, TipoDeRecurso.DISCO, TipoDeRecurso.BANCO, TipoDeRecurso.BUCKET}
+    {
+        TipoDeRecurso.INSTANCIA,
+        TipoDeRecurso.DISCO,
+        TipoDeRecurso.BANCO,
+        TipoDeRecurso.BUCKET,
+        TipoDeRecurso.CLUSTER_KUBERNETES,
+    }
 )
+
+
+def _provisionado(r: RecursoDoEscopo) -> bool:
+    """Criado pelo pacote: os tipos de sempre, o cluster, o balanceador que nasce de um
+    Service do cluster e os componentes que viram recurso (itens 15 e 19)."""
+    return (
+        TipoDeRecurso(r.tipo) in _PROVISIONADOS
+        or (r.tipo == TipoDeRecurso.BALANCEADOR and r.cluster is not None)
+        or r.componente in _COMPONENTES_DO_PACOTE
+    )
 
 
 def _no_inventario(
@@ -576,7 +748,8 @@ def _fora_do_pacote(
                 avisos.append(
                     f"{servico}: a rede de origem ({_texto_dos_nativos(achado.nativos)}) vira "
                     "a rede do pacote pelo espelho, só com as subredes que as máquinas e os "
-                    "bancos usam; gateways (internet, NAT, VPN) não são criados."
+                    "bancos usam, e a saída para a internet (gateway de internet e NAT); a VPN "
+                    "entre as nuvens não é criada."
                 )
             elif achado is not None:
                 avisos.append(
@@ -589,9 +762,10 @@ def _fora_do_pacote(
                     "(gestão, cobrança), sem infraestrutura própria, ou um tipo que o "
                     "inventário não lista; o pacote não o cria."
                 )
-        elif not tipos & _PROVISIONADOS:
+        elif not any(_provisionado(r) for r in recursos if servico_de.get(r.chave) == servico):
             avisos.append(
                 f"{servico} não vira recurso neste pacote (o Terraform cria máquina, disco, "
-                "banco e bucket): crie o equivalente dele no destino à parte."
+                "banco, bucket, cluster Kubernetes, registro de imagens, cofre de segredos e "
+                "zona de DNS): crie o equivalente dele no destino à parte."
             )
     return tuple(avisos)

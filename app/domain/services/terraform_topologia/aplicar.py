@@ -9,13 +9,16 @@ O plano de entrada não é alterado: sai um plano novo.
 
 from __future__ import annotations
 
-from collections import defaultdict
+import ipaddress
+import math
+from collections import Counter, defaultdict
 from collections.abc import Mapping
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
 from app.domain.services.terraform_plan import (
+    TIPO_DE_DISCO,
     Nomeador,
     PlanoDerivado,
     Premissa,
@@ -77,8 +80,359 @@ def aplicar_topologia(
     _discos_avulsos(novo, medido, detalhe.get("discos") or {})
     _versoes(novo, detalhe.get("bancos") or [], destino)
     _fronteira_do_escopo(novo, topologia.get("escopo") or {}, destino=destino, rede=rede)
+    _saida_da_rede(novo, destino, rede)
     _buckets_do_escopo(novo, topologia.get("escopo") or {})
+    _discos_do_escopo(novo, topologia.get("escopo") or {})
+    _kubernetes_do_escopo(novo, topologia.get("escopo") or {})
+    _componentes_do_escopo(novo, topologia.get("escopo") or {}, destino)
     return novo
+
+
+# A AWS só põe NAT em subrede pública: uma /28 própria, livre no fim da faixa da rede
+_PREFIXO_DA_SUBREDE_DO_NAT = 28
+# A subrede principal é a primeira /24 da rede (build_blueprint)
+_PREFIXO_DA_PRINCIPAL = 24
+
+
+# Categoria do disco no inventário → categoria do plano
+_CATEGORIA_DO_DISCO = {"ssd": "storage_ssd", "hdd": "storage_hdd"}
+
+
+def _discos_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> None:
+    """Os discos do escopo pelo inventário, no lugar do disco estimado pelo custo (item 14).
+
+    Boot é o disco raiz da máquina; volume persistente do cluster nasce do driver de
+    armazenamento dele no destino. O resto vira disco pelo tamanho medido."""
+    discos = escopo.get("discos")
+    if discos is None:
+        return
+    estimados = {
+        r.logical_name
+        for r in plano.recursos
+        if r.resource_type == "compute"
+        and r.configuration.get("disk_only")
+        and r.configuration.get("source_category") in _CATEGORIA_DO_DISCO.values()
+    }
+    plano.recursos = [r for r in plano.recursos if r.logical_name not in estimados]
+    plano.premissas = [p for p in plano.premissas if p.campo.split(".")[0] not in estimados]
+    do_cluster = [d for d in discos if d.get("do_cluster") and not d.get("boot")]
+    if do_cluster:
+        gb = sum(int(d.get("gb") or 0) for d in do_cluster)
+        plano.avisos.append(
+            f"{len(do_cluster)} volume(s) persistente(s) do Kubernetes ({gb} GB) nascem do "
+            "driver de armazenamento do cluster no destino: recrie a StorageClass e os "
+            "PersistentVolumeClaims; os dados não viajam pelo Terraform."
+        )
+    grupos: Counter[tuple[str, int]] = Counter()
+    sem_tamanho = 0
+    for d in discos:
+        if d.get("boot") or d.get("do_cluster"):
+            continue
+        categoria = _CATEGORIA_DO_DISCO.get(str(d.get("categoria") or "ssd"), "storage_ssd")
+        if not isinstance(d.get("gb"), int) or d["gb"] <= 0:
+            sem_tamanho += 1
+            continue
+        grupos[(categoria, int(d["gb"]))] += 1
+    if sem_tamanho:
+        plano.avisos.append(
+            f"{sem_tamanho} disco(s) do escopo sem tamanho no inventário não viraram disco: "
+            "crie-os à parte com o tamanho da origem."
+        )
+    nomeador = Nomeador(r.logical_name for r in plano.recursos)
+    for (categoria, gb), n in sorted(grupos.items()):
+        nome = nomeador.gerar("disco", categoria, f"{gb}gb")
+        plano.recursos.append(
+            RecursoDerivado(
+                logical_name=nome,
+                resource_type="compute",
+                configuration={
+                    "disk_only": True,
+                    "size_gb": gb,
+                    **({"volumes": n} if n > 1 else {}),
+                    "size_source": "medido",
+                    "disk_type": TIPO_DE_DISCO[categoria],
+                    "source_category": categoria,
+                },
+            )
+        )
+        plano.premissas.append(
+            Premissa(
+                campo=f"{nome}.size_gb",
+                categoria="derivacao",
+                valor=f"{gb} x{n}",
+                base=f"Tamanho de cada volume no inventário da origem ({n} volume(s)).",
+            )
+        )
+
+
+def _saida_da_rede(plano: PlanoDerivado, destino: str, rede: str) -> None:
+    """Gateway de internet e NAT para a rede espelhada (item 12).
+
+    Só quando há subrede espelhada da origem: é o pacote com topologia, e a origem tem
+    a saída. A subrede privada sai pela NAT e a pública pelo gateway de internet; quais
+    são, o renderer lê das subredes do pacote."""
+    if not any(
+        r.resource_type == "subnet" and r.configuration.get("mirror_of") for r in plano.recursos
+    ):
+        return
+    configuracao: dict[str, Any] = {}
+    if destino == "aws":
+        livre = _faixa_livre(plano, rede, _PREFIXO_DA_SUBREDE_DO_NAT)
+        if livre is None:
+            plano.avisos.append(
+                "Sem faixa livre na rede para a subrede do NAT: as subredes privadas ficam "
+                "sem saída para a internet. Aumente a faixa da rede ou crie o NAT à parte."
+            )
+        else:
+            nome = Nomeador(r.logical_name for r in plano.recursos).gerar("subnet", "saida_nat")
+            plano.recursos.insert(
+                0,
+                RecursoDerivado(
+                    logical_name=nome,
+                    resource_type="subnet",
+                    configuration={"cidr": livre, "public_access": True, "nat_only": True},
+                    depends_on=("rede_principal",),
+                ),
+            )
+            configuracao["nat_subnet"] = nome
+    plano.recursos.append(
+        RecursoDerivado(
+            logical_name="saida_da_rede",
+            resource_type="network_egress",
+            configuration=configuracao,
+            depends_on=("rede_principal",),
+        )
+    )
+
+
+def _faixa_livre(plano: PlanoDerivado, rede: str, prefixo: int) -> str | None:
+    """A última faixa do tamanho pedido que não cruza nenhuma subrede do pacote (a
+    principal é a primeira /24 da rede)."""
+    try:
+        cidr = ipaddress.IPv4Network(rede)
+    except ValueError:
+        return None
+    usadas = (
+        [next(cidr.subnets(new_prefix=_PREFIXO_DA_PRINCIPAL), cidr)]
+        if cidr.prefixlen < _PREFIXO_DA_PRINCIPAL
+        else [cidr]
+    )
+    for r in plano.recursos:
+        if r.resource_type == "subnet" and r.configuration.get("cidr"):
+            try:
+                usadas.append(ipaddress.IPv4Network(str(r.configuration["cidr"])))
+            except ValueError:
+                continue
+    if cidr.prefixlen >= prefixo:
+        return None
+    for candidata in reversed(list(cidr.subnets(new_prefix=prefixo))):
+        if not any(candidata.overlaps(u) for u in usadas):
+            return str(candidata)
+    return None
+
+
+def _pools_da_familia(plano: PlanoDerivado, familia: str) -> list[RecursoDerivado]:
+    return [
+        r
+        for r in plano.recursos
+        if r.resource_type == "compute"
+        and not r.configuration.get("disk_only")
+        and str(r.configuration.get("source_family") or "").upper() == familia
+    ]
+
+
+def _kubernetes_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> None:
+    """O cluster do escopo com os grupos de nós dele (itens 15 e 19).
+
+    Os pools de máquinas que são nós do cluster saem da lista de VMs e entram no grupo
+    de nós, com a máquina e a quantidade que a análise cotou. Pool só em parte no
+    cluster é dividido pela contagem de nós da família no escopo."""
+    clusters = escopo.get("clusters") or []
+    if not clusters:
+        return
+    nomeador = Nomeador(r.logical_name for r in plano.recursos)
+    gerados = 0
+    for cluster in clusters:
+        nome_origem = str(cluster.get("nome") or "cluster")
+        grupos = []
+        for g in cluster.get("grupos") or []:
+            familia = str(g.get("familia") or "").upper()
+            pools = _pools_da_familia(plano, familia)
+            if not pools:
+                continue
+            # O espelho pode repartir o pool pelas subredes: os nós saem dos pedaços em ordem
+            total = sum(int(str(p.configuration.get("instances") or 1)) for p in pools)
+            da_familia = max(int(g.get("da_familia") or 0), int(g.get("maquinas") or 0), 1)
+            nos = min(total, max(1, math.ceil(total * int(g.get("maquinas") or 0) / da_familia)))
+            primeiro = pools[0].configuration
+            grupos.append(
+                {
+                    "name": str(g.get("nome") or familia.lower()),
+                    "machine_type": primeiro.get("machine_type"),
+                    "instances": nos,
+                    "vcpus": _parte(primeiro.get("vcpus"), nos, _instancias(primeiro)),
+                    "ram_gb": _parte(primeiro.get("ram_gb"), nos, _instancias(primeiro)),
+                    "source_family": familia,
+                    **({"subnet": primeiro["subnet"]} if primeiro.get("subnet") else {}),
+                    # Os grupos espelhados do pool: a regra "a partir do grupo dos nós" casa
+                    **(
+                        {"security_groups": _lista(primeiro["security_groups"])}
+                        if primeiro.get("security_groups")
+                        else {}
+                    ),
+                }
+            )
+            falta = nos
+            for pool in pools:
+                cfg = pool.configuration
+                n = _instancias(cfg)
+                tirar = min(falta, n)
+                falta -= tirar
+                plano.recursos.remove(pool)
+                if n - tirar > 0:
+                    plano.recursos.append(
+                        replace(
+                            pool,
+                            configuration={
+                                **cfg,
+                                "instances": n - tirar,
+                                "vcpus": _parte(cfg.get("vcpus"), n - tirar, n),
+                                "ram_gb": _parte(cfg.get("ram_gb"), n - tirar, n),
+                            },
+                        )
+                    )
+        if not grupos:
+            plano.avisos.append(
+                f"Cluster {nome_origem}: nenhum nó dele no escopo (o serviço das máquinas não "
+                "foi escolhido); o pacote não cria cluster sem nós."
+            )
+            continue
+        nome = nomeador.gerar("cluster", nome_origem)
+        plano.recursos.append(
+            RecursoDerivado(
+                logical_name=nome,
+                resource_type="kubernetes_cluster",
+                configuration={
+                    "source_name": nome_origem,
+                    "source_version": cluster.get("versao"),
+                    "node_pools": grupos,
+                    "service_balancers": list(cluster.get("balanceadores") or []),
+                },
+                depends_on=("rede_principal",),
+            )
+        )
+        plano.premissas.append(
+            Premissa(
+                campo=f"{nome}.node_pools",
+                categoria="derivacao",
+                valor=", ".join(
+                    f"{g['name']} {g['machine_type']} x{g['instances']}" for g in grupos
+                ),
+                base=(
+                    f"Nós do cluster {nome_origem} no inventário, pelo grupo de nós; a máquina "
+                    "e a quantidade são as que a análise cotou para o pool da família."
+                ),
+            )
+        )
+        balanceadores = cluster.get("balanceadores") or []
+        plano.avisos.append(
+            f"Cluster {nome_origem}: o pacote cria o cluster e os grupos de nós; as aplicações "
+            "de dentro dele (Deployment, Service, Ingress, Helm) não viajam pelo Terraform: "
+            "reaplique os manifests no destino."
+            + (
+                f" O balanceador {', '.join(balanceadores)} é de um Service do cluster e nasce "
+                "dele no destino; o pacote não o cria à parte."
+                if balanceadores
+                else ""
+            )
+        )
+        gerados += 1
+    if gerados:
+        # O cluster agora vai no pacote: sai a frase do plano de controle fora do MVP
+        plano.nao_suportado = [x for x in plano.nao_suportado if not x.startswith("Kubernetes:")]
+
+
+def _lista(valor: object) -> list[str]:
+    return [str(x) for x in valor] if isinstance(valor, list | tuple) else []
+
+
+def _instancias(cfg: Mapping[str, Any]) -> int:
+    return max(1, int(str(cfg.get("instances") or 1)))
+
+
+def _parte(valor: object, parte: int, total: int) -> float | None:
+    numero = _decimal_ou_none(valor)
+    if numero is None or total <= 0:
+        return None
+    return float(round(numero * parte / total, 2))
+
+
+def _decimal_ou_none(valor: object) -> Decimal | None:
+    try:
+        return Decimal(str(valor)) if valor is not None else None
+    except ArithmeticError:
+        return None
+
+
+# Registro e segredo viram um recurso por item onde o destino tem o objeto, e um
+# contêiner com a lista onde ele não tem: o registro da Azure guarda os repositórios, o
+# cofre da Azure e da OCI exige o valor do segredo na criação
+_UM_SO = {("registro_de_imagens", "azure"), ("segredo", "azure"), ("segredo", "oci")}
+_TIPO_DO_COMPONENTE = {
+    "registro_de_imagens": "container_registry",
+    "segredo": "vault",
+    "zona_dns": "dns_zone",
+}
+
+
+def _componentes_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any], destino: str) -> None:
+    componentes = escopo.get("componentes") or []
+    if not componentes:
+        return
+    nomeador = Nomeador(r.logical_name for r in plano.recursos)
+    por_tipo: dict[str, list[str]] = defaultdict(list)
+    for c in componentes:
+        if str(c.get("tipo")) in _TIPO_DO_COMPONENTE:
+            por_tipo[str(c["tipo"])].append(str(c.get("nome") or ""))
+    for tipo, nomes in sorted(por_tipo.items()):
+        recurso = _TIPO_DO_COMPONENTE[tipo]
+        if (tipo, destino) in _UM_SO:
+            plano.recursos.append(
+                RecursoDerivado(
+                    logical_name=nomeador.gerar(recurso, "escopo"),
+                    resource_type=recurso,
+                    configuration={"items": sorted(nomes)},
+                )
+            )
+            continue
+        for origem in sorted(nomes):
+            plano.recursos.append(
+                RecursoDerivado(
+                    logical_name=nomeador.gerar(recurso, origem),
+                    resource_type=recurso,
+                    configuration={"source_name": origem},
+                )
+            )
+    if por_tipo.get("segredo"):
+        plano.avisos.append(
+            f"{len(por_tipo['segredo'])} segredo(s) da origem: o pacote cria "
+            + (
+                "o cofre; crie cada segredo nele com o valor"
+                if ("segredo", destino) in _UM_SO
+                else "cada segredo vazio, com o nome de origem; preencha o valor"
+            )
+            + " no destino. O valor de um segredo nunca viaja pelo pacote."
+        )
+    if por_tipo.get("registro_de_imagens"):
+        plano.avisos.append(
+            "Registro de imagens: o pacote cria o repositório; as imagens não viajam pelo "
+            "Terraform. Copie-as da origem (skopeo copy, crane copy) antes de subir o cluster."
+        )
+    if por_tipo.get("zona_dns"):
+        plano.avisos.append(
+            "Zona de DNS: o pacote cria a zona, privada e ligada à rede do pacote; os "
+            "registros não viajam. Exporte-os da origem e importe no destino."
+        )
 
 
 def _buckets_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> None:
@@ -178,14 +532,9 @@ def _fronteira_do_escopo(
             novos.append(
                 f"E mais {len(fronteira) - _MAX_NA_FRONTEIRA} na seção de escopo do README."
             )
-        if tem_banco and portas_no_banco and destino != "aws":
-            novos.insert(
-                1,
-                f"Em {destino.upper()} o banco do pacote fica na subrede de dados, mas sem a "
-                "regra de entrada espelhada da origem (só a AWS anexa grupo ao banco): libere "
-                f"{', '.join(portas_no_banco)} a partir da rede de origem na subrede de dados, "
-                "ou quem ficou na origem não alcança o banco.",
-            )
+        aviso_do_banco = _aviso_da_entrada_do_banco(plano, destino, portas_no_banco)
+        if tem_banco and portas_no_banco and aviso_do_banco:
+            novos.insert(1, aviso_do_banco)
         if sai:
             novos.insert(
                 1,
@@ -194,6 +543,42 @@ def _fronteira_do_escopo(
             )
     plano.avisos[:0] = novos
     plano.nao_suportado += [str(a) for a in escopo.get("avisos") or []]
+
+
+def _aviso_da_entrada_do_banco(
+    plano: PlanoDerivado, destino: str, portas: list[str]
+) -> str | None:
+    """Como quem ficou na origem chega ao banco no destino (item 13)."""
+    lista = ", ".join(portas)
+    if destino == "oci":
+        sem_grupo = [
+            r.configuration.get("engine_family")
+            for r in plano.recursos
+            if r.resource_type == "managed_database" and not r.configuration.get("security_groups")
+        ]
+        if not sem_grupo:
+            return None
+        motivo = (
+            "o MySQL HeatWave não aceita NSG"
+            if "mysql" in sem_grupo
+            else "o banco não tinha grupo de segurança na origem"
+        )
+        return (
+            f"Na OCI {motivo}: libere {lista} a partir da rede de origem na lista de "
+            "segurança da subrede de dados, ou quem ficou na origem não alcança o banco."
+        )
+    if destino == "azure":
+        return (
+            f"Na Azure o banco aceita {lista} de toda a rede virtual (VirtualNetwork), que "
+            "inclui a rede de origem ligada por VPN: falta só a VPN entre as nuvens."
+        )
+    if destino == "gcp":
+        return (
+            "No GCP o Cloud SQL fica na rede do serviço (acesso privado); o pacote exporta as "
+            f"rotas da VPC para esse peering, então {lista} chega da origem pela VPN entre as "
+            "nuvens."
+        )
+    return None
 
 
 # ── disco raiz ──────────────────────────────────────────────────────────

@@ -20,7 +20,12 @@ from app.domain.entities.workload_pool import (
     PoolKey,
     WorkloadPool,
 )
-from app.domain.services.azure_shape import parse_azure_shape
+from app.domain.services.azure_shape import (
+    AzureShape,
+    familia_vm,
+    parse_azure_shape,
+    tamanho_do_medidor,
+)
 from app.domain.services.banco_por_uso import (
     CACHE,
     INSTANCIA,
@@ -36,7 +41,7 @@ from app.domain.services.categoria_por_uso import CATEGORIAS as _CATEGORIAS_POR_
 from app.domain.services.categoria_por_uso import PLANO_DE_CONTROLE as _PLANO_DE_CONTROLE
 from app.domain.services.categoria_por_uso import quantidade_por_uso, tipo_por_uso
 from app.domain.services.compromisso_de_compute import paga_maquina_virtual
-from app.domain.services.instance_shape import parse_instance_shape
+from app.domain.services.instance_shape import InstanceShape, parse_instance_shape
 from app.domain.services.reclassificacao_por_uso import reclassificar
 from app.domain.services.rede_por_uso import CATEGORIAS as _CATEGORIAS_DE_REDE
 from app.domain.services.rede_por_uso import EGRESS as _REDE
@@ -294,6 +299,7 @@ class BillingAggregator:
                 orphan_cost += cost
                 orphan_skus.append(item.sku_id or item.usage_type or "unknown")
 
+        _licenca_com_a_maquina(pool_buckets)
         pools: list[WorkloadPool] = []
         estimated_capacity_cost = Decimal("0")
         measured_capacity_cost = Decimal("0")
@@ -467,9 +473,16 @@ class BillingAggregator:
         # hora-de-vCPU. Uma única linha carrega os dois eixos — expande ambos pelo
         # shape (m7g.2xlarge = 8 vCPU / 32 GiB). Sem shape (ex.: 'N2 Instance Core'
         # do GCP, já por-vCPU), segue o caminho por-unidade abaixo.
-        shape = parse_instance_shape(item.usage_type) or parse_instance_shape(
-            (item.sku_metadata or {}).get("instance_type")
-        )
+        tipo_informado = (item.sku_metadata or {}).get("instance_type")
+        shape: InstanceShape | AzureShape | None = parse_instance_shape(
+            item.usage_type
+        ) or parse_instance_shape(tipo_informado)
+        if shape is None and item.provider.lower() == "azure":
+            # Item 10: a VM da Azure é hora de instância, pelo SKU informado ou, sem ele,
+            # pelo nome do medidor; sem isto a hora entrava como hora de núcleo
+            shape = parse_azure_shape(tipo_informado) or parse_azure_shape(
+                tamanho_do_medidor(item.usage_type)
+            )
         if shape is not None and is_hour_unit and usage > 0:
             bucket = pool_buckets[self._pool_key(item)]
             bucket["core_hours"] += usage * shape.vcpus
@@ -517,12 +530,44 @@ class BillingAggregator:
         family = metadata.get("family")
         if isinstance(family, str) and family:
             return family
+        # Azure sem o SKU: o tamanho está no nome do medidor (item 10)
+        if item.provider.lower() == "azure" and (
+            pelo_medidor := familia_vm(tamanho_do_medidor(item.usage_type))
+        ):
+            return pelo_medidor
         return extract_family(item.usage_type) or "general"
 
 
 def _em_horas(item: BillingEnriched) -> bool:
     partes = (item.usage_unit or "").lower().split()
     return bool(partes) and partes[0] in _HOUR_UNITS
+
+
+def _licenca_com_a_maquina(pool_buckets: dict[PoolKey, dict[str, Any]]) -> None:
+    """Licença sem máquina no próprio pool vai para o pool de maior capacidade do mesmo
+    projeto e região (ou da região, ou da conta).
+
+    A linha de licença não diz a máquina (`SQL Server Enterprise vCPU`): cai num pool só
+    dela, sem capacidade, que a cotação descarta, e o custo sumia da conservação. Antes
+    isso só não aparecia porque as VMs da Azure caíam todas no mesmo pool "general"."""
+    com_maquina = [k for k, b in pool_buckets.items() if b["core_hours"] > 0]
+    if not com_maquina:
+        return
+    for chave in [k for k, b in pool_buckets.items() if b["core_hours"] <= 0]:
+        bucket = pool_buckets[chave]
+        if bucket["license_cost"] <= 0:
+            continue
+        candidatos = (
+            [k for k in com_maquina if (k.project_id, k.region) == (chave.project_id, chave.region)]
+            or [k for k in com_maquina if k.region == chave.region]
+            or com_maquina
+        )
+        destino = max(candidatos, key=lambda k: (pool_buckets[k]["core_hours"], k.machine_family))
+        pool_buckets[destino]["license_cost"] += bucket["license_cost"]
+        bucket["license_cost"] = Decimal("0")
+        vazio = bucket["compute_cost"] <= 0 and bucket["ram_gib_hours"] <= 0
+        if vazio and not bucket.get("recursos"):
+            del pool_buckets[chave]
 
 
 def _shape(item: BillingEnriched, atributos: dict) -> tuple[tuple[Decimal, Decimal] | None, bool]:
@@ -541,6 +586,12 @@ def _shape(item: BillingEnriched, atributos: dict) -> tuple[tuple[Decimal, Decim
         parse_instance_shape(tipo)
         or parse_instance_shape(item.usage_type)
         or parse_azure_shape(tipo)
+        # Azure sem o SKU: o tamanho está no nome do medidor (item 10)
+        or (
+            parse_azure_shape(tamanho_do_medidor(item.usage_type))
+            if item.provider.lower() == "azure"
+            else None
+        )
     )
     if vcpus and estimado is not None:
         return (vcpus, estimado.ram_gib / estimado.vcpus * vcpus), False

@@ -53,6 +53,8 @@ from app.domain.services.banco_por_uso import (
 )
 from app.domain.services.banco_por_uso import CATEGORIA as CATEGORIA_BANCO
 from app.domain.services.banco_por_uso import UNIDADE as UNIDADE_DO_BANCO
+from app.domain.services.categoria_por_uso import CHAVE as CATEGORIA_CHAVE
+from app.domain.services.categoria_por_uso import FRANQUIA_DE_CHAVES
 from app.domain.services.categoria_por_uso import UNIDADE as UNIDADE_POR_USO
 from app.domain.services.categoria_por_zona import dividir_por_zona
 from app.domain.services.category_calculator import (
@@ -112,8 +114,12 @@ from app.domain.services.service_identity import (
     service_type_hint,
 )
 from app.domain.services.servico_pelo_uso import servico_pelo_uso
+from app.domain.services.technical_assessment import CURATED
 from app.services.billing_aggregator import BillingAggregator
 from app.use_cases.analysis.leitura_completa import listar_todos
+
+# Quantidade que o destino não cobra por mês, por categoria cotada pela quantidade
+_FRANQUIAS = {CATEGORIA_EGRESS: FRANQUIA_DE_EGRESS_GB, CATEGORIA_CHAVE: FRANQUIA_DE_CHAVES}
 
 
 @dataclass(frozen=True)
@@ -522,7 +528,11 @@ def _cotar_banco(
                 provider=e.provider,
                 estimated_monthly_cost=total,
                 cost_delta=total - custo,
-                pricing_confidence=e.pricing_confidence if fator is not None else "low",
+                # Resto ao custo da origem rebaixa a confiança; sem resto, não há o que
+                # rebaixar (D3 do E2E de 17/10)
+                pricing_confidence=(
+                    e.pricing_confidence if fator is not None or resto == 0 else "low"
+                ),
             )
         )
     return out
@@ -580,6 +590,8 @@ def _taxas_por_provedor(
             confidence=confianca,
             region=escolha.regiao,
             approximate=escolha.aproximada,
+            fonte=melhor.source,
+            capturado_em=melhor.captured_at.date().isoformat() if melhor.captured_at else None,
         )
     return taxas
 
@@ -1044,7 +1056,7 @@ class BuildMigrationContextUseCase:
             curated_compute = await _get_equivalents("compute", "virtual_server")
 
             for fpool in family_pools:
-                monthly_cost_analysis = convert(fpool.monthly_cost, fx) or Decimal("0")
+                monthly_cost_analysis = convert(fpool.costs.compute_base, fx) or Decimal("0")
                 zona = zona_por_pool[fpool.pool_key.as_str()]
                 perfil_do_pool = perfil(source_provider, fpool.pool_key.machine_family)
                 if perfil_do_pool and perfil_do_pool.burstable and perfil_do_pool.base_cpu:
@@ -1294,7 +1306,7 @@ class BuildMigrationContextUseCase:
                             rates=rates,
                             unit=unidade_medida,
                             # A franquia é mensal e da conta toda: cada zona fica com a
-                            # parte dela pelos GB medidos (pelo custo, sem medida)
+                            # parte dela pela quantidade medida (pelo custo, sem medida)
                             franquia=(
                                 {
                                     p: g
@@ -1303,9 +1315,9 @@ class BuildMigrationContextUseCase:
                                         if quantidade_total > 0
                                         else parte.fracao
                                     )
-                                    for p, g in FRANQUIA_DE_EGRESS_GB.items()
+                                    for p, g in _FRANQUIAS[category].items()
                                 }
-                                if category == CATEGORIA_EGRESS
+                                if category in _FRANQUIAS
                                 else None
                             ),
                         )
@@ -1374,6 +1386,15 @@ class BuildMigrationContextUseCase:
                             if rates[e.provider].approximate
                             else {}
                         ),
+                        # M11: a fonte e a data de cada zero (destino grátis)
+                        **(
+                            {
+                                "taxa_destino_fonte": rates[e.provider].fonte,
+                                "taxa_destino_capturada_em": rates[e.provider].capturado_em,
+                            }
+                            if rates[e.provider].rate == 0
+                            else {}
+                        ),
                         **({"zonas": zonas} if zonas else {}),
                         **(
                             {
@@ -1427,22 +1448,33 @@ class BuildMigrationContextUseCase:
         # É o insumo da confiança da análise (domain/services/confidence.py): "que
         # fração do custo atual foi cotada com preço oficial?" (lote v4, V4.7).
         _custo_por_confianca: dict[str, Decimal] = {}
+        # M11: o que custa zero no destino, por provedor, com a fonte da taxa
+        _gratis: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
         def _add(provider: str, analyzed_cost: Decimal, source_cost: Decimal, conf: str) -> None:
             acc = _tally.setdefault(
                 provider,
-                {"analyzed": Decimal("0"), "covered": Decimal("0"), "confs": []},
+                {
+                    "analyzed": Decimal("0"),
+                    "covered": Decimal("0"),
+                    "confs": [],
+                    "por_confianca": defaultdict(Decimal),
+                },
             )
             acc["analyzed"] += analyzed_cost
             acc["covered"] += source_cost
             acc["confs"].append(conf)
+            # M11: a economia desta parte, pela confiança da cotação dela
+            acc["por_confianca"][conf] += source_cost - analyzed_cost
             # V4.7: pesa pelo custo ATUAL que a cotação cobre, não pelo valor cotado
             # no destino. Senão uma cotação mais barata (e mais precisa) com preço
             # oficial baixava a confiança da análise.
             _custo_por_confianca[conf] = _custo_por_confianca.get(conf, Decimal("0")) + source_cost
 
+        # O destino substitui a máquina; a licença (SQL Server, sistema) vai com ela ao
+        # custo de hoje e fica no saldo mantido (item 10 do PROXIMAS_EXECUCOES)
         family_src = {
-            fp.pool_key.as_str(): convert(fp.monthly_cost, fx) or Decimal("0")
+            fp.pool_key.as_str(): convert(fp.costs.compute_base, fx) or Decimal("0")
             for fp in family_pools
         }
         family_vcpus = {fp.pool_key.as_str(): fp.capacity.vcpus for fp in family_pools}
@@ -1492,22 +1524,36 @@ class BuildMigrationContextUseCase:
                 parte = compromisso_compute * min(Decimal("1"), vcpus / vcpus_dos_pools)
                 compromisso_por_provedor[provider] = parte
                 _tally[provider]["covered"] += parte
+                # Sai da origem por premissa (o contrato acaba ou é transferido): estimada
+                _tally[provider]["por_confianca"]["compromisso"] += parte
         for category, cat_equivs in category_equivalents.items():
             custo_da_categoria = auxiliary.custo(category) if auxiliary else Decimal("0")
             src = convert(custo_da_categoria, fx) or Decimal("0")
-            for ce in cat_equivs:
+            for cotada in cat_equivs:
+                equivalente: Mapping[str, Any] = cotada
                 _add(
-                    str(ce["provedor"]).lower(),
-                    Decimal(str(ce["custo_mensal_estimado"])),
+                    str(equivalente["provedor"]).lower(),
+                    Decimal(str(equivalente["custo_mensal_estimado"])),
                     src,
-                    str(ce["confianca_preco"]),
+                    str(equivalente["confianca_preco"]),
                 )
+                if Decimal(str(equivalente["custo_mensal_estimado"])) == 0 and src > 0:
+                    _gratis[str(equivalente["provedor"]).lower()].append(
+                        {
+                            "categoria": category,
+                            "economia_mensal": round(float(src), 2),
+                            "fonte": equivalente.get("taxa_destino_fonte"),
+                            "capturado_em": equivalente.get("taxa_destino_capturada_em"),
+                        }
+                    )
 
         tallies = {
             provider: ProviderTally(
                 analyzed_cost=acc["analyzed"],
                 source_covered=acc["covered"],
                 confidence=weakest_confidence(acc["confs"]),
+                economia_por_confianca=dict(acc["por_confianca"]),
+                itens_gratis=tuple(_gratis.get(provider, ())),
             )
             for provider, acc in _tally.items()
         }
@@ -1672,7 +1718,9 @@ class BuildMigrationContextUseCase:
                 sv.total_cost
                 for c in categories.values()
                 for sv in c["services"]
-                if getattr(sv, "type_source", "curado") != "curado"
+                # A mesma regra do score e da portabilidade: o apelido do catálogo é
+                # curado (D4 do E2E de 17/10)
+                if getattr(sv, "type_source", "curado") not in CURATED
             ),
             Decimal("0"),
         )

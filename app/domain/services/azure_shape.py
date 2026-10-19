@@ -99,6 +99,26 @@ def _ram_por_vcpu(family: str, sufixo: str, generation: int) -> Decimal:
     return _FAMILY_RAM_PER_VCPU.get(family, _DEFAULT_RAM_PER_VCPU)
 
 
+# Nome do medidor da Azure (`Virtual Machines | Edsv5 Series | E16ds v5`): o último
+# pedaço é o tamanho, com espaço antes da geração e o modo de cobrança no fim
+_MEDIDOR = re.compile(
+    r"^([A-Z][A-Za-z]*\d+(?:-\d+)?[a-z]*)(?:\s+v(\d+))?(?:\s+(?:Spot|Low Priority))?$"
+)
+
+
+def tamanho_do_medidor(medidor: str | None) -> str | None:
+    """`... | E16ds v5` → `Standard_E16ds_v5`; None se o último pedaço não for um tamanho.
+
+    A exportação da Azure sem o SKU traz a VM só pelo medidor (item 10 do
+    PROXIMAS_EXECUCOES): sem isto a hora da VM ficava sem vCPU nem família."""
+    if not medidor:
+        return None
+    m = _MEDIDOR.match(medidor.rsplit("|", 1)[-1].strip())
+    if not m:
+        return None
+    return f"Standard_{m.group(1)}" + (f"_v{m.group(2)}" if m.group(2) else "")
+
+
 # `Standard_D4s_v5` → `DSV5`: letra de família, recursos e versão, sem o tamanho
 _FAMILIA_VM = re.compile(r"^Standard_([A-Za-z]+)\d+(?:-\d+)?([a-z]*)(?:_v(\d+))?", re.IGNORECASE)
 

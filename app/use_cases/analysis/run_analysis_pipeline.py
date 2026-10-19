@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -43,6 +44,7 @@ from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextUseCase,
 )
 from app.use_cases.analysis.decision_support import impose_decision, prepare_decision_payload
+from app.use_cases.analysis.equivalence_pricing import _CATEGORIES
 from app.use_cases.analysis.topologia_no_payload import MontarTopologiaUseCase
 
 # Shorthand used inside _add_financials to silently ignore bad Decimal conversions
@@ -298,6 +300,35 @@ _CHAVE_DA_CATEGORIA = {
 }
 
 
+def _com_rotulos_do_gratis(resumo: Mapping[str, Any]) -> dict[str, Any]:
+    """M11: o nome da categoria de cada item que custa zero no destino, para a tela."""
+    linhas = []
+    for linha in resumo.get("por_provedor") or []:
+        itens = linha.get("itens_gratis") if isinstance(linha, Mapping) else None
+        linhas.append(
+            {
+                **linha,
+                "itens_gratis": [
+                    {
+                        **item,
+                        "rotulo": _ROTULO_DA_CATEGORIA.get(
+                            _CHAVE_DA_CATEGORIA.get(str(item.get("categoria")), ""),
+                            str(item.get("categoria")),
+                        ),
+                    }
+                    for item in itens
+                ],
+            }
+            if itens
+            else linha
+        )
+    return {**resumo, "por_provedor": linhas} if "por_provedor" in resumo else dict(resumo)
+
+
+# Chave do payload → nome da categoria (o mesmo da tela de equivalentes)
+_ROTULO_DA_CATEGORIA = {chave: rotulo for chave, (rotulo, _) in _CATEGORIES.items()}
+
+
 def _por_servico(auxiliary: Any, fx: Any) -> dict[str, object]:
     """Quanto de cada categoria é de cada serviço da fatura. Com isso o preço da
     categoria chega ao serviço pela parte dele (equivalence_pricing)."""
@@ -513,7 +544,7 @@ def build_pipeline_llm_input_payload(
     if servicos:
         context_payload["servicos"] = servicos
     # Roll-up por provedor + recomendação, já calculado no backend. A IA narra.
-    resumo = getattr(ctx, "resumo_executivo", {}) or {}
+    resumo = _com_rotulos_do_gratis(getattr(ctx, "resumo_executivo", {}) or {})
     if resumo:
         context_payload["resumo_executivo"] = resumo
     # Fatos medidos de export detalhado. O bill agregado não ganha a chave.
@@ -797,6 +828,37 @@ def _equiv_to_legacy(e) -> dict:
     }
 
 
+def assinatura_da_narrativa(payload: Mapping[str, Any]) -> str:
+    """Os números que a narrativa cita, em forma canônica (M3): custo atual e
+    recomendação, custo, economia, cobertura e confiança de cada destino, e a nota e a
+    política da decisão. Igual entre duas análises: a narrativa de uma serve à outra."""
+    resumo = payload.get("resumo_executivo") or {}
+    decisao = payload.get("decision_support") or {}
+    citado = {
+        "atual": resumo.get("custo_mensal_atual"),
+        "recomendado": resumo.get("recomendado"),
+        "destinos": sorted(
+            (
+                str(r.get("provedor")),
+                r.get("custo_estimado_total"),
+                r.get("economia_mensal"),
+                r.get("cobertura"),
+                r.get("confianca"),
+            )
+            for r in resumo.get("por_provedor") or []
+            if isinstance(r, Mapping)
+        ),
+        "politica": decisao.get("policy_version"),
+        "selecionado": decisao.get("selected_provider"),
+        "notas": sorted(
+            (str(s.get("provider")), s.get("value"))
+            for s in decisao.get("provider_scores") or []
+            if isinstance(s, Mapping)
+        ),
+    }
+    return hashlib.sha256(json.dumps(citado, sort_keys=True, default=str).encode()).hexdigest()
+
+
 class RunAnalysisPipelineUseCase:
     """Orquestra a pipeline de análise em background.
 
@@ -831,12 +893,30 @@ class RunAnalysisPipelineUseCase:
         self._sku_repo = sku_repo
         self._orchestrator = llm_orchestrator
 
+    async def _narrativa_anterior(
+        self, job: AnalysisJob, llm_input: Mapping[str, Any]
+    ) -> AnalysisJob | None:
+        buscar = getattr(type(self._job_repo), "ultima_concluida_por_report", None)
+        if buscar is None:  # repositórios de teste sem a busca
+            return None
+        anterior = await buscar(self._job_repo, job.report_id, job.user_id, exceto=job.job_id)
+        if (
+            not isinstance(anterior, AnalysisJob)
+            or not anterior.ai_structured_output
+            or not anterior.llm_input_payload
+            or assinatura_da_narrativa(anterior.llm_input_payload)
+            != assinatura_da_narrativa(llm_input)
+        ):
+            return None
+        return anterior
+
     async def execute(
         self,
         job: AnalysisJob,
         *,
         decision_context: dict | None = None,
         inventario_id: UUID | None = None,
+        nova_narrativa: bool = False,
     ) -> None:
         job.mark_processing()
         # Transação própria e curta ANTES de qualquer I/O externo: o estado
@@ -885,15 +965,23 @@ class RunAnalysisPipelineUseCase:
                 alvos_pelo_motor_do_inventario(llm_input)
 
             llm_input = prepare_decision_payload(llm_input)
-            ui_report = await self._orchestrator.generate_report(
-                context=ctx,
-                source_provider=ctx.source_provider,
-                billing_period=ctx.billing_period,
-                total_spend=float(ctx.total_spend),
-                currency=ctx.currency,
-                pools_json=pools_json,
-                payload=llm_input,
-            )
+            # M3: com os mesmos números citados, a narrativa da análise anterior serve;
+            # o LLM só roda quando algo que ela cita mudou, ou a pedido
+            anterior = None if nova_narrativa else await self._narrativa_anterior(job, llm_input)
+            if anterior is not None:
+                ui_report = AnalysisV2Response.resilient_parse(
+                    dict(anterior.ai_structured_output or {})
+                )
+            else:
+                ui_report = await self._orchestrator.generate_report(
+                    context=ctx,
+                    source_provider=ctx.source_provider,
+                    billing_period=ctx.billing_period,
+                    total_spend=float(ctx.total_spend),
+                    currency=ctx.currency,
+                    pools_json=pools_json,
+                    payload=llm_input,
+                )
 
             if not isinstance(ui_report, AnalysisV2Response):
                 ui_report = AnalysisV2Response.resilient_parse(
@@ -909,6 +997,17 @@ class RunAnalysisPipelineUseCase:
             ui_report = impose_decision(ui_report, llm_input)
 
             flags = ui_report.flags
+            if anterior is not None:
+                flags["narrative"] = [
+                    {
+                        "code": "NARRATIVA_REAPROVEITADA",
+                        "message": (
+                            f"Narrativa da análise {anterior.job_id}: os números que ela cita "
+                            "não mudaram. Peça uma nova narrativa para rodar o modelo de novo."
+                        ),
+                        "impact_area": "narrative",
+                    }
+                ]
             if ctx.missing_sku_ids:
                 flags.setdefault("catalog", []).extend(
                     {

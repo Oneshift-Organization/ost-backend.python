@@ -65,6 +65,13 @@ class TipoRecurso(StrEnum):
     MANAGED_DATABASE = "managed_database"
     # Só com a topologia do inventário (RI15.4): o billing não tem firewall.
     SECURITY_GROUP = "security_group"
+    # Só no pacote do escopo, pelo inventário (PROXIMAS_EXECUCOES, itens 15 e 19)
+    KUBERNETES_CLUSTER = "kubernetes_cluster"
+    CONTAINER_REGISTRY = "container_registry"
+    VAULT = "vault"
+    DNS_ZONE = "dns_zone"
+    # Saída da rede espelhada: gateway de internet e NAT (item 12)
+    NETWORK_EGRESS = "network_egress"
 
 
 class Categoria(StrEnum):

@@ -12,6 +12,8 @@ A nuvem mais exigente das quatro, por três motivos que moldam o arquivo:
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.infrastructure.terraform.hcl import (
     atributo,
     bloco,
@@ -20,21 +22,30 @@ from app.infrastructure.terraform.hcl import (
     referencia,
 )
 from app.infrastructure.terraform.renderers.base import (
+    TEXTO_SAIDA,
     ajustar_tamanho,
     com_indice,
     disco_raiz,
     disco_ssd,
     faixa_de_portas,
+    identificador,
     instancias_banco,
+    itens_do_componente,
+    lista_curta,
     nome_banco,
     nome_cloud,
+    nome_de_zona,
     quantidade_volumes,
+    subredes_privadas,
+    tem,
     texto_banco,
+    texto_cluster,
     texto_espelho,
     texto_grupo,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
+    variavel_de_versao_do_kubernetes,
 )
 from app.schemas.terraform import (
     RecursoTerraform,
@@ -74,6 +85,7 @@ class AdaptadorAzure:
                     "ou senha; a plataforma não gera nem armazena nenhuma das duas."
                 ),
             ),
+            *variavel_de_versao_do_kubernetes(bp, aceita_versao_maior=True, exemplo="1.30"),
         ]
 
     def preambulo(self, bp: TerraformBlueprint) -> list[str]:
@@ -90,7 +102,12 @@ class AdaptadorAzure:
                     "environment": bp.environment, "managed_by": "oneshift",
                 }),
             ])
-        ]
+        ] + (
+            # O cofre pede o tenant de quem aplica
+            [bloco("data", ["azurerm_client_config", _CONTA], [])]
+            if tem(bp, TipoRecurso.VAULT)
+            else []
+        )
 
     def outputs(self, bp: TerraformBlueprint) -> list[str]:
         saidas = [bloco("output", ["resource_group"], [
@@ -115,6 +132,11 @@ class AdaptadorAzure:
             TipoRecurso.OBJECT_STORAGE: _storage,
             TipoRecurso.MANAGED_DATABASE: _banco,
             TipoRecurso.SECURITY_GROUP: _asg,
+            TipoRecurso.KUBERNETES_CLUSTER: _cluster,
+            TipoRecurso.CONTAINER_REGISTRY: _registro,
+            TipoRecurso.VAULT: _cofre,
+            TipoRecurso.DNS_ZONE: _zona,
+            TipoRecurso.NETWORK_EGRESS: _saida,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -538,3 +560,150 @@ def _sku_azure(vcpus: int) -> str:
         if vcpus <= limite:
             return sku
     return "GP_Standard_D64s_v3"
+
+
+# ── Kubernetes e serviços gerenciados do escopo (itens 15 e 19) ─────────────
+
+_CONTA = "atual"
+
+
+def _pool_aks(nome: object) -> str:
+    """Nome de pool do AKS: até 12 minúsculas e dígitos, começando por letra."""
+    return (nome_cloud(nome, separador="") or "pool")[:12]
+
+
+def _subnet_do_pool(g: dict[str, Any]) -> str:
+    return referencia(f"azurerm_subnet.{g.get('subnet') or SUBNET}.id")
+
+
+def _cluster(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    cfg = r.configuration
+    pools = list(cfg.get("node_pools") or [])
+    primeiro, extras = pools[0], pools[1:]
+    nome = nome_cloud(bp.project_name, cfg.get("source_name"), maximo=63)
+    partes = [
+        comentario(texto_cluster(cfg))
+        + "\n"
+        + bloco("resource", ["azurerm_kubernetes_cluster", r.logical_name], [
+            atributo("name", nome),
+            *_grupo(),
+            atributo("dns_prefix", nome_cloud(bp.project_name, "aks", maximo=54)),
+            atributo("kubernetes_version", referencia("var.kubernetes_version")),
+            bloco_aninhado("default_node_pool", [
+                atributo("name", _pool_aks(primeiro.get("name")), nivel=2),
+                atributo("vm_size", str(primeiro.get("machine_type")), nivel=2),
+                atributo("node_count", max(1, int(primeiro.get("instances") or 1)), nivel=2),
+                atributo("vnet_subnet_id", _subnet_do_pool(primeiro), nivel=2),
+            ], nivel=1),
+            bloco_aninhado("identity", [
+                atributo("type", "SystemAssigned", nivel=2),
+            ], nivel=1),
+        ])
+    ]
+    for g in extras:
+        partes.append(
+            bloco(
+                "resource",
+                [
+                    "azurerm_kubernetes_cluster_node_pool",
+                    f"{r.logical_name}_{identificador(str(g.get('name')))}",
+                ],
+                [
+                    atributo("name", _pool_aks(g.get("name"))),
+                    atributo(
+                        "kubernetes_cluster_id",
+                        referencia(f"azurerm_kubernetes_cluster.{r.logical_name}.id"),
+                    ),
+                    atributo("vm_size", str(g.get("machine_type"))),
+                    atributo("node_count", max(1, int(g.get("instances") or 1))),
+                    atributo("vnet_subnet_id", _subnet_do_pool(g)),
+                ],
+            )
+        )
+    return "\n\n".join(partes)
+
+
+def _registro(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    itens = itens_do_componente(r.configuration)
+    return comentario(
+        f"Um registro guarda todos os repositórios de origem: {lista_curta(itens)}.\n"
+        "Nome sem hífen e GLOBAL: troque se já existir. As imagens não viajam pelo\n"
+        "Terraform: copie-as da origem (skopeo copy, crane copy)."
+    ) + "\n" + bloco("resource", ["azurerm_container_registry", r.logical_name], [
+        atributo("name", nome_cloud(bp.project_name, "acr", separador="", maximo=50)),
+        *_grupo(),
+        atributo("sku", "Standard"),
+        atributo("admin_enabled", False),
+    ])
+
+
+def _cofre(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    itens = itens_do_componente(r.configuration)
+    return comentario(
+        f"Cofre dos segredos de origem: {lista_curta(itens)}.\n"
+        "A Azure exige o valor na criação do segredo, e o valor nunca viaja pelo pacote:\n"
+        "crie cada segredo no cofre depois do apply."
+    ) + "\n" + bloco("resource", ["azurerm_key_vault", r.logical_name], [
+        atributo("name", nome_cloud(bp.project_name, "kv", maximo=24)),
+        *_grupo(),
+        atributo("tenant_id", referencia(f"data.azurerm_client_config.{_CONTA}.tenant_id")),
+        atributo("sku_name", "standard"),
+    ])
+
+
+def _zona(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    origem = itens_do_componente(r.configuration)[0]
+    grupo = atributo("resource_group_name", referencia(f"azurerm_resource_group.{GRUPO}.name"))
+    return comentario(
+        f"Zona de origem: {nome_de_zona(origem)}.\n"
+        "Privada, ligada à VNet do pacote; os registros não\n"
+        "viajam: exporte-os da origem e importe aqui."
+    ) + "\n" + bloco("resource", ["azurerm_private_dns_zone", r.logical_name], [
+        atributo("name", nome_de_zona(origem)),
+        grupo,
+    ]) + "\n\n" + bloco(
+        "resource", ["azurerm_private_dns_zone_virtual_network_link", f"{r.logical_name}_rede"], [
+            atributo("name", nome_cloud(bp.project_name, r.logical_name, "rede")),
+            grupo,
+            atributo(
+                "private_dns_zone_name",
+                referencia(f"azurerm_private_dns_zone.{r.logical_name}.name"),
+            ),
+            atributo("virtual_network_id", referencia(f"azurerm_virtual_network.{REDE}.id")),
+        ]
+    )
+
+
+def _saida(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """NAT gateway com IP público nas subredes privadas. A Azure não tem gateway de
+    internet à parte; a subrede delegada ao banco fica sem NAT."""
+    privadas = subredes_privadas(bp, sem_delegadas=True)
+    if not privadas:
+        return ""
+    partes = [
+        comentario(TEXTO_SAIDA)
+        + "\n"
+        + bloco("resource", ["azurerm_public_ip", "ip_do_nat"], [
+            atributo("name", nome_cloud(bp.project_name, "ip-nat")),
+            *_grupo(),
+            atributo("allocation_method", "Static"),
+            atributo("sku", "Standard"),
+        ]),
+        bloco("resource", ["azurerm_nat_gateway", "saida_nat"], [
+            atributo("name", nome_cloud(bp.project_name, "nat")),
+            *_grupo(),
+            atributo("sku_name", "Standard"),
+        ]),
+        bloco("resource", ["azurerm_nat_gateway_public_ip_association", "ip_do_nat"], [
+            atributo("nat_gateway_id", referencia("azurerm_nat_gateway.saida_nat.id")),
+            atributo("public_ip_address_id", referencia("azurerm_public_ip.ip_do_nat.id")),
+        ]),
+    ]
+    for s in privadas:
+        partes.append(
+            bloco("resource", ["azurerm_subnet_nat_gateway_association", f"nat_{s}"], [
+                atributo("subnet_id", referencia(f"azurerm_subnet.{s}.id")),
+                atributo("nat_gateway_id", referencia("azurerm_nat_gateway.saida_nat.id")),
+            ])
+        )
+    return "\n\n".join(partes)

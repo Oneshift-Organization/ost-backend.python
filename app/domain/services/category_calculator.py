@@ -33,6 +33,9 @@ class CategoryRate:
     # `domain/services/regioes.escolher_regiao_de_preco`).
     region: str | None = None
     approximate: bool = False
+    # De onde veio a taxa e quando (M11): diz a fonte de cada zero na tela
+    fonte: str | None = None
+    capturado_em: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

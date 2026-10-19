@@ -28,6 +28,7 @@ from app.schemas.terraform import (
     Premissa,
     RecursoTerraform,
     TerraformBlueprint,
+    TipoRecurso,
     VariavelTerraform,
 )
 from app.use_cases.analysis.topologia_no_payload import sequencia_de_migracao
@@ -616,7 +617,7 @@ def nome_cloud(*partes: object, maximo: int = 63, separador: str = "-") -> str:
 # subestima a análise; dizer "medido" de um estimado é pior.
 
 
-# O plano nomeia o disco com os tipos do GCP (ver `terraform_plan._TIPO_DE_DISCO`).
+# O plano nomeia o disco com os tipos do GCP (ver `terraform_plan.TIPO_DE_DISCO`).
 # A classe é o que os outros renderers traduzem; decidir pelo sufixo `ssd`
 # levava o pd-balanced, que é SSD, para st1 e Standard_LRS.
 _TIPOS_DE_DISCO_SSD = frozenset({"pd-balanced", "pd-ssd", "pd-extreme"})
@@ -772,3 +773,122 @@ def com_indice(nome: str, quantidade: int) -> str:
 
 def var_versao(cfg: dict[str, Any]) -> str:
     return referencia(f"var.{cfg.get('version_var') or 'database_version'}")
+
+
+# ── Kubernetes e serviços gerenciados do escopo (itens 15 e 19) ─────────────
+
+_VERSAO_XY = re.compile(r"^\d+\.\d+$")
+
+
+def clusters_do_pacote(bp: TerraformBlueprint) -> list[RecursoTerraform]:
+    return [r for r in bp.resources if r.resource_type is TipoRecurso.KUBERNETES_CLUSTER]
+
+
+def tem(bp: TerraformBlueprint, tipo: TipoRecurso) -> bool:
+    return any(r.resource_type is tipo for r in bp.resources)
+
+
+def variavel_de_versao_do_kubernetes(
+    bp: TerraformBlueprint, *, aceita_versao_maior: bool, exemplo: str
+) -> list[VariavelTerraform]:
+    """`kubernetes_version`: a versão medida no inventário é o default onde o destino
+    aceita a versão maior (`1.30`); onde ele exige a versão completa, fica sem default."""
+    clusters = clusters_do_pacote(bp)
+    if not clusters:
+        return []
+    medida = str(clusters[0].configuration.get("source_version") or "")
+    default = medida if aceita_versao_maior and _VERSAO_XY.match(medida) else None
+    return [
+        VariavelTerraform(
+            name="kubernetes_version",
+            description=(
+                f"Versão do Kubernetes do cluster (ex.: {exemplo}). Na origem: "
+                f"{medida or 'não medida'}. Confira se o destino oferece a versão."
+            )[:300],
+            default=default,
+        )
+    ]
+
+
+def texto_cluster(cfg: dict[str, Any]) -> str:
+    grupos = ", ".join(
+        f"{g.get('name')} ({g.get('machine_type')} x{g.get('instances')})"
+        for g in cfg.get("node_pools") or []
+    )
+    linhas = [
+        f"Cluster de origem: {cfg.get('source_name')} (Kubernetes "
+        f"{cfg.get('source_version') or 'versão não medida'}).",
+        f"Grupos de nós pela máquina que a análise cotou: {grupos}.",
+        "As aplicações de dentro do cluster (Deployment, Service, Ingress, Helm) não viajam",
+        "pelo Terraform: reaplique os manifests depois de criar o cluster.",
+    ]
+    balanceadores = cfg.get("service_balancers") or []
+    if balanceadores:
+        linhas.append(
+            f"O balanceador {', '.join(balanceadores)} nasce do Service do cluster: não é "
+            "recurso aqui."
+        )
+    return "\n".join(linhas)
+
+
+def itens_do_componente(cfg: dict[str, Any]) -> list[str]:
+    """O nome de origem (um recurso por item) ou a lista (um contêiner para todos)."""
+    if cfg.get("items"):
+        return [str(x) for x in cfg["items"]]
+    return [str(cfg.get("source_name") or "")]
+
+
+def nome_de_repositorio(nome: str) -> str:
+    """Repositório de imagens: minúsculas, dígitos e `._/-` (ECR e OCIR)."""
+    limpo = "".join(
+        c if (c.isascii() and (c.isalnum() or c in "._/-")) else "-" for c in nome.lower()
+    )
+    return limpo.strip("-./") or "repositorio"
+
+
+def nome_de_zona(nome: str) -> str:
+    return nome.strip().rstrip(".").lower()
+
+
+def identificador(nome: str) -> str:
+    """Pedaço de nome lógico do Terraform: letras, dígitos e `_`."""
+    limpo = re.sub(r"[^a-z0-9_]", "_", nome.lower()).strip("_")
+    return limpo or "item"
+
+
+# Itens citados no comentário de um contêiner (registro ou cofre com vários de origem)
+_ITENS_CITADOS = 20
+
+
+def lista_curta(itens: list[str]) -> str:
+    return ", ".join(itens[:_ITENS_CITADOS]) + ("…" if len(itens) > _ITENS_CITADOS else "")
+
+
+# ── Saída da rede espelhada (item 12) ───────────────────────────────────────
+
+
+def subredes_publicas(bp: TerraformBlueprint) -> list[str]:
+    """Subredes com acesso público: saem pelo gateway de internet."""
+    return [
+        r.logical_name
+        for r in bp.resources
+        if r.resource_type is TipoRecurso.SUBNET and r.configuration.get("public_access")
+    ]
+
+
+def subredes_privadas(bp: TerraformBlueprint, *, sem_delegadas: bool = False) -> list[str]:
+    """Subredes sem acesso público: saem pela NAT. A delegada a um serviço (o banco da
+    Azure) fica fora quando o destino não aceita NAT nela."""
+    return [
+        r.logical_name
+        for r in bp.resources
+        if r.resource_type is TipoRecurso.SUBNET
+        and not r.configuration.get("public_access")
+        and not (sem_delegadas and r.configuration.get("delegation"))
+    ]
+
+
+TEXTO_SAIDA = (
+    "Saída da rede espelhada da origem: a subrede privada sai para a internet pela NAT e a\n"
+    "pública, pelo gateway de internet. A VPN entre as nuvens não é criada aqui."
+)

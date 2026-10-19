@@ -66,3 +66,16 @@ def test_todo_alvo_existe_no_de_para(provedor: str, alvo: str) -> None:
     with _CSV.open(newline="", encoding="utf-8") as f:
         nomes = {r["service_name"] for r in csv.DictReader(f) if r["provider"].lower() == provedor}
     assert alvo in nomes
+
+
+def test_ec2_other_pelo_uso() -> None:
+    """Item 17: o EC2 - Other do Cost Explorer é agrupamento; o uso de cada linha diz."""
+    disco = [("EBS:VolumeUsage.gp3", Decimal("70")), ("EBS:SnapshotUsage", Decimal("10"))]
+    nat = [("NatGateway-Hours", Decimal("20"))]
+    assert servico_pelo_uso("aws", "EC2 - Other", [*disco, *nat]) == (
+        "Amazon Elastic Block Store (EBS)",
+        Decimal("0.8"),
+    )
+    # Mistura sem um alvo com 60%: fica sem tipo
+    misturado = [*disco[:1], ("NatGateway-Hours", Decimal("70"))]
+    assert servico_pelo_uso("aws", "EC2 - Other", misturado) is None

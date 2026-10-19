@@ -636,6 +636,7 @@ async def _run_analysis_pipeline(
     decision_context: dict | None = None,
     *,
     inventory_id: UUID | None = None,
+    nova_narrativa: bool = False,
 ) -> None:
     logger.info("pipeline_started job_id=%s", job_id)
 
@@ -671,7 +672,12 @@ async def _run_analysis_pipeline(
         )
 
         try:
-            await uc.execute(job, decision_context=decision_context, inventario_id=inventory_id)
+            await uc.execute(
+                job,
+                decision_context=decision_context,
+                inventario_id=inventory_id,
+                nova_narrativa=nova_narrativa,
+            )
             await session.commit()
             logger.info("pipeline_completed job_id=%s", job_id)
         except Exception:
@@ -699,6 +705,8 @@ async def start_analysis(
     *,
     external_id: UUID | None = None,
     options: AnalysisStartOptions | None = None,
+    # M3: com os mesmos números, a narrativa anterior é reaproveitada; true roda o modelo
+    nova_narrativa: bool = False,
 ) -> AnalysisJobResponse:
     user_uuid = UUID(user.sub)
     inventory_id = options.inventory_id if options else None
@@ -766,6 +774,7 @@ async def start_analysis(
         if options and options.decision_context
         else None,
         inventory_id=inventory_id,
+        nova_narrativa=nova_narrativa,
     )
 
     return AnalysisJobResponse(
