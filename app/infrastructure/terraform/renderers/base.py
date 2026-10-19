@@ -617,7 +617,7 @@ def nome_cloud(*partes: object, maximo: int = 63, separador: str = "-") -> str:
 # subestima a análise; dizer "medido" de um estimado é pior.
 
 
-# O plano nomeia o disco com os tipos do GCP (ver `terraform_plan._TIPO_DE_DISCO`).
+# O plano nomeia o disco com os tipos do GCP (ver `terraform_plan.TIPO_DE_DISCO`).
 # A classe é o que os outros renderers traduzem; decidir pelo sufixo `ssd`
 # levava o pd-balanced, que é SSD, para st1 e Standard_LRS.
 _TIPOS_DE_DISCO_SSD = frozenset({"pd-balanced", "pd-ssd", "pd-extreme"})

@@ -79,7 +79,7 @@ _TAXA_DB_VCPU_MES: dict[str, str] = {
 # derivação; cada renderer traduz a classe. SSD é o pd-balanced, o de propósito
 # geral: é por ele que a taxa de referência cota, e é o par do gp3 e do Premium
 # SSD. Provisionar pd-ssd cobraria o tier de desempenho que a cotação não previu.
-_TIPO_DE_DISCO: dict[str, str] = {"storage_ssd": "pd-balanced", "storage_hdd": "pd-standard"}
+TIPO_DE_DISCO: dict[str, str] = {"storage_ssd": "pd-balanced", "storage_hdd": "pd-standard"}
 
 # Chave do payload → categoria interna.
 _CATEGORIAS_ARMAZENAMENTO = {
@@ -577,7 +577,7 @@ def _derivar_armazenamento(
                         "size_gb": int(max(por_volume, Decimal("1"))),
                         "volumes": volumes,
                         "size_source": "medido",
-                        "disk_type": _TIPO_DE_DISCO[categoria],
+                        "disk_type": TIPO_DE_DISCO[categoria],
                         "source_category": categoria,
                     },
                 )
@@ -600,7 +600,7 @@ def _derivar_armazenamento(
                         "disk_only": True,
                         "size_gb": int(gb),
                         "size_source": "medido" if gb_medido is not None else "estimado",
-                        "disk_type": _TIPO_DE_DISCO[categoria],
+                        "disk_type": TIPO_DE_DISCO[categoria],
                         "source_category": categoria,
                     },
                 )

@@ -375,6 +375,26 @@ ficou na origem não alcançava o banco.
 **Quem é afetado:** pacotes com topologia e banco, na OCI e no GCP. A caracterização não
 muda (sem topologia). `terraform validate` nos quatro destinos.
 
+### Item 14 — discos do escopo pelo inventário
+
+**O defeito, nas quatro nuvens:** no pacote do escopo o disco sai do custo das linhas
+(custo ÷ taxa), num disco único estimado (78 GB na `f67fcd01`), embora o inventário traga
+cada volume com tamanho, tipo e se é de boot. Pior: os volumes da `f67fcd01` são 2 discos
+de boot de nós e 4 volumes persistentes do Kubernetes (PVC); nenhum deles é disco avulso.
+
+**O que muda (pacote do escopo com inventário):**
+
+- O recorte leva os discos do escopo com tamanho, categoria, boot e cluster.
+- Disco de boot não vira disco: é o disco raiz da máquina (ou do nó).
+- Volume persistente do cluster não vira disco: nasce do driver de armazenamento (CSI) do
+  cluster no destino; o pacote diz quantos e quantos GB, para recriar a StorageClass.
+- O resto vira disco pelo tamanho medido, agrupado por categoria e tamanho (`count`), no
+  lugar do disco estimado pelo custo.
+- Escopo sem disco no inventário: o disco pelo custo, como hoje.
+
+**Quem é afetado:** só o pacote do escopo com discos no inventário, nos quatro destinos.
+Caracterização igual. O custo da análise não muda.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |

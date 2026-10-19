@@ -47,6 +47,7 @@ from app.domain.services.terraform_topologia.escopo import (
     BucketDoEscopo,
     ClusterDoEscopo,
     ComponenteDoEscopo,
+    DiscoDoEscopo,
     GrupoDeNos,
     LigacaoEntreNuvens,
     RecorteDoEscopo,
@@ -129,6 +130,9 @@ class RecursoDoEscopo:
     grupo_de_nos: str | None = None
     versao: str | None = None
     componente: str | None = None
+    # Disco: o tamanho medido e se é o de boot (item 14)
+    tamanho_gb: int | None = None
+    boot: bool = False
 
 
 # Tag do grupo de nós em cada nuvem: grupo gerenciado do EKS (e do eksctl), pool do
@@ -190,6 +194,8 @@ def _recurso_do_escopo(chave: str, r: Any, indice: Indice, custo: Decimal) -> Re
         grupo_de_nos=_grupo_de_nos(r.tags) if cluster else None,
         versao=_texto_cru(r.atributos.get("versao")),
         componente=_componente(r),
+        tamanho_gb=tamanho if isinstance(tamanho := r.atributos.get("tamanho_gb"), int) else None,
+        boot=bool(r.atributos.get("boot")),
     )
 
 
@@ -597,6 +603,17 @@ def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:
             if r.tipo == TipoDeRecurso.BUCKET
         ),
         clusters=_clusters(recursos),
+        discos=tuple(
+            DiscoDoEscopo(
+                nome=r.nome or r.chave,
+                gb=r.tamanho_gb,
+                categoria=r.categoria_disco,
+                boot=r.boot,
+                do_cluster=r.cluster is not None,
+            )
+            for r in recursos
+            if r.tipo == TipoDeRecurso.DISCO
+        ),
         componentes=_componentes(
             recursos,
             [r for c, r in ctx.sem_aplicacao.items() if servico_de.get(c) in escolhidos]

@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import ipaddress
 import math
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
 from app.domain.services.terraform_plan import (
+    TIPO_DE_DISCO,
     Nomeador,
     PlanoDerivado,
     Premissa,
@@ -81,6 +82,7 @@ def aplicar_topologia(
     _fronteira_do_escopo(novo, topologia.get("escopo") or {}, destino=destino, rede=rede)
     _saida_da_rede(novo, destino, rede)
     _buckets_do_escopo(novo, topologia.get("escopo") or {})
+    _discos_do_escopo(novo, topologia.get("escopo") or {})
     _kubernetes_do_escopo(novo, topologia.get("escopo") or {})
     _componentes_do_escopo(novo, topologia.get("escopo") or {}, destino)
     return novo
@@ -90,6 +92,77 @@ def aplicar_topologia(
 _PREFIXO_DA_SUBREDE_DO_NAT = 28
 # A subrede principal é a primeira /24 da rede (build_blueprint)
 _PREFIXO_DA_PRINCIPAL = 24
+
+
+# Categoria do disco no inventário → categoria do plano
+_CATEGORIA_DO_DISCO = {"ssd": "storage_ssd", "hdd": "storage_hdd"}
+
+
+def _discos_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> None:
+    """Os discos do escopo pelo inventário, no lugar do disco estimado pelo custo (item 14).
+
+    Boot é o disco raiz da máquina; volume persistente do cluster nasce do driver de
+    armazenamento dele no destino. O resto vira disco pelo tamanho medido."""
+    discos = escopo.get("discos")
+    if discos is None:
+        return
+    estimados = {
+        r.logical_name
+        for r in plano.recursos
+        if r.resource_type == "compute"
+        and r.configuration.get("disk_only")
+        and r.configuration.get("source_category") in _CATEGORIA_DO_DISCO.values()
+    }
+    plano.recursos = [r for r in plano.recursos if r.logical_name not in estimados]
+    plano.premissas = [p for p in plano.premissas if p.campo.split(".")[0] not in estimados]
+    do_cluster = [d for d in discos if d.get("do_cluster") and not d.get("boot")]
+    if do_cluster:
+        gb = sum(int(d.get("gb") or 0) for d in do_cluster)
+        plano.avisos.append(
+            f"{len(do_cluster)} volume(s) persistente(s) do Kubernetes ({gb} GB) nascem do "
+            "driver de armazenamento do cluster no destino: recrie a StorageClass e os "
+            "PersistentVolumeClaims; os dados não viajam pelo Terraform."
+        )
+    grupos: Counter[tuple[str, int]] = Counter()
+    sem_tamanho = 0
+    for d in discos:
+        if d.get("boot") or d.get("do_cluster"):
+            continue
+        categoria = _CATEGORIA_DO_DISCO.get(str(d.get("categoria") or "ssd"), "storage_ssd")
+        if not isinstance(d.get("gb"), int) or d["gb"] <= 0:
+            sem_tamanho += 1
+            continue
+        grupos[(categoria, int(d["gb"]))] += 1
+    if sem_tamanho:
+        plano.avisos.append(
+            f"{sem_tamanho} disco(s) do escopo sem tamanho no inventário não viraram disco: "
+            "crie-os à parte com o tamanho da origem."
+        )
+    nomeador = Nomeador(r.logical_name for r in plano.recursos)
+    for (categoria, gb), n in sorted(grupos.items()):
+        nome = nomeador.gerar("disco", categoria, f"{gb}gb")
+        plano.recursos.append(
+            RecursoDerivado(
+                logical_name=nome,
+                resource_type="compute",
+                configuration={
+                    "disk_only": True,
+                    "size_gb": gb,
+                    **({"volumes": n} if n > 1 else {}),
+                    "size_source": "medido",
+                    "disk_type": TIPO_DE_DISCO[categoria],
+                    "source_category": categoria,
+                },
+            )
+        )
+        plano.premissas.append(
+            Premissa(
+                campo=f"{nome}.size_gb",
+                categoria="derivacao",
+                valor=f"{gb} x{n}",
+                base=f"Tamanho de cada volume no inventário da origem ({n} volume(s)).",
+            )
+        )
 
 
 def _saida_da_rede(plano: PlanoDerivado, destino: str, rede: str) -> None:
@@ -203,7 +276,7 @@ def _kubernetes_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> No
                     **({"subnet": primeiro["subnet"]} if primeiro.get("subnet") else {}),
                     # Os grupos espelhados do pool: a regra "a partir do grupo dos nós" casa
                     **(
-                        {"security_groups": list(primeiro["security_groups"])}
+                        {"security_groups": _lista(primeiro["security_groups"])}
                         if primeiro.get("security_groups")
                         else {}
                     ),
@@ -277,6 +350,10 @@ def _kubernetes_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> No
     if gerados:
         # O cluster agora vai no pacote: sai a frase do plano de controle fora do MVP
         plano.nao_suportado = [x for x in plano.nao_suportado if not x.startswith("Kubernetes:")]
+
+
+def _lista(valor: object) -> list[str]:
+    return [str(x) for x in valor] if isinstance(valor, list | tuple) else []
 
 
 def _instancias(cfg: Mapping[str, Any]) -> int:

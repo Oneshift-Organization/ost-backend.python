@@ -105,6 +105,18 @@ class ClusterDoEscopo:
 
 
 @dataclass(frozen=True, slots=True)
+class DiscoDoEscopo:
+    """Volume do inventário no escopo (item 14)."""
+
+    nome: str
+    gb: int | None
+    categoria: str | None
+    boot: bool = False
+    # Volume persistente do Kubernetes: nasce do driver de armazenamento do cluster
+    do_cluster: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class ComponenteDoEscopo:
     """Registro de imagens, segredo ou zona de DNS do escopo."""
 
@@ -144,6 +156,8 @@ class RecorteDoEscopo:
     # Kubernetes e serviços gerenciados (itens 15 e 19)
     clusters: tuple[ClusterDoEscopo, ...] = ()
     componentes: tuple[ComponenteDoEscopo, ...] = ()
+    # Os discos do inventário no escopo: None quando o recorte não os conhece
+    discos: tuple[DiscoDoEscopo, ...] | None = None
 
 
 def recortar_ao_escopo(payload: Mapping[str, Any], recorte: RecorteDoEscopo) -> dict[str, Any]:
@@ -369,6 +383,22 @@ def _secao(recorte: RecorteDoEscopo, fora: list[str]) -> dict[str, Any]:
                 ]
             }
             if recorte.clusters
+            else {}
+        ),
+        **(
+            {
+                "discos": [
+                    {
+                        "nome": d.nome,
+                        "gb": d.gb,
+                        "categoria": d.categoria,
+                        "boot": d.boot,
+                        "do_cluster": d.do_cluster,
+                    }
+                    for d in recorte.discos
+                ]
+            }
+            if recorte.discos is not None
             else {}
         ),
         **(
