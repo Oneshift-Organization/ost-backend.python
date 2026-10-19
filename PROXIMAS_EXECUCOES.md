@@ -14,12 +14,12 @@
 
 | # | item | resumo | de quem | estado |
 |---|---|---|---|---|
-| 1 | Terraform: banco do destino pelo motor medido | Conferidos os quatro geradores (§5). Só o da OCI erra: escreve todo banco como Oracle Autonomous Database, com 1 OCPU por vCPU (o dobro), e a análise cotou OCI PostgreSQL. PostgreSQL passa a `oci_psql_db_system` e MySQL a HeatWave; o Autonomous fica para Oracle. Some o aviso falso "versão 16 fora do que o destino aceita" | nós | em execução |
-| 2 | Terraform: buckets do escopo | O bucket só nasce do custo dele; a fatura não liga o custo do S3 ao bucket, e o pacote sai sem bucket e sem aviso (bucket conta como "tipo que o pacote cria"). Passa a sair do inventário, pelo nome | nós | em execução |
-| 3 | Terraform: avisos verdadeiros | "AmazonVPC: nenhum recurso no inventário" com 3 VPCs e 15 subredes, e a rede criada; idem Route53 com a zona no inventário. Cost Explorer e Config passam a ser "gestão da conta, não infraestrutura" | nós | a fazer |
-| 4 | Terraform: ocupação de origem burstable | O empacotador dimensiona burstable pela linha de base; o aviso compara com a vCPU nominal e pede "uma máquina a mais" sem motivo (146% na `f67fcd01`). Mesma base nos dois, dizendo que a origem é burstable | nós | a fazer |
-| 5 | D1: memória da série B v1 da Azure | B1ls com 2 GiB (real 0,5), B1s 2 (real 1), B1ms 4 (real 2): o Terraform da Azure cria ¼ da memória (9× B1ls para 17,5 GiB). Tabela pela especificação oficial | nós | a fazer |
-| 6 | M13: score v4.3 | Preparar o antes e depois das análises v4.2, sem gravar no histórico, para a conversa. O autor do MCP fez merge do score v5 na develop em 18/10 (PR #37, `0a8efcc`) | usuário com o MCP; a tabela é nossa | decisão |
+| 1 | Terraform: banco do destino pelo motor medido | Conferidos os quatro geradores (§5). Só o da OCI erra: escreve todo banco como Oracle Autonomous Database, com 1 OCPU por vCPU (o dobro), e a análise cotou OCI PostgreSQL. PostgreSQL passa a `oci_psql_db_system` e MySQL a HeatWave; o Autonomous fica para Oracle. Some o aviso falso "versão 16 fora do que o destino aceita" | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
+| 2 | Terraform: buckets do escopo | O bucket só nasce do custo dele; a fatura não liga o custo do S3 ao bucket, e o pacote sai sem bucket e sem aviso (bucket conta como "tipo que o pacote cria"). Passa a sair do inventário, pelo nome | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
+| 3 | Terraform: avisos verdadeiros | "AmazonVPC: nenhum recurso no inventário" com 3 VPCs e 15 subredes, e a rede criada; idem Route53 com a zona no inventário. Cost Explorer e Config passam a ser "gestão da conta, não infraestrutura" | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
+| 4 | Terraform: ocupação de origem burstable | O empacotador dimensiona burstable pela linha de base; o aviso compara com a vCPU nominal e pede "uma máquina a mais" sem motivo (146% na `f67fcd01`). Mesma base nos dois, dizendo que a origem é burstable | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
+| 5 | D1: memória da série B v1 da Azure | B1ls com 2 GiB (real 0,5), B1s 2 (real 1), B1ms 4 (real 2): o Terraform da Azure cria ¼ da memória (9× B1ls para 17,5 GiB). Tabela pela especificação oficial | nós | ✅ feito, em branch local (aguarda liberação para a develop) |
+| 6 | M13: score v4.3 | Tabela de antes e depois pronta (§5, item 6), sobre a política v5 que o MCP pôs na develop (PR #37). Falta a decisão | usuário com o MCP; a tabela é nossa | decisão (tabela pronta) |
 | 7 | M1: segurança | Revogar a chave da service account do GCP que vazou nas branches órfãs; trocar `MCP_TOKEN`, o token do inspector e a `GCP_BILLING_API_KEY` | usuário (console e segredos do cluster) | decisão |
 
 ## 2. Faça assim que possível
@@ -219,6 +219,58 @@ da regra estrutural.
   certa; cai a memória desses pools e o destino é cotado pelo que a origem tem.
 - Análises gravadas não mudam; reanalisar recalcula.
 - Caracterização: muda só se algum payload congelado tiver essas máquinas.
+
+### Item 6 — M13: antes e depois da nota (para a conversa com o MCP)
+
+Simulação só de leitura, em 18/10, sobre as 92 análises concluídas do develop (88 com
+cenários, 264 cenários, todos com status `partial`). **Hoje** = nota que o código da
+develop dá agora (política `score-7rs-v5`, do PR #37), recalculada do payload gravado.
+**v4.3** = a proposta do council aplicada aos mesmos fatores:
+
+- portão financeiro: economia ≤ 0 → teto 39; economia abaixo de 5% do custo atual (a
+  faixa de tolerância; **parâmetro a decidir**) → teto 59;
+- compatibilidade fora da média técnica (refatoração, portabilidade e dependências com
+  os pesos de hoje, renormalizados);
+- critério sem evidência vale 50 na parte que falta, sem redistribuir peso;
+- cobertura da análise como está.
+
+Faixas da tela: < 40 Não migrar, < 60 Avaliar, < 80 Viável, ≥ 80 Migrar.
+
+| situação | casos | hoje | v4.3 |
+|---|---|---|---|
+| destino **mais caro** que hoje | 121 | 74 saem Viável ou Migrar (até 81,5), 90 com Avaliar ou melhor | todos ≤ 39 (Não migrar) |
+| destino com economia ≥ 20% | 84 | 20 saem Não migrar (nota parcial conservadora) | nenhum abaixo de 40 |
+| destino recomendado | 84 | Migrar 48, Não migrar 20, Viável 8, Avaliar 8 | Viável 55, Migrar 20, Avaliar 9 |
+
+Exemplos (mesma fatura, várias análises com o mesmo resultado):
+
+| fatura | destino | economia | hoje | v4.3 |
+|---|---|---|---|---|
+| fatura AWS pequena (US$ 378, a da `f67fcd01`) | OCI | 42,9% | 89,7 Migrar | 84,4 Migrar |
+| | Azure | −5,7% | 72,6 Viável | 39 Não migrar |
+| | GCP | −12,0% | 70,5 Viável | 39 Não migrar |
+| Cost Explorer AWS (US$ 92.103), sem evidência técnica suficiente | OCI | 34,7% | 34,4 Não migrar | 59,4 Avaliar |
+| Cost Explorer AWS, com evidência | OCI | 40,8% | 86,5 Migrar | 77,4 Viável |
+| | Azure | −10,2% | 66,6 Viável | 39 Não migrar |
+| Azure (US$ 471.870) | OCI | 34,8% | 85,0 Migrar | 75,0 Viável |
+| | AWS | 12,9% | 77,3 Viável | 67,7 Viável |
+| GCP cost table (US$ 4.882) | OCI | 51,0% | 39,5 Não migrar | 64,5 Viável |
+| billing AWS de US$ 430 | OCI | 0,4% | 52,5 Avaliar | 58,4 Avaliar (teto 59) |
+| OCI (US$ 296.260) | AWS/Azure/GCP | −84% a −98% | 4 a 21 Não migrar | 29 a 37 Não migrar |
+
+**O que a tabela mostra:**
+
+1. Hoje, um destino 5% a 31% mais caro sai "Viável" em 74 cenários; a v4.3 corta todos.
+2. Hoje, a nota parcial conservadora derruba destinos com 35% a 51% de economia para
+   "Não migrar" (20 recomendados); a v4.3 os põe em Avaliar ou Viável. É efeito da v5 com
+   a regra "sem evidência suficiente, soma só o comprovado", que não estava no council.
+3. O topo cai de 85–93 para 72–85: "Migrar" passa a exigir evidência, não só economia.
+4. A recomendação (quem vence) não muda: com notas parciais ela segue pela economia.
+
+Decisões para a conversa: a faixa de tolerância (5%?), se a ausência vale 50 também no
+eixo de cobertura, e se a v4.3 entra sobre a v5 (como simulado) ou a substitui. A
+mudança exige subir `AUTHORITY_VERSION` (arquivo travado) e aviso ao MCP. Tabela
+completa: `m13_saida.json` (scratchpad da sessão), gerada por `m13_pod.py`.
 
 ## 6. Concluído
 
