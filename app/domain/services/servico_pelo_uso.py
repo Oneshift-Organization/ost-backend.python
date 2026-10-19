@@ -49,6 +49,16 @@ REGRAS: Mapping[tuple[str, str], tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"exadata"), "Exadata Cloud Service"),
         (_r(r"autonomous|database"), "Oracle Database Cloud Service"),
     ),
+    # Agrupamento do Cost Explorer: disco, snapshot, NAT, IP e tráfego da EC2 (item 17)
+    ("aws", "ec2 - other"): (
+        (_r(r"natgateway|nat gateway"), "AWS NAT Gateways"),
+        (
+            _r(r"ebs:|volumeusage|volumeio|volumep-iops|snapshot"),
+            "Amazon Elastic Block Store (EBS)",
+        ),
+        (_r(r"elasticip|publicipv4|idleaddress"), "Amazon VPC"),
+        (_r(r"datatransfer|data transfer|-bytes"), "AWS Data Transfer"),
+    ),
     ("oci", "network"): (
         (_r(r"fastconnect"), "OCI FastConnect"),
         (_r(r"\bvpn\b"), "Oracle VPN Connect"),

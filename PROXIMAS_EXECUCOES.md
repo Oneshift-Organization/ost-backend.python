@@ -511,6 +511,26 @@ ocupação baixa); (b) escolher o SKU pela máquina inteira e cotar pela fraçã
 ligado. Recomendação: (a) agora e (b) depois de rodar o empacotador com os candidatos de
 cada fatura.
 
+### Item 17 — curadoria: o que dá para resolver no código (a aprovação segue com o usuário)
+
+Fila do develop em 19/10: Kiro (AWS), Azure Bastion, EC2 - Other (AWS).
+
+- **Azure Bastion:** o DE-PARA não tinha bastion em nenhuma nuvem. Linhas novas, tipo
+  `bastion_host`: Azure Bastion, OCI Bastion, AWS Systems Manager Session Manager e
+  Identity-Aware Proxy do GCP (docs oficiais de cada um).
+- **Kiro:** IDE com agente de IA da AWS; entra no tipo que já existe,
+  `ai_coding_assistant` (Amazon Q Developer, GitHub Copilot, Gemini Code Assist).
+- **EC2 - Other:** não é um serviço, é o agrupamento do Cost Explorer para EBS, snapshot,
+  NAT, IP elástico e tráfego. Resolvido pelo uso de cada linha (`servico_pelo_uso`), como o
+  "Storage" da Azure e o "Networking" do GCP: o tipo vale para o serviço quando um alvo
+  tem 60% ou mais do custo; mistura de verdade fica sem tipo.
+
+**Quem é afetado:** faturas com esses nomes passam a ter tipo e equivalentes (Portabilidade,
+lock-in, tela de equivalentes); o custo não muda (sai por categoria). O DE-PARA vai a 864
+linhas: precisa do `seed_from_csv` em cada ambiente. As três sugestões da fila podem ser
+aprovadas (Bastion e Kiro pelo nome novo) ou recusadas (EC2 - Other, resolvido pelo uso):
+decisão do usuário. `CURADORES` no deploy do develop segue com o Luiz.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |

@@ -858,3 +858,8 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,migration,server_migration,oci,Oracle Cloud Migrations,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
 ,networking,load_balancer,azure,Azure Application Gateway,2026-10-18T00:00:00+00:00,https://learn.microsoft.com/en-us/azure/application-gateway/overview
 ,management_tools,policy_enforcement,oci,Oracle Cloud Guard,2026-10-18T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/cloud-guard/home.htm
+,security_identity,bastion_host,azure,Azure Bastion,2026-10-19T00:00:00+00:00,https://learn.microsoft.com/en-us/azure/bastion/bastion-overview
+,security_identity,bastion_host,oci,OCI Bastion,2026-10-19T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/Bastion/home.htm
+,security_identity,bastion_host,aws,AWS Systems Manager Session Manager,2026-10-19T00:00:00+00:00,https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html
+,security_identity,bastion_host,gcp,Identity-Aware Proxy,2026-10-19T00:00:00+00:00,https://cloud.google.com/iap/docs/using-tcp-forwarding
+,generative_ai,ai_coding_assistant,aws,Kiro,2026-10-19T00:00:00+00:00,https://kiro.dev/docs/
