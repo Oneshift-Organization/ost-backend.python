@@ -29,6 +29,7 @@ agente. O inventário da análise é lido de novo e a topologia recalculada; o
   "moeda": "USD",
   "provedor_origem": "aws",
   "provedor_recomendado": "oci",
+  "regioes_de_destino": { "oci": "us-ashburn-1", "azure": "eastus" },  // onde a análise cotou cada destino (a região de mais custo nos pools); padrão do diálogo do Terraform
   "inventario_id": "…",
   "chave_aplicacao": "app",
   "aplicacoes": [{

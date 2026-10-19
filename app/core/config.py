@@ -186,6 +186,12 @@ class Settings(BaseSettings):
     # Uma análise normal leva de 1 a 3 minutos: 10 dá folga sem deixar o usuário
     # meia hora olhando para um job morto.
     analysis_job_timeout_minutes: int = 10
+    # Sinal de vida do job em execução (análise e geração de Terraform): o processo
+    # grava `updated_at` a cada N segundos. Sem sinal além do limite, o processo
+    # morreu (deploy, OOM) e a varredura encerra o job com "reanalise", sem esperar
+    # os 10 minutos. O limite cobre um laço preso alguns segundos pelo cálculo.
+    job_heartbeat_seconds: int = 30
+    job_sem_sinal_minutes: int = 3
 
     # ── Precision Engine v3 — câmbio ────────────────────────────────────
     # Fallback usado quando `exchange_rates` não tem taxa para o par. Formato:

@@ -80,7 +80,7 @@ def aplicar_topologia(
     _discos_avulsos(novo, medido, detalhe.get("discos") or {})
     _versoes(novo, detalhe.get("bancos") or [], destino)
     _fronteira_do_escopo(novo, topologia.get("escopo") or {}, destino=destino, rede=rede)
-    _saida_da_rede(novo, destino, rede)
+    _saida_da_rede(novo, destino, rede, topologia.get("escopo") or {})
     _buckets_do_escopo(novo, topologia.get("escopo") or {})
     _discos_do_escopo(novo, topologia.get("escopo") or {})
     _kubernetes_do_escopo(novo, topologia.get("escopo") or {})
@@ -165,15 +165,20 @@ def _discos_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> None:
         )
 
 
-def _saida_da_rede(plano: PlanoDerivado, destino: str, rede: str) -> None:
-    """Gateway de internet e NAT para a rede espelhada (item 12).
+def _saida_da_rede(
+    plano: PlanoDerivado, destino: str, rede: str, escopo: Mapping[str, Any]
+) -> None:
+    """Gateway de internet e NAT para a rede do pacote (itens 12 e 29).
 
-    Só quando há subrede espelhada da origem: é o pacote com topologia, e a origem tem
-    a saída. A subrede privada sai pela NAT e a pública pelo gateway de internet; quais
-    são, o renderer lê das subredes do pacote."""
-    if not any(
+    Quando há subrede espelhada da origem (a origem tem a saída) ou quando o escopo
+    leva um cluster de Kubernetes: os nós ficam em subrede privada e precisam da NAT
+    para baixar imagem, mesmo sem espelho (fatura sem ID deixa o posicionamento vazio).
+    A subrede privada sai pela NAT e a pública pelo gateway de internet; quais são, o
+    renderer lê das subredes do pacote."""
+    espelhada = any(
         r.resource_type == "subnet" and r.configuration.get("mirror_of") for r in plano.recursos
-    ):
+    )
+    if not espelhada and not escopo.get("clusters"):
         return
     configuracao: dict[str, Any] = {}
     if destino == "aws":

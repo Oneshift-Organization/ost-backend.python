@@ -25,7 +25,9 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     # na origem e o GCP, ~2x mais caro como destino.
     ("aws", "storage_ssd", "gb_month", "0.080"),     # gp3
     ("gcp", "storage_ssd", "gb_month", "0.100"),     # pd-balanced
-    ("azure", "storage_ssd", "gb_month", "0.088"),   # premium ssd
+    # Premium SSD v2 (par do gp3: capacidade provisionada, IOPS de base sem custo):
+    # US$ 0,00011/GiB-h x 730 em eastus (Retail Prices API, 19/10/2026)
+    ("azure", "storage_ssd", "gb_month", "0.0803"),
     ("oci", "storage_ssd", "gb_month", "0.0425"),    # block balanced: 0,0255 + 10 VPU x 0,0017
     # Armazenamento de objetos, tier padrão ($/GB-mês). Cerca de metade da taxa
     # de bloco — é essa diferença que tornava a classificação errada cara: a
@@ -253,6 +255,7 @@ _CONFERIDO_EM: dict[tuple[str, str], date] = {
     **{(p, "object_storage"): date(2026, 9, 13) for p in ("aws", "gcp", "azure", "oci")},
     ("gcp", "storage_ssd"): date(2026, 9, 27),
     ("oci", "storage_ssd"): date(2026, 10, 17),
+    ("azure", "storage_ssd"): date(2026, 10, 19),
     **{(p, c): date(2026, 10, 17) for p in ("aws", "gcp", "azure", "oci")
        for c in (
            "database", "database_mysql", "database_postgresql", "database_storage",

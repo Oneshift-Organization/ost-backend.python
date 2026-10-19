@@ -1,11 +1,12 @@
 import logging
+from contextlib import AbstractAsyncContextManager
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.deps import (
     CurrentUser,
@@ -18,12 +19,18 @@ from app.api.v1.envelope import erro, erro_do_payload
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.domain.analysis import MigrationContext
-from app.domain.entities.analysis_job import AnalysisJob, DispStatus, agora_utc
+from app.domain.entities.analysis_job import (
+    ACTIVE_STATUSES,
+    AnalysisJob,
+    DispStatus,
+    agora_utc,
+)
 from app.domain.services.analise_vigente import Revisao, analises_por_billing
 from app.domain.services.diagnostico_de_entrada import diagnosticar_payload
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
 from app.infrastructure.database.models.billing_reports import BillingReportModel
 from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.database.sinal_de_vida import sinal_de_vida
 from app.infrastructure.llm.claude_client import ClaudeLLMClient
 from app.infrastructure.llm.gemini_client import GeminiLLMClient
 from app.infrastructure.llm.mock_client import MockLLMClient
@@ -628,6 +635,21 @@ async def get_llm_input_preview(
     }
 
 
+def _sinal_da_analise(
+    job_id: UUID, sessionmaker: async_sessionmaker[AsyncSession]
+) -> AbstractAsyncContextManager[None]:
+    """Grava o sinal de vida do job enquanto a análise roda (PROXIMAS_EXECUCOES, item 26)."""
+    return sinal_de_vida(
+        sessionmaker,
+        AnalysisJobModel,
+        AnalysisJobModel.job_id,
+        job_id,
+        [s.value for s in ACTIVE_STATUSES],
+        intervalo_segundos=get_settings().job_heartbeat_seconds,
+        agora=agora_utc,
+    )
+
+
 async def _run_analysis_pipeline(
     user_id: UUID,
     report_id: UUID,
@@ -640,7 +662,7 @@ async def _run_analysis_pipeline(
 ) -> None:
     logger.info("pipeline_started job_id=%s", job_id)
 
-    async with sessionmaker() as session:
+    async with _sinal_da_analise(job_id, sessionmaker), sessionmaker() as session:
         job_repo = PgAnalysisJobRepository(session)
         job = await job_repo.get_by_id(job_id, user_id)
 
@@ -1040,7 +1062,7 @@ async def _run_legacy_analysis_pipeline(
         job_id,
     )
 
-    async with sessionmaker() as session:
+    async with _sinal_da_analise(job_id, sessionmaker), sessionmaker() as session:
         job_repo = PgAnalysisJobRepository(session)
         job = await job_repo.get_by_id(job_id, user_id)
 

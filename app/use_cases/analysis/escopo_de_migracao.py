@@ -230,6 +230,8 @@ class ContextoDoEscopo:
     no_inventario: Mapping[str, ServicoNoInventario] = field(default_factory=dict)
     # Registro, segredo e zona de DNS fora das aplicações, com o serviço da fatura
     sem_aplicacao: Mapping[str, RecursoDoEscopo] = field(default_factory=dict)
+    # Destino → região onde a análise cotou os pools dele (padrão do diálogo do Terraform)
+    regioes_de_destino: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -408,6 +410,7 @@ class EscopoDeMigracaoUseCase:
             provedores=provedores,
             provedor_origem=payload.get("provedor_origem"),
             provedor_recomendado=_texto(resumo.get("recomendado")),
+            regioes_de_destino=regioes_de_destino(payload),
             moeda=str(payload.get("moeda") or "USD"),
             inventario_id=str(inventario_id),
             correspondencia=correspondencia,
@@ -490,6 +493,25 @@ def _pools(payload: Mapping[str, Any]) -> list[PoolCotado]:
             )
         )
     return pools
+
+
+def regioes_de_destino(payload: Mapping[str, Any]) -> dict[str, str]:
+    """Destino → a região de preço com mais custo cotado nos pools (item 27).
+
+    É onde a análise pôs o destino: o pacote Terraform nessa região tem o preço que a
+    análise mostrou. Sem pool cotado, o destino fica de fora."""
+    por_destino: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+    for p in payload.get("pools_computacao") or []:
+        for e in p.get("equivalentes") or []:
+            financeiro = e.get("financeiro") or {}
+            regiao = financeiro.get("preco_regiao")
+            custo = _decimal(financeiro.get("custo_mensal_estimado"))
+            if e.get("provedor") and regiao and custo is not None:
+                por_destino[str(e["provedor"]).lower()][str(regiao)] += custo
+    return {
+        destino: max(regioes.items(), key=lambda kv: (kv[1], kv[0]))[0]
+        for destino, regioes in por_destino.items()
+    }
 
 
 def _taxas(payload: Mapping[str, Any]) -> dict[str, dict[str, Decimal]]:
