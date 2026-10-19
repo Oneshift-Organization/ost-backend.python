@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import replace
+from decimal import Decimal
 from typing import Any
 
 from app.domain.services.terraform_plan import (
@@ -76,7 +77,64 @@ def aplicar_topologia(
     _discos_avulsos(novo, medido, detalhe.get("discos") or {})
     _versoes(novo, detalhe.get("bancos") or [], destino)
     _fronteira_do_escopo(novo, topologia.get("escopo") or {}, destino=destino, rede=rede)
+    _buckets_do_escopo(novo, topologia.get("escopo") or {})
     return novo
+
+
+def _buckets_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> None:
+    """Um bucket por bucket do inventário no escopo, no lugar do agregado pelo custo.
+
+    O agregado só existia quando a fatura ligava custo aos buckets; sem isso o escopo
+    ficava sem bucket nenhum, e calado. O tamanho de referência sai do custo ligado a
+    cada um, pela mesma taxa da origem que dimensionava o agregado.
+    """
+    buckets = escopo.get("buckets") or []
+    if not buckets:
+        return
+    agregados = {r.logical_name for r in plano.recursos if r.resource_type == "object_storage"}
+    base = next((r.configuration for r in plano.recursos if r.logical_name in agregados), {})
+    plano.recursos = [r for r in plano.recursos if r.logical_name not in agregados]
+    plano.premissas = [p for p in plano.premissas if p.campo.split(".")[0] not in agregados]
+    custo_total = sum(Decimal(str(b.get("custo") or 0)) for b in buckets)
+    gb_total = Decimal(str(base.get("estimated_gb") or 0))
+    nomeador = Nomeador(r.logical_name for r in plano.recursos)
+    for b in buckets:
+        origem = str(b.get("nome") or "")
+        nome = nomeador.gerar("bucket", origem)
+        custo = Decimal(str(b.get("custo") or 0))
+        # O agregado já dividiu custo por taxa; cada bucket fica com a parte do custo dele
+        gb = int(gb_total * custo / custo_total) if custo > 0 and custo_total > 0 else 0
+        plano.recursos.append(
+            RecursoDerivado(
+                logical_name=nome,
+                resource_type="object_storage",
+                configuration={
+                    **({"location": base["location"]} if base.get("location") else {}),
+                    "storage_class": "STANDARD",
+                    "source_name": origem,
+                    **(
+                        {"estimated_gb": gb, "size_source": base.get("size_source") or "estimado"}
+                        if gb > 0
+                        else {"size_source": "sem_custo"}
+                    ),
+                },
+            )
+        )
+        plano.premissas.append(
+            Premissa(
+                campo=f"{nome}.origem",
+                categoria="derivacao",
+                valor=origem,
+                base=(
+                    "Bucket do inventário, no escopo. "
+                    + (
+                        f"Volume de referência: ~{gb} GB, a parte do custo ligada a ele."
+                        if gb > 0
+                        else "A fatura não liga custo a este bucket: o volume não é conhecido."
+                    )
+                ),
+            )
+        )
 
 
 # Ligações da fronteira listadas uma a uma nos avisos; o resto, no README

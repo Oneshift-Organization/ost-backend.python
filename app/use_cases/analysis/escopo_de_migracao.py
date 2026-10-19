@@ -44,6 +44,7 @@ from app.domain.services.cotacao_do_escopo import (
 from app.domain.services.currency import FxRate, convert, identity_rate
 from app.domain.services.sku_matcher import extract_family
 from app.domain.services.terraform_topologia.escopo import (
+    BucketDoEscopo,
     LigacaoEntreNuvens,
     RecorteDoEscopo,
     familia_da_maquina,
@@ -497,6 +498,11 @@ def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:
         somente_os_servicos=so_o_servico,
         servicos=tuple(sorted(escolhidos)) if so_o_servico else (),
         fronteira=plano.fronteira,
+        buckets=tuple(
+            BucketDoEscopo(nome=r.nome or r.chave, custo=r.custo)
+            for r in recursos
+            if r.tipo == TipoDeRecurso.BUCKET
+        ),
     )
 
 

@@ -15,7 +15,7 @@
 | # | item | resumo | de quem | estado |
 |---|---|---|---|---|
 | 1 | Terraform: banco do destino pelo motor medido | Conferidos os quatro geradores (§5). Só o da OCI erra: escreve todo banco como Oracle Autonomous Database, com 1 OCPU por vCPU (o dobro), e a análise cotou OCI PostgreSQL. PostgreSQL passa a `oci_psql_db_system` e MySQL a HeatWave; o Autonomous fica para Oracle. Some o aviso falso "versão 16 fora do que o destino aceita" | nós | em execução |
-| 2 | Terraform: buckets do escopo | O bucket só nasce do custo dele; a fatura não liga o custo do S3 ao bucket, e o pacote sai sem bucket e sem aviso (bucket conta como "tipo que o pacote cria"). Passa a sair do inventário, pelo nome | nós | a fazer |
+| 2 | Terraform: buckets do escopo | O bucket só nasce do custo dele; a fatura não liga o custo do S3 ao bucket, e o pacote sai sem bucket e sem aviso (bucket conta como "tipo que o pacote cria"). Passa a sair do inventário, pelo nome | nós | em execução |
 | 3 | Terraform: avisos verdadeiros | "AmazonVPC: nenhum recurso no inventário" com 3 VPCs e 15 subredes, e a rede criada; idem Route53 com a zona no inventário. Cost Explorer e Config passam a ser "gestão da conta, não infraestrutura" | nós | a fazer |
 | 4 | Terraform: ocupação de origem burstable | O empacotador dimensiona burstable pela linha de base; o aviso compara com a vCPU nominal e pede "uma máquina a mais" sem motivo (146% na `f67fcd01`). Mesma base nos dois, dizendo que a origem é burstable | nós | a fazer |
 | 5 | D1: memória da série B v1 da Azure | B1ls com 2 GiB (real 0,5), B1s 2 (real 1), B1ms 4 (real 2): o Terraform da Azure cria ¼ da memória (9× B1ls para 17,5 GiB). Tabela pela especificação oficial | nós | a fazer |
@@ -98,6 +98,76 @@ develop, só leitura.
 - Agente e MCP: o blueprint não ganha chave; muda só o HCL e o texto.
 - Validação: `terraform validate` com o provider da OCI fixado (6.37) nos pacotes novos.
 - Risco: forma e versões vêm do catálogo atual da OCI. Se a Oracle mudar a lista, o pacote para no `plan`, não no meio do `apply`; o comentário do recurso diz de onde veio a forma.
+
+### Item 2 — buckets do escopo pelo inventário
+
+**O defeito, nas quatro nuvens:** no pacote do escopo (o único que a tela gera), o bucket
+sai do custo das linhas da fatura ligadas a ele. Quando a fatura não liga o custo do
+armazenamento de objetos a cada bucket (Cost Explorer, fatura da AWS, tabela de custos do
+GCP, export da Azure sem ID de recurso), o escopo fica com custo zero e o pacote sai **sem
+bucket nenhum**. Nem aviso aparece, porque bucket conta como "tipo que o pacote cria". Na
+`f67fcd01`: 3 buckets no inventário, 0 no pacote. Com ID de recurso, sai **um** bucket
+agregado com o tamanho somado, e não um por bucket.
+
+**O que muda:**
+
+- O recorte do escopo leva os buckets do inventário que estão no escopo (nome e o custo
+  ligado a cada um). Vale para qualquer origem: o caso de uso já lê o inventário na hora
+  de gerar.
+- O pacote cria **um bucket por bucket do inventário**, no lugar do agregado. O nome de
+  origem vai no comentário. O volume de referência sai do custo ligado a ele, quando
+  existe; sem custo ligado, o comentário diz que a fatura não liga custo àquele bucket
+  (o bucket não tem tamanho declarado em nenhuma nuvem: é só referência).
+- Escopo com custo de objetos e sem bucket no inventário: segue o agregado de hoje.
+- O README do escopo passa a dizer "buckets saem do inventário".
+
+**Quem é afetado:**
+
+- Só o pacote do escopo (`escopo` na requisição) com bucket no escopo, nos quatro destinos.
+  O pacote da análise inteira não muda: o payload gravado não guarda os buckets do
+  inventário (fica anotado como limite).
+- Caracterização (pacotes sem topologia): não muda.
+- Testes do escopo com bucket passam a esperar um recurso por bucket.
+- Custo e análise: nada muda; o bucket do Terraform não tem preço.
+- `_fora_do_pacote`: o S3 deixa de ser "criado" sem ser criado; nada a mudar ali.
+
+### Item 3 — avisos verdadeiros sobre o que fica fora do pacote
+
+**O defeito:** "X: nenhum recurso dele no inventário das unidades do escopo" saía sempre
+que nenhum recurso das aplicações escolhidas ficava ligado ao serviço. Três situações
+diferentes caíam na mesma frase:
+
+1. o recurso está no inventário, mas fora das aplicações (a zona do Route53 da `f67fcd01`);
+2. o recurso é da fundação de rede (VPC, subredes, gateways), que o pacote espelha, mas que
+   não pertence a aplicação nenhuma: a frase dizia "não cria" enquanto o pacote criava a rede;
+3. o serviço não tem infraestrutura própria (Cost Explorer, Config, Support).
+
+Para saber a qual serviço da fatura um recurso pertence, sem linha de custo ligada a
+ele, existe uma tabela de tipo → serviço. Ela só cobre AWS e GCP, e não conhece zona de
+DNS nem a rede. Então o defeito existe nas quatro origens.
+
+**O que muda:**
+
+- A frase passa a dizer o que se sabe: (1) "N recurso(s) no inventário (tipo nativo),
+  fora das aplicações do escopo; o pacote não o cria"; (2) "a rede de origem vira a rede
+  do pacote pelo espelho (as subredes que as máquinas e os bancos usam); gateways não são
+  criados"; (3) "nenhum recurso dele no inventário: serviço da conta (gestão, cobrança),
+  sem infraestrutura própria, ou um tipo que o inventário não lista".
+- A tabela de tipo nativo → serviço ganha o que o inventário da AWS traz e a fatura cobra
+  com nome conhecido: zona e health check do Route53 (`AmazonRoute53`); VPC, subrede,
+  internet gateway, VPN, Transit Gateway, ACL e tabela de rotas (`AmazonVPC`). Azure e
+  OCI ficam com a frase geral (3) até haver tabela delas, conferida com os nomes que os
+  parsers dão aos serviços (anotado como limite).
+
+**Quem é afetado:**
+
+- Só o texto da lista "o que ficou de fora" no pacote do escopo com "só o serviço" (README,
+  `unsupported_items`).
+- A tabela nova só liga recursos sem linha de custo a um serviço. Recurso de fundação não
+  pertence a aplicação, então não entra nem sai do recorte; a zona de DNS sem aplicação,
+  idem. O recorte, a cotação do escopo e o catálogo de aplicações não mudam.
+- Dependências da fronteira: calculadas entre recursos das aplicações; a fundação não é
+  ponta de dependência. Conferir no teste.
 
 ## 6. Concluído
 
