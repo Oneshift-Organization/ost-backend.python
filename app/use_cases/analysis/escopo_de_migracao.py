@@ -127,7 +127,8 @@ class ServicoNoInventario:
     """Os recursos do inventário inteiro (não só das aplicações) de um serviço da fatura."""
 
     nativos: tuple[tuple[str, int], ...]
-    so_fundacao: bool
+    # Tem rede, subrede, grupo ou gateway: é a fundação que o espelho recria
+    fundacao: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -537,7 +538,7 @@ def _no_inventario(
         if servico is None:
             continue
         nativos[servico][recurso.tipo_nativo] += 1
-        fundacao[servico] = fundacao.get(servico, True) and recurso.tipo in FUNDACAO
+        fundacao[servico] = fundacao.get(servico, False) or recurso.tipo in FUNDACAO
     return {
         s: ServicoNoInventario(
             tuple(sorted(c.items(), key=lambda kv: (-kv[1], kv[0]))), fundacao[s]
@@ -571,7 +572,7 @@ def _fora_do_pacote(
         tipos = {r.tipo for r in recursos if servico_de.get(r.chave) == servico}
         if not tipos:
             achado = no_inventario.get(servico)
-            if achado is not None and achado.so_fundacao:
+            if achado is not None and achado.fundacao:
                 avisos.append(
                     f"{servico}: a rede de origem ({_texto_dos_nativos(achado.nativos)}) vira "
                     "a rede do pacote pelo espelho, só com as subredes que as máquinas e os "

@@ -22,11 +22,13 @@ def _recurso(chave: str, tipo: TipoDeRecurso) -> RecursoDoEscopo:
 
 _NO_INVENTARIO = {
     "AmazonVPC": ServicoNoInventario(
-        (("AWS::EC2::Subnet", 15), ("AWS::EC2::VPC", 3)), so_fundacao=True
+        # A tabela de rotas é "outro", não fundação: basta ter fundação (o caso da f67fcd01)
+        (("AWS::EC2::Subnet", 15), ("AWS::EC2::RouteTable", 9), ("AWS::EC2::VPC", 3)),
+        fundacao=True,
     ),
-    "AmazonRoute53": ServicoNoInventario((("AWS::Route53::HostedZone", 1),), so_fundacao=False),
+    "AmazonRoute53": ServicoNoInventario((("AWS::Route53::HostedZone", 1),), fundacao=False),
     "AWSELB": ServicoNoInventario(
-        (("AWS::ElasticLoadBalancingV2::LoadBalancer", 1),), so_fundacao=False
+        (("AWS::ElasticLoadBalancingV2::LoadBalancer", 1),), fundacao=False
     ),
 }
 
