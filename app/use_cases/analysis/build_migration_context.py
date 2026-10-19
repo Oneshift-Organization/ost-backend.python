@@ -1056,7 +1056,7 @@ class BuildMigrationContextUseCase:
             curated_compute = await _get_equivalents("compute", "virtual_server")
 
             for fpool in family_pools:
-                monthly_cost_analysis = convert(fpool.monthly_cost, fx) or Decimal("0")
+                monthly_cost_analysis = convert(fpool.costs.compute_base, fx) or Decimal("0")
                 zona = zona_por_pool[fpool.pool_key.as_str()]
                 perfil_do_pool = perfil(source_provider, fpool.pool_key.machine_family)
                 if perfil_do_pool and perfil_do_pool.burstable and perfil_do_pool.base_cpu:
@@ -1471,8 +1471,10 @@ class BuildMigrationContextUseCase:
             # oficial baixava a confiança da análise.
             _custo_por_confianca[conf] = _custo_por_confianca.get(conf, Decimal("0")) + source_cost
 
+        # O destino substitui a máquina; a licença (SQL Server, sistema) vai com ela ao
+        # custo de hoje e fica no saldo mantido (item 10 do PROXIMAS_EXECUCOES)
         family_src = {
-            fp.pool_key.as_str(): convert(fp.monthly_cost, fx) or Decimal("0")
+            fp.pool_key.as_str(): convert(fp.costs.compute_base, fx) or Decimal("0")
             for fp in family_pools
         }
         family_vcpus = {fp.pool_key.as_str(): fp.capacity.vcpus for fp in family_pools}

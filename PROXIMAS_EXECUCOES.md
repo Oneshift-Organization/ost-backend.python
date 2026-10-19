@@ -438,6 +438,58 @@ na OCI) com a categoria, a economia, a fonte e a data da taxa. A soma das duas p
 campos no snapshot: nota ao MCP. A tela é do front (passo seguinte). Análises gravadas só
 ganham os campos ao reanalisar.
 
+### Item 10 — caso Azure de US$ 471.870 (ponto 5 do MCP): VM pelo nome do medidor
+
+**O que a auditoria achou (develop, só leitura, análise `d2993418`):** o pool "general"
+de brazilsouth custa US$ 77.487/mês e entra com 126 vCPU e **0 GB** de memória; a OCI o
+cota a US$ 1.428. São US$ 614 por vCPU-mês na origem, dez vezes o normal. Sozinho, ele faz
+~US$ 76 mil dos US$ 164 mil de economia da OCI.
+
+**Causa, geral:** a exportação da Azure traz a VM só pelo nome do medidor
+(`Virtual Machines | Edsv5 Series | E16ds v5`), sem o SKU (`Standard_E16ds_v5`) nem a
+vCPU. O agregador lê a vCPU pelo parser da AWS no tipo de uso e pelo da Azure só no SKU:
+nenhum entende "E16ds v5". As horas de 22 mil instâncias E16ds v5 (16 vCPU cada) ficam
+sem capacidade, e a família vira "general". Vale para toda fatura da Azure exportada com o
+medidor no lugar do SKU.
+
+**O que muda:** o tamanho da VM sai também do nome do medidor ("E16ds v5" →
+`Standard_E16ds_v5`, "D16s v5 Spot" → `Standard_D16s_v5`, "B2ms" → `Standard_B2ms`), com
+as regras de sempre do parser da Azure (geração v1/v2 de D e E recusada, tabela da B v1).
+Só para linha da Azure. A família do pool sai do mesmo tamanho (`EDSV5`, `DSV5`).
+
+**Quem é afetado:** análises de origem Azure cuja fatura não traz o SKU. A capacidade da
+origem passa a ser a real; o destino é cotado por ela: o custo de destino sobe e a
+economia falsa some. Os pools passam a se chamar pela família. Precisa só reanalisar (o
+agregador relê as linhas). Medido antes e depois nas faturas do develop, abaixo.
+
+**Achado na medição, também geral:** a licença (SQL Server, sistema operacional) entrava
+no custo de origem do pool que o destino substitui, mas o destino é cotado só pela
+capacidade: a licença virava economia. Antes isso aparecia pouco porque a licença caía num
+pool sem máquina, descartado da cotação (e o custo dela sumia da conservação). Agora:
+
+- licença sem máquina no próprio pool vai para o pool de maior capacidade do mesmo projeto
+  e região (a conservação fecha);
+- o custo de origem que o destino substitui é só o de máquina: a licença fica no saldo
+  mantido ao custo de hoje, a regra que a tela de equivalentes já mostra ("vai com a
+  máquina, ao custo de hoje").
+
+Afeta toda análise com licença cobrada à parte (Azure, GCP): o destino sobe pelo valor da
+licença, e a economia cai dele.
+
+**Medido no develop (mesmo banco; código da develop × branch; nada gravado), US$/mês:**
+
+| fatura | destino | economia antes | economia depois | cobertura |
+|---|---|---|---|---|
+| azure_billing_2026-09 (US$ 471.870) | OCI | 205.524 | 167.771 | 0,64 → 0,61 |
+| | GCP | 119.448 | 21.770 | 0,67 → 0,64 |
+| | AWS | 102.177 | 2.321 | 0,67 → 0,64 |
+| Cost Explorer AWS, CUR, GCP, fatura AWS, OCI | todos | iguais | iguais | iguais |
+
+Na Azure, os pools passam de "general" (126 vCPU, 0 GB) às famílias reais (EDSV5, DSV5,
+ESV5, DDSV5, LSV3); somem os alertas `familia_generica_concentrada` e
+`preco_vcpu_implausivel`; a conservação fecha; a nota da OCI vai de 88,9 a 85,9 e a
+recomendação segue OCI.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |
