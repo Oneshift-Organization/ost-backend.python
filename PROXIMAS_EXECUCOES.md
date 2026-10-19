@@ -169,6 +169,26 @@ DNS nem a rede. Então o defeito existe nas quatro origens.
 - Dependências da fronteira: calculadas entre recursos das aplicações; a fundação não é
   ponta de dependência. Conferir no teste.
 
+### Item 4 — ocupação de origem burstable na mesma base do empacotamento
+
+**O defeito:** o empacotamento (`equivalence_matcher._packing_pela_base`) dimensiona origem
+burstable em destino sem crédito pela linha de base (uma t4g entrega 40% de cada vCPU sem
+crédito). Os avisos do Terraform comparam a máquina escolhida com a vCPU **nominal**. Na
+`f67fcd01`, o pool T4G (2,93 vCPU nominal) cabe em 2 vCPU pela base (1,17), e o aviso diz
+"o uso ocupa 146%, avalie uma máquina a mais". O mesmo vale para qualquer origem burstable
+(família T da AWS, série B da Azure, núcleo compartilhado do GCP) em qualquer destino sem
+crédito. O aviso de "máquina menor" (fragmentação) erra do mesmo jeito.
+
+**O que muda:** os dois avisos usam a base que a própria análise gravou
+(`premissas.burstable_pela_base`, por pool) quando o destino não tem crédito; a memória
+fica como está. A premissa da máquina diz que a origem é burstable e qual base valeu.
+Análise anterior à regra (16/10) não grava a base e foi dimensionada pela nominal: segue
+lida pela nominal, sem reinterpretar o que já foi feito.
+
+**Quem é afetado:** só o texto (premissa e avisos) dos pools burstable no Terraform. A
+máquina escolhida, o número de instâncias e o custo não mudam (vêm da análise). A
+caracterização muda só onde há pool burstable com destino sem crédito.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |
