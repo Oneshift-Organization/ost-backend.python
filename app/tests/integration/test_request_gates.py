@@ -246,10 +246,13 @@ def test_tipo_inferido_e_declarado(aws_context) -> None:
     assim que object storage virou block storage); quem lê precisa saber."""
     payload, _ = build_pipeline_llm_input_payload(aws_context)
     por_nome = {s["nome"]: s for s in payload["servicos"]}
-    # Kiro não está no catálogo curado: o tipo é inferência.
-    kiro = por_nome.get("Kiro")
-    assert kiro is not None
-    assert kiro.get("tipo_fonte") == "inferido"
+    # O nome do EKS no Cost Explorer não está no catálogo curado: o tipo é inferência.
+    eks = por_nome.get("Amazon Elastic Container Service for Kubernetes")
+    assert eks is not None
+    assert eks.get("tipo_fonte") == "inferido"
+    # O Kiro era o exemplo até 19/10 (item 17 do PROXIMAS_EXECUCOES): agora curado
+    assert "tipo_fonte" not in por_nome["Kiro"]
+    assert por_nome["Kiro"]["tipo"] == "ai_coding_assistant"
     # O MSK era o exemplo até o lote v4 (V4.3): agora está no DE-PARA, curado
     msk = por_nome["Amazon Managed Streaming for Apache Kafka"]
     assert "tipo_fonte" not in msk

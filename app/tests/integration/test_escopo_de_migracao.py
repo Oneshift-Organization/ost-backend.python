@@ -482,17 +482,17 @@ async def test_fronteira_inclui_quem_nao_tem_linha_na_fatura(
     assert {"AmazonRDS (checkout)", "AmazonRDS (auth)"} <= monitor
 
 
-async def test_terraform_so_do_banco_avisa_a_regra_que_falta_no_destino(
+async def test_terraform_so_do_banco_leva_a_regra_de_entrada_no_destino(
     app_tf: FastAPI, analise: tuple[str, str]
 ) -> None:
+    """Item 13 do PROXIMAS_EXECUCOES: na OCI o banco recebe os NSGs espelhados dos grupos
+    dele na origem; antes o pacote só avisava para liberar a porta à mão."""
     com, _ = analise
     async with _cliente(app_tf) as c:
         g = await _gerar(c, com, "oci", {"servicos": ["AmazonRDS"], "somente_os_servicos": True})
     assert g["warnings"][0].startswith("Só os serviços escolhidos:")
-    assert g["warnings"][1].startswith(
-        "Em OCI o banco do pacote fica na subrede de dados, mas sem a regra de entrada"
-    )
-    assert "libere tcp/5432 a partir da rede de origem" in g["warnings"][1]
+    assert not any("libere tcp/5432" in a for a in g["warnings"])
+    assert re.search(r"nsg_ids\s*=\s*\[oci_core_network_security_group\.", g["tf"])
     # O banco fica na subrede privada de dados, não fora da rede nova
     assert "ficou fora da rede nova" not in "\n".join(g["warnings"])
     assert "subnet_id" in g["tf"]
