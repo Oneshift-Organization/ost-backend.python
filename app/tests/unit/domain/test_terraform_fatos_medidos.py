@@ -160,8 +160,36 @@ def test_azure_so_gera_postgresql_e_declara_o_resto() -> None:
     assert any("só é gerado para postgresql" in x and "MySQL" in x for x in plano.nao_suportado)
 
 
-def test_oci_avisa_troca_de_motor() -> None:
-    assert any("troca de motor" in x for x in _derivar(destino="oci").avisos)
+def test_oci_gera_o_banco_do_motor_medido() -> None:
+    """Cada motor no produto dele: PostgreSQL e MySQL não viram Oracle (Autonomous)."""
+    assert not any("troca de motor" in x for x in _derivar(destino="oci").avisos)
+    main = _pacote("oci")["main.tf"]
+    assert "oci_database_autonomous_database" not in main
+    postgres = re.findall(r'resource "oci_psql_db_system" "(\w+)"', main)
+    assert len(postgres) == 2  # db.t4g.small e o Aurora PostgreSQL
+    assert re.search(r'resource "oci_mysql_mysql_db_system"', main)
+    # OCPU = vCPU ÷ 2 (a conta da cotação); memória da classe, no mínimo 16 GB
+    assert re.search(r"instance_ocpu_count\s*=\s*32\b", main)  # db.r8g.16xlarge: 64 vCPU
+    assert re.search(r"instance_memory_size_in_gbs\s*=\s*512\b", main)
+    assert re.search(r"instance_ocpu_count\s*=\s*1\b", main)  # db.t4g.small: 2 vCPU, 2 GB
+    assert re.search(r"instance_memory_size_in_gbs\s*=\s*16\b", main)
+    assert re.search(r'shape_name\s*=\s*"MySQL.2"', main)  # db.t3.micro: 2 vCPU = 2 ECPU
+    assert re.search(r"mysql_version\s*=\s*var\.database_version_mysql", main)
+    assert re.search(r"db_version\s*=\s*var\.database_version_postgresql", main)
+    assert 'variable "db_admin_username"' in _pacote("oci")["variables.tf"]
+
+
+def test_oci_alta_disponibilidade_do_motor() -> None:
+    main = _pacote("oci", ha=True)["main.tf"]
+    assert re.search(r"instance_count\s*=\s*2\b", main)  # PostgreSQL: 2 nós
+    assert re.search(r"is_highly_available\s*=\s*true", main)  # HeatWave
+
+
+def test_oci_sem_sql_server_gerenciado_declara() -> None:
+    payload = _payload()
+    payload["inventario_medido"]["bancos"][0]["motor"] = "SQL Server"
+    plano = _derivar(payload, destino="oci")
+    assert any("SQL Server" in x and "OCI" in x for x in plano.nao_suportado)
 
 
 def test_grupos_nao_detalhados_sao_avisados() -> None:
@@ -187,14 +215,19 @@ def test_consolidacao_e_tempo_ativo_na_premissa() -> None:
 # ── variáveis e renderização ────────────────────────────────────────────────
 
 
-def _pacote(destino: str) -> dict[str, str]:
+def _pacote(destino: str, *, motor: str | None = None, ha: bool = False) -> dict[str, str]:
     entrada = TerraformGenerationIn(
         analysis_job_id=uuid4(), project_name="teste-medido", target_provider=destino,
         region={"gcp": "us-central1", "aws": "sa-east-1", "azure": "brazilsouth",
                 "oci": "sa-saopaulo-1"}[destino],
+        availability={"high_availability": ha},
     )
     payload = deepcopy(_payload())
     payload["provedor_origem"] = "gcp" if destino == "aws" else "aws"
+    if motor:
+        for grupo in payload["inventario_medido"]["bancos"]:
+            if grupo["motor"] != "Redis":
+                grupo["motor"] = motor
     return renderizar(montar_blueprint(payload, entrada))
 
 
@@ -221,7 +254,9 @@ def test_aws_motor_medido_vira_literal() -> None:
 
 
 def test_oci_db_name_cabe_em_14_e_nao_colide() -> None:
-    main = _pacote("oci")["main.tf"]
+    # `db_name` é do Autonomous: só a origem Oracle o gera
+    main = _pacote("oci", motor="Oracle")["main.tf"]
+    assert "oci_psql_db_system" not in main
     nomes = [
         linha.split("=", 1)[1].strip().strip('"').replace("${count.index}", "")
         for linha in main.splitlines()

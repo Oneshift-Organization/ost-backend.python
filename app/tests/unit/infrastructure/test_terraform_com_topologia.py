@@ -334,7 +334,7 @@ def test_banco_na_subrede_de_dados_espelhada() -> None:
     zona DNS privada e sem acesso público. Só o mock Azure diz a subrede do banco, e
     Azure para Azure não é par: a origem é trocada para exercitar o destino Azure."""
     oci = pacote(com_topologia("azure"), "oci")["main.tf"]
-    banco = _bloco(oci, "oci_database_autonomous_database", "banco_")
+    banco = _bloco(oci, "oci_psql_db_system", "banco_")
     assert re.search(r"subnet_id\s*=\s*oci_core_subnet\.subnet_dados\.id", banco)
 
     azure = pacote({**com_topologia("azure"), "provedor_origem": "aws"}, "azure")["main.tf"]

@@ -272,7 +272,8 @@ def _secao_escopo(escopo: dict[str, Any]) -> str:
         "",
         f"Só o plano de migração escolhido: **{aplicacoes}** "
         f"({escopo.get('unidades', 0)} unidade(s)). Máquinas, bancos, subredes e grupos "
-        "de segurança são os deles; discos e buckets saem do custo deles na fatura.",
+        "de segurança são os deles; buckets saem do inventário e discos, do custo deles "
+        "na fatura.",
         "",
     ]
     ordens = escopo.get("ordens") or []
@@ -324,7 +325,7 @@ def _secao_so_dos_servicos(escopo: dict[str, Any], aplicacoes: str) -> str:
         f"Só os serviços escolhidos: **{servicos}**, nas aplicações {aplicacoes} "
         f"({escopo.get('unidades', 0)} unidade(s)). O resto dessas aplicações fica na "
         "origem. Máquinas, bancos, subredes e grupos de segurança são só os desses "
-        "serviços; discos e buckets saem do custo deles na fatura.",
+        "serviços; buckets saem do inventário e discos, do custo deles na fatura.",
         "",
         "### O que fica do outro lado (fronteira)",
         "",
@@ -717,9 +718,14 @@ def texto_tamanho_disco(cfg: dict[str, Any]) -> str:
 
 
 def texto_volume_bucket(cfg: dict[str, Any]) -> str:
+    origem = f"Bucket de origem: {cfg['source_name']}.\n" if cfg.get("source_name") else ""
+    if cfg.get("size_source") == "sem_custo":
+        return origem + "Volume não conhecido: a fatura não liga custo a este bucket.\n"
     if cfg.get("size_source") == "medido":
-        return f"Volume medido: ~{cfg.get('estimated_gb')} GB (soma de GB-mês no billing).\n"
-    return f"Volume estimado: ~{cfg.get('estimated_gb')} GB (derivado do custo).\n"
+        return (
+            origem + f"Volume medido: ~{cfg.get('estimated_gb')} GB (soma de GB-mês no billing).\n"
+        )
+    return origem + f"Volume estimado: ~{cfg.get('estimated_gb')} GB (derivado do custo).\n"
 
 
 def texto_banco(cfg: dict[str, Any], vcpus: int) -> str:

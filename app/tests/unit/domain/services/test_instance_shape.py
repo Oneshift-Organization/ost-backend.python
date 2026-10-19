@@ -69,3 +69,25 @@ def test_nxlarge_scales_by_four() -> None:
 )
 def test_no_shape_returns_none(text: str | None) -> None:
     assert parse_instance_shape(text) is None
+
+
+@pytest.mark.parametrize(
+    ("tipo", "vcpus", "ram_gib"),
+    [
+        # Geração anterior: a especificação não segue a regra estrutural
+        ("t1.micro", "1", "0.613"),
+        ("BoxUsage:m1.small", "1", "1.7"),
+        ("db.m1.small", "1", "1.7"),
+        ("c1.medium", "2", "1.7"),
+        ("m2.xlarge", "2", "17.1"),
+        ("m3.medium", "1", "3.75"),
+        ("m3.2xlarge", "8", "30"),
+        # A geração atual segue a regra, sem a tabela
+        ("m5.large", "2", "8"),
+        ("m6i.2xlarge", "8", "32"),
+    ],
+)
+def test_geracao_anterior_pela_tabela_oficial(tipo: str, vcpus: str, ram_gib: str) -> None:
+    forma = parse_instance_shape(tipo)
+    assert forma is not None
+    assert (forma.vcpus, forma.ram_gib) == (Decimal(vcpus), Decimal(ram_gib))

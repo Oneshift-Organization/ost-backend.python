@@ -53,6 +53,9 @@ _B_V2 = 2
 # confiar nele produziria specs-fantasma. B e F sempre foram lineares.
 _INDEX_FAMILIES = frozenset({"d", "e", "g"})
 _MIN_LINEAR_GENERATION = 3
+# A B v1 de 1 vCPU foge da regra (tabela oficial da série B): a RAM total pelo sufixo.
+# A regra dava 2, 2 e 4 GiB, e o empacotador punha 9 B1ls num pool de 17,5 GiB (D1)
+_B_V1_DE_UMA_VCPU = {"ls": Decimal("0.5"), "s": Decimal("1"), "ms": Decimal("2")}
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +83,8 @@ def parse_azure_shape(arm_sku_name: str | None) -> AzureShape | None:
     vcpus = Decimal(m.group(3) or m.group(2))
     if vcpus <= 0:
         return None
+    if family == "b" and generation < _B_V2 and vcpus == 1 and sufixo in _B_V1_DE_UMA_VCPU:
+        return AzureShape(vcpus=vcpus, ram_gib=_B_V1_DE_UMA_VCPU[sufixo])
     ram = vcpus * _ram_por_vcpu(family, sufixo, generation)
     return AzureShape(vcpus=vcpus, ram_gib=ram)
 

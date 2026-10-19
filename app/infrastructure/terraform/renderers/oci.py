@@ -14,8 +14,11 @@ Duas particularidades:
 from __future__ import annotations
 
 import hashlib
+import math
+from typing import Any
 
 from app.domain.services.oci_shape import FAMILIA_PADRAO, ler_shape, ocpus_para
+from app.domain.services.terraform_topologia.bancos import ram_da_classe
 from app.infrastructure.terraform.hcl import (
     atributo,
     bloco,
@@ -38,6 +41,7 @@ from app.infrastructure.terraform.renderers.base import (
     texto_grupo,
     texto_tamanho_disco,
     texto_volume_bucket,
+    var_versao,
 )
 from app.schemas.terraform import (
     RecursoTerraform,
@@ -93,14 +97,24 @@ class AdaptadorOCI:
                     ),
                 )
             )
-        if any(r.resource_type is TipoRecurso.MANAGED_DATABASE for r in bp.resources):
+        bancos = [r for r in bp.resources if r.resource_type is TipoRecurso.MANAGED_DATABASE]
+        if any(_produto_do_banco(r) != "oracle" for r in bancos):
+            variaveis.append(
+                VariavelTerraform(
+                    name="db_admin_username",
+                    description=(
+                        "Usuário administrador do banco (PostgreSQL ou MySQL HeatWave). "
+                        "Não sai do billing nem do inventário."
+                    ),
+                )
+            )
+        if bancos:
             variaveis.append(
                 VariavelTerraform(
                     name="db_admin_password",
                     description=(
-                        "Senha do administrador do Autonomous Database. A "
-                        "plataforma não gera nem armazena senha — escolha uma e "
-                        "guarde no seu cofre."
+                        "Senha do administrador do banco gerenciado. A plataforma não "
+                        "gera nem armazena senha — escolha uma e guarde no seu cofre."
                     ),
                     sensitive=True,
                 )
@@ -350,13 +364,121 @@ def _db_name(bp: TerraformBlueprint, r: RecursoTerraform, n: int) -> str:
     return referencia(f'"{prefixo}${{count.index}}"') if n > 1 else prefixo
 
 
+# Cada motor no produto dele (PROXIMAS_EXECUCOES, item 1). Formas do catálogo da OCI
+# lidas em 18/10/2026 (docs.oracle.com, "Supported Shapes" do PostgreSQL e do MySQL
+# HeatWave). As contas são as da cotação: OCPU = vCPU ÷ 2 no PostgreSQL, ECPU = vCPU
+# no MySQL
+_FORMA_POSTGRES = "PostgreSQL.VM.Standard.E5.Flex"
+_FAMILIA_POSTGRES = "E5"
+_GB_MINIMO_POSTGRES = 16
+_GB_MAXIMO_POR_OCPU_POSTGRES = 64
+_GB_MAXIMO_POSTGRES = 1024
+# Sem a classe da origem, a proporção das formas fixas (16 GB por OCPU)
+_GB_POR_OCPU_POSTGRES = 16
+# Alta disponibilidade do PostgreSQL da OCI: um nó a mais sobre o mesmo armazenamento
+_NOS_COM_HA_POSTGRES = 2
+_ECPUS_MYSQL = (2, 4, 8, 16, 32, 48, 64, 96, 192, 256)
+
+
+def _produto_do_banco(r: RecursoTerraform) -> str:
+    """O motor medido escolhe o produto; sem motor (caminho agregado), PostgreSQL, como
+    na Azure. SQL Server não chega aqui: o plano o recusa para a OCI."""
+    familia = str(r.configuration.get("engine_family") or "")
+    return familia if familia in ("mysql", "oracle") else "postgresql"
+
+
 def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    gerar = {"mysql": _mysql, "oracle": _autonomous}.get(_produto_do_banco(r), _postgresql)
+    return gerar(r, bp)
+
+
+def _subnet_do_banco(cfg: dict[str, Any]) -> str:
+    """A subrede de dados espelhada (T3) ou, sem ela, a principal: o PostgreSQL e o
+    HeatWave só existem dentro de uma subrede."""
+    subredes = [str(x) for x in cfg.get("db_subnets") or []]
+    return referencia(f"oci_core_subnet.{subredes[0] if subredes else SUBNET}.id")
+
+
+def _memoria_postgres(cfg: dict[str, Any], ocpus: int) -> int:
+    """A memória da classe da origem, dentro dos limites da forma flexível."""
+    ram = ram_da_classe(str(cfg.get("source_class") or "") or None)
+    pedida = math.ceil(ram) if ram else ocpus * _GB_POR_OCPU_POSTGRES
+    teto = min(ocpus * _GB_MAXIMO_POR_OCPU_POSTGRES, _GB_MAXIMO_POSTGRES)
+    return min(max(_GB_MINIMO_POSTGRES, ocpus, pedida), teto)
+
+
+def _postgresql(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     cfg = r.configuration
     vcpus = max(1, int(cfg.get("vcpus") or 1))
+    ocpus = ocpus_para(vcpus, _FAMILIA_POSTGRES)
+    memoria = _memoria_postgres(cfg, ocpus)
+    nos = _NOS_COM_HA_POSTGRES if cfg.get("high_availability") else 1
+    n = instancias_banco(cfg)
+    return comentario(
+        texto_banco(cfg, vcpus) + "\n"
+        f"OCI Database with PostgreSQL, forma {_FORMA_POSTGRES}: {ocpus} OCPU (2 vCPU por\n"
+        f"OCPU, a conta da cotação) e {memoria} GB, {nos} nó(s). A variável de versão aqui é\n"
+        "a versão maior do PostgreSQL (14, 15 ou 16).\n"
+        "A senha de admin NÃO é gerada aqui — preencha `db_admin_password`."
+    ) + "\n" + bloco("resource", ["oci_psql_db_system", r.logical_name], [
+        *([atributo("count", n)] if n > 1 else []),
+        _compartimento(),
+        atributo("display_name", com_indice(nome_banco(bp, r), n)),
+        atributo("db_version", var_versao(cfg)),
+        atributo("shape", _FORMA_POSTGRES),
+        atributo("instance_ocpu_count", ocpus),
+        atributo("instance_memory_size_in_gbs", memoria),
+        atributo("instance_count", nos),
+        bloco_aninhado("network_details", [
+            atributo("subnet_id", _subnet_do_banco(cfg), nivel=2),
+        ], nivel=1),
+        bloco_aninhado("storage_details", [
+            atributo("is_regionally_durable", True, nivel=2),
+            atributo("system_type", "OCI_OPTIMIZED_STORAGE", nivel=2),
+        ], nivel=1),
+        bloco_aninhado("credentials", [
+            atributo("username", referencia("var.db_admin_username"), nivel=2),
+            bloco_aninhado("password_details", [
+                atributo("password_type", "PLAIN_TEXT", nivel=3),
+                atributo("password", referencia("var.db_admin_password"), nivel=3),
+            ], nivel=2),
+        ], nivel=1),
+    ])
+
+
+def _mysql(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    cfg = r.configuration
+    vcpus = max(1, int(cfg.get("vcpus") or 1))
+    ecpus = next((e for e in _ECPUS_MYSQL if e >= vcpus), _ECPUS_MYSQL[-1])
+    forma = f"MySQL.{ecpus}"
+    n = instancias_banco(cfg)
+    return comentario(
+        texto_banco(cfg, vcpus) + "\n"
+        f"MySQL HeatWave, forma {forma}: {ecpus} ECPU (ECPU = vCPU, a premissa da cotação).\n"
+        "A versão é a completa do catálogo da OCI (ex.: 8.4.x): `oci mysql version list`.\n"
+        "A senha de admin NÃO é gerada aqui — preencha `db_admin_password`."
+    ) + "\n" + bloco("resource", ["oci_mysql_mysql_db_system", r.logical_name], [
+        *([atributo("count", n)] if n > 1 else []),
+        _compartimento(),
+        atributo("availability_domain", referencia("var.availability_domain")),
+        atributo("display_name", com_indice(nome_banco(bp, r), n)),
+        atributo("shape_name", forma),
+        atributo("mysql_version", var_versao(cfg)),
+        atributo("subnet_id", _subnet_do_banco(cfg)),
+        atributo("admin_username", referencia("var.db_admin_username")),
+        atributo("admin_password", referencia("var.db_admin_password")),
+        atributo("is_highly_available", bool(cfg.get("high_availability"))),
+    ])
+
+
+def _autonomous(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    cfg = r.configuration
+    vcpus = max(1, int(cfg.get("vcpus") or 1))
+    ocpus = ocpus_para(vcpus, FAMILIA_PADRAO)
     subredes = [str(x) for x in cfg.get("db_subnets") or []]
     return comentario(
         texto_banco(cfg, vcpus) + "\n"
-        "Autonomous Database: a OCI cobra por OCPU, que casa com o vCPU derivado.\n"
+        f"Autonomous Database, o motor Oracle da origem: {ocpus} OCPU (2 vCPU por OCPU).\n"
         "A senha de admin NÃO é gerada aqui — preencha `db_admin_password`."
     ) + "\n" + bloco(
         "resource", ["oci_database_autonomous_database", r.logical_name], [
@@ -364,7 +486,7 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             _compartimento(),
             atributo("db_name", _db_name(bp, r, n)),
             atributo("display_name", com_indice(nome_banco(bp, r), n)),
-            atributo("cpu_core_count", vcpus),
+            atributo("cpu_core_count", ocpus),
             atributo("data_storage_size_in_tbs", 1),
             atributo("admin_password", referencia("var.db_admin_password")),
             atributo("is_auto_scaling_enabled", True),

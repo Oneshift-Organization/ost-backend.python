@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
+import re
 import shutil
 from decimal import Decimal
 from typing import Any
@@ -11,6 +13,7 @@ import pytest
 
 from app.core import config
 from app.domain.services.terraform_topologia.escopo import (
+    BucketDoEscopo,
     LigacaoEntreNuvens,
     RecorteDoEscopo,
     recortar_ao_escopo,
@@ -113,6 +116,8 @@ def _bancos(arquivos: dict[str, str]) -> int:
             "google_sql_database_instance",
             "azurerm_postgresql_flexible_server",
             "oci_database_autonomous_database",
+            "oci_psql_db_system",
+            "oci_mysql_mysql_db_system",
         )
     )
 
@@ -168,3 +173,57 @@ def test_pacote_de_so_a_vm_passa_no_validate(
     finally:
         config.get_settings.cache_clear()
     assert r.validado is True, r.erros
+
+
+# ── buckets do escopo pelo inventário (PROXIMAS_EXECUCOES, item 2) ──────
+
+_BUCKETS = {
+    "aws": 'resource "aws_s3_bucket"',
+    "gcp": 'resource "google_storage_bucket"',
+    "azure": 'resource "azurerm_storage_account"',
+    "oci": 'resource "oci_objectstorage_bucket"',
+}
+
+
+@pytest.mark.parametrize(("origem", "destino"), list(zip(_ORIGENS, _DESTINOS, strict=True)))
+def test_um_bucket_por_bucket_do_inventario_mesmo_sem_custo_ligado(
+    origem: str, destino: str
+) -> None:
+    """A fatura sem ID de recurso não liga custo ao bucket: antes o escopo saía sem
+    bucket nenhum, e calado. Agora sai um por bucket do inventário."""
+    payload = com_topologia(origem)
+    recorte = dataclasses.replace(
+        _recorte(payload),
+        buckets=(
+            BucketDoEscopo("site-estatico", Decimal(0)),
+            BucketDoEscopo("logs", Decimal(0)),
+        ),
+    )
+    arquivos = pacote(recortar_ao_escopo(payload, recorte), destino)
+    main = arquivos["main.tf"]
+    assert main.count(_BUCKETS[destino]) == 2
+    assert "Bucket de origem: site-estatico." in main
+    assert main.count("a fatura não liga custo a este bucket") == 2
+    assert "buckets saem do inventário" in arquivos["README.md"]
+
+
+def test_bucket_com_custo_ligado_divide_o_volume_do_agregado() -> None:
+    payload = com_topologia("aws")
+    recorte = dataclasses.replace(
+        _recorte(payload),
+        custos={"armazenamento_objetos": Decimal("30")},
+        buckets=(
+            BucketDoEscopo("grande", Decimal("20")),
+            BucketDoEscopo("pequeno", Decimal("10")),
+        ),
+    )
+    novo = recortar_ao_escopo(payload, recorte)
+    plano = montar_blueprint(novo, entrada("gcp"))
+    buckets = [r for r in plano.resources if r.resource_type.value == "object_storage"]
+    assert sorted(r.configuration["source_name"] for r in buckets) == ["grande", "pequeno"]
+    gb = {r.configuration["source_name"]: r.configuration["estimated_gb"] for r in buckets}
+    assert gb["pequeno"] > 0
+    assert abs(gb["grande"] - 2 * gb["pequeno"]) <= 1  # arredondamento do GB
+    # O agregado sai: nenhum bucket sem nome de origem
+    assert all(r.configuration.get("source_name") for r in buckets)
+    assert not re.search(r"bucket_object_storage", " ".join(r.logical_name for r in buckets))

@@ -11,8 +11,10 @@ recortado antes de derivar o plano:
 - bancos: os do escopo, na topologia (onde estão) e nos grupos medidos da fatura (o
   que o pacote cria), pela classe. Sem os grupos medidos o pacote caía num banco
   genérico, fora da rede nova e com endpoint público (corrigido em 18/10);
-- discos, buckets e banco gerenciado estimado: pelo custo das linhas do escopo. O
+- discos e banco gerenciado estimado: pelo custo das linhas do escopo. O
   armazenamento medido e os discos do inventário são da conta inteira e saem;
+- buckets: os do inventário no escopo, um recurso por bucket (a fatura nem sempre liga
+  o custo do armazenamento de objetos a cada bucket);
 - o resto dos custos auxiliares (rede, segredos, serverless...) sai: o pacote não os
   provisiona, e a lista do que ficou de fora seria da conta inteira;
 - o README ganha a seção do escopo: aplicações, ordem de migração e a conectividade
@@ -73,6 +75,15 @@ class LigacaoEntreNuvens:
 
 
 @dataclass(frozen=True, slots=True)
+class BucketDoEscopo:
+    """Bucket do inventário no escopo: o nome e o custo que a fatura liga a ele (zero
+    quando a fatura não liga custo a bucket)."""
+
+    nome: str
+    custo: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class RecorteDoEscopo:
     """O que o escopo tem, já tirado do inventário pelo caso de uso."""
 
@@ -97,6 +108,9 @@ class RecorteDoEscopo:
     somente_os_servicos: bool = False
     servicos: tuple[str, ...] = ()
     fronteira: tuple[LigacaoNaFronteira, ...] = ()
+    # Os buckets do inventário no escopo: o pacote cria um por bucket, mesmo quando a
+    # fatura não liga o custo do armazenamento de objetos a cada um
+    buckets: tuple[BucketDoEscopo, ...] = ()
 
 
 def recortar_ao_escopo(payload: Mapping[str, Any], recorte: RecorteDoEscopo) -> dict[str, Any]:
@@ -290,6 +304,16 @@ def _secao(recorte: RecorteDoEscopo, fora: list[str]) -> dict[str, Any]:
         "para_tras": [ligacao(g) for g in recorte.para_tras],
         "pools_fora": sorted(set(fora)),
         "avisos": list(recorte.avisos),
+        **(
+            {
+                "buckets": [
+                    {"nome": b.nome, "custo": float(b.custo)}
+                    for b in sorted(recorte.buckets, key=lambda b: b.nome)
+                ]
+            }
+            if recorte.buckets
+            else {}
+        ),
         **(
             {
                 "somente_os_servicos": True,

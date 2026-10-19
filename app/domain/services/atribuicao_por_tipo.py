@@ -273,6 +273,19 @@ SERVICO_DO_NATIVO: Mapping[str, str] = {
     "AWS::SecretsManager::Secret": "AWSSecretsManager",
     "AWS::SQS::Queue": "AWSQueueService",
     "AWS::SNS::Topic": "AmazonSNS",
+    # Sem linha de custo própria na fatura, mas com serviço conhecido nela: a zona de DNS
+    # e a fundação de rede. Não pertencem a aplicação: só dizem a que serviço o recurso é
+    # (PROXIMAS_EXECUCOES, item 3)
+    "AWS::Route53::HostedZone": "AmazonRoute53",
+    "AWS::Route53::HealthCheck": "AmazonRoute53",
+    "AWS::EC2::VPC": "AmazonVPC",
+    "AWS::EC2::Subnet": "AmazonVPC",
+    "AWS::EC2::InternetGateway": "AmazonVPC",
+    "AWS::EC2::VPNGateway": "AmazonVPC",
+    "AWS::EC2::VPNConnection": "AmazonVPC",
+    "AWS::EC2::TransitGateway": "AmazonVPC",
+    "AWS::EC2::NetworkAcl": "AmazonVPC",
+    "AWS::EC2::RouteTable": "AmazonVPC",
 }
 
 

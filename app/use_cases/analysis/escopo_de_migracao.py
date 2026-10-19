@@ -19,7 +19,7 @@ from uuid import UUID
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.domain.entities.analysis_job import AnalysisJob, AnalysisStatus
-from app.domain.entities.topologia import TipoDeRecurso
+from app.domain.entities.topologia import FUNDACAO, TipoDeRecurso
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.domain.repositories.i_custo_por_recurso import ILeitorDeCustoPorRecurso
 from app.domain.repositories.i_inventory_repo import IInventoryRepository
@@ -44,6 +44,7 @@ from app.domain.services.cotacao_do_escopo import (
 from app.domain.services.currency import FxRate, convert, identity_rate
 from app.domain.services.sku_matcher import extract_family
 from app.domain.services.terraform_topologia.escopo import (
+    BucketDoEscopo,
     LigacaoEntreNuvens,
     RecorteDoEscopo,
     familia_da_maquina,
@@ -122,6 +123,15 @@ class RecursoDoEscopo:
 
 
 @dataclass(frozen=True, slots=True)
+class ServicoNoInventario:
+    """Os recursos do inventário inteiro (não só das aplicações) de um serviço da fatura."""
+
+    nativos: tuple[tuple[str, int], ...]
+    # Tem rede, subrede, grupo ou gateway: é a fundação que o espelho recria
+    fundacao: bool
+
+
+@dataclass(frozen=True, slots=True)
 class ContextoDoEscopo:
     catalogo: CatalogoDeAplicacoes
     linhas: tuple[LinhaDoEscopo, ...]
@@ -139,6 +149,8 @@ class ContextoDoEscopo:
     gasto_total: Decimal | None = None
     # Unidade com cluster → prováveis aplicações dentro dele (indício, não unidade)
     cargas_no_cluster: Mapping[str, CargasDoCluster] = field(default_factory=dict)
+    # Serviço → o que o inventário tem dele: diz o que fica fora do pacote sem mentir
+    no_inventario: Mapping[str, ServicoNoInventario] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -341,6 +353,7 @@ class EscopoDeMigracaoUseCase:
             },
             periodo=_texto_cru(payload.get("periodo_faturamento")),
             cargas_no_cluster=cargas_no_cluster(conteudo, analise),
+            no_inventario=_no_inventario(indice, servico_do_recurso),
             gasto_total=_decimal(payload.get("gasto_total")),
         )
 
@@ -493,10 +506,19 @@ def recorte_do_plano(cotado: PlanoCotado) -> RecorteDoEscopo:
         ordens=tuple((o.ordem, tuple(nomes.get(g, g) for g in o.grupos)) for o in plano.ordens),
         antes=ligacoes(plano.antes),
         para_tras=ligacoes(plano.para_tras),
-        avisos=_fora_do_pacote(escolhidos, recursos, servico_de) if so_o_servico else (),
+        avisos=(
+            _fora_do_pacote(escolhidos, recursos, servico_de, ctx.no_inventario)
+            if so_o_servico
+            else ()
+        ),
         somente_os_servicos=so_o_servico,
         servicos=tuple(sorted(escolhidos)) if so_o_servico else (),
         fronteira=plano.fronteira,
+        buckets=tuple(
+            BucketDoEscopo(nome=r.nome or r.chave, custo=r.custo)
+            for r in recursos
+            if r.tipo == TipoDeRecurso.BUCKET
+        ),
     )
 
 
@@ -506,18 +528,67 @@ _PROVISIONADOS = frozenset(
 )
 
 
+def _no_inventario(
+    indice: Indice, servico_do_recurso: Mapping[str, str]
+) -> dict[str, ServicoNoInventario]:
+    nativos: dict[str, Counter[str]] = defaultdict(Counter)
+    fundacao: dict[str, bool] = {}
+    for chave, recurso in indice.recursos.items():
+        servico = servico_do_recurso.get(chave)
+        if servico is None:
+            continue
+        nativos[servico][recurso.tipo_nativo] += 1
+        fundacao[servico] = fundacao.get(servico, False) or recurso.tipo in FUNDACAO
+    return {
+        s: ServicoNoInventario(
+            tuple(sorted(c.items(), key=lambda kv: (-kv[1], kv[0]))), fundacao[s]
+        )
+        for s, c in nativos.items()
+    }
+
+
+# Tipos nativos citados por serviço na lista do que fica fora
+_NATIVOS_CITADOS = 3
+
+
+def _texto_dos_nativos(nativos: tuple[tuple[str, int], ...]) -> str:
+    texto = ", ".join(f"{n} {tipo}" for tipo, n in nativos[:_NATIVOS_CITADOS])
+    return texto + ("…" if len(nativos) > _NATIVOS_CITADOS else "")
+
+
 def _fora_do_pacote(
-    escolhidos: frozenset[str], recursos: list[RecursoDoEscopo], servico_de: Mapping[str, str]
+    escolhidos: frozenset[str],
+    recursos: list[RecursoDoEscopo],
+    servico_de: Mapping[str, str],
+    no_inventario: Mapping[str, ServicoNoInventario],
 ) -> tuple[str, ...]:
-    """Serviço escolhido que o pacote não cria: dito na resposta e no README."""
+    """Serviço escolhido que o pacote não cria: dito na resposta e no README.
+
+    Sem recurso nas aplicações do escopo há três casos, e cada um tem a sua frase: o
+    recurso existe fora das aplicações, é a fundação de rede (que o espelho cria) ou o
+    inventário não tem nada dele."""
     avisos = []
     for servico in sorted(escolhidos):
         tipos = {r.tipo for r in recursos if servico_de.get(r.chave) == servico}
         if not tipos:
-            avisos.append(
-                f"{servico}: nenhum recurso dele no inventário das unidades do escopo; o "
-                "pacote não o cria."
-            )
+            achado = no_inventario.get(servico)
+            if achado is not None and achado.fundacao:
+                avisos.append(
+                    f"{servico}: a rede de origem ({_texto_dos_nativos(achado.nativos)}) vira "
+                    "a rede do pacote pelo espelho, só com as subredes que as máquinas e os "
+                    "bancos usam; gateways (internet, NAT, VPN) não são criados."
+                )
+            elif achado is not None:
+                avisos.append(
+                    f"{servico}: {_texto_dos_nativos(achado.nativos)} no inventário, fora das "
+                    "aplicações do escopo; o pacote não o cria."
+                )
+            else:
+                avisos.append(
+                    f"{servico}: nenhum recurso dele no inventário. É serviço da conta "
+                    "(gestão, cobrança), sem infraestrutura própria, ou um tipo que o "
+                    "inventário não lista; o pacote não o cria."
+                )
         elif not tipos & _PROVISIONADOS:
             avisos.append(
                 f"{servico} não vira recurso neste pacote (o Terraform cria máquina, disco, "

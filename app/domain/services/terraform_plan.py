@@ -39,6 +39,7 @@ from typing import Any
 from app.domain.services.categoria_por_uso import CHAVE_NO_PAYLOAD as CHAVE_POR_USO
 from app.domain.services.categoria_por_uso import OBSERVABILIDADE_E_BORDA
 from app.domain.services.instance_shape import parse_instance_shape
+from app.domain.services.perfil_de_familia import perfil
 
 # Taxas de referência por GB-mês, usadas para voltar de dinheiro para tamanho.
 # São as mesmas de `seed_category_rates`; ficam aqui porque a derivação é pura e
@@ -109,13 +110,15 @@ _FAMILIAS_DE_MOTOR = (
     ("oracle", "oracle"),
 )
 
-# O que o renderer de cada destino sabe gerar. Ausente = aceita qualquer um
-# (com aviso quando é troca de motor). Recusar aqui, e não no renderer, é o que
-# faz a recusa aparecer no README em vez de sumir em silêncio.
+# O que o renderer de cada destino sabe gerar, cada motor no produto dele. Ausente =
+# aceita qualquer um. Recusar aqui, e não no renderer, é o que faz a recusa aparecer
+# no README em vez de sumir em silêncio.
 _MOTORES_POR_DESTINO: dict[str, frozenset[str]] = {
     "azure": frozenset({"postgresql"}),
     "gcp": frozenset({"postgresql", "mysql", "sqlserver"}),
     "aws": frozenset({"postgresql", "mysql", "sqlserver", "oracle"}),
+    # PostgreSQL, MySQL HeatWave e Autonomous (Oracle); a OCI não tem SQL Server gerenciado
+    "oci": frozenset({"postgresql", "mysql", "oracle"}),
 }
 
 
@@ -275,7 +278,9 @@ def _derivar_compute(
 
         instancias = int(pool.get("instancias") or equivalente.get("instancias") or 1)
         tecnica = equivalente.get("correspondencia_tecnica") or {}
-        ocupacao = _ocupacao(pool.get("capacidade") or {}, tecnica)
+        linha_de_base = _linha_de_base(payload, pool, destino, str(sku_bruto))
+        capacidade = _pela_linha_de_base(pool.get("capacidade") or {}, linha_de_base)
+        ocupacao = _ocupacao(capacidade, tecnica)
 
         plano.recursos.append(
             RecursoDerivado(
@@ -313,13 +318,18 @@ def _derivar_compute(
         if idade is not None:
             base += f" Preço capturado há {idade} dias."
         base += _origem_medida(pool, familia, max(1, instancias), plano)
+        if linha_de_base is not None:
+            base += (
+                f" A origem é burstable: a vCPU conta pela linha de base "
+                f"({linha_de_base:.0%} da nominal), como no empacotamento."
+            )
         base += _aviso_de_empacotamento(
             familia,
             max(1, instancias),
             ocupacao,
             plano,
             instancias_na_origem=pool.get("instancias_medidas"),
-            capacidade=pool.get("capacidade") or {},
+            capacidade=capacidade,
             tecnica=tecnica,
         )
         if pool.get("custo_coberto_por_compromisso") or pool.get(
@@ -352,6 +362,32 @@ _OCUPACAO_BAIXA = Decimal("0.5")
 _OCUPACAO_CHEIA = Decimal("1")
 # Máquina do destino abaixo disto da média da origem: o empacotamento fragmentou
 _MAQUINA_MENOR = Decimal("0.9")
+
+
+def _linha_de_base(
+    payload: dict[str, Any], pool: dict[str, Any], destino: str, sku: str
+) -> Decimal | None:
+    """A base com que o empacotamento dimensionou o pool (`_packing_pela_base`): a que a
+    análise gravou em `premissas.burstable_pela_base`, só para destino sem crédito.
+    Análise anterior a essa regra não grava nada e foi dimensionada pela nominal: None."""
+    registro = ((payload.get("premissas") or {}).get("burstable_pela_base") or {}).get("pools")
+    chave = f"{pool.get('familia')}/{pool.get('regiao')}"
+    base = next(
+        (_decimal(p.get("base_cpu")) for p in registro or [] if p.get("pool") == chave), None
+    )
+    if base is None:
+        return None
+    no_destino = perfil(destino, sku)
+    if no_destino is not None and no_destino.burstable:
+        return None
+    return base
+
+
+def _pela_linha_de_base(capacidade: dict[str, Any], base: Decimal | None) -> dict[str, Any]:
+    vcpus = _decimal(capacidade.get("vcpus"))
+    if base is None or vcpus is None:
+        return capacidade
+    return {**capacidade, "vcpus": vcpus * base}
 
 
 def _ocupacao(capacidade: dict[str, Any], tecnica: dict[str, Any]) -> Decimal | None:
@@ -827,12 +863,6 @@ def _banco_medido(
         plano.avisos.append(
             f"{total - detalhados} instâncias de banco em grupos menores não aparecem "
             "no resumo da análise e não viraram recurso."
-        )
-    if destino == "oci":
-        plano.avisos.append(
-            "Na OCI o banco é gerado como Autonomous Database (motor Oracle). Com a "
-            "origem em PostgreSQL/MySQL isso é troca de motor, não lift-and-shift: "
-            "avalie o OCI Database with PostgreSQL / MySQL HeatWave."
         )
     return True
 

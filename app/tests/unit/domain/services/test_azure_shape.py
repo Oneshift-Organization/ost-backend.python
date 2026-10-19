@@ -64,3 +64,26 @@ def test_f_series_v2_is_linear_and_kept() -> None:
     shape = parse_azure_shape("Standard_F16s_v2")
     assert shape is not None
     assert shape.vcpus == Decimal("16")
+
+
+@pytest.mark.parametrize(
+    ("arm", "vcpus", "ram_gib"),
+    [
+        # A B v1 de 1 vCPU foge da regra (tabela oficial da série B; D1 do E2E de 17/10)
+        ("Standard_B1ls", 1, "0.5"),
+        ("Standard_B1s", 1, "1"),
+        ("Standard_B1ms", 1, "2"),
+        # As demais seguem a regra
+        ("Standard_B2s", 2, "4"),
+        ("Standard_B2ms", 2, "8"),
+        ("Standard_B20ms", 20, "80"),
+        ("Standard_B2ts_v2", 2, "1"),
+        ("Standard_B2ls_v2", 2, "4"),
+        ("Standard_B4ls_v2", 4, "8"),
+    ],
+)
+def test_serie_b_pela_tabela_oficial(arm: str, vcpus: int, ram_gib: str) -> None:
+    forma = parse_azure_shape(arm)
+    assert forma is not None
+    assert forma.vcpus == vcpus
+    assert forma.ram_gib == Decimal(ram_gib)
