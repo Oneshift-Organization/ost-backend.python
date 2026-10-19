@@ -5,8 +5,8 @@ credit maxima are treated as approved amounts. Changes require source review and
 catalog + agent authority version bump; old persisted analyses remain unchanged.
 """
 
-CATALOG_VERSION = "corporate-benefits-v1"
-REVIEWED_ON = "2026-10-14"
+CATALOG_VERSION = "corporate-benefits-v2"
+REVIEWED_ON = "2026-10-18"
 
 _CREDITS = (
     (
@@ -41,12 +41,17 @@ _CREDITS = (
     ),
     (
         "oci",
-        "Oracle Cloud Free Tier",
-        "Avaliação e serviços gratuitos com limites; não é subsídio permanente de produção.",
-        "https://www.oracle.com/cloud/free/",
+        "Oracle Startup Growth Engine",
+        "Startups selecionadas podem receber até US$ 60 mil em créditos OCI ou "
+        "financiamento para avaliações técnicas e de negócio, conforme a modalidade. "
+        "Não é saldo aprovado nem desconto permanente.",
+        "https://www.oracle.com/br/artificial-intelligence/startup-growth-engine/",
         [
-            "Elegibilidade da conta para avaliação e disponibilidade regional.",
-            "Prazo, limites de uso e serviços incluídos; validar custos após a avaliação.",
+            "Produto tecnológico validado com clientes, potencial de escala e workloads "
+            "compatíveis com OCI; disposição para desenvolver ou migrar para a plataforma.",
+            "Ausência de relação comercial ativa com OCI no momento da inscrição.",
+            "País atendido, seleção e nível elegível do Oracle PartnerNetwork (eOPN); "
+            "confirmar a modalidade, o valor, a validade e os serviços autorizados.",
         ],
     ),
 )
@@ -57,8 +62,8 @@ _SUPPORT = (
     ("gcp", "Google Cloud Customer Care", "https://cloud.google.com/support"),
     (
         "oci",
-        "Suporte e limites do Oracle Cloud Free Tier",
-        "https://www.oracle.com/asean/cloud/free/faq/",
+        "Oracle Support para infraestrutura cloud",
+        "https://www.oracle.com/support/",
     ),
 )
 
