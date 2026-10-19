@@ -114,6 +114,7 @@ from app.domain.services.service_identity import (
     service_type_hint,
 )
 from app.domain.services.servico_pelo_uso import servico_pelo_uso
+from app.domain.services.technical_assessment import CURATED
 from app.services.billing_aggregator import BillingAggregator
 from app.use_cases.analysis.leitura_completa import listar_todos
 
@@ -527,7 +528,11 @@ def _cotar_banco(
                 provider=e.provider,
                 estimated_monthly_cost=total,
                 cost_delta=total - custo,
-                pricing_confidence=e.pricing_confidence if fator is not None else "low",
+                # Resto ao custo da origem rebaixa a confiança; sem resto, não há o que
+                # rebaixar (D3 do E2E de 17/10)
+                pricing_confidence=(
+                    e.pricing_confidence if fator is not None or resto == 0 else "low"
+                ),
             )
         )
     return out
@@ -1677,7 +1682,9 @@ class BuildMigrationContextUseCase:
                 sv.total_cost
                 for c in categories.values()
                 for sv in c["services"]
-                if getattr(sv, "type_source", "curado") != "curado"
+                # A mesma regra do score e da portabilidade: o apelido do catálogo é
+                # curado (D4 do E2E de 17/10)
+                if getattr(sv, "type_source", "curado") not in CURATED
             ),
             Decimal("0"),
         )

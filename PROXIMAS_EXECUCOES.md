@@ -410,6 +410,20 @@ uma versão (a fatura não diz quantas versões cada chave tem).
 gravar a taxa nova (`seed_category_rates`) em cada ambiente, com autorização. Análises
 gravadas não mudam.
 
+### Item 11 — D3 e D4: dois rótulos errados
+
+- **D3:** a cotação do banco marcava confiança "low" sempre que o destino não tinha a
+  razão do resto (armazenamento, backup), mesmo com resto zero (banco todo em instância,
+  como no mock da Azure). Passa a "low" só quando há resto e ele fica ao custo da origem.
+- **D4:** `premissas.tipo_servico_inferido` contava o apelido do catálogo
+  (`catalog_alias`) como tipo inferido, enquanto o resto do sistema (`CURATED`, o score e
+  a portabilidade) o trata como curado. O alerta "tipo inferido concentrado" acusava
+  falso (OCI; Azure 27,8%). Passa a usar a mesma regra.
+
+**Quem é afetado:** só rótulos. D3 pode subir a confiança do banco (e a da análise, que
+pesa pelo valor cotado) onde o resto é zero; D4 tira o alerta falso da reconciliação. Os
+números de custo, economia e nota não mudam. Análises gravadas só mudam ao reanalisar.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |

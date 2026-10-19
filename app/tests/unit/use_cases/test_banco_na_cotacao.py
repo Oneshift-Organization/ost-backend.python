@@ -145,6 +145,26 @@ def test_sem_vcpu_hora_a_instancia_vai_pela_razao() -> None:
     assert round(oci.estimated_monthly_cost, 2) == D("54.04")
 
 
+def test_banco_todo_instancia_nao_rebaixa_a_confianca() -> None:
+    """D3 do E2E de 17/10: sem a razão do resto no destino, a confiança só cai quando há
+    resto, que fica ao custo da origem."""
+
+    def confianca(custo: str) -> str:
+        [oci] = _cotar_banco(
+            source_provider="aws",
+            custo=D(custo),
+            medido=D("80"),
+            quantidade=D("1000"),
+            preco_efetivo=D("0.08"),
+            taxas={"aws": _t("aws", "0.089"), "oci": _t("oci", "0.049")},
+            fator_do_resto={},
+        )
+        return oci.pricing_confidence
+
+    assert confianca("80") == _t("oci", "0.049").confidence
+    assert confianca("100") == "low"
+
+
 def _linha(
     uso: str,
     custo: str,
