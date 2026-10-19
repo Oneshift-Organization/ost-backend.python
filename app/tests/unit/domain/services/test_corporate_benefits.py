@@ -11,8 +11,8 @@ def build_corporate_benefits():
 
 def test_catalog_is_sourced_versioned_and_explicitly_not_approved():
     benefits = build_corporate_benefits()
-    assert benefits.catalog_version == "corporate-benefits-v1"
-    assert benefits.reviewed_on.isoformat() == "2026-10-14"
+    assert benefits.catalog_version == "corporate-benefits-v2"
+    assert benefits.reviewed_on.isoformat() == "2026-10-18"
     assert benefits.score_effect == "none"
     assert len({o.id for o in benefits.opportunities}) == 8
     assert {o.provider for o in benefits.opportunities} == {"aws", "azure", "gcp", "oci"}
@@ -42,3 +42,22 @@ def test_catalog_can_be_persisted_as_json_without_custom_encoder():
     benefits = build_corporate_benefits()
     assert json.loads(json.dumps(benefits.model_dump())) == benefits.model_dump(mode="json")
     assert json.loads(json.dumps(build_catalog())) == build_catalog()
+
+
+def test_oci_program_is_conditional_and_support_is_not_limited_to_free_tier():
+    benefits = build_corporate_benefits()
+    credits = next(o for o in benefits.opportunities if o.id == "oci-credits")
+    assert credits.title == "Oracle Startup Growth Engine"
+    assert "até US$ 60 mil" in credits.summary
+    assert "Não é saldo aprovado" in credits.summary
+    assert "ou financiamento" in credits.summary
+    assert str(credits.source_url) == (
+        "https://www.oracle.com/br/artificial-intelligence/startup-growth-engine/"
+    )
+    requirements = " ".join(credits.requirements)
+    assert "Ausência de relação comercial ativa" in requirements
+    assert "eOPN" in requirements
+    assert credits.eligibility == "not_verified"
+    assert benefits.score_effect == "none"
+    support = next(o for o in benefits.opportunities if o.id == "oci-support")
+    assert str(support.source_url) == "https://www.oracle.com/support/"

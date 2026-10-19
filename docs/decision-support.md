@@ -151,10 +151,22 @@ apenas o resumo e o ledger compacto. Rede e regras privadas não são enviadas.
 ## Benefícios comerciais (fora da pontuação)
 
 `decision_support.corporate_benefits` é aditivo e opcional para resultados
-históricos. A versão `corporate-benefits-v1`, revisada em 14/10/2026, contém
+históricos. A versão `corporate-benefits-v2`, atualizada em 18/10/2026, contém
 fontes oficiais de programas de crédito e suporte para AWS, Azure, GCP e OCI.
-Em OCI, a oportunidade documentada é Free Tier/avaliação, não um programa
-corporativo de startups presumido. Não se expõem máximos promocionais como saldo.
+Em OCI, o [Startup Growth Engine](https://www.oracle.com/br/artificial-intelligence/startup-growth-engine/)
+substitui a indicação de Free Tier neste catálogo. O
+[anúncio oficial de 23/06/2026](https://www.oracle.com/br/news/announcement/oracle-expands-oracle-partner-network-with-startup-growth-engine-2026-06-23/)
+informa até US$ 60 mil em créditos OCI ou financiamento de avaliações, condicionado
+à seleção e ao nível elegível do eOPN. O máximo não é saldo aprovado. A página do
+programa exige produto validado e ausência de relação comercial ativa com OCI
+na inscrição. O link de suporte passa a ser o [Oracle Support](https://www.oracle.com/support/),
+sem presumir plano contratado ou SLA. A revisão desta versão é das referências OCI;
+as referências das demais nuvens permanecem as revisadas em 14/10/2026.
+
+Autoridade `agent-authority-v5.1`: muda apenas o catálogo informativo, sem alterar
+a política `score-7rs-v5`, os pesos 35/50/15 ou preços. Snapshots preparados antes
+da mudança precisam ser renovados para novos envios; repetições já persistidas
+mantêm o contrato de idempotência.
 
 Toda oportunidade tem `eligibility=not_verified` e `score_effect=none` no
 catálogo. O billing não comprova elegibilidade, porte, aprovação ou plano

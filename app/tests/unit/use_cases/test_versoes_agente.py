@@ -57,7 +57,13 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 # - se a mesma entrada passa a produzir outra análise corrigida, suba
 #   AUTHORITY_VERSION em `use_cases/agent/versoes.py` e registre o hash novo;
 # - se não (refactor, comentário, tipo), só troque o hash da versão atual.
+# Keep fingerprints separate from their keys to avoid false credential alerts.
+# fmt: off
 _HASH_POR_VERSAO = {
+    # v5.1: atualização informativa dos benefícios OCI, sem mudar score/preços.
+    "agent-authority-v5.1": (
+        "ca31d210fb34be5cc9bb9a5d6650f83553d988884f032e2245ad24667a0a89e0"
+    ),
     # v5: lock-in da origem efetiva; classe/inventário estimado são provisórios.
     "agent-authority-v5": (
         "aaa89c0d5f5896e671ed9c92780e2435965a0b7a2082ef8420b382756cc00931"
@@ -108,6 +114,7 @@ _HASH_POR_VERSAO = {
         "7329f9fd996a9a63d2f182528642c22bca96d5b543a33594593384a03f543b66"
     ),
 }
+# fmt: on
 
 
 def _hash_das_regras() -> str:

@@ -32,7 +32,8 @@ CONTRACT_VERSION = "agent-snapshot-v1"
 # v4.3: a ordem de migração da topologia sai em etapas (nome, duração, detalhe) e os
 # riscos em alertas estruturados (título e tema), no contrato de `agent_views`.
 # v5: lock-in efetivo da origem com proveniência e evidências provisórias.
-AUTHORITY_VERSION = "agent-authority-v5"
+# v5.1: catálogo informativo OCI Startup Growth Engine; score e preços inalterados.
+AUTHORITY_VERSION = "agent-authority-v5.1"
 
 
 def politica_de_decisao_atual() -> str:
