@@ -48,7 +48,7 @@ from app.domain.services.perfil_de_familia import perfil
 _TAXA_GB_MES: dict[str, dict[str, str]] = {
     "aws": {"storage_ssd": "0.080", "storage_hdd": "0.045", "object_storage": "0.023"},
     "gcp": {"storage_ssd": "0.100", "storage_hdd": "0.040", "object_storage": "0.020"},
-    "azure": {"storage_ssd": "0.088", "storage_hdd": "0.045", "object_storage": "0.018"},
+    "azure": {"storage_ssd": "0.0803", "storage_hdd": "0.045", "object_storage": "0.018"},
     # SSD = Block Volume Balanced, armazenamento + 10 VPU (PLANO_PRECISAO_OCI P1.2)
     "oci": {"storage_ssd": "0.0425", "storage_hdd": "0.0255", "object_storage": "0.0255"},
 }
@@ -971,10 +971,11 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
         or _decimal(auxiliares.get("kubernetes_outros"))
     ):
         plano.nao_suportado.append(
-            "Kubernetes: o pacote leva o cluster inteiro. Os nós entram como máquinas "
-            "virtuais, e as aplicações de dentro do cluster não são separadas: o "
-            "inventário da nuvem não vê Deployment nem Service. O plano de controle "
-            "fica fora do MVP: exige decidir sobre node pools, versão e rede do cluster."
+            "Kubernetes: este pacote é da análise inteira e leva os nós do cluster como "
+            "máquinas virtuais. O cluster gerenciado do destino, com os grupos de nós, sai "
+            "no pacote gerado pela aba Migração (plano de migração, com o inventário "
+            "anexado). As aplicações de dentro do cluster não viajam pelo Terraform: o "
+            "inventário da nuvem não vê Deployment nem Service."
         )
     if _decimal(auxiliares.get("armazenamento_arquivos")):
         # T4: o Filestore saía como disco HDD e virava ~1.570 GB de disco que não existe

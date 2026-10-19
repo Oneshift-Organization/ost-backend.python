@@ -30,6 +30,7 @@ from app.infrastructure.database.models.terraform_generation_job import (
     TerraformGenerationJobModel,
 )
 from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.database.sinal_de_vida import sinal_de_vida
 from app.infrastructure.terraform.archive import montar_zip
 from app.infrastructure.terraform.renderers import arquivos_esperados
 from app.schemas.terraform import (
@@ -231,7 +232,16 @@ async def _executar_geracao(
     daria erro de conexão fechada, e a falha ficaria invisível porque ninguém
     espera por esta função.
     """
-    async with sessionmaker() as session:
+    sinal = sinal_de_vida(
+        sessionmaker,
+        TerraformGenerationJobModel,
+        TerraformGenerationJobModel.generation_id,
+        generation_id,
+        [StatusGeracao.PENDING.value, StatusGeracao.PROCESSING.value],
+        intervalo_segundos=get_settings().job_heartbeat_seconds,
+        agora=agora_utc,
+    )
+    async with sinal, sessionmaker() as session:
         job = (
             await session.execute(
                 select(TerraformGenerationJobModel).where(

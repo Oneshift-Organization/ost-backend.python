@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.analysis_job import (
@@ -14,6 +15,8 @@ from app.domain.entities.analysis_job import (
 )
 from app.domain.repositories.i_analysis_job_repo import IAnalysisJobRepository
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
+
+ANALISE_INTERROMPIDA = "INTERROMPIDA: o servidor reiniciou durante a análise. Reanalise."
 
 
 class PgAnalysisJobRepository(IAnalysisJobRepository):
@@ -139,12 +142,37 @@ class PgAnalysisJobRepository(IAnalysisJobRepository):
 
         É a válvula que torna a idempotência segura: sem ela, um job travado
         bloquearia o report para sempre (o índice único parcial impediria criar
-        outro). O relógio é `updated_at`, com fallback em `created_at` para
-        linhas anteriores à migration.
+        outro). O relógio é o início (`started_at`, com fallback em `created_at`):
+        `updated_at` agora é o sinal de vida e avança enquanto o processo vive,
+        então um job vivo e preso não sairia nunca por ele.
         """
         corte = agora_utc() - limite
         agora = agora_utc()
         result = await self._session.execute(
+            update(AnalysisJobModel)
+            .where(
+                AnalysisJobModel.status.in_([s.value for s in ACTIVE_STATUSES]),
+                func.coalesce(AnalysisJobModel.started_at, AnalysisJobModel.created_at)
+                < corte,
+            )
+            .values(
+                status=AnalysisStatus.FAILED,
+                error="TIMEOUT: execucao nao concluiu dentro do limite",
+                updated_at=agora,
+            )
+        )
+        await self._session.commit()
+        return int(result.rowcount or 0)
+
+    async def encerrar_sem_sinal(self, limite: timedelta) -> int:
+        """Marca FAILED o job ativo sem sinal de vida além do limite. Devolve quantos.
+
+        O processo que roda a análise grava `updated_at` a cada 30 s (`sinal_de_vida`).
+        Sem sinal, o processo morreu (deploy, OOM): o job não termina mais, e quem
+        espera fica sabendo em minutos, não no limite de 10 (PROXIMAS_EXECUCOES, 26).
+        """
+        corte = agora_utc() - limite
+        result: CursorResult[Any] = await self._session.execute(  # type: ignore[assignment]
             update(AnalysisJobModel)
             .where(
                 AnalysisJobModel.status.in_([s.value for s in ACTIVE_STATUSES]),
@@ -153,8 +181,8 @@ class PgAnalysisJobRepository(IAnalysisJobRepository):
             )
             .values(
                 status=AnalysisStatus.FAILED,
-                error="TIMEOUT: execucao nao concluiu dentro do limite",
-                updated_at=agora,
+                error=ANALISE_INTERROMPIDA,
+                updated_at=agora_utc(),
             )
         )
         await self._session.commit()

@@ -21,6 +21,12 @@
 | 5 | D1: memória da série B v1 da Azure | B1ls com 2 GiB (real 0,5), B1s 2 (real 1), B1ms 4 (real 2): o Terraform da Azure cria ¼ da memória (9× B1ls para 17,5 GiB). Tabela pela especificação oficial | nós | ✅ feito (develop `ba92bce`) |
 | 6 | M13: score v4.3 | Tabela de antes e depois pronta (§5, item 6), sobre a política v5 que o MCP pôs na develop (PR #37). Falta a decisão | usuário com o MCP; a tabela é nossa | decisão (tabela pronta) |
 | 7 | M1: segurança | Revogar a chave da service account do GCP que vazou nas branches órfãs; trocar `MCP_TOKEN`, o token do inspector e a `GCP_BILLING_API_KEY` | usuário (console e segredos do cluster) | decisão |
+| 26 | Análise morta por reinício do servidor (`09a7ab29`) | Deploy ou restart no meio da análise mata o job; a tela espera 10 min até a varredura marcar `TIMEOUT`, sem dizer o motivo. Sinal de vida a cada 30 s e varredura que encerra em 3 min, com "reanalise" | nós; o tempo de encerramento do pod é do Luiz (infra) | ✅ feito no branch `fix/ensaio-19-10` (front `fix/regiao-do-terraform`); aguarda liberação |
+| 27 | Região padrão do diálogo do Terraform | São Paulo fixo nos quatro destinos; a análise cotou em outra região. Passa a vir da região onde a análise cotou cada destino | nós (back e front) | ✅ feito no branch `fix/ensaio-19-10` (front `fix/regiao-do-terraform`); aguarda liberação |
+| 28 | Texto do Kubernetes no pacote da análise inteira | Ainda diz "plano de controle fora do MVP"; o cluster sai no pacote do plano de migração | nós | ✅ feito no branch `fix/ensaio-19-10` (front `fix/regiao-do-terraform`); aguarda liberação |
+| 29 | NAT quando a rede de origem não é espelhada | Escopo com cluster e sem subrede espelhada (fatura sem ID) sai sem NAT: os nós privados não baixam imagem | nós | ✅ feito no branch `fix/ensaio-19-10` (front `fix/regiao-do-terraform`); aguarda liberação |
+| 30 | SSD da Azure de referência | 0,088 contra 0,0803 oficial (Premium SSD v2, eastus) | nós | ✅ feito no branch `fix/ensaio-19-10` (front `fix/regiao-do-terraform`); aguarda liberação |
+| 31 | Câmbio no develop e na produção | `sync_fx` sem agendamento: develop com taxa de 14/10, banco local vazio (5,70 do config contra 5,0453 do BCE em 19/10) | nós; produção com ordem | a fazer |
 
 ## 2. Faça assim que possível
 
@@ -49,6 +55,7 @@
 | 23 | M2: recálculo diário | CronJob no infra com o sync de preços e o câmbio | nós (PR no infra); usuário faz o merge | a fazer |
 | 24 | M7 e M8: Terraform pelo agente, parecer do agente na tela | Aguardam resposta | usuário | decisão |
 | 25 | M6: coleta automática do inventário | Só com muito tempo e risco de o cliente não gostar | nós | a fazer |
+| 32 | "Networking" do GCP sem tipo nem equivalente | Mistura de verdade na fatura real (balanceador 55%, VPN 35%, Private Service Connect 8%): uma linha no DE-PARA rotularia tudo errado. O custo já sai certo por categoria; falta o serviço misto com equivalentes por parte | nós | a fazer (depois do MVP) |
 
 ## 4. Diagnóstico do Terraform da `f67fcd01` (18/10)
 
@@ -546,6 +553,60 @@ LLM e terminam em segundos (menos risco de o job morrer num deploy). A narrativa
 número que mudou: qualquer diferença nos números citados força o LLM. O agente (MCP) não
 muda: o snapshot é montado do payload, não da narrativa. O `AnalysisStartOptions` é arquivo
 travado da autoridade; por isso a opção entra como parâmetro da rota.
+
+### Ensaio geral de 19/10 — itens 26 a 32
+
+Ensaio com os mocks das quatro nuvens, as massas reais e o inventário (banco local `ost_e2e`,
+develop `803f6a2`, front `8eba258`) e as faturas reais do develop recalculadas em memória.
+Pipeline, os 24 pacotes Terraform (`validate`) e os números da tela batem com a API; o preço
+do banco é igual ao da fonte oficial em todos os 264 pools conferidos. Itens abertos:
+
+**Item 26 — análise morta por reinício.** A análise roda no processo da API (BackgroundTasks).
+No deploy, o uvicorn espera as tarefas em andamento e o Kubernetes mata o pod 30 s depois do
+aviso: o desligamento do app nem roda. A varredura só encerra o job 10 min depois, com
+`TIMEOUT` e sem dizer o motivo. Correção: enquanto a análise (e a geração de Terraform) roda,
+o processo grava o sinal de vida (`updated_at`) a cada 30 s numa sessão própria; a varredura
+encerra o job ativo sem sinal há 3 min, com "interrompida: o servidor reiniciou; reanalise".
+O limite de 10 min passa a contar do início (`started_at`), não do último sinal, para um job
+vivo e preso continuar caindo no `TIMEOUT`. Impacto: nenhuma tabela nova; a linha do job só é
+escrita no início (transação própria) e no fim, então o sinal não disputa trava com a
+análise. Job que termina depois de marcado (laço travado mais de 3 min) grava o resultado
+por cima, como hoje. A tela já mostra a falha com "Tentar novamente": passa a aparecer em
+~3 min, não em 10. O que evita a falha de vez é do infra: tempo de encerramento do pod maior
+que uma análise (~3 min); fica com o Luiz.
+
+**Item 27 — região padrão do diálogo.** A rota `applications` ganha `regioes_de_destino`
+(aditivo): para cada destino, a região de preço com mais custo cotado nos pools. O diálogo
+usa essa região e, sem ela, continua em São Paulo. Impacto: só o valor inicial do campo;
+o usuário troca. Nenhum número muda.
+
+**Item 28 — texto do Kubernetes no pacote da análise inteira.** Troca a frase "O plano de
+controle fica fora do MVP" por onde o cluster sai (pacote do plano de migração, com
+inventário). O pacote não muda; o README dos pacotes com cluster muda o texto (teste de
+caracterização regenerado só nesses).
+
+**Item 29 — NAT sem rede espelhada.** A saída para a internet hoje só nasce com subrede
+espelhada. Escopo com cluster de Kubernetes e sem espelho (fatura sem ID: o posicionamento
+sai vazio) ficava sem NAT nas quatro nuvens. Passa a nascer também quando o escopo tem
+cluster: os nós são privados e precisam baixar imagem. O texto do comentário deixa de dizer
+"rede espelhada". Impacto: só soma recursos ao pacote desse caso; pacote sem topologia não
+muda (caracterização). A cópia das subredes do cluster continua de fora: mexe no espelho dos
+quatro destinos, arriscado para o prazo.
+
+**Item 30 — SSD da Azure.** A referência de `storage_ssd` da Azure passa de 0,088 para
+0,0803 (Premium SSD v2, eastus: US$ 0,00011/GiB-h × 730; Retail Prices API em 19/10), no seed
+e na taxa que o Terraform usa para voltar do custo ao tamanho. Impacto medido: destino Azure fica
+8,75% mais barato no SSD (no mock AWS de US$ 92 mil, SSD de US$ 5.893,74 para US$ 5.378,04;
+total Azure de US$ 116.298,59 para US$ 115.782,89); disco estimado de origem Azure fica 9,6%
+maior (nenhum pacote da caracterização mudou por isso). Precisa do `sync_prices --providers categories` no develop e na produção.
+
+**Item 31 — câmbio.** Sem código: `sync_fx` no develop e, com ordem, na produção. O agendamento
+é o item 23. Medido no banco local: com 5,0453 (BCE, 19/10) no lugar de 5,70, a cost table real
+do GCP passa de US$ 4.890 para US$ 5.525 por mês; a economia na OCI vai de US$ 2.305 para
+US$ 2.863 e a AWS deixa de sair US$ 133 mais cara para sair US$ 379 mais barata. Câmbio errado
+faz a fatura em BRL parecer mais barata e distorce todo destino.
+
+**Item 32 — "Networking" do GCP.** Ver a fila: não é nome que falta, é serviço misto.
 
 ## 6. Concluído
 

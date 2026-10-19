@@ -150,6 +150,13 @@ class ApplicationsResponse(BaseModel):
     moeda: str
     provedor_origem: str | None
     provedor_recomendado: str | None
+    regioes_de_destino: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "destino → região onde a análise cotou os pools dele (a de mais custo); "
+            "o Terraform nessa região tem o preço mostrado. Sem pool cotado, fica de fora"
+        ),
+    )
     inventario_id: str
     chave_aplicacao: str | None = Field(
         description="tag de onde vem a aplicação; null = sem tag, cada unidade conta como uma"
@@ -170,6 +177,7 @@ class ApplicationsResponse(BaseModel):
             moeda=ctx.moeda,
             provedor_origem=ctx.provedor_origem,
             provedor_recomendado=ctx.provedor_recomendado,
+            regioes_de_destino=dict(ctx.regioes_de_destino),
             inventario_id=ctx.inventario_id,
             chave_aplicacao=c.chave_aplicacao,
             aplicacoes=[

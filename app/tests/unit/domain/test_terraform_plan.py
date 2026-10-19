@@ -235,12 +235,14 @@ def _aviso_do_cluster(plano) -> list[str]:
     return [item for item in plano.nao_suportado if item.startswith("Kubernetes:")]
 
 
-def test_cluster_do_inventario_avisa_que_vai_inteiro() -> None:
-    """Opção B adiada: as aplicações de dentro do cluster não são separadas."""
+def test_cluster_do_inventario_aponta_o_pacote_da_aba_migracao() -> None:
+    """O pacote da análise inteira leva os nós como VMs; o cluster sai pelo plano de
+    migração (item 28). As aplicações de dentro do cluster não viajam (opção B adiada)."""
     payload = _payload()
     payload["topologia"] = {"resumo": {"contagens": {"por_tipo": {"cluster_kubernetes": 1}}}}
     [aviso] = _aviso_do_cluster(_derivar(payload))
-    assert "cluster inteiro" in aviso
+    assert "aba Migração" in aviso
+    assert "fora do MVP" not in aviso
     assert "Deployment" in aviso
 
 

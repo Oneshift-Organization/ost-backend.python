@@ -12,6 +12,7 @@ Os dois defeitos que estes testes travam atingem um agente diretamente:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -22,10 +23,15 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import _DEV_USER
 from app.api.v1.routes import analysis as _rotas_analysis
-from app.domain.entities.analysis_job import AnalysisJob, AnalysisStatus
+from app.domain.entities.analysis_job import AnalysisJob, AnalysisStatus, agora_utc
 from app.domain.entities.billing_report import BillingReport
+from app.infrastructure.database.models.analysis_job import AnalysisJobModel
 from app.infrastructure.database.session import get_sessionmaker
-from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
+from app.infrastructure.database.sinal_de_vida import sinal_de_vida
+from app.infrastructure.repositories.pg_analysis_job_repo import (
+    ANALISE_INTERROMPIDA,
+    PgAnalysisJobRepository,
+)
 from app.infrastructure.repositories.pg_billing_report_repo import (
     PgBillingReportRepository,
 )
@@ -194,10 +200,10 @@ async def test_reaper_libera_job_travado(_db_ready) -> None:
             job = AnalysisJob(job_id=uuid4(), user_id=HTTP_USER, report_id=rid)
             await PgAnalysisJobRepository(s).create(job)
             await s.commit()
-            # Envelhece o job para além do limite.
+            # Envelhece o job para além do limite: o relógio é o início dele
             antigo = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=3)
             await s.execute(
-                text("update analysis_jobs set updated_at=:t where job_id=:j"),
+                text("update analysis_jobs set created_at=:t, updated_at=:t where job_id=:j"),
                 {"t": antigo, "j": job.job_id},
             )
             await s.commit()
@@ -238,6 +244,130 @@ async def test_reaper_nao_toca_job_recente(_db_ready) -> None:
             visto = await PgAnalysisJobRepository(s).get_by_id(job.job_id, HTTP_USER)
             assert visto is not None
             assert visto.status == AnalysisStatus.PENDING
+    finally:
+        await _limpar(rid)
+
+
+# ── sinal de vida (PROXIMAS_EXECUCOES, item 26) ─────────────────────────
+
+
+async def _job_processando(rid: UUID, *, inicio: timedelta, sinal: timedelta) -> UUID:
+    """Job em PROCESSING que começou há `inicio` e deu o último sinal há `sinal`."""
+    agora = datetime.now(UTC).replace(tzinfo=None)
+    sm = get_sessionmaker()
+    async with sm() as s:
+        job = AnalysisJob(job_id=uuid4(), user_id=HTTP_USER, report_id=rid)
+        await PgAnalysisJobRepository(s).create(job)
+        await s.commit()
+        await s.execute(
+            text(
+                "update analysis_jobs set status='PROCESSING', created_at=:i, started_at=:i,"
+                " updated_at=:u where job_id=:j"
+            ),
+            {"i": agora - inicio, "u": agora - sinal, "j": job.job_id},
+        )
+        await s.commit()
+    return job.job_id
+
+
+async def _visto(job_id: UUID) -> AnalysisJob:
+    async with get_sessionmaker()() as s:
+        visto = await PgAnalysisJobRepository(s).get_by_id(job_id, HTTP_USER)
+    assert visto is not None
+    return visto
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_processo_morto_encerra_em_minutos_com_reanalise(_db_ready: object) -> None:
+    """Deploy no meio da análise: sem sinal há 5 min, o job sai FAILED dizendo o
+    motivo, sem esperar os 10 min do limite (a análise 09a7ab29 do develop)."""
+    rid = await _report_pronto()
+    try:
+        job_id = await _job_processando(
+            rid, inicio=timedelta(minutes=5), sinal=timedelta(minutes=5)
+        )
+        async with get_sessionmaker()() as s:
+            n = await PgAnalysisJobRepository(s).encerrar_sem_sinal(timedelta(minutes=3))
+        assert n >= 1
+        visto = await _visto(job_id)
+        assert visto.status == AnalysisStatus.FAILED
+        assert visto.error == ANALISE_INTERROMPIDA
+    finally:
+        await _limpar(rid)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_job_com_sinal_recente_segue_rodando(_db_ready: object) -> None:
+    rid = await _report_pronto()
+    try:
+        job_id = await _job_processando(
+            rid, inicio=timedelta(minutes=8), sinal=timedelta(seconds=20)
+        )
+        async with get_sessionmaker()() as s:
+            await PgAnalysisJobRepository(s).encerrar_sem_sinal(timedelta(minutes=3))
+            await PgAnalysisJobRepository(s).expirar_travados(timedelta(minutes=10))
+        assert (await _visto(job_id)).status == AnalysisStatus.PROCESSING
+    finally:
+        await _limpar(rid)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_job_vivo_e_preso_ainda_cai_no_limite(_db_ready: object) -> None:
+    """O sinal mantém `updated_at` novo: o limite de 10 min conta do início."""
+    rid = await _report_pronto()
+    try:
+        job_id = await _job_processando(
+            rid, inicio=timedelta(minutes=11), sinal=timedelta(seconds=5)
+        )
+        async with get_sessionmaker()() as s:
+            await PgAnalysisJobRepository(s).expirar_travados(timedelta(minutes=10))
+        visto = await _visto(job_id)
+        assert visto.status == AnalysisStatus.FAILED
+        assert "TIMEOUT" in (visto.error or "")
+    finally:
+        await _limpar(rid)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_sinal_de_vida_avanca_enquanto_roda_e_para_no_fim(_db_ready: object) -> None:
+    rid = await _report_pronto()
+    try:
+        job_id = await _job_processando(
+            rid, inicio=timedelta(minutes=5), sinal=timedelta(minutes=5)
+        )
+        antes = (await _visto(job_id)).updated_at
+        sinal = sinal_de_vida(
+            get_sessionmaker(),
+            AnalysisJobModel,
+            AnalysisJobModel.job_id,
+            job_id,
+            ["PENDING", "PROCESSING"],
+            intervalo_segundos=0.05,
+            agora=agora_utc,
+        )
+        async with sinal:
+            await asyncio.sleep(0.3)
+        depois = (await _visto(job_id)).updated_at
+        assert antes is not None and depois is not None and depois > antes
+
+        # Terminado, o sinal não escreve mais: um job concluído não volta a "viver"
+        async with get_sessionmaker()() as s:
+            await s.execute(
+                text("update analysis_jobs set status='COMPLETED', updated_at=:t where job_id=:j"),
+                {"t": antes, "j": job_id},
+            )
+            await s.commit()
+        async with sinal_de_vida(
+            get_sessionmaker(),
+            AnalysisJobModel,
+            AnalysisJobModel.job_id,
+            job_id,
+            ["PENDING", "PROCESSING"],
+            intervalo_segundos=0.05,
+            agora=agora_utc,
+        ):
+            await asyncio.sleep(0.2)
+        assert (await _visto(job_id)).updated_at == antes
     finally:
         await _limpar(rid)
 

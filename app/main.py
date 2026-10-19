@@ -6,7 +6,7 @@ from datetime import timedelta
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import update
+from sqlalchemy import func, or_, update
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1.router import api_router
@@ -31,10 +31,15 @@ async def _expirar_jobs_travados() -> int:
     esta varredura o report ficaria bloqueado permanentemente — o reaper é a
     válvula que torna a idempotência segura.
     """
-    limite = timedelta(minutes=get_settings().analysis_job_timeout_minutes)
+    settings = get_settings()
+    limite = timedelta(minutes=settings.analysis_job_timeout_minutes)
+    sem_sinal = timedelta(minutes=settings.job_sem_sinal_minutes)
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
-        return await PgAnalysisJobRepository(session).expirar_travados(limite)
+        repo = PgAnalysisJobRepository(session)
+        # Processo morto primeiro: a mensagem diz o motivo e manda reanalisar
+        interrompidos = await repo.encerrar_sem_sinal(sem_sinal)
+        return interrompidos + await repo.expirar_travados(limite)
 
 
 async def _expirar_geracoes_travadas() -> int:
@@ -48,8 +53,14 @@ async def _expirar_geracoes_travadas() -> int:
     diferentes é uso legítimo —, então o travamento não bloqueia nada. Mas a
     tela precisa saber que aquilo morreu.
     """
-    limite = agora_utc() - timedelta(
-        minutes=get_settings().analysis_job_timeout_minutes
+    settings = get_settings()
+    limite = agora_utc() - timedelta(minutes=settings.analysis_job_timeout_minutes)
+    # Sem sinal de vida (`sinal_de_vida`) além do limite: o processo da geração morreu
+    sem_sinal = agora_utc() - timedelta(minutes=settings.job_sem_sinal_minutes)
+    ultimo_sinal = func.coalesce(
+        TerraformGenerationJobModel.updated_at,
+        TerraformGenerationJobModel.started_at,
+        TerraformGenerationJobModel.created_at,
     )
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
@@ -57,11 +68,11 @@ async def _expirar_geracoes_travadas() -> int:
             update(TerraformGenerationJobModel)
             .where(
                 TerraformGenerationJobModel.status.in_(("PENDING", "PROCESSING")),
-                TerraformGenerationJobModel.created_at < limite,
+                or_(TerraformGenerationJobModel.created_at < limite, ultimo_sinal < sem_sinal),
             )
             .values(
                 status="FAILED",
-                error="geração interrompida por reinício do processo",
+                error="geração interrompida por reinício do processo; gere de novo",
                 updated_at=agora_utc(),
             )
         )

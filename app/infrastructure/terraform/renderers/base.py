@@ -864,7 +864,7 @@ def lista_curta(itens: list[str]) -> str:
     return ", ".join(itens[:_ITENS_CITADOS]) + ("…" if len(itens) > _ITENS_CITADOS else "")
 
 
-# ── Saída da rede espelhada (item 12) ───────────────────────────────────────
+# ── Saída para a internet (itens 12 e 29) ───────────────────────────────────────
 
 
 def subredes_publicas(bp: TerraformBlueprint) -> list[str]:
@@ -889,6 +889,6 @@ def subredes_privadas(bp: TerraformBlueprint, *, sem_delegadas: bool = False) ->
 
 
 TEXTO_SAIDA = (
-    "Saída da rede espelhada da origem: a subrede privada sai para a internet pela NAT e a\n"
-    "pública, pelo gateway de internet. A VPN entre as nuvens não é criada aqui."
+    "Saída para a internet: a subrede privada sai pela NAT e a pública, pelo gateway de\n"
+    "internet. A VPN entre as nuvens não é criada aqui."
 )
