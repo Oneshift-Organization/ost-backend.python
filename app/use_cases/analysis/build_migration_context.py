@@ -590,6 +590,8 @@ def _taxas_por_provedor(
             confidence=confianca,
             region=escolha.regiao,
             approximate=escolha.aproximada,
+            fonte=melhor.source,
+            capturado_em=melhor.captured_at.date().isoformat() if melhor.captured_at else None,
         )
     return taxas
 
@@ -1384,6 +1386,15 @@ class BuildMigrationContextUseCase:
                             if rates[e.provider].approximate
                             else {}
                         ),
+                        # M11: a fonte e a data de cada zero (destino grátis)
+                        **(
+                            {
+                                "taxa_destino_fonte": rates[e.provider].fonte,
+                                "taxa_destino_capturada_em": rates[e.provider].capturado_em,
+                            }
+                            if rates[e.provider].rate == 0
+                            else {}
+                        ),
                         **({"zonas": zonas} if zonas else {}),
                         **(
                             {
@@ -1437,15 +1448,24 @@ class BuildMigrationContextUseCase:
         # É o insumo da confiança da análise (domain/services/confidence.py): "que
         # fração do custo atual foi cotada com preço oficial?" (lote v4, V4.7).
         _custo_por_confianca: dict[str, Decimal] = {}
+        # M11: o que custa zero no destino, por provedor, com a fonte da taxa
+        _gratis: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
         def _add(provider: str, analyzed_cost: Decimal, source_cost: Decimal, conf: str) -> None:
             acc = _tally.setdefault(
                 provider,
-                {"analyzed": Decimal("0"), "covered": Decimal("0"), "confs": []},
+                {
+                    "analyzed": Decimal("0"),
+                    "covered": Decimal("0"),
+                    "confs": [],
+                    "por_confianca": defaultdict(Decimal),
+                },
             )
             acc["analyzed"] += analyzed_cost
             acc["covered"] += source_cost
             acc["confs"].append(conf)
+            # M11: a economia desta parte, pela confiança da cotação dela
+            acc["por_confianca"][conf] += source_cost - analyzed_cost
             # V4.7: pesa pelo custo ATUAL que a cotação cobre, não pelo valor cotado
             # no destino. Senão uma cotação mais barata (e mais precisa) com preço
             # oficial baixava a confiança da análise.
@@ -1502,6 +1522,8 @@ class BuildMigrationContextUseCase:
                 parte = compromisso_compute * min(Decimal("1"), vcpus / vcpus_dos_pools)
                 compromisso_por_provedor[provider] = parte
                 _tally[provider]["covered"] += parte
+                # Sai da origem por premissa (o contrato acaba ou é transferido): estimada
+                _tally[provider]["por_confianca"]["compromisso"] += parte
         for category, cat_equivs in category_equivalents.items():
             custo_da_categoria = auxiliary.custo(category) if auxiliary else Decimal("0")
             src = convert(custo_da_categoria, fx) or Decimal("0")
@@ -1512,12 +1534,23 @@ class BuildMigrationContextUseCase:
                     src,
                     str(ce["confianca_preco"]),
                 )
+                if Decimal(str(ce["custo_mensal_estimado"])) == 0 and src > 0:
+                    _gratis[str(ce["provedor"]).lower()].append(
+                        {
+                            "categoria": category,
+                            "economia_mensal": round(float(src), 2),
+                            "fonte": ce.get("taxa_destino_fonte"),
+                            "capturado_em": ce.get("taxa_destino_capturada_em"),
+                        }
+                    )
 
         tallies = {
             provider: ProviderTally(
                 analyzed_cost=acc["analyzed"],
                 source_covered=acc["covered"],
                 confidence=weakest_confidence(acc["confs"]),
+                economia_por_confianca=dict(acc["por_confianca"]),
+                itens_gratis=tuple(_gratis.get(provider, ())),
             )
             for provider, acc in _tally.items()
         }

@@ -53,3 +53,44 @@ def test_weakest_confidence() -> None:
     assert weakest_confidence(["official", "reference", "low"]) == "low"
     assert weakest_confidence(["official", "official"]) == "official"
     assert weakest_confidence([]) == "missing"
+
+
+def test_economia_por_fonte_soma_a_economia_e_lista_o_gratis() -> None:
+    """M11: a economia de preço oficial e a estimada somam a economia do provedor; o que
+    custa zero no destino sai com a fonte da taxa."""
+    gratis = {"categoria": "nat_gateway", "economia_mensal": 30.0, "fonte": "oci_cetools"}
+    out = consolidate(
+        source_provider="aws",
+        current_total=Decimal("1000"),
+        tallies={
+            "oci": ProviderTally(
+                analyzed_cost=Decimal("500"),
+                source_covered=Decimal("900"),
+                confidence="reference",
+                economia_por_confianca={
+                    "official": Decimal("250"),
+                    "reference": Decimal("100"),
+                    "compromisso": Decimal("50"),
+                },
+                itens_gratis=(gratis,),
+            )
+        },
+    )
+    [oci] = out["por_provedor"]
+    assert oci["economia_mensal"] == 400.0
+    assert oci["economia_por_fonte"] == {"preco_oficial": 250.0, "estimada": 150.0}
+    assert oci["itens_gratis"] == [gratis]
+
+
+def test_sem_o_detalhe_a_linha_sai_como_antes() -> None:
+    out = consolidate(
+        source_provider="aws",
+        current_total=Decimal("100"),
+        tallies={
+            "oci": ProviderTally(
+                analyzed_cost=Decimal("50"), source_covered=Decimal("90"), confidence="official"
+            )
+        },
+    )
+    assert "economia_por_fonte" not in out["por_provedor"][0]
+    assert "itens_gratis" not in out["por_provedor"][0]

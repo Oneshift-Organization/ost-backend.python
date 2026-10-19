@@ -424,6 +424,20 @@ gravadas não mudam.
 pesa pelo valor cotado) onde o resto é zero; D4 tira o alerta falso da reconciliação. Os
 números de custo, economia e nota não mudam. Análises gravadas só mudam ao reanalisar.
 
+### Item 9 — M11 (ponto 2 do MCP): economia comprovada × estimada
+
+**O que muda (backend, aditivo):** cada linha de `resumo_executivo.por_provedor` ganha
+`economia_por_fonte` — a economia de cada parte cotada somada pela confiança da cotação:
+`preco_oficial` (preço da API do provedor, ou taxa oficial gravada com fonte e data) e
+`estimada` (taxa de referência, razão de taxas, premissa e o compromisso de compute que
+sai da origem) — e `itens_gratis`, a lista do que custa zero no destino (NAT, IP, segredos
+na OCI) com a categoria, a economia, a fonte e a data da taxa. A soma das duas partes é a
+`economia_mensal` de sempre.
+
+**Quem é afetado:** o payload ganha campos; nenhum número muda. O agente (MCP) recebe os
+campos no snapshot: nota ao MCP. A tela é do front (passo seguinte). Análises gravadas só
+ganham os campos ao reanalisar.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |
