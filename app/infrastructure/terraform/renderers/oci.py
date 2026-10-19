@@ -27,6 +27,7 @@ from app.infrastructure.terraform.hcl import (
     referencia,
 )
 from app.infrastructure.terraform.renderers.base import (
+    TEXTO_SAIDA,
     ajustar_tamanho,
     clusters_do_pacote,
     com_indice,
@@ -42,6 +43,8 @@ from app.infrastructure.terraform.renderers.base import (
     nome_de_repositorio,
     nome_de_zona,
     quantidade_volumes,
+    subredes_privadas,
+    subredes_publicas,
     tem,
     texto_banco,
     texto_cluster,
@@ -200,6 +203,7 @@ class AdaptadorOCI:
             TipoRecurso.CONTAINER_REGISTRY: _registro,
             TipoRecurso.VAULT: _cofre,
             TipoRecurso.DNS_ZONE: _zona,
+            TipoRecurso.NETWORK_EGRESS: _saida,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -230,6 +234,13 @@ def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo(
             "prohibit_public_ip_on_vnic",
             not bool(r.configuration.get("public_access")),
+        ),
+        # Item 12: a subrede pública sai pelo gateway de internet; a privada usa a tabela
+        # padrão da VCN, que aponta para a NAT
+        *(
+            [atributo("route_table_id", referencia("oci_core_route_table.rotas_publicas.id"))]
+            if r.configuration.get("public_access") and tem(bp, TipoRecurso.NETWORK_EGRESS)
+            else []
         ),
     ])
     return comentario(espelho) + "\n" + bloco_hcl if espelho else bloco_hcl
@@ -653,3 +664,46 @@ def _zona(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
         atributo("scope", "PRIVATE"),
         atributo("view_id", referencia(f"data.oci_dns_resolver.{_RESOLVER}.default_view_id")),
     ])
+
+
+def _rota(destino: str) -> str:
+    return bloco_aninhado("route_rules", [
+        atributo("destination", "0.0.0.0/0", nivel=2),
+        atributo("destination_type", "CIDR_BLOCK", nivel=2),
+        atributo("network_entity_id", referencia(destino), nivel=2),
+    ], nivel=1)
+
+
+def _saida(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """NAT pela tabela padrão da VCN e gateway de internet para a subrede pública."""
+    vcn = atributo("vcn_id", referencia(f"oci_core_vcn.{REDE}.id"))
+    partes = []
+    if subredes_privadas(bp):
+        partes += [
+            bloco("resource", ["oci_core_nat_gateway", "saida_nat"], [
+                _compartimento(), vcn,
+                atributo("display_name", nome_cloud(bp.project_name, "nat")),
+            ]),
+            bloco("resource", ["oci_core_default_route_table", "rotas_privadas"], [
+                atributo(
+                    "manage_default_resource_id",
+                    referencia(f"oci_core_vcn.{REDE}.default_route_table_id"),
+                ),
+                _rota("oci_core_nat_gateway.saida_nat.id"),
+            ]),
+        ]
+    if subredes_publicas(bp):
+        partes += [
+            bloco("resource", ["oci_core_internet_gateway", "saida_internet"], [
+                _compartimento(), vcn,
+                atributo("display_name", nome_cloud(bp.project_name, "igw")),
+            ]),
+            bloco("resource", ["oci_core_route_table", "rotas_publicas"], [
+                _compartimento(), vcn,
+                _rota("oci_core_internet_gateway.saida_internet.id"),
+            ]),
+        ]
+    if not partes:
+        return ""
+    partes[0] = comentario(TEXTO_SAIDA) + "\n" + partes[0]
+    return "\n\n".join(partes)

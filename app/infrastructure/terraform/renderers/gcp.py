@@ -12,6 +12,7 @@ from app.infrastructure.terraform.hcl import (
     referencia,
 )
 from app.infrastructure.terraform.renderers.base import (
+    TEXTO_SAIDA,
     ajustar_tamanho,
     com_indice,
     disco_raiz,
@@ -103,6 +104,7 @@ class AdaptadorGCP:
             TipoRecurso.CONTAINER_REGISTRY: _registro,
             TipoRecurso.VAULT: _segredo,
             TipoRecurso.DNS_ZONE: _zona,
+            TipoRecurso.NETWORK_EGRESS: _saida,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -419,4 +421,21 @@ def _zona(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
                 atributo("network_url", referencia(f"google_compute_network.{REDE}.id"), nivel=3),
             ], nivel=2),
         ], nivel=1),
+    ])
+
+
+def _saida(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """Cloud NAT para todas as subredes; a rota para a internet já vem com a VPC."""
+    return comentario(TEXTO_SAIDA) + "\n" + bloco(
+        "resource", ["google_compute_router", "roteador"], [
+            atributo("name", nome_cloud(bp.project_name, "roteador")),
+            atributo("region", bp.region),
+            atributo("network", referencia(f"google_compute_network.{REDE}.id")),
+        ]
+    ) + "\n\n" + bloco("resource", ["google_compute_router_nat", "saida_nat"], [
+        atributo("name", nome_cloud(bp.project_name, "nat")),
+        atributo("router", referencia("google_compute_router.roteador.name")),
+        atributo("region", bp.region),
+        atributo("nat_ip_allocate_option", "AUTO_ONLY"),
+        atributo("source_subnetwork_ip_ranges_to_nat", "ALL_SUBNETWORKS_ALL_IP_RANGES"),
     ])

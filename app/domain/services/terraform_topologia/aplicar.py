@@ -9,6 +9,7 @@ O plano de entrada não é alterado: sai um plano novo.
 
 from __future__ import annotations
 
+import ipaddress
 import math
 from collections import defaultdict
 from collections.abc import Mapping
@@ -78,10 +79,83 @@ def aplicar_topologia(
     _discos_avulsos(novo, medido, detalhe.get("discos") or {})
     _versoes(novo, detalhe.get("bancos") or [], destino)
     _fronteira_do_escopo(novo, topologia.get("escopo") or {}, destino=destino, rede=rede)
+    _saida_da_rede(novo, destino, rede)
     _buckets_do_escopo(novo, topologia.get("escopo") or {})
     _kubernetes_do_escopo(novo, topologia.get("escopo") or {})
     _componentes_do_escopo(novo, topologia.get("escopo") or {}, destino)
     return novo
+
+
+# A AWS só põe NAT em subrede pública: uma /28 própria, livre no fim da faixa da rede
+_PREFIXO_DA_SUBREDE_DO_NAT = 28
+# A subrede principal é a primeira /24 da rede (build_blueprint)
+_PREFIXO_DA_PRINCIPAL = 24
+
+
+def _saida_da_rede(plano: PlanoDerivado, destino: str, rede: str) -> None:
+    """Gateway de internet e NAT para a rede espelhada (item 12).
+
+    Só quando há subrede espelhada da origem: é o pacote com topologia, e a origem tem
+    a saída. A subrede privada sai pela NAT e a pública pelo gateway de internet; quais
+    são, o renderer lê das subredes do pacote."""
+    if not any(
+        r.resource_type == "subnet" and r.configuration.get("mirror_of") for r in plano.recursos
+    ):
+        return
+    configuracao: dict[str, Any] = {}
+    if destino == "aws":
+        livre = _faixa_livre(plano, rede, _PREFIXO_DA_SUBREDE_DO_NAT)
+        if livre is None:
+            plano.avisos.append(
+                "Sem faixa livre na rede para a subrede do NAT: as subredes privadas ficam "
+                "sem saída para a internet. Aumente a faixa da rede ou crie o NAT à parte."
+            )
+        else:
+            nome = Nomeador(r.logical_name for r in plano.recursos).gerar("subnet", "saida_nat")
+            plano.recursos.insert(
+                0,
+                RecursoDerivado(
+                    logical_name=nome,
+                    resource_type="subnet",
+                    configuration={"cidr": livre, "public_access": True, "nat_only": True},
+                    depends_on=("rede_principal",),
+                ),
+            )
+            configuracao["nat_subnet"] = nome
+    plano.recursos.append(
+        RecursoDerivado(
+            logical_name="saida_da_rede",
+            resource_type="network_egress",
+            configuration=configuracao,
+            depends_on=("rede_principal",),
+        )
+    )
+
+
+def _faixa_livre(plano: PlanoDerivado, rede: str, prefixo: int) -> str | None:
+    """A última faixa do tamanho pedido que não cruza nenhuma subrede do pacote (a
+    principal é a primeira /24 da rede)."""
+    try:
+        cidr = ipaddress.IPv4Network(rede)
+    except ValueError:
+        return None
+    usadas = (
+        [next(cidr.subnets(new_prefix=_PREFIXO_DA_PRINCIPAL), cidr)]
+        if cidr.prefixlen < _PREFIXO_DA_PRINCIPAL
+        else [cidr]
+    )
+    for r in plano.recursos:
+        if r.resource_type == "subnet" and r.configuration.get("cidr"):
+            try:
+                usadas.append(ipaddress.IPv4Network(str(r.configuration["cidr"])))
+            except ValueError:
+                continue
+    if cidr.prefixlen >= prefixo:
+        return None
+    for candidata in reversed(list(cidr.subnets(new_prefix=prefixo))):
+        if not any(candidata.overlaps(u) for u in usadas):
+            return str(candidata)
+    return None
 
 
 def _pools_da_familia(plano: PlanoDerivado, familia: str) -> list[RecursoDerivado]:

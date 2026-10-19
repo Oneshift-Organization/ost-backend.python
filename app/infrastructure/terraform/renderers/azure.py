@@ -22,6 +22,7 @@ from app.infrastructure.terraform.hcl import (
     referencia,
 )
 from app.infrastructure.terraform.renderers.base import (
+    TEXTO_SAIDA,
     ajustar_tamanho,
     com_indice,
     disco_raiz,
@@ -35,6 +36,7 @@ from app.infrastructure.terraform.renderers.base import (
     nome_cloud,
     nome_de_zona,
     quantidade_volumes,
+    subredes_privadas,
     tem,
     texto_banco,
     texto_cluster,
@@ -134,6 +136,7 @@ class AdaptadorAzure:
             TipoRecurso.CONTAINER_REGISTRY: _registro,
             TipoRecurso.VAULT: _cofre,
             TipoRecurso.DNS_ZONE: _zona,
+            TipoRecurso.NETWORK_EGRESS: _saida,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -669,3 +672,38 @@ def _zona(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             atributo("virtual_network_id", referencia(f"azurerm_virtual_network.{REDE}.id")),
         ]
     )
+
+
+def _saida(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """NAT gateway com IP público nas subredes privadas. A Azure não tem gateway de
+    internet à parte; a subrede delegada ao banco fica sem NAT."""
+    privadas = subredes_privadas(bp, sem_delegadas=True)
+    if not privadas:
+        return ""
+    partes = [
+        comentario(TEXTO_SAIDA)
+        + "\n"
+        + bloco("resource", ["azurerm_public_ip", "ip_do_nat"], [
+            atributo("name", nome_cloud(bp.project_name, "ip-nat")),
+            *_grupo(),
+            atributo("allocation_method", "Static"),
+            atributo("sku", "Standard"),
+        ]),
+        bloco("resource", ["azurerm_nat_gateway", "saida_nat"], [
+            atributo("name", nome_cloud(bp.project_name, "nat")),
+            *_grupo(),
+            atributo("sku_name", "Standard"),
+        ]),
+        bloco("resource", ["azurerm_nat_gateway_public_ip_association", "ip_do_nat"], [
+            atributo("nat_gateway_id", referencia("azurerm_nat_gateway.saida_nat.id")),
+            atributo("public_ip_address_id", referencia("azurerm_public_ip.ip_do_nat.id")),
+        ]),
+    ]
+    for s in privadas:
+        partes.append(
+            bloco("resource", ["azurerm_subnet_nat_gateway_association", f"nat_{s}"], [
+                atributo("subnet_id", referencia(f"azurerm_subnet.{s}.id")),
+                atributo("nat_gateway_id", referencia("azurerm_nat_gateway.saida_nat.id")),
+            ])
+        )
+    return "\n\n".join(partes)

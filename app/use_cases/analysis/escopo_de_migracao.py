@@ -731,7 +731,8 @@ def _fora_do_pacote(
                 avisos.append(
                     f"{servico}: a rede de origem ({_texto_dos_nativos(achado.nativos)}) vira "
                     "a rede do pacote pelo espelho, só com as subredes que as máquinas e os "
-                    "bancos usam; gateways (internet, NAT, VPN) não são criados."
+                    "bancos usam, e a saída para a internet (gateway de internet e NAT); a VPN "
+                    "entre as nuvens não é criada."
                 )
             elif achado is not None:
                 avisos.append(

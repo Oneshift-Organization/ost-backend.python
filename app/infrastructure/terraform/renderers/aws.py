@@ -22,6 +22,7 @@ from app.infrastructure.terraform.hcl import (
     referencia,
 )
 from app.infrastructure.terraform.renderers.base import (
+    TEXTO_SAIDA,
     ajustar_tamanho,
     clusters_do_pacote,
     com_indice,
@@ -37,6 +38,8 @@ from app.infrastructure.terraform.renderers.base import (
     nome_de_repositorio,
     nome_de_zona,
     quantidade_volumes,
+    subredes_privadas,
+    subredes_publicas,
     texto_banco,
     texto_cluster,
     texto_espelho,
@@ -147,6 +150,7 @@ class AdaptadorAWS:
             TipoRecurso.CONTAINER_REGISTRY: _registro,
             TipoRecurso.VAULT: _segredos,
             TipoRecurso.DNS_ZONE: _zona,
+            TipoRecurso.NETWORK_EGRESS: _saida,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -161,6 +165,19 @@ def _rede(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
 
 def _subnet(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
     espelho = texto_espelho(r.configuration)
+    if r.configuration.get("nat_only"):
+        # Só para o NAT: a AWS exige subrede pública com rota para o gateway de internet
+        return comentario("Subrede pública só do NAT gateway.") + "\n" + bloco(
+            "resource", ["aws_subnet", r.logical_name], [
+                atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id")),
+                atributo("cidr_block", str(r.configuration.get("cidr"))),
+                atributo("availability_zone", referencia(
+                    f"element(data.aws_availability_zones.{ZONAS}.names, 0)"
+                )),
+                atributo("map_public_ip_on_launch", False),
+                atributo("tags", {"Name": nome_cloud(bp.project_name, r.logical_name)}),
+            ]
+        )
     if espelho is not None:
         return comentario(espelho) + "\n" + bloco("resource", ["aws_subnet", r.logical_name], [
             atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id")),
@@ -507,3 +524,51 @@ def _zona(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
             atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id"), nivel=2),
         ], nivel=1),
     ])
+
+
+def _saida(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    """Gateway de internet, NAT na subrede própria e as rotas de cada subrede (item 12)."""
+    nat = r.configuration.get("nat_subnet")
+    publicas = subredes_publicas(bp)
+    privadas = [s for s in subredes_privadas(bp) if s != nat]
+    vpc = atributo("vpc_id", referencia(f"aws_vpc.{REDE}.id"))
+    partes = [
+        comentario(TEXTO_SAIDA)
+        + "\n"
+        + bloco("resource", ["aws_internet_gateway", "saida_internet"], [
+            vpc,
+            atributo("tags", {"Name": nome_cloud(bp.project_name, "igw")}),
+        ]),
+        bloco("resource", ["aws_route_table", "rotas_publicas"], [vpc]),
+        bloco("resource", ["aws_route", "rotas_publicas_internet"], [
+            atributo("route_table_id", referencia("aws_route_table.rotas_publicas.id")),
+            atributo("destination_cidr_block", "0.0.0.0/0"),
+            atributo("gateway_id", referencia("aws_internet_gateway.saida_internet.id")),
+        ]),
+    ]
+    for s in publicas:
+        partes.append(bloco("resource", ["aws_route_table_association", f"rotas_{s}"], [
+            atributo("subnet_id", referencia(f"aws_subnet.{s}.id")),
+            atributo("route_table_id", referencia("aws_route_table.rotas_publicas.id")),
+        ]))
+    if nat and privadas:
+        partes += [
+            bloco("resource", ["aws_eip", "ip_do_nat"], [atributo("domain", "vpc")]),
+            bloco("resource", ["aws_nat_gateway", "saida_nat"], [
+                atributo("allocation_id", referencia("aws_eip.ip_do_nat.id")),
+                atributo("subnet_id", referencia(f"aws_subnet.{nat}.id")),
+                atributo("depends_on", referencia("[aws_internet_gateway.saida_internet]")),
+            ]),
+            bloco("resource", ["aws_route_table", "rotas_privadas"], [vpc]),
+            bloco("resource", ["aws_route", "rotas_privadas_nat"], [
+                atributo("route_table_id", referencia("aws_route_table.rotas_privadas.id")),
+                atributo("destination_cidr_block", "0.0.0.0/0"),
+                atributo("nat_gateway_id", referencia("aws_nat_gateway.saida_nat.id")),
+            ]),
+        ]
+        for s in privadas:
+            partes.append(bloco("resource", ["aws_route_table_association", f"rotas_{s}"], [
+                atributo("subnet_id", referencia(f"aws_subnet.{s}.id")),
+                atributo("route_table_id", referencia("aws_route_table.rotas_privadas.id")),
+            ]))
+    return "\n\n".join(partes)

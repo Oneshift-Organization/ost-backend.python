@@ -862,3 +862,33 @@ _ITENS_CITADOS = 20
 
 def lista_curta(itens: list[str]) -> str:
     return ", ".join(itens[:_ITENS_CITADOS]) + ("…" if len(itens) > _ITENS_CITADOS else "")
+
+
+# ── Saída da rede espelhada (item 12) ───────────────────────────────────────
+
+
+def subredes_publicas(bp: TerraformBlueprint) -> list[str]:
+    """Subredes com acesso público: saem pelo gateway de internet."""
+    return [
+        r.logical_name
+        for r in bp.resources
+        if r.resource_type is TipoRecurso.SUBNET and r.configuration.get("public_access")
+    ]
+
+
+def subredes_privadas(bp: TerraformBlueprint, *, sem_delegadas: bool = False) -> list[str]:
+    """Subredes sem acesso público: saem pela NAT. A delegada a um serviço (o banco da
+    Azure) fica fora quando o destino não aceita NAT nela."""
+    return [
+        r.logical_name
+        for r in bp.resources
+        if r.resource_type is TipoRecurso.SUBNET
+        and not r.configuration.get("public_access")
+        and not (sem_delegadas and r.configuration.get("delegation"))
+    ]
+
+
+TEXTO_SAIDA = (
+    "Saída da rede espelhada da origem: a subrede privada sai para a internet pela NAT e a\n"
+    "pública, pelo gateway de internet. A VPN entre as nuvens não é criada aqui."
+)

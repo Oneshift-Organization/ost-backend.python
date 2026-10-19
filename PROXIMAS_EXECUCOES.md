@@ -320,6 +320,37 @@ segredos e a zona `kitconta.internal.`.
   destino exige formato próprio, papel IAM na AWS).
 - Validação: `terraform validate` com os providers fixados nos quatro destinos.
 
+### Item 12 — saída para a internet: gateway de internet e NAT
+
+**O defeito, nos quatro destinos:** o pacote com a rede espelhada cria a rede e as
+subredes, mas nenhuma saída. Subrede privada sem NAT não baixa imagem, pacote nem
+atualização; o nó do Kubernetes não sobe. Subrede pública sem gateway de internet não
+recebe tráfego. A origem tem os dois (`f67fcd01`: 3 internet gateways e 1 NAT).
+
+**O que muda (só no pacote com topologia, onde as subredes vêm do espelho):**
+
+- Recurso novo de saída da rede: subrede privada sai pela NAT; subrede pública, pelo
+  gateway de internet.
+- OCI: internet gateway e NAT gateway; a tabela de rotas padrão da VCN aponta para a NAT;
+  a subrede pública ganha a tabela com o gateway de internet.
+- AWS: internet gateway, NAT gateway com IP elástico numa subrede pública própria (/28
+  livre no fim da faixa da rede: o NAT da AWS só funciona em subrede pública) e as
+  tabelas de rotas privada e pública associadas às subredes.
+- Azure: NAT gateway com IP público, associado às subredes privadas (menos a delegada ao
+  banco); a Azure não tem gateway de internet à parte (IP público na VM).
+- GCP: Cloud Router com Cloud NAT para todas as subredes; a rota padrão para a internet
+  já vem com a VPC.
+- A frase da VPC no "o que fica fora" passa a dizer que internet e NAT são recriados e
+  que a VPN não é.
+
+**Quem é afetado:**
+
+- Pacotes com topologia, nos quatro destinos. Sem topologia, nada muda (caracterização).
+- Custo: o NAT do destino tem preço (OCI grátis; AWS, Azure e GCP cobram por hora e por
+  GB). A análise já cota o NAT da origem pela quantidade medida; o pacote só passa a
+  criar o que foi cotado.
+- `terraform validate` nos quatro destinos.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |

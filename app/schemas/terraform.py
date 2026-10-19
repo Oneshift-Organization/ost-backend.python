@@ -70,6 +70,8 @@ class TipoRecurso(StrEnum):
     CONTAINER_REGISTRY = "container_registry"
     VAULT = "vault"
     DNS_ZONE = "dns_zone"
+    # Saída da rede espelhada: gateway de internet e NAT (item 12)
+    NETWORK_EGRESS = "network_egress"
 
 
 class Categoria(StrEnum):
