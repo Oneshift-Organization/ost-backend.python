@@ -36,7 +36,7 @@
 | 15 | Terraform: EKS → OKE (e AKS, GKE) | Cluster e node pool. Na `f67fcd01` tudo roda no EKS e o pacote entrega VMs soltas. Reverte o "plano de controle fora do MVP" | usuário decide; nós | decisão |
 | 16 | Ponto 1 do MCP: franquia das chaves da OCI | 20 versões de chave HSM grátis, depois US$ 0,5334 por versão por mês. Premissa: 1 chave da origem = 1 versão | nós | a fazer |
 | 17 | Curadoria no develop | Fila: Kiro, Azure Bastion, EC2 - Other. Falta `CURADORES` no deploy do develop (Swagger dá 403) | usuário aprova; Luiz (infra) | decisão |
-| 18 | D2: critério do empacotador | Penalidade de desperdício sobre o custo pela fração ocupada (F1 a 52,41 no lugar de D2as_v5 a 25,18). Medir antes fração × máquina inteira | nós | a fazer |
+| 18 | D2: critério do empacotador | Penalidade de desperdício sobre o custo pela fração ocupada (F1 a 52,41 no lugar de D2as_v5 a 25,18). Medir antes fração × máquina inteira | nós; a decisão é do usuário | medido (§5, item 18); decisão |
 
 ## 3. Se não der: a apresentação do MVP não precisa disso
 
@@ -489,6 +489,27 @@ Na Azure, os pools passam de "general" (126 vCPU, 0 GB) às famílias reais (EDS
 ESV5, DDSV5, LSV3); somem os alertas `familia_generica_concentrada` e
 `preco_vcpu_implausivel`; a conservação fecha; a nota da OCI vai de 88,9 a 85,9 e a
 recomendação segue OCI.
+
+### Item 18 — D2, medição (sem mudança de código)
+
+**Pergunta do council (L2):** quanto a cotação pela fração ocupada (capacidade-hora, a
+base que o usuário decidiu no PLANO_EMPACOTAMENTO) difere das máquinas inteiras que o
+Terraform cria?
+
+**Medido nas análises do develop (19/10, só leitura):** 18 pools, em 8 faturas, têm as
+máquinas inteiras custando mais de 1,5 vez o cotado. Todos são pools quase ociosos (0,0 a
+0,05 vCPU de média): cotados a centavos, provisionados como uma máquina de ~US$ 70/mês.
+Diferença por fatura: de US$ 131 a US$ 1.521/mês (menos de 2% de uma fatura de US$ 92 mil).
+Ressalva: só AWS e Azure gravam o preço por hora no payload, e muitos equivalentes não
+gravam a quantidade de instâncias; a escolha do SKU (F1 a US$ 52 no lugar de D2as_v5 a
+US$ 25) só se mede rodando o empacotador com os candidatos, não pelo payload.
+
+**Decisão do usuário, antes de mudar:** (a) manter a capacidade-hora e só avisar no
+Terraform quando a máquina inteira passa de 1,5 vez o cotado (barato, já há o aviso de
+ocupação baixa); (b) escolher o SKU pela máquina inteira e cotar pela fração (o council:
+"escolher e cotar pela mesma base"); (c) um piso de cotação de uma máquina por pool
+ligado. Recomendação: (a) agora e (b) depois de rodar o empacotador com os candidatos de
+cada fatura.
 
 ## 6. Concluído
 
