@@ -1,8 +1,9 @@
 import json
 from copy import deepcopy
 from decimal import Decimal
+from typing import Any, cast
 from unittest.mock import AsyncMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -581,17 +582,25 @@ class _RepoComAnterior:
     def __init__(self, anterior: AnalysisJob | None) -> None:
         self.anterior = anterior
 
-    async def marcar_processando(self, job_id) -> None:
+    async def marcar_processando(self, job_id: UUID) -> None:
         return None
 
     async def update(self, job: AnalysisJob) -> None:
         return None
 
-    async def ultima_concluida_por_report(self, report_id, user_id, *, exceto):
+    async def ultima_concluida_por_report(
+        self, report_id: UUID, user_id: UUID, *, exceto: UUID
+    ) -> AnalysisJob | None:
         return self.anterior
 
 
-async def _pipeline_m3(decision_payload, monkeypatch, *, anterior, nova=False):
+async def _pipeline_m3(
+    decision_payload: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    anterior: AnalysisJob | None,
+    nova: bool = False,
+) -> tuple[AnalysisJob, AsyncMock]:
     context = MigrationContext(
         source_provider="aws",
         billing_period="2026-09",
@@ -609,8 +618,10 @@ async def _pipeline_m3(decision_payload, monkeypatch, *, anterior, nova=False):
     orchestrator.generate_report.return_value = AnalysisV2Response(
         viability_score=1, recommendation_rationale="narrativa nova"
     )
+    # Só o que o pipeline usa com o contexto já montado
+    nada = cast(Any, None)
     pipeline = RunAnalysisPipelineUseCase(
-        _RepoComAnterior(anterior), None, None, None, None, None, orchestrator
+        cast(Any, _RepoComAnterior(anterior)), nada, nada, nada, nada, nada, orchestrator
     )
     await pipeline.execute(
         job, decision_context=decision_payload["decision_context"], nova_narrativa=nova
@@ -624,6 +635,7 @@ async def test_reanalise_com_os_mesmos_numeros_reaproveita_a_narrativa(
 ):
     """M3: os números citados não mudaram, então o LLM não roda."""
     primeira, _ = await _pipeline_m3(decision_payload, monkeypatch, anterior=None)
+    assert primeira.ai_structured_output is not None
     primeira.ai_structured_output = {
         **primeira.ai_structured_output,
         "recommendation_rationale": "narrativa antiga",
@@ -631,6 +643,7 @@ async def test_reanalise_com_os_mesmos_numeros_reaproveita_a_narrativa(
     job, orchestrator = await _pipeline_m3(decision_payload, monkeypatch, anterior=primeira)
     assert job.status == "COMPLETED", job.error
     orchestrator.generate_report.assert_not_called()
+    assert job.ai_structured_output is not None
     assert job.ai_structured_output["recommendation_rationale"] == "narrativa antiga"
     [aviso] = job.ai_structured_output["flags"]["narrative"]
     assert aviso["code"] == "NARRATIVA_REAPROVEITADA"
@@ -640,6 +653,7 @@ async def test_reanalise_com_os_mesmos_numeros_reaproveita_a_narrativa(
 @pytest.mark.asyncio
 async def test_numero_citado_diferente_ou_pedido_roda_o_llm(decision_payload, monkeypatch):
     primeira, _ = await _pipeline_m3(decision_payload, monkeypatch, anterior=None)
+    assert primeira.llm_input_payload is not None
     # A pedido: roda mesmo com os números iguais
     _, orchestrator = await _pipeline_m3(
         decision_payload, monkeypatch, anterior=primeira, nova=True

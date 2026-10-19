@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any, cast
 
 from app.domain.services.provider_consolidation import (
     ProviderTally,
@@ -76,7 +77,7 @@ def test_economia_por_fonte_soma_a_economia_e_lista_o_gratis() -> None:
             )
         },
     )
-    [oci] = out["por_provedor"]
+    [oci] = cast(list[dict[str, Any]], out["por_provedor"])
     assert oci["economia_mensal"] == 400.0
     assert oci["economia_por_fonte"] == {"preco_oficial": 250.0, "estimada": 150.0}
     assert oci["itens_gratis"] == [gratis]
@@ -92,5 +93,6 @@ def test_sem_o_detalhe_a_linha_sai_como_antes() -> None:
             )
         },
     )
-    assert "economia_por_fonte" not in out["por_provedor"][0]
-    assert "itens_gratis" not in out["por_provedor"][0]
+    [linha] = cast(list[dict[str, Any]], out["por_provedor"])
+    assert "economia_por_fonte" not in linha
+    assert "itens_gratis" not in linha

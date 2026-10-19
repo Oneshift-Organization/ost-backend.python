@@ -1529,20 +1529,21 @@ class BuildMigrationContextUseCase:
         for category, cat_equivs in category_equivalents.items():
             custo_da_categoria = auxiliary.custo(category) if auxiliary else Decimal("0")
             src = convert(custo_da_categoria, fx) or Decimal("0")
-            for ce in cat_equivs:
+            for cotada in cat_equivs:
+                equivalente: Mapping[str, Any] = cotada
                 _add(
-                    str(ce["provedor"]).lower(),
-                    Decimal(str(ce["custo_mensal_estimado"])),
+                    str(equivalente["provedor"]).lower(),
+                    Decimal(str(equivalente["custo_mensal_estimado"])),
                     src,
-                    str(ce["confianca_preco"]),
+                    str(equivalente["confianca_preco"]),
                 )
-                if Decimal(str(ce["custo_mensal_estimado"])) == 0 and src > 0:
-                    _gratis[str(ce["provedor"]).lower()].append(
+                if Decimal(str(equivalente["custo_mensal_estimado"])) == 0 and src > 0:
+                    _gratis[str(equivalente["provedor"]).lower()].append(
                         {
                             "categoria": category,
                             "economia_mensal": round(float(src), 2),
-                            "fonte": ce.get("taxa_destino_fonte"),
-                            "capturado_em": ce.get("taxa_destino_capturada_em"),
+                            "fonte": equivalente.get("taxa_destino_fonte"),
+                            "capturado_em": equivalente.get("taxa_destino_capturada_em"),
                         }
                     )
 
