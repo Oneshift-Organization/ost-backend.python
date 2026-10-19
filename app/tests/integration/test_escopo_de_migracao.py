@@ -304,7 +304,7 @@ _VM = re.compile(
 )
 _BANCO = re.compile(
     r'resource "(aws_db_instance|google_sql_database_instance|azurerm_postgresql_flexible_server|'
-    r'oci_database_autonomous_database)"'
+    r'oci_database_autonomous_database|oci_psql_db_system|oci_mysql_mysql_db_system)"'
 )
 _TIPOS = re.compile(r'resource "([a-z_]+)"')
 _TEM_TERRAFORM = shutil.which("terraform") is not None and bool(

@@ -182,5 +182,9 @@ do de sempre (RI15 do plano):
   (administração ou banco aberto para a internet) **não é replicada**;
 - a versão do banco medida como default da variável; na AWS, o banco num grupo
   de subredes da VPC nova;
+- o banco no produto do motor medido: na OCI, PostgreSQL vira OCI Database with
+  PostgreSQL (`oci_psql_db_system`), MySQL vira MySQL HeatWave e só Oracle vira
+  Autonomous Database; SQL Server não tem produto gerenciado na OCI e sai como
+  "não gerado";
 - no README, a seção "Topologia de origem" (ondas, portas entre ondas, riscos,
   cobertura); no `manifest.json`, o inventário de onde saiu (id e fingerprint).

@@ -169,7 +169,8 @@ nuvens com VM estão cobertas pelos payloads congelados.
   regra. Criar grupo de segurança para banco gerenciado na GCP, Azure e OCI é o próximo passo
   natural.
 - **Ainda aberto:** na OCI, o banco PostgreSQL ou MySQL sai como Autonomous Database (motor
-  Oracle), com o aviso de troca de motor que já existia.
+  Oracle), com o aviso de troca de motor que já existia. *(Resolvido em 18/10: item 1 do
+  [`PROXIMAS_EXECUCOES`](PROXIMAS_EXECUCOES.md).)*
 - **Tela:** o backend aceita as três escolhas. Quem faz a aba Migração no front precisa mandar
   o corpo (2.2); não mexi no front, porque essa aba é do Luiz e está em construção.
 

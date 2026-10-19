@@ -18,12 +18,12 @@
   "versions.tf": "83851d8971b47a9c62e3298cf325cf10af6031ae260d10506546c44bdd103e9c"
  },
  "aws>oci": {
-  "README.md": "46a991c45f0b3016e45c1f953e4d4419af1613a492818b6045931ecdb3777a06",
-  "main.tf": "e2bc0946fc7128ae020e21d8e9944d6b6102fa3114b4c97918c7352c893046dc",
+  "README.md": "75eca5cf666a74058e4de1fb3818a5fd1126955847983e331dc4e142728d2d35",
+  "main.tf": "c33395baf4cf37bf1db29615b9dcf893dc5eb5c447c55170562add3486076466",
   "outputs.tf": "cd0ac690b89ba9ba50f38a2c9069f8301b8946153958808d72f9bea7cbfb37cc",
   "providers.tf": "808fc6f03a3e7345a21a5599a70c28628cc734d776b19d01e276b72cad1d5be7",
-  "terraform.tfvars.example": "4acf9d3df23eadbf96079c3dfc56104cf6073ad2434daae15cbfe61a636d7792",
-  "variables.tf": "f6e624cd6ab26ad695fdfb3234e8705fe1cf640d0e27943cd36f71c5c2ab7c67",
+  "terraform.tfvars.example": "f8ebbce686212876fbf2eda17cccae758543ed635137fe90732f0f1d8c92c3d9",
+  "variables.tf": "f392169c998dcfb69b11a0d3237f6cb2f9a8295be616974845c550fddd7889b4",
   "versions.tf": "2c34138c2df0851110ba5d49776b0910f296ac8ed8f5cab0050c6419d2adb8fc"
  },
  "azure>aws": {
@@ -46,11 +46,11 @@
  },
  "azure>oci": {
   "README.md": "011ee1b4a78e691ad644e3a9674e1c360506a4d0853bcc607a3d6ad31752b863",
-  "main.tf": "76b6754c02a12401625663fd54e56a8a90dcce7e6665aea7f483e67733141d1b",
+  "main.tf": "e6c5e28f64d727f6e3b8f4d46e0fb2db187abf408bf0065bf1a158fc9c99fe4b",
   "outputs.tf": "cd0ac690b89ba9ba50f38a2c9069f8301b8946153958808d72f9bea7cbfb37cc",
   "providers.tf": "808fc6f03a3e7345a21a5599a70c28628cc734d776b19d01e276b72cad1d5be7",
-  "terraform.tfvars.example": "052c50fa14b64bfe6febcb2a6b0834cf7326393e01ac010f90b698ec8f282c03",
-  "variables.tf": "f91e8a2656215ba3852a778e8548db30d8e8d028c36ccd91c9bd4b54756abedf",
+  "terraform.tfvars.example": "2973f225ad31cf7dc9b1262217dd66b94ab3e9be7edf10a8d42d6c92a39cc8db",
+  "variables.tf": "4f11f9d36bf1288e1389e86ac7d4062dc727a40ed78810a57365a9c39d17b092",
   "versions.tf": "2c34138c2df0851110ba5d49776b0910f296ac8ed8f5cab0050c6419d2adb8fc"
  },
  "gcp>aws": {
@@ -73,11 +73,11 @@
  },
  "gcp>oci": {
   "README.md": "0776d8d8b7dbbd911b40d66f14132fbf476f02022224e33d818d631ee5ac8e0d",
-  "main.tf": "eb59ea35d8e739e3f34ca647dbf8577c437502cce8e3fe9c3017262e2419a00b",
+  "main.tf": "d04016e92a7cbbd34f8c9322b9576c1383d1636c9db5bb8b8113ff2c9ba8ebc5",
   "outputs.tf": "cd0ac690b89ba9ba50f38a2c9069f8301b8946153958808d72f9bea7cbfb37cc",
   "providers.tf": "808fc6f03a3e7345a21a5599a70c28628cc734d776b19d01e276b72cad1d5be7",
-  "terraform.tfvars.example": "052c50fa14b64bfe6febcb2a6b0834cf7326393e01ac010f90b698ec8f282c03",
-  "variables.tf": "f91e8a2656215ba3852a778e8548db30d8e8d028c36ccd91c9bd4b54756abedf",
+  "terraform.tfvars.example": "2973f225ad31cf7dc9b1262217dd66b94ab3e9be7edf10a8d42d6c92a39cc8db",
+  "variables.tf": "4f11f9d36bf1288e1389e86ac7d4062dc727a40ed78810a57365a9c39d17b092",
   "versions.tf": "2c34138c2df0851110ba5d49776b0910f296ac8ed8f5cab0050c6419d2adb8fc"
  },
  "gcp_legado>aws": {
@@ -100,11 +100,11 @@
  },
  "gcp_legado>oci": {
   "README.md": "f03466ffffbaa1d8f63484c1bf5d31cad886ce4307191ceaa1c986bb6a66c18e",
-  "main.tf": "14bbdf003897da3657ca4c5431d737a70921e83a5e65082be70a9feeb49c78dd",
+  "main.tf": "59783a3aef627714f4386748aec5790092694352b7e9a44103add66ae9cb5731",
   "outputs.tf": "cd0ac690b89ba9ba50f38a2c9069f8301b8946153958808d72f9bea7cbfb37cc",
   "providers.tf": "808fc6f03a3e7345a21a5599a70c28628cc734d776b19d01e276b72cad1d5be7",
-  "terraform.tfvars.example": "052c50fa14b64bfe6febcb2a6b0834cf7326393e01ac010f90b698ec8f282c03",
-  "variables.tf": "f91e8a2656215ba3852a778e8548db30d8e8d028c36ccd91c9bd4b54756abedf",
+  "terraform.tfvars.example": "2973f225ad31cf7dc9b1262217dd66b94ab3e9be7edf10a8d42d6c92a39cc8db",
+  "variables.tf": "4f11f9d36bf1288e1389e86ac7d4062dc727a40ed78810a57365a9c39d17b092",
   "versions.tf": "2c34138c2df0851110ba5d49776b0910f296ac8ed8f5cab0050c6419d2adb8fc"
  },
  "oci>aws": {

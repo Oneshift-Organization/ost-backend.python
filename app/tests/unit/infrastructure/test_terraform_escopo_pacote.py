@@ -113,6 +113,8 @@ def _bancos(arquivos: dict[str, str]) -> int:
             "google_sql_database_instance",
             "azurerm_postgresql_flexible_server",
             "oci_database_autonomous_database",
+            "oci_psql_db_system",
+            "oci_mysql_mysql_db_system",
         )
     )
 

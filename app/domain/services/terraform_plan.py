@@ -109,13 +109,15 @@ _FAMILIAS_DE_MOTOR = (
     ("oracle", "oracle"),
 )
 
-# O que o renderer de cada destino sabe gerar. Ausente = aceita qualquer um
-# (com aviso quando é troca de motor). Recusar aqui, e não no renderer, é o que
-# faz a recusa aparecer no README em vez de sumir em silêncio.
+# O que o renderer de cada destino sabe gerar, cada motor no produto dele. Ausente =
+# aceita qualquer um. Recusar aqui, e não no renderer, é o que faz a recusa aparecer
+# no README em vez de sumir em silêncio.
 _MOTORES_POR_DESTINO: dict[str, frozenset[str]] = {
     "azure": frozenset({"postgresql"}),
     "gcp": frozenset({"postgresql", "mysql", "sqlserver"}),
     "aws": frozenset({"postgresql", "mysql", "sqlserver", "oracle"}),
+    # PostgreSQL, MySQL HeatWave e Autonomous (Oracle); a OCI não tem SQL Server gerenciado
+    "oci": frozenset({"postgresql", "mysql", "oracle"}),
 }
 
 
@@ -827,12 +829,6 @@ def _banco_medido(
         plano.avisos.append(
             f"{total - detalhados} instâncias de banco em grupos menores não aparecem "
             "no resumo da análise e não viraram recurso."
-        )
-    if destino == "oci":
-        plano.avisos.append(
-            "Na OCI o banco é gerado como Autonomous Database (motor Oracle). Com a "
-            "origem em PostgreSQL/MySQL isso é troca de motor, não lift-and-shift: "
-            "avalie o OCI Database with PostgreSQL / MySQL HeatWave."
         )
     return True
 

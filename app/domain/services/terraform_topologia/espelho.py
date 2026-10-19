@@ -269,7 +269,7 @@ def _ligar_bancos(
       o RDS cairia na VPC padrão da conta, fora dos grupos de segurança espelhados.
     - Azure: a subrede de dados espelhada é delegada ao PostgreSQL Flexible, que a
       exige exclusiva; com VM nela, o banco fica fora e o pacote avisa.
-    - OCI: endpoint privado do Autonomous na subrede de dados espelhada.
+    - OCI: o banco (PostgreSQL, HeatWave ou Autonomous) na subrede de dados espelhada.
     - GCP: acesso privado a serviços (faixa reservada e conexão de peering na VPC nova).
     """
     bancos = [(i, r) for i, r in enumerate(plano.recursos) if r.resource_type == "managed_database"]

@@ -24,9 +24,20 @@ from app.domain.services.instance_shape import parse_instance_shape
 # azurerm 3.x recusa "17" na validação do `version`: o pacote não aplicaria.
 _POSTGRES = frozenset({"12", "13", "14", "15", "16"})
 _MYSQL = frozenset({"8.0"})
+# O PostgreSQL da OCI só tem 14, 15 e 16 (docs da Oracle, "PostgreSQL Version and
+# Upgrades", lidas em 18/10/2026). O MySQL HeatWave pede a versão completa do catálogo
+# dela (8.4.x, 9.x): a versão maior medida não serve de default
+_POSTGRES_OCI = frozenset({"14", "15", "16"})
+_ACEITAS = {
+    "aws": "PostgreSQL 12 a 16, MySQL 8.0",
+    "azure": "PostgreSQL 12 a 16",
+    "gcp": "PostgreSQL 12 a 16, MySQL 8.0",
+    "oci": "PostgreSQL 14 a 16; o MySQL HeatWave pede a versão completa do catálogo da OCI",
+}
 
 # Tier do Cloud SQL: `db-custom-<vCPU>-<MB>`.
 _TIER_GCP = re.compile(r"^db-custom-(\d+)-\d+$")
+_TIER_MB_GCP = re.compile(r"^db-custom-\d+-(\d+)$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,8 +65,8 @@ def _chave_numerica(maior: str) -> tuple[int, ...]:
 
 
 def _no_formato(maior: str, familia: str, destino: str) -> str | None:
-    if familia == "postgresql" and maior in _POSTGRES:
-        return {"aws": maior, "azure": maior, "gcp": f"POSTGRES_{maior}"}.get(destino)
+    if familia == "postgresql" and maior in (_POSTGRES_OCI if destino == "oci" else _POSTGRES):
+        return {"aws": maior, "azure": maior, "gcp": f"POSTGRES_{maior}", "oci": maior}.get(destino)
     if familia == "mysql" and maior in _MYSQL:
         return {"aws": maior, "gcp": "MYSQL_" + maior.replace(".", "_")}.get(destino)
     return None
@@ -65,7 +76,7 @@ def versao_padrao(versoes: Mapping[str, int], familia: str | None, destino: str)
     """A versão maior mais frequente (empate: a maior), no formato do destino.
 
     ``default`` nulo quando nada foi medido, quando a versão não é suportada ou
-    quando o destino não tem variável de versão (Autonomous Database da OCI).
+    quando o destino não aceita a versão maior como valor (MySQL HeatWave da OCI).
     """
     por_maior: Counter[str] = Counter()
     for versao, n in versoes.items():
@@ -78,9 +89,10 @@ def versao_padrao(versoes: Mapping[str, int], familia: str | None, destino: str)
     contagem = dict(sorted(por_maior.items(), key=lambda kv: _chave_numerica(kv[0])))
     default = _no_formato(maior, familia, destino)
     if default is None:
+        aceitas = _ACEITAS.get(destino)
         motivo = (
-            f"versão {maior} medida no inventário, fora do que o destino aceita neste pacote "
-            "(PostgreSQL 12 a 16, MySQL 8.0)"
+            f"versão {maior} medida no inventário, fora do que o destino aceita neste "
+            "pacote" + (f" ({aceitas})" if aceitas else "")
         )
     else:
         motivo = f"versão {maior} medida no inventário (a mais frequente)"
@@ -96,6 +108,17 @@ def vcpus_da_classe(classe: str | None) -> int | None:
         return int(forma.vcpus)
     m = _TIER_GCP.match(classe)
     return int(m.group(1)) if m else None
+
+
+def ram_da_classe(classe: str | None) -> float | None:
+    """Memória (GB) de uma classe de banco medida: RDS, Azure ou Cloud SQL."""
+    if not classe:
+        return None
+    forma = parse_instance_shape(classe) or parse_azure_shape(classe)
+    if forma is not None:
+        return float(forma.ram_gib)
+    m = _TIER_MB_GCP.match(classe)
+    return int(m.group(1)) / 1024 if m else None
 
 
 @dataclass(frozen=True, slots=True)

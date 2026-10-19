@@ -20,13 +20,27 @@ from app.domain.services.terraform_topologia.discos import avulsos, boot_medio
 
 @pytest.mark.parametrize(
     ("destino", "esperado"),
-    [("aws", "16"), ("azure", "16"), ("gcp", "POSTGRES_16"), ("oci", None)],
+    [("aws", "16"), ("azure", "16"), ("gcp", "POSTGRES_16"), ("oci", "16")],
 )
 def test_versao_mais_frequente_no_formato_do_destino(destino: str, esperado: str | None) -> None:
     v = versao_padrao({"14.10": 11, "15.4": 9, "16.1": 12}, "postgresql", destino)
     assert v.default == esperado
     assert v.maior == "16"
     assert v.contagem == {"14": 11, "15": 9, "16": 12}
+
+
+def test_versao_fora_do_destino_diz_o_que_ele_aceita() -> None:
+    # O PostgreSQL da OCI começa no 14; a AWS ainda aceita o 13
+    oci = versao_padrao({"13.7": 1}, "postgresql", "oci")
+    assert oci.default is None
+    assert "PostgreSQL 14 a 16" in oci.motivo
+    assert versao_padrao({"13.7": 1}, "postgresql", "aws").default == "13"
+    # A versão medida dentro do que o destino aceita não vira aviso de "fora"
+    assert "fora" not in versao_padrao({"16.4": 1}, "postgresql", "oci").motivo
+    # O HeatWave pede a versão completa do catálogo da OCI
+    mysql = versao_padrao({"8.0.35": 1}, "mysql", "oci")
+    assert mysql.default is None
+    assert "catálogo da OCI" in mysql.motivo
 
 
 def test_empate_fica_com_a_maior_e_menores_somam() -> None:

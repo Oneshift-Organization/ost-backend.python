@@ -14,7 +14,7 @@
 
 | # | item | resumo | de quem | estado |
 |---|---|---|---|---|
-| 1 | Terraform: banco da OCI pelo motor | O gerador da OCI escreve todo banco como Oracle Autonomous Database, com 1 OCPU por vCPU (o dobro). A análise cotou OCI PostgreSQL. PostgreSQL passa a `oci_psql_db_system` e MySQL a HeatWave; o Autonomous fica para Oracle. Some o aviso falso "versão 16 fora do que o destino aceita" | nós | a fazer |
+| 1 | Terraform: banco do destino pelo motor medido | Conferidos os quatro geradores (§5). Só o da OCI erra: escreve todo banco como Oracle Autonomous Database, com 1 OCPU por vCPU (o dobro), e a análise cotou OCI PostgreSQL. PostgreSQL passa a `oci_psql_db_system` e MySQL a HeatWave; o Autonomous fica para Oracle. Some o aviso falso "versão 16 fora do que o destino aceita" | nós | em execução |
 | 2 | Terraform: buckets do escopo | O bucket só nasce do custo dele; a fatura não liga o custo do S3 ao bucket, e o pacote sai sem bucket e sem aviso (bucket conta como "tipo que o pacote cria"). Passa a sair do inventário, pelo nome | nós | a fazer |
 | 3 | Terraform: avisos verdadeiros | "AmazonVPC: nenhum recurso no inventário" com 3 VPCs e 15 subredes, e a rede criada; idem Route53 com a zona no inventário. Cost Explorer e Config passam a ser "gestão da conta, não infraestrutura" | nós | a fazer |
 | 4 | Terraform: ocupação de origem burstable | O empacotador dimensiona burstable pela linha de base; o aviso compara com a vCPU nominal e pede "uma máquina a mais" sem motivo (146% na `f67fcd01`). Mesma base nos dois, dizendo que a origem é burstable | nós | a fazer |
@@ -67,7 +67,39 @@ develop, só leitura.
 | AWS Cost Explorer, AWSConfig | gestão da conta | nada | correto; falta dizer que não é infraestrutura | 3 |
 | AmazonEC2 | 2 nós no escopo e o srv-openvpn | 3 VMs; o openvpn fica (ferramenta de administração) | correto; aviso de 146% inconsistente | 4 |
 
-## 5. Concluído
+## 5. Análises de impacto (escritas antes do código)
+
+### Item 1 — banco do destino pelo motor medido
+
+**Conferido nos quatro geradores (18/10):**
+
+| destino | o que o gerador faz | veredito |
+|---|---|---|
+| AWS | motor medido vira `engine` literal; sem motor, a variável carrega motor e versão | certo |
+| GCP | `database_version` (ex.: `POSTGRES_16`) cobre PostgreSQL, MySQL e SQL Server; Oracle sai como "não gerado" (o GCP não tem) | certo |
+| Azure | só PostgreSQL Flexible; MySQL e SQL Server medidos saem como "não gerado", declarado | limite declarado, não erro (fica para depois) |
+| OCI | **todo** banco vira Autonomous Database (motor Oracle), com `cpu_core_count` = vCPU (no x86, 1 OCPU = 2 vCPU: o dobro). Com banco do inventário, nem o aviso de troca de motor aparece | **erro**: produto de outro motor, tamanho dobrado |
+
+**O que muda (gerador da OCI e regra de versão):**
+
+- PostgreSQL → `oci_psql_db_system`, forma `PostgreSQL.VM.Standard.E5.Flex`. OCPU = vCPU ÷ 2, a mesma conta da cotação (US$ 0,098 por OCPU = 0,049 por vCPU). Memória = a da classe da origem, entre 16 GB e 64 GB por OCPU (limites da forma, docs da Oracle de 18/10); sem a classe, 16 GB por OCPU. Armazenamento otimizado regional. Alta disponibilidade = 2 nós, como na cotação.
+- MySQL → `oci_mysql_mysql_db_system` (HeatWave), forma `MySQL.N` com o menor N ≥ vCPU (ECPU = vCPU, a premissa da cotação). Com alta disponibilidade, `is_highly_available` (3 instâncias, como na cotação). A versão fica sem default: a OCI só aceita a versão completa do catálogo dela (8.4.x, 9.x).
+- Oracle → Autonomous, como hoje, com `cpu_core_count` = vCPU ÷ 2.
+- Motor desconhecido no caminho agregado (sem inventário nem export detalhado) → PostgreSQL, com a premissa "motor não informado", como a Azure já faz. SQL Server, e grupo medido sem motor → "não gerado", declarado, como nas outras nuvens (a OCI não tem SQL Server gerenciado).
+- Versão: o PostgreSQL da OCI aceita 14, 15 e 16. O aviso de versão passa a dizer o que aquele destino aceita (hoje diz "12 a 16" até quando a versão está dentro).
+- Variável nova `db_admin_username`, sem default, para PostgreSQL e MySQL. A senha segue como hoje.
+
+**Quem é afetado:**
+
+- Só pacotes com destino OCI que têm banco. AWS, Azure e GCP saem byte a byte iguais (a caracterização trava isso).
+- Caracterização: os pacotes `aws>oci`, `gcp>oci`, `azure>oci` e `gcp_legado>oci` mudam nos arquivos com banco; o esperado é regenerado no mesmo commit, com o motivo.
+- Testes que esperam o Autonomous (`test_terraform_com_topologia`, `test_terraform_escopo_pacote`, `test_escopo_de_migracao`) passam a esperar o recurso do motor.
+- Custo e análise: nada muda. A análise já cotava o PostgreSQL e o MySQL da OCI; o Terraform passa a casar com a cotação.
+- Agente e MCP: o blueprint não ganha chave; muda só o HCL e o texto.
+- Validação: `terraform validate` com o provider da OCI fixado (6.37) nos pacotes novos.
+- Risco: forma e versões vêm do catálogo atual da OCI. Se a Oracle mudar a lista, o pacote para no `plan`, não no meio do `apply`; o comentário do recurso diz de onde veio a forma.
+
+## 6. Concluído
 
 | data | item | o que foi feito | commit |
 |---|---|---|---|
