@@ -26,16 +26,16 @@
 
 | # | item | resumo | de quem | estado |
 |---|---|---|---|---|
-| 8 | M3: completar a análise sem rodar o LLM | Anexar inventário ou reanalisar recalcula o determinístico e reaproveita a narrativa; o LLM só roda se o resultado mudar. A narrativa antiga não pode citar número que mudou | nós | ✅ feito, em branch local (aguarda liberação) |
-| 9 | M11 / ponto 2 do MCP: economia comprovada × estimada | Somar por provedor a economia por preço oficial e a por premissa, com fonte e data de cada zero. Campo aditivo, fora dos arquivos travados; aviso ao MCP; a tela é do front | nós (back), front | ✅ feito (back e front), em branch local (aguarda liberação) |
-| 10 | Ponto 5 do MCP: caso Azure de US$ 471.870 | 55,66% de cobertura de preço; conferir capacidade, horas e licença dos dois pools que fazem a maior parte da economia | nós | ✅ feito (VM pelo medidor; licença ao custo de hoje), em branch local |
-| 11 | D3 e D4: rótulos errados | Confiança do banco "low" com resto zero; `catalog_alias` contado como tipo inferido (alerta falso na OCI; Azure 27,8%) | nós | ✅ feito, em branch local (aguarda liberação) |
-| 12 | Terraform: gateways | Nenhum gerador cria internet gateway nem NAT; sem NAT a subrede do destino não sai para a internet | nós | ✅ feito, em branch local (aguarda liberação) |
-| 13 | Terraform: entrada do banco fora da AWS | Criar no destino a regra de entrada do banco (tcp/5432 a partir da rede de origem); hoje só o aviso | nós | ✅ feito (OCI e GCP; HeatWave segue com aviso), em branch local |
-| 14 | Terraform: discos pelo inventário | O tamanho de cada volume do inventário, no lugar de custo ÷ taxa (78 GB estimados na `f67fcd01`) | nós | ✅ feito, em branch local (aguarda liberação) |
-| 15 | Terraform: EKS → OKE (e AKS, GKE) | Cluster e node pool. Na `f67fcd01` tudo roda no EKS e o pacote entrega VMs soltas. Reverte o "plano de controle fora do MVP" | usuário decide; nós | ✅ feito (decidido pelo usuário em 19/10), em branch local |
-| 16 | Ponto 1 do MCP: franquia das chaves da OCI | 20 versões de chave HSM grátis, depois US$ 0,5334 por versão por mês. Premissa: 1 chave da origem = 1 versão | nós | ✅ feito, em branch local; taxa nova pede seed_category_rates |
-| 17 | Curadoria no develop | Fila: Kiro, Azure Bastion, EC2 - Other. Falta `CURADORES` no deploy do develop (Swagger dá 403) | usuário aprova; Luiz (infra) | código feito (DE-PARA e EC2 - Other), em branch local; fila e CURADORES: decisão |
+| 8 | M3: completar a análise sem rodar o LLM | Anexar inventário ou reanalisar recalcula o determinístico e reaproveita a narrativa; o LLM só roda se o resultado mudar. A narrativa antiga não pode citar número que mudou | nós | ✅ feito (develop `803f6a2`) |
+| 9 | M11 / ponto 2 do MCP: economia comprovada × estimada | Somar por provedor a economia por preço oficial e a por premissa, com fonte e data de cada zero. Campo aditivo, fora dos arquivos travados; aviso ao MCP; a tela é do front | nós (back), front | ✅ feito (back e front) (develop `803f6a2`) |
+| 10 | Ponto 5 do MCP: caso Azure de US$ 471.870 | 55,66% de cobertura de preço; conferir capacidade, horas e licença dos dois pools que fazem a maior parte da economia | nós | ✅ feito (VM pelo medidor; licença ao custo de hoje) (develop `803f6a2`) |
+| 11 | D3 e D4: rótulos errados | Confiança do banco "low" com resto zero; `catalog_alias` contado como tipo inferido (alerta falso na OCI; Azure 27,8%) | nós | ✅ feito (develop `803f6a2`) |
+| 12 | Terraform: gateways | Nenhum gerador cria internet gateway nem NAT; sem NAT a subrede do destino não sai para a internet | nós | ✅ feito (develop `803f6a2`) |
+| 13 | Terraform: entrada do banco fora da AWS | Criar no destino a regra de entrada do banco (tcp/5432 a partir da rede de origem); hoje só o aviso | nós | ✅ feito (OCI e GCP; HeatWave segue com aviso) (develop `803f6a2`) |
+| 14 | Terraform: discos pelo inventário | O tamanho de cada volume do inventário, no lugar de custo ÷ taxa (78 GB estimados na `f67fcd01`) | nós | ✅ feito (develop `803f6a2`) |
+| 15 | Terraform: EKS → OKE (e AKS, GKE) | Cluster e node pool. Na `f67fcd01` tudo roda no EKS e o pacote entrega VMs soltas. Reverte o "plano de controle fora do MVP" | usuário decide; nós | ✅ feito (decidido pelo usuário em 19/10) (develop `803f6a2`) |
+| 16 | Ponto 1 do MCP: franquia das chaves da OCI | 20 versões de chave HSM grátis, depois US$ 0,5334 por versão por mês. Premissa: 1 chave da origem = 1 versão | nós | ✅ feito (develop `803f6a2`) |
+| 17 | Curadoria no develop | Fila: Kiro, Azure Bastion, EC2 - Other. Falta `CURADORES` no deploy do develop (Swagger dá 403) | usuário aprova; Luiz (infra) | código feito (DE-PARA e EC2 - Other, develop `803f6a2`); fila e CURADORES: decisão |
 | 18 | D2: critério do empacotador | Penalidade de desperdício sobre o custo pela fração ocupada (F1 a 52,41 no lugar de D2as_v5 a 25,18). Medir antes fração × máquina inteira | nós; a decisão é do usuário | medido (§5, item 18); decisão |
 
 ## 3. Se não der: a apresentação do MVP não precisa disso
@@ -551,6 +551,7 @@ travado da autoridade; por isso a opção entra como parâmetro da rota.
 
 | data | item | o que foi feito | commit |
 |---|---|---|---|
+| 19/10 | Itens 8 a 17, 19 e Kubernetes | Kubernetes, registro, cofre e DNS no Terraform do escopo; NAT e gateway de internet; entrada do banco (NSG na OCI, rotas no GCP); discos pelo inventário; franquia das chaves da OCI; D3 e D4; economia comprovada × estimada (back e front); reanálise sem LLM; VM da Azure pelo medidor e licença ao custo de hoje (caso de US$ 471.870); DE-PARA com Bastion, Kiro e EC2 - Other pelo uso. Bateria completa 2684 verde; CI verde. Develop: DE-PARA 864 semeado, taxa de chave da OCI sincronizada. Front: diálogo do Terraform cabe na tela (sobre a lista do Luiz, `afef18e`) e o bloco de economia por fonte (`7ecc6cd`) | `803f6a2` |
 | 18/10 | Itens 1 a 5 | Banco da OCI pelo motor; buckets do escopo pelo inventário; avisos do que fica fora do pacote; ocupação burstable pela base gravada; especificação oficial das máquinas fora da regra (Azure B1, AWS geração anterior). Caso real `f67fcd01` conferido no develop: PostgreSQL 16 na subrede de dados, 3 buckets, VPC e Route53 com a frase certa, T4G a 73% sem aviso. Bateria completa: 2634 testes; CI verde | `ba92bce` |
 | 18/10 | Sync da Azure no develop | `sync_prices --providers azure --zonas todas`: 8650 preços; B1ls 2 → 0,5 GiB, B1s 2 → 1, B1ms 4 → 2 (9 regiões) | — |
 | 18/10 | Auditoria do MCP | Conferida ponto a ponto: banco por partes, SSD com VPU, DE-PARA da OCI (139 linhas), VPN da Azure e "sem equivalente na OCI" já estavam na develop depois do `684029c` que ela leu; seis pontos seguem abertos (itens 6, 9, 10, 16, 20, 22) | — |
