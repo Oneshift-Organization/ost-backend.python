@@ -9,6 +9,7 @@ O plano de entrada não é alterado: sai um plano novo.
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import replace
@@ -78,7 +79,203 @@ def aplicar_topologia(
     _versoes(novo, detalhe.get("bancos") or [], destino)
     _fronteira_do_escopo(novo, topologia.get("escopo") or {}, destino=destino, rede=rede)
     _buckets_do_escopo(novo, topologia.get("escopo") or {})
+    _kubernetes_do_escopo(novo, topologia.get("escopo") or {})
+    _componentes_do_escopo(novo, topologia.get("escopo") or {}, destino)
     return novo
+
+
+def _pools_da_familia(plano: PlanoDerivado, familia: str) -> list[RecursoDerivado]:
+    return [
+        r
+        for r in plano.recursos
+        if r.resource_type == "compute"
+        and not r.configuration.get("disk_only")
+        and str(r.configuration.get("source_family") or "").upper() == familia
+    ]
+
+
+def _kubernetes_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> None:
+    """O cluster do escopo com os grupos de nós dele (itens 15 e 19).
+
+    Os pools de máquinas que são nós do cluster saem da lista de VMs e entram no grupo
+    de nós, com a máquina e a quantidade que a análise cotou. Pool só em parte no
+    cluster é dividido pela contagem de nós da família no escopo."""
+    clusters = escopo.get("clusters") or []
+    if not clusters:
+        return
+    nomeador = Nomeador(r.logical_name for r in plano.recursos)
+    gerados = 0
+    for cluster in clusters:
+        nome_origem = str(cluster.get("nome") or "cluster")
+        grupos = []
+        for g in cluster.get("grupos") or []:
+            familia = str(g.get("familia") or "").upper()
+            pools = _pools_da_familia(plano, familia)
+            if not pools:
+                continue
+            # O espelho pode repartir o pool pelas subredes: os nós saem dos pedaços em ordem
+            total = sum(int(str(p.configuration.get("instances") or 1)) for p in pools)
+            da_familia = max(int(g.get("da_familia") or 0), int(g.get("maquinas") or 0), 1)
+            nos = min(total, max(1, math.ceil(total * int(g.get("maquinas") or 0) / da_familia)))
+            primeiro = pools[0].configuration
+            grupos.append(
+                {
+                    "name": str(g.get("nome") or familia.lower()),
+                    "machine_type": primeiro.get("machine_type"),
+                    "instances": nos,
+                    "vcpus": _parte(primeiro.get("vcpus"), nos, _instancias(primeiro)),
+                    "ram_gb": _parte(primeiro.get("ram_gb"), nos, _instancias(primeiro)),
+                    "source_family": familia,
+                    **({"subnet": primeiro["subnet"]} if primeiro.get("subnet") else {}),
+                }
+            )
+            falta = nos
+            for pool in pools:
+                cfg = pool.configuration
+                n = _instancias(cfg)
+                tirar = min(falta, n)
+                falta -= tirar
+                plano.recursos.remove(pool)
+                if n - tirar > 0:
+                    plano.recursos.append(
+                        replace(
+                            pool,
+                            configuration={
+                                **cfg,
+                                "instances": n - tirar,
+                                "vcpus": _parte(cfg.get("vcpus"), n - tirar, n),
+                                "ram_gb": _parte(cfg.get("ram_gb"), n - tirar, n),
+                            },
+                        )
+                    )
+        if not grupos:
+            plano.avisos.append(
+                f"Cluster {nome_origem}: nenhum nó dele no escopo (o serviço das máquinas não "
+                "foi escolhido); o pacote não cria cluster sem nós."
+            )
+            continue
+        nome = nomeador.gerar("cluster", nome_origem)
+        plano.recursos.append(
+            RecursoDerivado(
+                logical_name=nome,
+                resource_type="kubernetes_cluster",
+                configuration={
+                    "source_name": nome_origem,
+                    "source_version": cluster.get("versao"),
+                    "node_pools": grupos,
+                    "service_balancers": list(cluster.get("balanceadores") or []),
+                },
+                depends_on=("rede_principal",),
+            )
+        )
+        plano.premissas.append(
+            Premissa(
+                campo=f"{nome}.node_pools",
+                categoria="derivacao",
+                valor=", ".join(
+                    f"{g['name']} {g['machine_type']} x{g['instances']}" for g in grupos
+                ),
+                base=(
+                    f"Nós do cluster {nome_origem} no inventário, pelo grupo de nós; a máquina "
+                    "e a quantidade são as que a análise cotou para o pool da família."
+                ),
+            )
+        )
+        balanceadores = cluster.get("balanceadores") or []
+        plano.avisos.append(
+            f"Cluster {nome_origem}: o pacote cria o cluster e os grupos de nós; as aplicações "
+            "de dentro dele (Deployment, Service, Ingress, Helm) não viajam pelo Terraform: "
+            "reaplique os manifests no destino."
+            + (
+                f" O balanceador {', '.join(balanceadores)} é de um Service do cluster e nasce "
+                "dele no destino; o pacote não o cria à parte."
+                if balanceadores
+                else ""
+            )
+        )
+        gerados += 1
+    if gerados:
+        # O cluster agora vai no pacote: sai a frase do plano de controle fora do MVP
+        plano.nao_suportado = [x for x in plano.nao_suportado if not x.startswith("Kubernetes:")]
+
+
+def _instancias(cfg: Mapping[str, Any]) -> int:
+    return max(1, int(str(cfg.get("instances") or 1)))
+
+
+def _parte(valor: object, parte: int, total: int) -> float | None:
+    numero = _decimal_ou_none(valor)
+    if numero is None or total <= 0:
+        return None
+    return float(round(numero * parte / total, 2))
+
+
+def _decimal_ou_none(valor: object) -> Decimal | None:
+    try:
+        return Decimal(str(valor)) if valor is not None else None
+    except ArithmeticError:
+        return None
+
+
+# Registro e segredo viram um recurso por item onde o destino tem o objeto, e um
+# contêiner com a lista onde ele não tem: o registro da Azure guarda os repositórios, o
+# cofre da Azure e da OCI exige o valor do segredo na criação
+_UM_SO = {("registro_de_imagens", "azure"), ("segredo", "azure"), ("segredo", "oci")}
+_TIPO_DO_COMPONENTE = {
+    "registro_de_imagens": "container_registry",
+    "segredo": "vault",
+    "zona_dns": "dns_zone",
+}
+
+
+def _componentes_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any], destino: str) -> None:
+    componentes = escopo.get("componentes") or []
+    if not componentes:
+        return
+    nomeador = Nomeador(r.logical_name for r in plano.recursos)
+    por_tipo: dict[str, list[str]] = defaultdict(list)
+    for c in componentes:
+        if str(c.get("tipo")) in _TIPO_DO_COMPONENTE:
+            por_tipo[str(c["tipo"])].append(str(c.get("nome") or ""))
+    for tipo, nomes in sorted(por_tipo.items()):
+        recurso = _TIPO_DO_COMPONENTE[tipo]
+        if (tipo, destino) in _UM_SO:
+            plano.recursos.append(
+                RecursoDerivado(
+                    logical_name=nomeador.gerar(recurso, "escopo"),
+                    resource_type=recurso,
+                    configuration={"items": sorted(nomes)},
+                )
+            )
+            continue
+        for origem in sorted(nomes):
+            plano.recursos.append(
+                RecursoDerivado(
+                    logical_name=nomeador.gerar(recurso, origem),
+                    resource_type=recurso,
+                    configuration={"source_name": origem},
+                )
+            )
+    if por_tipo.get("segredo"):
+        plano.avisos.append(
+            f"{len(por_tipo['segredo'])} segredo(s) da origem: o pacote cria "
+            + (
+                "o cofre; crie cada segredo nele com o valor"
+                if ("segredo", destino) in _UM_SO
+                else "cada segredo vazio, com o nome de origem; preencha o valor"
+            )
+            + " no destino. O valor de um segredo nunca viaja pelo pacote."
+        )
+    if por_tipo.get("registro_de_imagens"):
+        plano.avisos.append(
+            "Registro de imagens: o pacote cria o repositório; as imagens não viajam pelo "
+            "Terraform. Copie-as da origem (skopeo copy, crane copy) antes de subir o cluster."
+        )
+    if por_tipo.get("zona_dns"):
+        plano.avisos.append(
+            "Zona de DNS: o pacote cria a zona, privada e ligada à rede do pacote; os "
+            "registros não viajam. Exporte-os da origem e importe no destino."
+        )
 
 
 def _buckets_do_escopo(plano: PlanoDerivado, escopo: Mapping[str, Any]) -> None:

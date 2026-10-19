@@ -272,6 +272,54 @@ eixo de cobertura, e se a v4.3 entra sobre a v5 (como simulado) ou a substitui. 
 mudança exige subir `AUTHORITY_VERSION` (arquivo travado) e aviso ao MCP. Tabela
 completa: `m13_saida.json` (scratchpad da sessão), gerada por `m13_pod.py`.
 
+### Itens 15 e 19 — Kubernetes, registro de imagens, segredos e DNS no Terraform do escopo
+
+Decidido pelo usuário em 19/10: o Kubernetes é essencial e não pode ficar fora do pacote,
+assim como os outros serviços gerenciados que o inventário mostra. Referência: o pacote da
+análise `b01f59da` (o mesmo inventário da `f67fcd01`, 11 serviços marcados).
+
+**O que o inventário já traz (AWS, Azure, GCP):** o cluster com versão e subredes; cada
+nó ligado ao cluster ("membro de") e ao grupo de nós (tag `eks:nodegroup-name`,
+`kubernetes.azure.com/agentpool`, `goog-k8s-node-pool-name`); o balanceador que o
+controlador do cluster cria para um Service, também ligado ao cluster; registro de imagens
+e segredos marcados como componente; a zona de DNS pelo tipo nativo. Na `f67fcd01`:
+`eks-kitconta-prd` 1.35, grupos `ng-infra-arm` (t4g.xlarge) e `ng-microservices-arm`
+(r7g.large), o NLB do Kong (Service `LoadBalancer`, 80 e 443), 18 repositórios, 18
+segredos e a zona `kitconta.internal.`.
+
+**O que muda:**
+
+- **Cluster:** um cluster gerenciado por cluster do escopo, com os grupos de nós dele
+  (OKE, EKS, AKS, GKE). Os pools de máquinas que são nós do cluster deixam de virar VM
+  avulsa e viram o grupo de nós, com a máquina e a quantidade que a análise cotou; pool
+  só em parte no cluster é dividido pela contagem de nós. A versão medida vira o default
+  da variável quando o destino aceita o formato; senão a variável fica sem default.
+  Some a frase "plano de controle fora do MVP".
+- **Balanceador do cluster:** não vira recurso. Ele nasce do Service do cluster no destino;
+  o pacote diz qual Service e quais portas.
+- **Registro de imagens:** um repositório por repositório de origem (OCI, AWS); na Azure um
+  registro; no GCP um repositório Docker. As imagens não viajam pelo Terraform (copiar com
+  `skopeo`/`crane`).
+- **Segredos:** na AWS e no GCP, o segredo vazio com o nome da origem; na Azure e na OCI,
+  o cofre (o segredo exige valor na criação), com os nomes no README. Valor de segredo
+  nunca viaja.
+- **Zona de DNS:** uma por zona de origem; privada, ligada à rede do pacote, salvo quando
+  o inventário diz que é pública. Os registros não viajam.
+- **"Só o serviço":** registro, segredo e zona sem aplicação (sem tag) vão junto quando o
+  serviço deles foi escolhido: eles só migram pela escolha do serviço.
+
+**Quem é afetado:**
+
+- Só o pacote do escopo com cluster ou com esses componentes, nos quatro destinos. O
+  pacote sem escopo e a caracterização não mudam.
+- Custo e análise: não mudam (o Terraform não tem preço). As VMs que viram nós somem da
+  lista de máquinas; a capacidade é a mesma.
+- `unsupported_items` encolhe; o diálogo do front, que mostrava a lista inteira, fica
+  menor (o botão escondido pelo excesso de avisos é do front, item à parte).
+- Variáveis novas sem default onde a análise não sabe (versão do Kubernetes quando o
+  destino exige formato próprio, papel IAM na AWS).
+- Validação: `terraform validate` com os providers fixados nos quatro destinos.
+
 ## 6. Concluído
 
 | data | item | o que foi feito | commit |

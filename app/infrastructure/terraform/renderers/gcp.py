@@ -16,16 +16,21 @@ from app.infrastructure.terraform.renderers.base import (
     com_indice,
     disco_raiz,
     faixa_de_portas,
+    identificador,
     instancias_banco,
+    itens_do_componente,
     nome_banco,
     nome_cloud,
+    nome_de_zona,
     quantidade_volumes,
     texto_banco,
+    texto_cluster,
     texto_espelho,
     texto_grupo,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
+    variavel_de_versao_do_kubernetes,
 )
 from app.schemas.terraform import (
     RecursoTerraform,
@@ -63,6 +68,7 @@ class AdaptadorGCP:
                 ),
                 default="debian-cloud/debian-12",
             ),
+            *variavel_de_versao_do_kubernetes(bp, aceita_versao_maior=True, exemplo="1.30"),
         ]
 
     def preambulo(self, bp: TerraformBlueprint) -> list[str]:
@@ -93,6 +99,10 @@ class AdaptadorGCP:
             TipoRecurso.OBJECT_STORAGE: _bucket,
             TipoRecurso.MANAGED_DATABASE: _banco,
             TipoRecurso.SECURITY_GROUP: _grupo,
+            TipoRecurso.KUBERNETES_CLUSTER: _cluster,
+            TipoRecurso.CONTAINER_REGISTRY: _registro,
+            TipoRecurso.VAULT: _segredo,
+            TipoRecurso.DNS_ZONE: _zona,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -313,6 +323,100 @@ def _banco(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
                 atributo("private_network", referencia(
                     f"google_compute_network.{REDE}.id"
                 ), nivel=3),
+            ], nivel=2),
+        ], nivel=1),
+    ])
+
+
+# ── Kubernetes e serviços gerenciados do escopo (itens 15 e 19) ─────────────
+
+# Cluster regional: o node pool conta por zona, nas três zonas da região
+_ZONAS_DO_CLUSTER = 3
+
+
+def _cluster(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    cfg = r.configuration
+    pools = list(cfg.get("node_pools") or [])
+    subrede = pools[0].get("subnet") if pools else None
+    partes = [
+        comentario(
+            texto_cluster(cfg) + "\nCluster regional: cada node pool conta por zona, então "
+            "os nós da origem\nse dividem pelas três zonas, arredondando para cima."
+        )
+        + "\n"
+        + bloco("resource", ["google_container_cluster", r.logical_name], [
+            atributo("name", nome_cloud(bp.project_name, cfg.get("source_name"), maximo=40)),
+            atributo("location", bp.region),
+            atributo("network", referencia(f"google_compute_network.{REDE}.id")),
+            atributo(
+                "subnetwork", referencia(f"google_compute_subnetwork.{subrede or SUBNET}.id")
+            ),
+            atributo("min_master_version", referencia("var.kubernetes_version")),
+            # Os nós vêm dos node pools abaixo, um por grupo de nós da origem
+            atributo("remove_default_node_pool", True),
+            atributo("initial_node_count", 1),
+        ])
+    ]
+    cluster = referencia(f"google_container_cluster.{r.logical_name}.id")
+    for g in pools:
+        n = max(1, int(g.get("instances") or 1))
+        nome_do_pool = f"{r.logical_name}_{identificador(str(g.get('name')))}"
+        partes.append(
+            bloco(
+                "resource",
+                ["google_container_node_pool", nome_do_pool],
+                [
+                    atributo("name", nome_cloud(g.get("name"), maximo=40)),
+                    atributo("cluster", cluster),
+                    atributo("location", bp.region),
+                    atributo("node_count", -(-n // _ZONAS_DO_CLUSTER)),
+                    bloco_aninhado("node_config", [
+                        atributo("machine_type", str(g.get("machine_type")), nivel=2),
+                    ], nivel=1),
+                ],
+            )
+        )
+    return "\n\n".join(partes)
+
+
+def _registro(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    origem = itens_do_componente(r.configuration)[0]
+    return comentario(
+        f"Repositório de origem: {origem}. As imagens não viajam pelo Terraform: copie-as\n"
+        "da origem (skopeo copy, crane copy)."
+    ) + "\n" + bloco("resource", ["google_artifact_registry_repository", r.logical_name], [
+        atributo("location", bp.region),
+        atributo("repository_id", nome_cloud(origem, maximo=63) or "imagens"),
+        atributo("format", "DOCKER"),
+    ])
+
+
+def _segredo(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    origem = itens_do_componente(r.configuration)[0]
+    nome = "".join(c if (c.isascii() and (c.isalnum() or c in "_-")) else "-" for c in origem)
+    return comentario(
+        f"Segredo de origem: {origem}. Criado sem versão: o valor nunca viaja pelo pacote."
+    ) + "\n" + bloco("resource", ["google_secret_manager_secret", r.logical_name], [
+        atributo("secret_id", nome[:255] or "segredo"),
+        bloco_aninhado("replication", [
+            bloco_aninhado("auto", [], nivel=2),
+        ], nivel=1),
+    ])
+
+
+def _zona(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    origem = itens_do_componente(r.configuration)[0]
+    return comentario(
+        f"Zona de origem: {nome_de_zona(origem)}.\n"
+        "Privada, visível só na VPC do pacote; os registros\n"
+        "não viajam: exporte-os da origem e importe aqui."
+    ) + "\n" + bloco("resource", ["google_dns_managed_zone", r.logical_name], [
+        atributo("name", nome_cloud(bp.project_name, nome_de_zona(origem), maximo=63)),
+        atributo("dns_name", nome_de_zona(origem) + "."),
+        atributo("visibility", "private"),
+        bloco_aninhado("private_visibility_config", [
+            bloco_aninhado("networks", [
+                atributo("network_url", referencia(f"google_compute_network.{REDE}.id"), nivel=3),
             ], nivel=2),
         ], nivel=1),
     ])

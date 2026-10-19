@@ -84,6 +84,36 @@ class BucketDoEscopo:
 
 
 @dataclass(frozen=True, slots=True)
+class GrupoDeNos:
+    """Nós de um cluster com a mesma máquina: viram um grupo de nós no destino."""
+
+    nome: str
+    familia: str
+    regiao: str | None
+    maquinas: int
+    # Máquinas da mesma família no escopo, nós ou não: divide o pool que é só em parte nó
+    da_familia: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ClusterDoEscopo:
+    nome: str
+    versao: str | None
+    grupos: tuple[GrupoDeNos, ...]
+    # Balanceadores que o controlador do cluster criou para um Service: nascem dele
+    balanceadores: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ComponenteDoEscopo:
+    """Registro de imagens, segredo ou zona de DNS do escopo."""
+
+    tipo: str
+    nome: str
+    servico: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RecorteDoEscopo:
     """O que o escopo tem, já tirado do inventário pelo caso de uso."""
 
@@ -111,6 +141,9 @@ class RecorteDoEscopo:
     # Os buckets do inventário no escopo: o pacote cria um por bucket, mesmo quando a
     # fatura não liga o custo do armazenamento de objetos a cada um
     buckets: tuple[BucketDoEscopo, ...] = ()
+    # Kubernetes e serviços gerenciados (itens 15 e 19)
+    clusters: tuple[ClusterDoEscopo, ...] = ()
+    componentes: tuple[ComponenteDoEscopo, ...] = ()
 
 
 def recortar_ao_escopo(payload: Mapping[str, Any], recorte: RecorteDoEscopo) -> dict[str, Any]:
@@ -312,6 +345,40 @@ def _secao(recorte: RecorteDoEscopo, fora: list[str]) -> dict[str, Any]:
                 ]
             }
             if recorte.buckets
+            else {}
+        ),
+        **(
+            {
+                "clusters": [
+                    {
+                        "nome": c.nome,
+                        "versao": c.versao,
+                        "balanceadores": list(c.balanceadores),
+                        "grupos": [
+                            {
+                                "nome": g.nome,
+                                "familia": g.familia,
+                                "regiao": g.regiao,
+                                "maquinas": g.maquinas,
+                                "da_familia": g.da_familia,
+                            }
+                            for g in c.grupos
+                        ],
+                    }
+                    for c in recorte.clusters
+                ]
+            }
+            if recorte.clusters
+            else {}
+        ),
+        **(
+            {
+                "componentes": [
+                    {"tipo": c.tipo, "nome": c.nome, "servico": c.servico}
+                    for c in sorted(recorte.componentes, key=lambda c: (c.tipo, c.nome))
+                ]
+            }
+            if recorte.componentes
             else {}
         ),
         **(

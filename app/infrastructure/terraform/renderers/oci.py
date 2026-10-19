@@ -28,20 +28,29 @@ from app.infrastructure.terraform.hcl import (
 )
 from app.infrastructure.terraform.renderers.base import (
     ajustar_tamanho,
+    clusters_do_pacote,
     com_indice,
     disco_raiz,
     faixa_de_portas,
     fontes,
+    identificador,
     instancias_banco,
+    itens_do_componente,
+    lista_curta,
     nome_banco,
     nome_cloud,
+    nome_de_repositorio,
+    nome_de_zona,
     quantidade_volumes,
+    tem,
     texto_banco,
+    texto_cluster,
     texto_espelho,
     texto_grupo,
     texto_tamanho_disco,
     texto_volume_bucket,
     var_versao,
+    variavel_de_versao_do_kubernetes,
 )
 from app.schemas.terraform import (
     RecursoTerraform,
@@ -126,10 +135,41 @@ class AdaptadorOCI:
                     description="Namespace do Object Storage da sua tenancy.",
                 )
             )
+        if clusters_do_pacote(bp):
+            # A OCI pede a versão completa (v1.31.1): a maior medida não serve de default
+            variaveis += variavel_de_versao_do_kubernetes(
+                bp, aceita_versao_maior=False, exemplo="v1.31.1"
+            )
+            variaveis.append(
+                VariavelTerraform(
+                    name="oke_node_image_ocid",
+                    description=(
+                        "OCID da imagem dos nós do OKE (Oracle Linux para OKE da versão do "
+                        "cluster). Varia por região e por versão."
+                    ),
+                )
+            )
         return variaveis
 
     def preambulo(self, bp: TerraformBlueprint) -> list[str]:
-        return []
+        if not tem(bp, TipoRecurso.DNS_ZONE):
+            return []
+        # Zona privada: vive na view padrão do resolver da VCN do pacote
+        return [
+            bloco("data", ["oci_core_vcn_dns_resolver_association", _RESOLVER], [
+                atributo("vcn_id", referencia(f"oci_core_vcn.{REDE}.id")),
+            ])
+            + "\n\n"
+            + bloco("data", ["oci_dns_resolver", _RESOLVER], [
+                atributo(
+                    "resolver_id",
+                    referencia(
+                        f"data.oci_core_vcn_dns_resolver_association.{_RESOLVER}.dns_resolver_id"
+                    ),
+                ),
+                atributo("scope", "PRIVATE"),
+            ])
+        ]
 
     def outputs(self, bp: TerraformBlueprint) -> list[str]:
         saidas = []
@@ -156,6 +196,10 @@ class AdaptadorOCI:
             TipoRecurso.OBJECT_STORAGE: _bucket,
             TipoRecurso.MANAGED_DATABASE: _banco,
             TipoRecurso.SECURITY_GROUP: _nsg,
+            TipoRecurso.KUBERNETES_CLUSTER: _cluster,
+            TipoRecurso.CONTAINER_REGISTRY: _registro,
+            TipoRecurso.VAULT: _cofre,
+            TipoRecurso.DNS_ZONE: _zona,
         }.get(r.resource_type, lambda *_: None)(r, bp)
 
 
@@ -495,3 +539,117 @@ def _autonomous(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
               if subredes else []),
         ],
     )
+
+
+# ── Kubernetes e serviços gerenciados do escopo (itens 15 e 19) ─────────────
+
+_RESOLVER = "resolver_da_rede"
+
+
+def _cluster(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    cfg = r.configuration
+    pools = list(cfg.get("node_pools") or [])
+    subrede = (pools[0].get("subnet") if pools else None) or SUBNET
+    partes = [
+        comentario(texto_cluster(cfg))
+        + "\n"
+        + bloco("resource", ["oci_containerengine_cluster", r.logical_name], [
+            _compartimento(),
+            atributo("name", nome_cloud(bp.project_name, cfg.get("source_name"))),
+            atributo("kubernetes_version", referencia("var.kubernetes_version")),
+            atributo("vcn_id", referencia(f"oci_core_vcn.{REDE}.id")),
+            bloco_aninhado("endpoint_config", [
+                atributo("subnet_id", referencia(f"oci_core_subnet.{subrede}.id"), nivel=2),
+                atributo("is_public_ip_enabled", False, nivel=2),
+            ], nivel=1),
+        ])
+    ]
+    for g in pools:
+        n = max(1, int(g.get("instances") or 1))
+        lido = ler_shape(str(g.get("machine_type") or ""))
+        familia = lido[0] if lido else FAMILIA_PADRAO
+        shape = _SHAPE_DA_FAMILIA.get(familia, f"VM.Standard.{familia}.Flex")
+        vcpus = float(g.get("vcpus") or n)
+        ram = float(g.get("ram_gb") or vcpus * _GB_POR_VCPU)
+        partes.append(
+            bloco(
+                "resource",
+                [
+                    "oci_containerengine_node_pool",
+                    f"{r.logical_name}_{identificador(str(g.get('name')))}",
+                ],
+                [
+                    atributo(
+                        "cluster_id", referencia(f"oci_containerengine_cluster.{r.logical_name}.id")
+                    ),
+                    _compartimento(),
+                    atributo("name", nome_cloud(g.get("name"))),
+                    atributo("kubernetes_version", referencia("var.kubernetes_version")),
+                    atributo("node_shape", shape),
+                    bloco_aninhado("node_shape_config", [
+                        atributo("ocpus", ocpus_para(vcpus / n, familia), nivel=2),
+                        atributo("memory_in_gbs", max(1.0, round(ram / n, 1)), nivel=2),
+                    ], nivel=1),
+                    bloco_aninhado("node_source_details", [
+                        atributo("image_id", referencia("var.oke_node_image_ocid"), nivel=2),
+                        atributo("source_type", "IMAGE", nivel=2),
+                    ], nivel=1),
+                    bloco_aninhado("node_config_details", [
+                        atributo("size", n, nivel=2),
+                        bloco_aninhado("placement_configs", [
+                            atributo(
+                                "availability_domain",
+                                referencia("var.availability_domain"),
+                                nivel=3,
+                            ),
+                            atributo(
+                                "subnet_id",
+                                referencia(f"oci_core_subnet.{g.get('subnet') or subrede}.id"),
+                                nivel=3,
+                            ),
+                        ], nivel=2),
+                    ], nivel=1),
+                ],
+            )
+        )
+    return "\n\n".join(partes)
+
+
+def _registro(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    origem = itens_do_componente(r.configuration)[0]
+    return comentario(
+        f"Repositório de origem: {origem}. As imagens não viajam pelo Terraform: copie-as\n"
+        "da origem (skopeo copy, crane copy)."
+    ) + "\n" + bloco("resource", ["oci_artifacts_container_repository", r.logical_name], [
+        _compartimento(),
+        atributo("display_name", nome_de_repositorio(origem)),
+        atributo("is_public", False),
+    ])
+
+
+def _cofre(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    itens = itens_do_componente(r.configuration)
+    return comentario(
+        f"Cofre dos segredos de origem: {lista_curta(itens)}.\n"
+        "A OCI exige o valor na criação do segredo, e o valor nunca viaja pelo pacote:\n"
+        "crie cada segredo no cofre depois do apply."
+    ) + "\n" + bloco("resource", ["oci_kms_vault", r.logical_name], [
+        _compartimento(),
+        atributo("display_name", nome_cloud(bp.project_name, "cofre")),
+        atributo("vault_type", "DEFAULT"),
+    ])
+
+
+def _zona(r: RecursoTerraform, bp: TerraformBlueprint) -> str:
+    origem = itens_do_componente(r.configuration)[0]
+    return comentario(
+        f"Zona de origem: {nome_de_zona(origem)}.\n"
+        "Privada, na view do resolver da VCN do pacote; os\n"
+        "registros não viajam: exporte-os da origem e importe aqui."
+    ) + "\n" + bloco("resource", ["oci_dns_zone", r.logical_name], [
+        _compartimento(),
+        atributo("name", nome_de_zona(origem)),
+        atributo("zone_type", "PRIMARY"),
+        atributo("scope", "PRIVATE"),
+        atributo("view_id", referencia(f"data.oci_dns_resolver.{_RESOLVER}.default_view_id")),
+    ])
