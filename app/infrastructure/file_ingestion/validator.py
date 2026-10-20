@@ -13,6 +13,7 @@ import pandera.pandas as pa
 from pandera.pandas import Check, Column, DataFrameSchema
 
 from app.core.exceptions import ValidationError
+from app.domain.value_objects.charge_kind import VALORES as CHARGE_KINDS
 
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 _PERIOD_RE = re.compile(r"^\d{4}-\d{2}$")
@@ -50,6 +51,24 @@ BillingNormalizedSchema = DataFrameSchema(
         "raw_payload": Column(object, nullable=False),
         "source_file": Column(str, nullable=False),
         "line_hash": Column(str, Check(lambda s: s.str.len() == _SHA256_HEX_LEN)),
+        # Exports detalhados. `required=False`: parser legado não emite estas
+        # colunas, e exigi-las quebraria o caminho travado pela caracterização.
+        # Quando presentes, o vocabulário é fechado — uma natureza desconhecida
+        # passaria pelo enriquecimento sem filtro nem rota.
+        # dtype livre: pandas 3 infere `str` para coluna só de texto e `object`
+        # quando há None — os dois são válidos aqui.
+        "charge_kind": Column(
+            None,
+            Check(lambda s: s.dropna().isin(CHARGE_KINDS).all()),
+            nullable=True,
+            required=False,
+        ),
+        "cost_billed": Column(
+            object,
+            Check(lambda s: s.dropna().apply(_is_decimal).all()),
+            nullable=True,
+            required=False,
+        ),
     },
     strict=False,
     coerce=False,

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
@@ -5,6 +6,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.billing_item import BillingItem
+from app.domain.services.correlacao_inventario import (
+    CustoDeRecurso,
+    CustosDoBilling,
+    LinhaSemRecurso,
+)
+from app.domain.value_objects.charge_kind import FORA_DA_BASE
 from app.domain.value_objects.cloud_provider import CloudProvider
 from app.infrastructure.database.models.billing_items import BillingItemModel
 
@@ -62,7 +69,9 @@ class PgBillingItemRepository:
                 BillingItemModel.report_id == report_id,
                 BillingItemModel.user_id == user_id,
             )
-            .order_by(BillingItemModel.cost.desc(), BillingItemModel.service)
+            # `id` desempata: sem ordem total, a paginação por offset repete
+            # e pula linhas (centenas empatam em custo zero no mesmo serviço).
+            .order_by(BillingItemModel.cost.desc(), BillingItemModel.service, BillingItemModel.id)
             .offset(offset)
             .limit(limit)
         )
@@ -93,6 +102,11 @@ class PgBillingItemRepository:
             is_correction=model.is_correction,
             is_estimate=model.is_estimate,
             line_hash=model.line_hash,
+            usage_type=model.usage_type,
+            resource_type=model.resource_type,
+            charge_kind=model.charge_kind,
+            cost_billed=model.cost_billed,
+            attributes=model.attributes or {},
         )
 
     @staticmethod
@@ -119,4 +133,106 @@ class PgBillingItemRepository:
             "is_correction": item.is_correction,
             "is_estimate": item.is_estimate,
             "line_hash": item.line_hash,
+            "usage_type": item.usage_type,
+            "resource_type": item.resource_type,
+            "charge_kind": item.charge_kind,
+            "cost_billed": item.cost_billed,
+            # NULL em vez de `{}` no legado: deixa claro no banco que a linha
+            # não veio de export detalhado, em vez de fingir "sem atributos".
+            "attributes": item.attributes or None,
         }
+
+    async def custos_por_recurso(self, report_id: UUID, user_id: UUID) -> CustosDoBilling:
+        """Custo de base por recurso, para a correlação com o inventário (RI13).
+
+        Base = o que a análise usa: sem imposto, crédito, reembolso nem ajuste.
+        Linha sem natureza (caminho legado) entra, como na análise.
+        """
+        fora = [k.value for k in FORA_DA_BASE]
+        base = (
+            BillingItemModel.report_id == report_id,
+            BillingItemModel.user_id == user_id,
+            (BillingItemModel.charge_kind.is_(None)) | (BillingItemModel.charge_kind.not_in(fora)),
+        )
+        total_moeda = (
+            await self._session.execute(
+                select(
+                    func.coalesce(func.sum(BillingItemModel.cost), 0),
+                    func.min(BillingItemModel.currency),
+                    func.min(BillingItemModel.billing_period),
+                    func.min(BillingItemModel.provider),
+                ).where(*base)
+            )
+        ).one()
+        # O tipo de uso: `usage_type` nos exports detalhados; o formato legado da AWS
+        # o grava em `resource_type`. É o que a atribuição pelo tipo lê.
+        uso = func.coalesce(BillingItemModel.usage_type, BillingItemModel.resource_type)
+        com_id = (BillingItemModel.resource_id.is_not(None)) & (BillingItemModel.resource_id != "")
+        linhas = await self._session.execute(
+            select(
+                BillingItemModel.resource_id,
+                BillingItemModel.account_id,
+                BillingItemModel.region,
+                BillingItemModel.service,
+                uso,
+                func.sum(BillingItemModel.usage_amount),
+                func.sum(BillingItemModel.cost),
+            )
+            .where(*base, com_id)
+            .group_by(
+                BillingItemModel.resource_id,
+                BillingItemModel.account_id,
+                BillingItemModel.region,
+                BillingItemModel.service,
+                uso,
+            )
+            .order_by(BillingItemModel.resource_id, uso)
+        )
+        sem_id = await self._session.execute(
+            select(
+                BillingItemModel.account_id,
+                BillingItemModel.region,
+                BillingItemModel.service,
+                uso,
+                func.sum(BillingItemModel.usage_amount),
+                func.sum(BillingItemModel.cost),
+            )
+            .where(*base, ~com_id)
+            .group_by(
+                BillingItemModel.account_id,
+                BillingItemModel.region,
+                BillingItemModel.service,
+                uso,
+            )
+            .order_by(BillingItemModel.service, uso)
+        )
+        return CustosDoBilling(
+            periodo=total_moeda[2],
+            moeda=total_moeda[1] or "USD",
+            custo_da_base=Decimal(str(total_moeda[0])),
+            provedor=total_moeda[3],
+            por_recurso=tuple(
+                CustoDeRecurso(
+                    resource_id=rid or "",
+                    conta=conta,
+                    regiao=regiao,
+                    servico=servico,
+                    custo=Decimal(str(custo)),
+                    uso=tipo_de_uso,
+                    quantidade=Decimal(str(qtd)) if qtd is not None else None,
+                )
+                for rid, conta, regiao, servico, tipo_de_uso, qtd, custo in linhas.tuples()
+            ),
+            sem_recurso=tuple(
+                LinhaSemRecurso(
+                    conta=conta,
+                    regiao=regiao,
+                    servico=servico,
+                    uso=tipo_de_uso,
+                    custo=Decimal(str(custo)),
+                    quantidade=Decimal(str(qtd)) if qtd is not None else None,
+                )
+                for conta, regiao, servico, tipo_de_uso, qtd, custo in sem_id.tuples()
+                if custo
+            ),
+        )

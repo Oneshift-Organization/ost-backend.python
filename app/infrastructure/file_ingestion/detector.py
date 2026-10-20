@@ -3,7 +3,7 @@ from __future__ import annotations
 import gzip
 import zipfile
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pandas as pd
 
@@ -12,6 +12,8 @@ from app.core.logging import get_logger
 from app.infrastructure.file_ingestion.base_parser import BaseParser
 from app.infrastructure.file_ingestion.loaders import (
     XLSX_EXTS,
+    is_parquet,
+    ler_colunas,
     read_xlsx_headers_as_csv_bytes,
 )
 from app.infrastructure.file_ingestion.parsers import (
@@ -84,6 +86,10 @@ def _read_sample(file_path: Path, size: int = 8192) -> bytes:
         raise UnsupportedFormatError(f"file not found: {file_path}")
 
     suffix = file_path.suffix.lower()
+    if is_parquet(file_path):
+        # Mesmo truque do XLSX: o cabeçalho vira uma linha CSV, e o `can_parse`
+        # de cada parser continua funcionando sem saber de Parquet.
+        return ",".join(ler_colunas(file_path)).encode("utf-8")
     if suffix in XLSX_EXTS:
         return read_xlsx_headers_as_csv_bytes(file_path)
     if suffix == ".gz":
@@ -97,3 +103,51 @@ def _read_sample(file_path: Path, size: int = 8192) -> bytes:
             with z.open(names[0]) as f:
                 return f.read(size)
     return file_path.read_bytes()[:size]
+
+
+# Formato que cada parser grava em `schema_version`. O AWS e o GCP decidem na
+# leitura (CUR 2.0 ou legado; BigQuery padrão ou detalhado); aqui a amostra decide.
+_FORMATO_DO_PARSER = {
+    "AWSCostExplorerParser": "AWS_CE_DAILY_BY_SERVICE",
+    "AwsDetailedBillingParser": "AWS_DETAILED_BILLING",
+    "GcpCostTableParser": "GCP_COST_TABLE",
+    "AzureParser": "AZURE_PAYG",
+    "OCIParser": "OCI_COST_REPORT",
+}
+
+
+# Arquivos que parecem fatura e não são: reconhecidos para dizer o que enviar no lugar
+_NAO_E_FATURA = (
+    # Relatório de uso da OCI: mesmas colunas `lineItem/` do de custos, sem nenhuma `cost/`
+    ("OCI_USAGE_REPORT", (b"lineItem/referenceNo", b"usage/consumedQuantity"), b"cost/"),
+)
+
+
+def formato_que_nao_e_fatura(file_path: Path) -> str | None:
+    """O formato conhecido que o detector recusa com razão, ou None."""
+    try:
+        amostra = _read_sample(file_path)
+    except UnsupportedFormatError:
+        return None
+    for formato, exige, proibe in _NAO_E_FATURA:
+        if all(t in amostra for t in exige) and proibe not in amostra:
+            return formato
+    return None
+
+
+def inspecionar_formato(file_path: Path) -> tuple[str, bool | None]:
+    """(formato, traz ID de recurso?) pela amostra do arquivo, sem ler tudo.
+
+    ``None`` no ID quando a amostra não basta para dizer. Levanta as mesmas
+    exceções de ``detect_parser`` quando o formato não é reconhecido.
+    """
+    parser = detect_parser(file_path, uuid4(), uuid4())
+    amostra = _read_sample(file_path)
+    nome = type(parser).__name__
+    if nome == "AWSParser":
+        formato = "AWS_CUR2.0" if b"line_item_" in amostra else "AWS_CUR_LEGACY"
+        return formato, b"line_item_resource_id" in amostra or b"lineItem/ResourceId" in amostra
+    if nome == "GCPParser":
+        detalhado = b'"resource"' in amostra or b"resource.name" in amostra
+        return ("GCP_BILLING_DETAILED" if detalhado else "GCP_BILLING_STD"), detalhado or None
+    return _FORMATO_DO_PARSER.get(nome, nome), None

@@ -17,6 +17,20 @@ from app.domain.services.azure_shape import parse_azure_shape
         ("Standard_B2ms", "2", "8"),
         ("Standard_D96as_v5", "96", "384"),  # instância grande — sobe o teto
         ("Standard_E8-4as_v5", "4", "32"),   # constrained: vCPU efetivo = 4
+        # O sufixo manda na RAM (PLANO_PRECISAO_OCI P1.4): "t" 0,5 e "l" 2 GiB por vCPU
+        ("Standard_B2ts_v2", "2", "1"),
+        ("Standard_B2pts_v2", "2", "1"),
+        ("Standard_B2ats_v2", "2", "1"),
+        ("Standard_B2ls_v2", "2", "4"),
+        ("Standard_B4pls_v2", "4", "8"),
+        ("Standard_B2s_v2", "2", "8"),
+        ("Standard_D4ls_v5", "4", "8"),
+        ("Standard_D48pls_v6", "48", "96"),
+        ("Standard_D4plds_v5", "4", "8"),
+        ("Standard_D4ps_v5", "4", "16"),
+        # Série B v1: "m" é 4 GiB por vCPU; sem ele, 2
+        ("Standard_B2s", "2", "4"),
+        ("Standard_B4ms", "4", "16"),
     ],
 )
 def test_azure_shape_matches_specs(arm: str, vcpus: str, ram_gib: str) -> None:
@@ -50,3 +64,26 @@ def test_f_series_v2_is_linear_and_kept() -> None:
     shape = parse_azure_shape("Standard_F16s_v2")
     assert shape is not None
     assert shape.vcpus == Decimal("16")
+
+
+@pytest.mark.parametrize(
+    ("arm", "vcpus", "ram_gib"),
+    [
+        # A B v1 de 1 vCPU foge da regra (tabela oficial da série B; D1 do E2E de 17/10)
+        ("Standard_B1ls", 1, "0.5"),
+        ("Standard_B1s", 1, "1"),
+        ("Standard_B1ms", 1, "2"),
+        # As demais seguem a regra
+        ("Standard_B2s", 2, "4"),
+        ("Standard_B2ms", 2, "8"),
+        ("Standard_B20ms", 20, "80"),
+        ("Standard_B2ts_v2", 2, "1"),
+        ("Standard_B2ls_v2", 2, "4"),
+        ("Standard_B4ls_v2", 4, "8"),
+    ],
+)
+def test_serie_b_pela_tabela_oficial(arm: str, vcpus: int, ram_gib: str) -> None:
+    forma = parse_azure_shape(arm)
+    assert forma is not None
+    assert forma.vcpus == vcpus
+    assert forma.ram_gib == Decimal(ram_gib)

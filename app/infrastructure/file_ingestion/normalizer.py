@@ -6,7 +6,8 @@ ready for `IBillingItemRepository.bulk_insert`.
 
 from __future__ import annotations
 
-from typing import cast
+from decimal import Decimal
+from typing import Any, cast
 from uuid import UUID
 
 import pandas as pd
@@ -57,9 +58,29 @@ def dataframe_to_items(df: pd.DataFrame, report_id: UUID) -> list[BillingItem]:
                 is_correction=bool(record.get("is_correction", False)),
                 is_estimate=bool(record.get("is_estimate", False)),
                 line_hash=cast(str, record.get("line_hash", "")),
+                usage_type=_str_or_none(record.get("usage_type")),
+                resource_type=_str_or_none(record.get("resource_type")),
+                charge_kind=_str_or_none(record.get("charge_kind")),
+                cost_billed=_decimal_or_none(record.get("cost_billed")),
+                attributes=_as_dict(record.get("attributes")),
             )
         )
     return items
+
+
+def _str_or_none(value: object) -> str | None:
+    limpo = _nan_to_none(value)
+    return None if limpo is None or limpo == "" else str(limpo)
+
+
+def _decimal_or_none(value: object) -> Decimal | None:
+    limpo = _nan_to_none(value)
+    return limpo if isinstance(limpo, Decimal) else None
+
+
+def _as_dict(value: object) -> dict[str, Any]:
+    """Atributos só como dict. NaN (coluna ausente em parte das linhas) vira {}."""
+    return value if isinstance(value, dict) else {}
 
 
 def _build_tags(record: dict) -> dict:

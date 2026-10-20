@@ -3,6 +3,22 @@
 **Regra number one:** o caminho legado (`Frontend → API → LLM`) **não é tocado**.
 Tudo novo nasce ao lado, desligado, e entra quando alguém virar o interruptor.
 
+> ## Status — 2026-08-11
+>
+> | bloco | estado | onde |
+> |---|---|---|
+> | **0** — preços AWS/GCP | ✅ feito | PR #21 (main) · #23 (develop) |
+> | **A** — trava do legado | ✅ feito | PR #18 · tag `baseline/legado-travado` |
+> | **B** — proveniência e frescor | ✅ feito | PR #20 |
+> | **C** — confiança propagada | ✅ feito | PR #20 |
+> | **D** — autoridade por categoria | ✅ feito | PR #24 |
+> | **E** — recepção + sugestões | ✅ feito | PR #25 |
+> | **F** — `report_id` aditivo | ✅ feito | PR #19 |
+> | **G** — o interruptor | ✅ feito | PR #25 (`AGENT_FLOW_ENABLED`) |
+>
+> **Todos os blocos do plano estão implementados.** O que falta não é código
+> deste repo — está em [§9](#9-o-que-falta-para-o-fluxo-novo-funcionar).
+
 ---
 
 ## 1. Por que o plano anterior estava errado
@@ -342,3 +358,155 @@ sobre 42% de preço mock. Depois destes blocos, o mesmo caso sai com
 `analysis_confidence: low`, cada equivalente dizendo de onde veio o preço e há
 quantos dias, e a IA sinalizando quais números não confia — **sem que nenhum
 valor tenha deixado de ser reprodutível.**
+
+
+---
+
+# 9. O que falta para o fluxo novo funcionar
+
+Os oito blocos estão prontos e mergeados em `develop`. O fluxo MCP+Agente **não
+funcionava ponta a ponta**, e uma parte do motivo **era deste repositório**, ao
+contrário do que esta seção dizia até 11/10/2026 (ver 9.0).
+
+> **Revisão de 12/10/2026.** O §9 dizia "nenhum deles neste repositório" e que a
+> flag estava `false`. As duas coisas estavam erradas ou desatualizadas: o envio
+> do agente tinha uma lacuna no backend (9.0), e o padrão da flag é `true`
+> desde 13/09 (9.3).
+
+## 9.0 O envio do agente dependia de análise feita pela tela · **resolvido no código**
+
+Encontrado em 11/10/2026 na API local. `GET /v1/analyses/{id}/request`
+recalculava sem gravar, e `POST /v1/agent/analyses/{id}/result` exigia uma
+análise gravada: num relatório novo, respondia `409 PAYLOAD_AUSENTE` com
+`retryable: true`, e repetir o GET não resolvia (o agente entraria em loop).
+Com análise gravada, o envio corrigia contra "a última análise", não contra o
+que o agente leu, e **gravava por cima da análise da tela**, apagando o texto do
+LLM. O teste de integração não pegava porque inseria a análise à mão.
+
+Resolvido pelo [`PLANO_SNAPSHOT_AGENTE.md`](PLANO_SNAPSHOT_AGENTE.md), com o
+desenho proposto pelo time do MCP: `POST /v1/agent/snapshots` grava o snapshot
+lido, e `POST /v1/agent/snapshots/{id}/submissions` corrige contra ele, com
+idempotência pelo conteúdo, versões e transação, sem tocar nas análises da tela.
+Atrás de `AGENT_SNAPSHOT_ENABLED` (padrão `false`). A rota antiga ficou
+deprecated (10.6).
+
+## 9.1 O MCP precisa implementar as três tools · **bloqueante**
+
+O pacote está pronto em `../MCP.PLAN/` — código TypeScript compilado e testado
+contra um clone real do `ost-mcp.nodejs`, contrato da API campo a campo, deploy
+e testes. **Ainda não foi entregue ao responsável.**
+
+| tool | o que faz |
+|---|---|
+| `list_billing_reports` | descobre os relatórios do usuário |
+| `get_billing_request` | busca a análise pronta |
+| `submit_billing_analysis` | devolve a análise para o backend corrigir |
+
+A terceira é a que fecha o circuito com o `POST /v1/agent/analyses/{id}/result`
+deste repo. Especificada em `MCP.PLAN/08-CONTESTACAO-E-SUGESTOES.md`.
+
+~~O MCP hoje é só um servidor de prompts~~. **Atualização de 11/10/2026:** a
+revisão do time do MCP mostrou que as três tools já estão implementadas na
+develop do `ost-mcp.nodejs` (`0550305`). O que falta do lado deles é migrar para
+o contrato de snapshot (`MCP.PLAN/09-CONTRATO-SNAPSHOT.md`).
+
+## 9.2 O cliente MCP precisa mandar a identidade do usuário
+
+Toda query da API isola por `user_id` do JWT, e o MCP não é um usuário. A saída
+é repassar o JWT do usuário final no header `X-OST-User-Token` — implementado no
+pacote, mas exige mudança em **quem hospeda o agente**, possivelmente outro time.
+
+Sem isso as tools respondem `SEM_CREDENCIAL` e nada funciona.
+
+## 9.3 Ligar o interruptor
+
+`AGENT_FLOW_ENABLED=true` no ambiente. ~~Hoje `false` em dev e produção~~: o
+padrão no código é `true` desde 13/09/2026; falta confirmar que o ambiente não
+sobrescreve. As rotas de snapshot pedem também `AGENT_SNAPSHOT_ENABLED=true`, que
+só deve ser ligado depois da migração `e7f8a9b0c1d2`.
+
+**Ligar não desliga o legado.** A virada real é o frontend parar de chamar
+`POST /v1/analyses/start`.
+
+---
+
+# 10. Dívida conhecida
+
+## 10.1 `exchange_rates` está vazia — **resolvido em 07/09/2026**
+
+O diagnóstico original desta seção estava errado. O risco não era a variável
+`fx_brl_usd` sumir (ela tem default `5.70` no `config.py`, não some): era o
+caminho `SEM_TAXA_CAMBIO` em `build_migration_context._resolve_fx`. Qualquer par
+sem cotação — EUR, GBP — era convertido por **1**, somando moedas diferentes, e
+o rótulo morria no ledger. `grep -rn SEM_TAXA_CAMBIO app/` retornava uma linha
+só: a que criava o rótulo. Ninguém lia.
+
+E a taxa do env estava mesmo errada: em 07/09/2026 o câmbio de referência do BCE
+era `5.1261` contra os `5.70` do ambiente — **11% de erro** sobre as linhas em
+BRL do bill GCP, sem data para comparar e sem ninguém encarregado de atualizar.
+
+O que passou a existir:
+
+| peça | onde |
+|---|---|
+| alertas do backend contra os próprios insumos | `domain/services/alertas.py` |
+| rebaixamento com motivo declarado | `ConfiancaAnalise.com_rebaixamento` |
+| `SEM_TAXA_CAMBIO` tipado | `currency.taxa_desconhecida` |
+| cotação com data e procedência | `infrastructure/fx/ecb_fx_client.py` |
+| sync offline | `scripts/sync_fx.py` |
+
+A escada de gravidade: **sem taxa** e **cotação vencida (>90 dias)** rebaixam a
+confiança um degrau; **sem data** (o fallback de env) e **>30 dias** avisam sem
+rebaixar. Punir o estado normal esvaziaria o sinal justamente onde ele precisa
+discriminar.
+
+Os alertas saem em `premissas.sugestoes_backend`, no mesmo formato das sugestões
+do agente e com `origem: backend`, e `agent_result` os junta na lista que a tela
+exibe. É o simétrico da contestação: o agente contesta um número nosso, e agora
+o backend contesta os próprios insumos.
+
+**Pendente:** rodar `python scripts/sync_fx.py` contra dev e produção, e agendar
+(cron ou job) — enquanto a tabela estiver vazia o câmbio segue vindo do env, só
+que agora *dizendo* que não tem data.
+
+## 10.2 A env da key do GCP não persiste no cluster
+
+`GCP_BILLING_API_KEY` está no `.env.dev` local e o sync já rodou contra o banco
+de dev (24 price points de GCP oficiais). Mas o `api-secret` do namespace
+`develop` é gerenciado por Flux — alteração via `kubectl` é revertida no próximo
+reconcile.
+
+**Não bloqueia nada:** o sync é offline, o pod não precisa da key em runtime, a
+análise só *lê* `cloud_price_points`. Só importa para rodar o sync de dentro do
+pod. A correção definitiva é um PR no `ost-infra`.
+
+## 10.3 Build e testes rodam em paralelo no CI
+
+`Build, Push & Deploy` não espera `Tests`. Imagem quebrada sobe mesmo com teste
+vermelho. A correção é um `needs:` no job de build, mas o workflow é mantido por
+outra pessoa — combinar antes.
+
+## 10.4 Preço só de uma região por provedor — **resolvido em 12/10/2026**
+
+Os fetchers coletavam `us-east-1` (AWS), `eastus` (Azure), `us-central1` (GCP).
+Um bill com carga em São Paulo era cotado com preço da Virgínia, ~1,6x mais
+barato, e a economia de sair saía otimista. Resolvido em
+[`PLANO_PRECO_REGIONAL.md`](PLANO_PRECO_REGIONAL.md): cada pool é cotado na zona
+dele, com `financeiro.preco_regiao` no payload e aviso quando falta preço da
+região.
+
+## 10.5 A "fila de sync" das contestações não existe
+
+O §4.2 e o adendo do MCP prometem que as contestações de preço do agente viram
+fila de sync. Elas são gravadas e exibidas, e nada mais: nenhum processo as lê,
+verifica ou ressincroniza. Registrado em 11/10/2026. A verificação de
+contestação contra a fonte oficial de preço fica para o plano de autoridade,
+depois do preço por região.
+
+## 10.6 A rota antiga do envio sobrescreve a análise da tela
+
+`POST /v1/agent/analyses/{report_id}/result` grava a resposta do agente por cima
+da última análise com payload do relatório, inclusive a feita pela tela.
+Deprecated desde 12/10/2026, sem mudança de comportamento; a condição combinada
+com o time do MCP é usá-la só com relatório de teste até migrarem para o envio
+por snapshot. **A remoção precisa de data**, senão vira dívida permanente.

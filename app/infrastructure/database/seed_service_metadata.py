@@ -1,11 +1,21 @@
 """Seed cloud_services_metadata and cloud_services_comparation tables.
 
 Run via: python -m app.infrastructure.database.seed_service_metadata
+
+A metadata curada (lock-in e refatoração) é sincronizada a cada execução: nome
+renomeado, linha nova e nota alterada chegam a um banco já semeado. A tabela de
+comparação só é gravada no banco vazio, porque o `seed_from_csv` (DE-PARA) a
+recarrega depois.
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database.models.cloud_services_comparation import (
     CloudServiceComparisonModel,
@@ -106,7 +116,120 @@ COMPARATION_SEED = [
     ("analytics", "data_warehouse", "oci", "Oracle Autonomous Data Warehouse"),
 ]
 
-# (provider, category, service_name, metadata)
+_Linha = tuple[str, str, str, dict[str, Any]]
+
+# Nomes antigos da metadata, que não existiam no DE-PARA (`cloud_services_mapping.csv`):
+# a nota curada nunca chegava à análise, nem na origem nem no destino. O seed
+# renomeia as linhas já gravadas para o nome do DE-PARA (lote v4, V4.4).
+RENOMEADOS: dict[tuple[str, str], str] = {
+    ("aws", "Amazon EBS"): "Amazon Elastic Block Store (EBS)",
+    ("aws", "Amazon EFS"): "Amazon Elastic File System (EFS)",
+    ("aws", "AWS IAM"): "AWS Identity and Access Management (IAM)",
+    ("azure", "Azure Virtual Machine"): "Azure Virtual Machines",
+    ("gcp", "Cloud Functions"): "Cloud Run functions",
+    ("gcp", "VPC Network"): "Virtual Private Cloud (VPC)",
+    ("oci", "Oracle Container Engine for Kubernetes (OKE)"): (
+        "Container Engine for Kubernetes (OKE)"
+    ),
+    ("oci", "Oracle Object Storage"): "Oracle Cloud Infrastructure Object Storage",
+    ("oci", "Oracle Block Volume"): "OCI Block Volumes",
+    ("oci", "Oracle Flexible Load Balancer"): "OCI Load Balancing",
+    # Curadoria de 16/10: o DE-PARA não tem o Autonomous. O DATABASE da OCI com uso
+    # Autonomous cai em "Oracle Database Cloud Service" (`servico_pelo_uso`).
+    ("oci", "Oracle Autonomous Database"): "Oracle Database Cloud Service",
+}
+
+
+def _curado(lock_in: str, refatora: bool, motivo: str) -> dict[str, Any]:
+    """Nota da curadoria de 16/10: só os dois campos que a análise lê, mais o porquê."""
+    return {"vendor_lock_in_level": lock_in, "requires_refactoring": refatora, "notes": motivo}
+
+
+# Curadoria aprovada em 16/10 (PLANO_SCORE_V5_LOCKIN §8): os serviços dos seis
+# relatórios que ficavam "a confirmar". Categoria e nome do DE-PARA.
+_CURADORIA_16_10: list[_Linha] = [
+    ("aws", "security_identity", "AWS WAF", _curado(
+        "medium", False,
+        "Regras e grupos gerenciados próprios: reescreve a configuração, não a aplicação",
+    )),
+    ("aws", "analytics", "Amazon MSK", _curado(
+        "low", False, "Kafka gerenciado; o protocolo é aberto (Event Hubs e OCI Streaming)",
+    )),
+    ("aws", "ai_ml", "Amazon Translate", _curado("medium", True, "API e SDK próprios")),
+    ("aws", "analytics", "Amazon Managed Workflows for Apache Airflow (MWAA)", _curado(
+        "low", False, "Airflow aberto; os DAGs são portáveis",
+    )),
+    ("aws", "application_services", "Amazon Simple Queue Service (SQS)", _curado(
+        "medium", True, "API própria: muda o cliente",
+    )),
+    ("aws", "containers", "Amazon Elastic Container Registry (ECR)", _curado(
+        "low", False, "Imagem OCI padrão",
+    )),
+    ("aws", "ai_ml", "Amazon Comprehend", _curado("medium", True, "API e modelos próprios")),
+    ("aws", "security_identity", "AWS Directory Service", _curado(
+        "low", False, "Active Directory e LDAP padrão",
+    )),
+    ("aws", "security_identity", "AWS Key Management Service (KMS)", _curado(
+        "medium", True, "A chave não sai do serviço: recriptografar; SDK próprio",
+    )),
+    ("aws", "management_tools", "AWS Config", _curado(
+        "medium", False, "Regras próprias: reescreve a política",
+    )),
+    ("aws", "security_identity", "AWS Secrets Manager", _curado(
+        "medium", False, "API própria, troca simples",
+    )),
+    ("aws", "security_identity", "AWS Security Hub", _curado(
+        "medium", False, "Achados e integrações próprios",
+    )),
+    ("aws", "management_tools", "AWS Cost Explorer", _curado(
+        "low", False, "Ferramenta de custo, sem dado a migrar",
+    )),
+    ("gcp", "containers", "Cloud Run", _curado("low", False, "Contêiner padrão")),
+    ("gcp", "storage", "Filestore", _curado("low", False, "NFS, como o EFS")),
+    ("gcp", "containers", "Artifact Registry", _curado("low", False, "Imagem OCI padrão")),
+    ("gcp", "management_tools", "Cloud Monitoring", _curado(
+        "low", False, "Como o CloudWatch",
+    )),
+    ("gcp", "serverless", "Cloud Scheduler", _curado("low", False, "Cron")),
+    ("gcp", "networking", "Cloud DNS", _curado("low", False, "Como o Route 53")),
+    ("gcp", "security_identity", "Secret Manager", _curado(
+        "medium", False, "Como o Secrets Manager",
+    )),
+    ("gcp", "management_tools", "Cloud Logging", _curado("low", False, "Como o CloudWatch")),
+    ("azure", "database", "Azure Database for PostgreSQL", _curado(
+        "medium", True, "Motor aberto gerenciado, como o RDS e o Cloud SQL",
+    )),
+    ("azure", "database", "Azure Database for MySQL", _curado(
+        "medium", True, "Motor aberto gerenciado, como o RDS e o Cloud SQL",
+    )),
+    ("oci", "compute", "Oracle Cloud Infrastructure Compute", _curado(
+        "medium", False, "Como EC2, VMs da Azure e Compute Engine",
+    )),
+    ("oci", "database", "MySQL Database Service", _curado("medium", True, "Como o RDS")),
+    # 18/10 (PLANO_EQUIVALENTES_E_TARIFAS §4): o PostgreSQL da OCI entrou em
+    # `managed_relational_database`, ao lado do MySQL; mesma nota do PostgreSQL da Azure
+    ("oci", "database", "OCI Database with PostgreSQL", _curado(
+        "medium", True, "Motor aberto gerenciado, como o RDS e o Cloud SQL",
+    )),
+    # 18/10 (PLANO_EQUIVALENTES_E_TARIFAS §9): o Application Gateway entrou no DE-PARA
+    # como balanceador; a mesma nota do balanceador da AWS
+    ("azure", "networking", "Azure Application Gateway", _curado(
+        "low", False, "Balanceador de camada 7: as regras se reconfiguram, a aplicação não muda",
+    )),
+    # Transferência de dados: o "Bandwidth" da Azure era o único serviço dos seis
+    # relatórios sem linha no DE-PARA. Tráfego cobrado por GB, sem dado a migrar.
+    *(
+        (provider, "networking", nome, _curado("low", False, "Tráfego por GB; nada a migrar"))
+        for provider, nome in (
+            ("aws", "AWS Data Transfer"),
+            ("azure", "Bandwidth"),
+            ("gcp", "Network Service Tiers"),
+            ("oci", "OCI Outbound Data Transfer"),
+        )
+    ),
+]
+
+# (provider, category, service_name, metadata). O nome é o do DE-PARA.
 METADATA_SEED = [
     # ─── AWS ─────────────────────────────────────────────
     ("aws", "compute", "Amazon EC2", {
@@ -138,14 +261,14 @@ METADATA_SEED = [
         "pricing_model": "per_gb_monthly",
         "price_per_gb_month_usd": 0.023,
     }),
-    ("aws", "storage", "Amazon EBS", {
+    ("aws", "storage", "Amazon Elastic Block Store (EBS)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
         "pricing_model": "per_gb_monthly",
         "price_per_gb_month_usd": 0.08,
     }),
-    ("aws", "storage", "Amazon EFS", {
+    ("aws", "storage", "Amazon Elastic File System (EFS)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
@@ -201,7 +324,7 @@ METADATA_SEED = [
         "pricing_model": "per_gb_transfer",
         "price_per_gb_usd": 0.085,
     }),
-    ("aws", "security", "AWS IAM", {
+    ("aws", "security", "AWS Identity and Access Management (IAM)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": True,
         "isolation_level": "shared",
@@ -223,7 +346,7 @@ METADATA_SEED = [
         "price_per_hour_usd": 0.25,
     }),
     # ─── Azure ───────────────────────────────────────────
-    ("azure", "compute", "Azure Virtual Machine", {
+    ("azure", "compute", "Azure Virtual Machines", {
         "vendor_lock_in_level": "medium",
         "requires_refactoring": False,
         "isolation_level": "shared",
@@ -286,7 +409,7 @@ METADATA_SEED = [
         "pricing_model": "on_demand_committed_sustained",
         "price_per_hour_usd": 0.082,
     }),
-    ("gcp", "compute", "Cloud Functions", {
+    ("gcp", "compute", "Cloud Run functions", {
         "vendor_lock_in_level": "medium",
         "requires_refactoring": True,
         "isolation_level": "shared",
@@ -321,7 +444,7 @@ METADATA_SEED = [
         "pricing_model": "instance_hourly_storage",
         "price_per_hour_usd": 0.048,
     }),
-    ("gcp", "networking", "VPC Network", {
+    ("gcp", "networking", "Virtual Private Cloud (VPC)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
@@ -349,62 +472,90 @@ METADATA_SEED = [
         "pricing_model": "per_execution_duration",
         "price_per_million_executions_usd": 0.15,
     }),
-    ("oci", "compute", "Oracle Container Engine for Kubernetes (OKE)", {
+    ("oci", "compute", "Container Engine for Kubernetes (OKE)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
         "pricing_model": "free_management",
         "notes": "No charge for cluster management; pay for worker nodes",
     }),
-    ("oci", "storage", "Oracle Object Storage", {
+    ("oci", "storage", "Oracle Cloud Infrastructure Object Storage", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
         "pricing_model": "per_gb_monthly",
         "price_per_gb_month_usd": 0.0225,
     }),
-    ("oci", "storage", "Oracle Block Volume", {
+    ("oci", "storage", "OCI Block Volumes", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
         "pricing_model": "per_gb_monthly",
         "price_per_gb_month_usd": 0.0425,
     }),
-    ("oci", "database", "Oracle Autonomous Database", {
-        "vendor_lock_in_level": "high",
-        "requires_refactoring": True,
-        "isolation_level": "dedicated",
-        "pricing_model": "ocpu_hourly",
-        "price_per_ocpu_hour_usd": 0.036,
-    }),
+    ("oci", "database", "Oracle Database Cloud Service", _curado(
+        "medium", True,
+        "Motor Oracle: licença e edição limitam o destino, mas ele roda na Azure, no GCP"
+        " e na AWS (Oracle Database@). Coerente com a exclusividade do inventário",
+    )),
     ("oci", "networking", "Oracle Virtual Cloud Network (VCN)", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
         "pricing_model": "free_included",
     }),
-    ("oci", "networking", "Oracle Flexible Load Balancer", {
+    ("oci", "networking", "OCI Load Balancing", {
         "vendor_lock_in_level": "low",
         "requires_refactoring": False,
         "isolation_level": "shared",
         "pricing_model": "per_hour_per_mbps",
         "price_per_hour_usd": 0.020,
     }),
+    *_CURADORIA_16_10,
 ]
 
 
-async def seed() -> None:
-    sessionmaker = get_sessionmaker()
-    async with sessionmaker() as session:
-        existing = await session.execute(
-            __import__("sqlalchemy").select(CloudServiceMetadataModel).limit(1)
-        )
-        if existing.scalar_one_or_none() is not None:
-            print("Tables already seeded — skipping.")
-            return
 
-        # Insert metadata
-        for provider, category, service_name, metadata in METADATA_SEED:
+
+async def _renomear(session: AsyncSession, renomeados: Mapping[tuple[str, str], str]) -> None:
+    tabela = CloudServiceMetadataModel
+    for (provider, antigo), novo in renomeados.items():
+        ja_existe = await session.scalar(
+            select(tabela.id).where(tabela.provider == provider, tabela.service_name == novo)
+        )
+        filtro = (tabela.provider == provider, tabela.service_name == antigo)
+        if ja_existe is None:
+            await session.execute(update(tabela).where(*filtro).values(service_name=novo))
+        else:
+            await session.execute(delete(tabela).where(*filtro))
+
+
+async def sincronizar_metadata(
+    session: AsyncSession,
+    linhas: Sequence[_Linha] = tuple(METADATA_SEED),
+    renomeados: Mapping[tuple[str, str], str] = RENOMEADOS,
+) -> int:
+    """Renomeia, atualiza e insere a metadata curada; devolve quantas linhas são novas.
+
+    Atualizar preserva as colunas que o seed não escreve (`docs_costs`, `id`).
+    """
+    await _renomear(session, renomeados)
+    provedores = {provider for provider, *_ in linhas}
+    gravadas = {
+        (m.provider, m.service_name): m
+        for m in (
+            await session.execute(
+                select(CloudServiceMetadataModel).where(
+                    CloudServiceMetadataModel.provider.in_(provedores)
+                )
+            )
+        ).scalars()
+    }
+    novas = 0
+    for provider, category, service_name, metadata in linhas:
+        linha = gravadas.get((provider, service_name))
+        if linha is None:
+            novas += 1
             session.add(
                 CloudServiceMetadataModel(
                     provider=provider,
@@ -413,21 +564,32 @@ async def seed() -> None:
                     service_metadata=metadata,
                 )
             )
-        await session.flush()
+        else:
+            linha.category = category
+            linha.service_metadata = metadata
+    await session.flush()
+    return novas
 
-        # Insert comparation
-        for category, service_type, provider, service_name in COMPARATION_SEED:
-            session.add(
-                CloudServiceComparisonModel(
-                    category=category,
-                    service_type=service_type,
-                    provider=provider,
-                    service_name=service_name,
+
+async def seed() -> None:
+    sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
+        vazio = await session.scalar(select(CloudServiceMetadataModel.id).limit(1)) is None
+        novas = await sincronizar_metadata(session)
+        if vazio:
+            for category, service_type, provider, service_name in COMPARATION_SEED:
+                session.add(
+                    CloudServiceComparisonModel(
+                        category=category,
+                        service_type=service_type,
+                        provider=provider,
+                        service_name=service_name,
+                    )
                 )
-            )
         await session.commit()
 
-    print(f"Seeded {len(METADATA_SEED)} metadata rows, {len(COMPARATION_SEED)} comparation rows.")
+    comparacao = f", {len(COMPARATION_SEED)} comparation rows" if vazio else ""
+    print(f"Synced {len(METADATA_SEED)} metadata rows ({novas} new){comparacao}.")  # noqa: T201
 
 
 if __name__ == "__main__":

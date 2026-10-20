@@ -57,6 +57,26 @@ The LLM no longer receives raw SKUs. It receives structured `WorkloadPool` objec
 | `ChargeCategory` | `scope` | line_item, global_zero, tax |
 | `Tags` | `tags` | raw_payload (provider metadata) |
 
+## 3b. Capacidade medida (exports detalhados)
+
+Com CUR, BigQuery, Azure ou OCI a capacidade deixa de ser estimada pelo nome
+do tipo ([`PLANO_CUR_BIGQUERY.md`](../PLANO_CUR_BIGQUERY.md), RN4/RN9):
+
+- o parser declara a **unidade de capacidade** da linha em
+  `attributes.capacity_unit`: `instance` (instância-hora: AWS, Azure), `vcpu`
+  (vCPU-hora: GCP, OCI, com `vcpus_per_unit` = 2 por OCPU x86) ou `gib`
+  (GiB-hora). O agregador segue a unidade declarada em vez de adivinhar pelo
+  texto do SKU;
+- o **shape medido** (vCPU e RAM informados pelo provedor) prevalece sobre o
+  estimado; com um eixo só (a Azure informa vCPU e não RAM), a capacidade
+  conta como estimada;
+- cada pool ganha um **inventário** (`InventarioDoPool`): instâncias
+  distintas, tipos de origem, horas ligadas e vCPU-hora medida x estimada;
+- fora do compute, o agregador mede GB de armazenamento (snapshot à parte),
+  bancos (classe, motor, multi-AZ) e o custo sob demanda das linhas que o têm.
+
+Linha sem `attributes` (bill agregado) segue exatamente o caminho histórico.
+
 ## 4. Implementation Status
 
 ### Domain Entities (app/domain/entities/)

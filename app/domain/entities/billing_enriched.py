@@ -37,6 +37,10 @@ class BillingEnriched:
     component_type: str = "unclassified"
     mapping_confidence: str | None = None
     match_layer: str | None = None
+    # Recurso e fatos medidos que vêm do export detalhado. Sem eles o
+    # agregador não sabe quantas instâncias existem nem o shape real.
+    resource_id: str | None = None
+    attributes: dict[str, Any] | None = None
     created_at: datetime | None = None
     id: UUID = field(default_factory=uuid4)
 

@@ -82,10 +82,23 @@ python -m app.infrastructure.database.seed_service_metadata
 python -m app.infrastructure.database.seed_catalog_pareto
 python -m app.infrastructure.database.seed_classification_rules
 python -m app.infrastructure.database.seed_from_csv    # <- POR ÚLTIMO
+
+# Taxas de referência por categoria não-compute. NÃO é opcional.
+PYTHONPATH=. python scripts/sync_prices.py --providers categories
 ```
 
+> ⚠️ **As taxas de categoria faltavam nesta lista.** Sem elas, storage, egresso
+> e banco não são reprecificados no destino e `cobertura_analise` cai de ~0,80
+> para **0,17** — sem erro nenhum, só um número pior. Descoberto em 13/09/2026
+> subindo um ambiente do zero seguindo este documento ao pé da letra: três gates
+> de integração falharam e a causa não era código.
+>
+> Elas vivem em `cloud_price_points` (não numa tabela própria), por isso entram
+> pelo `sync_prices.py` e não por um módulo `seed_*`. É a razão de terem passado
+> despercebidas aqui.
+
 > ⚠️ **`seed_from_csv` tem que ser o último.** Ele carrega
-> `cloud_services_mapping.csv` (816 linhas, a fonte autoritativa do DE-PARA, com
+> `cloud_services_mapping.csv` (864 linhas, a fonte autoritativa do DE-PARA, com
 > tipos finos como `managed_relational_database`) e **limpa e recarrega** a tabela.
 > O `seed_service_metadata` também escreve em `cloud_services_comparation`, mas a
 > partir de uma lista inline de 120 tuplas com tipos grosseiros (`relational`).
@@ -93,15 +106,54 @@ python -m app.infrastructure.database.seed_from_csv    # <- POR ÚLTIMO
 > grosseiro e o DE-PARA por serviço perde precisão. Isso foi descoberto pelos
 > gates de integração, não em revisão de código.
 
+> **A metadata curada (lock-in e refatoração) usa o nome do DE-PARA** e o
+> `seed_service_metadata` a sincroniza a cada execução: renomeia nome antigo,
+> atualiza nota e insere serviço novo, sem perder `docs_costs`. A tabela de
+> comparação ele só grava no banco vazio. Nome fora do DE-PARA nunca chega à
+> análise; `test_metadata_no_depara.py` barra isso (lote v4, V4.4). Mudou a
+> metadata? Rode o seed no ambiente; a análise nova já sai com a nota.
+
+> ⚠️ **Regra ou taxa mudou? Rode de novo e re-enriqueça.** A classificação é
+> gravada em `billing_enriched` na ingestão: re-seedar muda só os reports novos.
+> Para os existentes, `python scripts/re_enrich_report.py <report_id>`. Foi o
+> caso da correção do Balanced PD do GCP (SSD, não HDD) e da taxa de SSD do GCP
+> (pd-balanced, não pd-ssd).
+
 ## 4.2 Preços oficiais (opcional, precisa de rede)
 
 ```bash
-python scripts/sync_prices.py --providers azure,oci,categories,categories-live
+PYTHONPATH=. python -u scripts/sync_prices.py --providers aws,gcp,oci,categories-live
+PYTHONPATH=. python -u scripts/sync_prices.py --providers azure   # o mais lento
 ```
 
-Popula `cloud_price_points` das APIs públicas (Azure Retail, OCI cetools). Roda
-**offline**, nunca no caminho crítico. Sem isso a análise funciona, mas os
-equivalentes ficam com `confianca_preco: low` (catálogo seed).
+Popula `cloud_price_points` das APIs públicas (AWS, GCP Catalog, Azure Retail,
+OCI cetools), em cada região das zonas pedidas. Padrão: `virginia`,
+`meio-oeste`, `sao-paulo`, `texas`, `california`; `--zonas todas` para as 11.
+Roda **offline**, nunca no caminho crítico. O GCP exige `GCP_BILLING_API_KEY`;
+sem ela sai vazio e os outros seguem. Cada provedor grava num commit próprio:
+uma API fora do ar não descarta as outras.
+
+Ao fim de cada sync, o ciclo de vida dos preços é recalculado: estado (vivo,
+maduro, em decomposição, adubo) e score de cada ponto. O decaimento anda com o
+relógio, então em ambiente de verdade isto também roda agendado, uma vez por dia:
+
+```bash
+PYTHONPATH=. python scripts/recalcular_ciclo_de_vida.py
+python - < scripts/recalcular_ciclo_de_vida.py     # no pod
+```
+
+As regras (meia-vida, limiares, peso de cada fonte) estão nas tabelas
+`price_lifecycle_rules` e `price_source_weights`, criadas pela migração
+`c3d4e5f6a7b8`. Ver [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](../PLANO_CICLO_DE_VIDA_DO_PRECO.md).
+
+Sem isso a análise funciona, mas os equivalentes ficam com `confianca_preco:
+low` (catálogo seed). Com o sync de uma zona só, uma carga de outra zona é
+cotada com preço de fora e sai `reference`, com o aviso "Preço de outra região
+na cotação".
+
+> ⚠️ A Retail API da Azure limita requisições (429) e derruba conexões. O
+> cliente espera e tenta de novo, mas cinco regiões levam de 10 a 30 minutos.
+> Rode a Azure separada.
 
 ## 5. Subir a API
 
@@ -112,6 +164,32 @@ equivalentes ficam com `confianca_preco: low` (catálogo seed).
 Endpoints:
 - http://127.0.0.1:8000/docs — Swagger UI
 - http://127.0.0.1:8000/v1/health — sanity check
+
+## 5.1 Inventário (opcional)
+
+O inventário da infraestrutura fica atrás de `INVENTORY_ENABLED` (default
+`false`). Para ligar em dev:
+
+```bash
+.venv/bin/alembic upgrade head          # tabelas inventories, inventory_resources, inventory_relations
+INVENTORY_ENABLED=true .venv/bin/uvicorn app.main:app --reload --reload-dir app
+```
+
+Mocks coerentes com os de billing (as mesmas contas, projetos e recursos), para
+testar o fluxo inteiro sem cliente real:
+
+```bash
+PYTHONPATH=. python scripts/gerar_mocks_billing.py --destino /tmp/mocks
+PYTHONPATH=. python scripts/gerar_mocks_inventario.py --billing /tmp/mocks --destino /tmp/inv
+
+curl -X POST http://127.0.0.1:8000/v1/inventories \
+  -F "files=@/tmp/inv/gcp_asset_inventory_2025-12-31.json.gz"
+# depois: GET /v1/inventories/{id}/topology, /correlation?report_id=, e
+# POST /v1/analyses/start/{report_id} com {"inventory_id": "..."}
+```
+
+Catálogo completo e os comandos de export de cada nuvem:
+[`endpoints/inventories.md`](endpoints/inventories.md).
 
 ## Testes
 
@@ -124,6 +202,32 @@ pytest -m integration           # só os gates da pipeline (precisa de Postgres 
 Os gates de integração **pulam graciosamente** sem Postgres ou sem seed,
 declarando o motivo. No CI (`.github/workflows/tests.yml`) um skip é tratado
 como **falha de ambiente** — skip silencioso esconderia a rede de segurança caída.
+
+### Testes de Terraform (`validate` e `fmt`)
+
+Os 24 testes que rodam o binário (20 unitários e 4 de integração com os mocks) pulam
+sem `terraform` no PATH e sem `TF_PLUGIN_CACHE_DIR`. No CI o binário vem da
+`hashicorp/setup-terraform` (1.9.8), com cache dos providers. Na máquina sem o binário,
+um script `terraform` no PATH que roda a imagem do podman faz o mesmo papel:
+
+```bash
+mkdir -p ~/.local/tf/bin ~/.local/tf/cache
+cat > ~/.local/tf/bin/terraform <<'SH'
+#!/bin/sh
+# Monta o diretório de trabalho, o TMPDIR (os testes passam caminho absoluto) e o
+# cache no mesmo caminho. O TMPDIR não entra no container: o socket do handshake do
+# provider não cabe em caminho longo (limite de 108 caracteres).
+exec podman run --rm -i --network host --security-opt label=disable \
+  -v "$PWD:$PWD" -w "$PWD" \
+  -v "${TMPDIR:-/tmp}:${TMPDIR:-/tmp}" \
+  -v "$TF_PLUGIN_CACHE_DIR:$TF_PLUGIN_CACHE_DIR" -e TF_PLUGIN_CACHE_DIR \
+  docker.io/hashicorp/terraform:1.9.8 "$@"
+SH
+chmod +x ~/.local/tf/bin/terraform
+PATH=~/.local/tf/bin:$PATH TF_PLUGIN_CACHE_DIR=~/.local/tf/cache pytest -k terraform
+```
+
+A primeira rodada baixa os providers do Google, AWS, Azure e OCI para o cache.
 
 Qualidade do request enviado ao agente (DE-PARA por custo, divergência vs
 catálogo curado, cobertura de expectativa de migração):

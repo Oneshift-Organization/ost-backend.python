@@ -46,6 +46,13 @@ _KNOWN_FAMILY_PATTERN = re.compile(
 # do sufixo de tamanho — .2xlarge, -standard-4). O separador obrigatório é o que
 # distingue "m7g.2xlarge" (família) de um token solto sem tamanho.
 _FAMILY_SHAPE_PATTERN = re.compile(r"\b([a-z]{1,4}\d[a-z]{0,3})[.\-]", re.IGNORECASE)
+# Prefixo de região da AWS no tipo de uso (`USE1-`, `SAE1-`, `APN1-`): 3-4
+# letras + 1 dígito + hífen no INÍCIO. Tem a mesma forma de uma família e era
+# lido como uma — `USE1-CW:DatabaseInsights-vCPU-Hours` (monitoramento) virava
+# `core` da família "USE1", com capacidade fantasma. Nenhuma família de
+# instância real começa o descritor assim: as da AWS vêm com `.` e as do GCP com
+# esse formato estão na lista de tokens conhecidos.
+_PREFIXO_DE_REGIAO = re.compile(r"^[a-z]{3,4}\d-", re.IGNORECASE)
 
 # component_type implied by a catalog service_type on an L0/L1 hit.
 _SERVICE_TYPE_ROLE = {
@@ -99,8 +106,11 @@ def extract_family(text: str | None) -> str | None:
     m = _KNOWN_FAMILY_PATTERN.search(text)
     if m:
         return m.group(1).upper()
-    m = _FAMILY_SHAPE_PATTERN.search(text)
-    return m.group(1).upper() if m else None
+    for m in _FAMILY_SHAPE_PATTERN.finditer(text):
+        if m.start() == 0 and _PREFIXO_DE_REGIAO.match(text):
+            continue
+        return m.group(1).upper()
+    return None
 
 
 class SkuMatcher:

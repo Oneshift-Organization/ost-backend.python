@@ -38,6 +38,7 @@ CREATE TABLE billing_reports (
     provider        VARCHAR(10),
     schema_version  VARCHAR(50),
     source_filename VARCHAR(500),
+    alias           VARCHAR(120),  -- nome dado pelo usuário (M9); a tela mostra alias ou arquivo
     status          VARCHAR(20)  NOT NULL DEFAULT 'queued',
     row_count       INTEGER      NOT NULL DEFAULT 0,
     error_message   VARCHAR(2000),
@@ -89,6 +90,13 @@ CREATE TABLE billing_items (
     is_correction    BOOLEAN         NOT NULL DEFAULT FALSE,
     is_estimate      BOOLEAN         NOT NULL DEFAULT FALSE,
     line_hash        VARCHAR(64)     NOT NULL,
+
+    -- Exports detalhados (migração f6a7b8c9d0e1). NULL no caminho legado.
+    usage_type       VARCHAR(500),   -- descritor por SKU (o que a escada casa)
+    resource_type    VARCHAR(200),   -- tipo medido: m7g.2xlarge, n2-standard-8, Standard_D4s_v5
+    charge_kind      VARCHAR(20),    -- natureza: usage|commitment|tax|credit|refund|adjustment|other
+    cost_billed      NUMERIC(18, 6), -- valor da fatura (unblended); `cost` é o amortizado
+    attributes       JSONB,          -- SÓ fato medido pelo provedor (vcpus, memory_gib, project_id…)
 
     created_at       TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
@@ -142,6 +150,10 @@ CREATE TABLE billing_enriched (
 
     scope               VARCHAR(20)     NOT NULL DEFAULT 'line_item',
     source_line_hash    VARCHAR(64)     NOT NULL,
+
+    -- Exports detalhados (migração f6a7b8c9d0e1). NULL no caminho legado.
+    resource_id         VARCHAR(500),   -- sem ele, ninguém a jusante conta instâncias
+    attributes          JSONB,          -- fatos medidos herdados do billing_items
 
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
@@ -312,12 +324,148 @@ CREATE INDEX ix_price_points_provider_type
 |---|---|
 | `service_type` | `virtual_server` para compute; para não-compute guarda a **categoria** (`storage_ssd`, `network_egress`, `database`) |
 | `unit` | `instance_hour` (compute) · `gb_month` (storage) · `gb` (egress) · `db_vcpu_month` |
+| `region` | região do provedor (`sa-east-1`, `southamerica-east1`, `brazilsouth`, `sa-saopaulo-1`). As taxas de referência digitadas usam `us-east`, que conta como Virgínia |
 | `confidence` | `official` (API do provedor) · `reference` (taxa publicada, digitada) · `low` |
-| `source` | `azure_retail_api`, `oci_cetools_api`, `published_reference_2026` |
+| `source` | `aws_pricing_calculator`, `aws_price_list_bulk`, `gcp_billing_catalog_api`, `azure_retail_api`, `oci_cetools_api`, `published_reference_2026` |
 
 Populado offline por `python scripts/sync_prices.py` — **nunca** no caminho
 crítico da análise. O matcher prefere estes preços e rebaixa a confiança quando
 cai no `cloud_sku_catalog`.
+
+**Região (PLANO_PRECO_REGIONAL).** Cada pool é cotado na zona dele
+(`domain/services/regioes.py`): um pool em São Paulo consulta `sa-east-1`,
+`southamerica-east1`, `brazilsouth` e `sa-saopaulo-1`. Sem preço da região, a
+escolha cai em outra da mesma zona, no preço global (compute e armazenamento da
+OCI) ou, por último, na Virgínia, e o rótulo `official` vira `reference`. O
+sync substitui o conjunto (provedor, região, tipo, fonte) que coletou: o que a
+coleta não trouxe sai.
+
+### Inventário
+
+Migration `a1b2c3d4e5f7` (PLANO_INVENTARIO_API, I5). Três tabelas novas; nada do
+que existe muda. `ON DELETE CASCADE` das filhas: `DELETE /v1/inventories/{id}`
+apaga tudo que deriva do envio. Isolamento por `user_id` em toda query, como no
+billing.
+
+```
+inventories (1)  ──CASCADE──▶  inventory_resources (N)
+                 ──CASCADE──▶  inventory_relations (N)
+```
+
+```sql
+CREATE TABLE inventories (
+    id                      UUID PRIMARY KEY,
+    user_id                 UUID NOT NULL,
+    status                  VARCHAR(20) NOT NULL DEFAULT 'queued',  -- queued → processing → done | failed
+    provider                VARCHAR(10),                            -- aws | gcp | azure | oci
+    source_files            JSONB NOT NULL DEFAULT '[]',
+    detected_formats        JSONB NOT NULL DEFAULT '{}',            -- arquivo → formato detectado
+    captured_at             TIMESTAMPTZ,
+    captured_at_estimated   BOOLEAN NOT NULL DEFAULT false,         -- Resource Graph: data do envio
+    resource_count          INTEGER NOT NULL DEFAULT 0,
+    relation_count          INTEGER NOT NULL DEFAULT 0,
+    rule_count              INTEGER NOT NULL DEFAULT 0,
+    counts                  JSONB NOT NULL DEFAULT '{}',            -- descartado/não modelado, por motivo
+    fingerprint             VARCHAR(64),                            -- SHA-256 do conteúdo normalizado
+    declarations            JSONB NOT NULL DEFAULT '{}',
+    declarations_updated_at TIMESTAMPTZ,
+    error_message           VARCHAR(2000),
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX ix_inventories_user_id_created_at ON inventories (user_id, created_at);
+
+CREATE TABLE inventory_resources (
+    id            BIGSERIAL PRIMARY KEY,
+    inventory_id  UUID NOT NULL REFERENCES inventories(id) ON DELETE CASCADE,
+    user_id       UUID NOT NULL,
+    resource_key  TEXT NOT NULL,          -- ARN, nome do asset do GCP, id do ARM em minúsculas
+    kind          VARCHAR(32) NOT NULL,   -- papel canônico: instancia, banco, subrede, grupo_seguranca…
+    native_type   VARCHAR(200) NOT NULL,  -- AWS::EC2::Instance, compute.googleapis.com/Instance…
+    name          TEXT,
+    account       TEXT,
+    region        VARCHAR(100),
+    zone          VARCHAR(100),
+    state         VARCHAR(20) NOT NULL,
+    attributes    JSONB,
+    tags          JSONB,
+    aliases       JSONB NOT NULL DEFAULT '[]',  -- como o billing cita o recurso (RI13)
+    captured_at   TIMESTAMPTZ,
+    rules         JSONB,                  -- regras de rede, só na linha do grupo de segurança
+    CONSTRAINT uq_inventory_resources_key UNIQUE (inventory_id, resource_key)
+);
+CREATE INDEX ix_inventory_resources_inventory_kind ON inventory_resources (inventory_id, kind);
+
+CREATE TABLE inventory_relations (
+    id            BIGSERIAL PRIMARY KEY,
+    inventory_id  UUID NOT NULL REFERENCES inventories(id) ON DELETE CASCADE,
+    user_id       UUID NOT NULL,
+    source_key    TEXT NOT NULL,
+    target_key    TEXT NOT NULL,
+    kind          VARCHAR(32) NOT NULL,   -- contido_em, protegido_por, anexado_a, membro_de…
+    CONSTRAINT uq_inventory_relations UNIQUE (inventory_id, source_key, target_key, kind)
+);
+CREATE INDEX ix_inventory_relations_inventory ON inventory_relations (inventory_id);
+```
+
+O arquivo bruto enviado é apagado depois da ingestão (RI17); o normalizado fica
+até o `DELETE`. A topologia não é persistida: é recalculada do normalizado com as
+declarações vigentes. A análise que usa o inventário congela a topologia dela no
+`llm_input_payload` do job (chave `topologia`), com o `fingerprint`.
+
+### Snapshot do agente
+
+Migration `e7f8a9b0c1d2` (PLANO_SNAPSHOT_AGENTE, item B). Duas tabelas novas;
+nada do que existe muda. **Exige PostgreSQL 15+** (`NULLS NOT DISTINCT`). As
+rotas que as usam ficam atrás de `AGENT_SNAPSHOT_ENABLED`, então o deploy pode
+vir antes da migração.
+
+```
+billing_reports (1) ──CASCADE──▶ agent_snapshots (N) ──CASCADE──▶ agent_submissions (N)
+```
+
+```sql
+CREATE TABLE agent_snapshots (
+    id                    UUID PRIMARY KEY,
+    user_id               UUID NOT NULL,
+    report_id             UUID NOT NULL REFERENCES billing_reports(id) ON DELETE CASCADE,
+    inventory_id          UUID,             -- sem FK: inventário apagado vira SNAPSHOT_DESATUALIZADO
+    inventory_marker      VARCHAR(200),     -- fingerprint do inventário | declarations_updated_at
+    fingerprint           VARCHAR(64) NOT NULL,  -- SHA-256 de {versions, payload completo}
+    payload_fingerprint   VARCHAR(64) NOT NULL,  -- SHA-256 da representação entregue ao agente
+    versions              JSONB NOT NULL,        -- contract, decision_policy, topology, authority
+    payload               JSONB NOT NULL,        -- completo, com topologia.detalhe
+    pools_sem_equivalente JSONB NOT NULL DEFAULT '[]',
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at            TIMESTAMPTZ NOT NULL
+);
+-- Reaproveitamento: INSERT … ON CONFLICT sobre este índice.
+CREATE UNIQUE INDEX uq_agent_snapshots_conteudo
+    ON agent_snapshots (user_id, report_id, inventory_id, fingerprint) NULLS NOT DISTINCT;
+CREATE INDEX ix_agent_snapshots_expires_at ON agent_snapshots (expires_at);
+
+CREATE TABLE agent_submissions (
+    id                  UUID PRIMARY KEY,
+    snapshot_id         UUID NOT NULL REFERENCES agent_snapshots(id) ON DELETE CASCADE,
+    user_id             UUID NOT NULL,
+    report_id           UUID NOT NULL,   -- desnormalizado para a consulta por relatório
+    request_hash        VARCHAR(64) NOT NULL,  -- SHA-256 do corpo validado: a idempotência
+    revision            INTEGER NOT NULL,
+    agent_raw           JSONB NOT NULL,  -- o que o agente mandou
+    analysis            JSONB NOT NULL,  -- a análise corrigida, que a API devolve
+    campos_sobrescritos INTEGER NOT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_agent_submissions_conteudo UNIQUE (snapshot_id, request_hash),
+    CONSTRAINT uq_agent_submissions_revisao UNIQUE (snapshot_id, revision)
+);
+CREATE INDEX ix_agent_submissions_user_report_created
+    ON agent_submissions (user_id, report_id, created_at);
+```
+
+Validade de 24 h (`AGENT_SNAPSHOT_TTL_HOURS`), renovada a cada reaproveitamento.
+A varredura periódica apaga o snapshot vencido há mais de
+`AGENT_SNAPSHOT_RETENTION_DAYS` (7) **que não tem envio**; com envio, ele fica.
+A exclusão de conta alcança as duas tabelas pela cascata do `billing_reports`.
 
 > **Sobre `raw_payload`:** o schema canônico do parser inclui um campo
 > `raw_payload: dict`, mas a **migration 0001 não persiste essa coluna** ainda
@@ -378,8 +526,8 @@ como `TypedDict` (e em `NORMALIZED_COLUMNS` como tuple para ordem de DataFrame).
 
 | Coluna | Tipo Python | Obrigatório | Notas |
 |---|---|---|---|
-| `cost` | `Decimal` | sim | Custo sem descontos. **Pode ser negativo** para créditos/ajustes. |
-| `cost_discounted` | `Decimal` | sim | Custo com descontos/créditos aplicados (`cost + credits` no GCP, p.ex.). Pode ser negativo. |
+| `cost` | `Decimal` | sim | Parsers legados: custo como exportado, sem descontos. **Exports detalhados** (CUR, BigQuery, Azure, OCI): custo **efetivo líquido amortizado** (RN1 do [`PLANO_CUR_BIGQUERY.md`](../PLANO_CUR_BIGQUERY.md)): compromisso distribuído sobre o uso coberto, desconto negociado aplicado. **Pode ser negativo** para créditos/ajustes. |
+| `cost_discounted` | `Decimal` | sim | Custo com descontos/créditos aplicados (`cost + credits` no GCP legado, p.ex.). Nos exports detalhados, igual a `cost`. Pode ser negativo. |
 | `currency` | `str` (3 chars) | sim | ISO-4217 — `USD`, `BRL`, `EUR`, etc. |
 
 ### Uso
@@ -404,6 +552,18 @@ como `TypedDict` (e em `NORMALIZED_COLUMNS` como tuple para ordem de DataFrame).
 | `raw_payload` | `dict` | sim | Linha original preservada — replay e auditoria. Hoje só em memória; persistência adiada. |
 | `source_file` | `str` | sim | Nome do arquivo que originou a linha. |
 | `line_hash` | `str` | sim | SHA-256 de `raw_payload` ordenado. Chave de dedup. |
+
+### Exports detalhados (CUR, BigQuery, Azure, OCI)
+
+Opcionais. Parser legado não os emite e segue exatamente como antes. Ver
+[`PLANO_CUR_BIGQUERY.md`](../PLANO_CUR_BIGQUERY.md) (RN1–RN6).
+
+| Coluna | Tipo Python | Notas |
+|---|---|---|
+| `usage_type` | `str \| None` | Descritor por SKU: `BoxUsage:m7g.2xlarge`, `N2 Instance Core running in Americas`. É o que a escada de SKU casa. Antes o enriquecimento procurava isso no `raw_payload` pelo nome da coluna de cada formato. |
+| `charge_kind` | `str \| None` | Natureza da linha ([`charge_kind.py`](../app/domain/value_objects/charge_kind.py)). `tax`, `credit`, `refund`, `adjustment` ficam fora da base; `commitment` nunca vira capacidade. Vocabulário fechado, validado pelo Pandera. |
+| `cost_billed` | `Decimal \| None` | Valor como aparece na fatura. Nos exports detalhados, `cost` é o **amortizado** (RN1). |
+| `attributes` | `dict` | **Só fato medido** pelo provedor: `vcpus`, `memory_gib`, `instance_type`, `project_id`, `first_usage`… Estimativa nunca entra aqui, porque chegaria a jusante como fato. |
 
 ## Convenções de `raw_payload`
 

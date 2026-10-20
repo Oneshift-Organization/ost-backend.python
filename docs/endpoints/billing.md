@@ -32,6 +32,10 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
 
 - Content-Type: `multipart/form-data`
 - Campo: `file` (obrigatório)
+- Campo: `alias` (opcional): o nome que a pessoa dá na importação. Mesma regra do
+  [`PUT …/alias`](#put-v1billing-filesjob_idalias); vazio ou ausente fica com o nome
+  do arquivo. O front já preenche com o nome do arquivo e só manda o campo se a
+  pessoa mudar
 - Extensões aceitas: `.csv`, `.tsv`, `.txt`, `.gz`, `.zip`, `.json`, `.ndjson`, `.xlsx`, `.xlsm`
 - Tamanho máximo: 50 MB (configurável via `MAX_UPLOAD_SIZE_MB`)
 
@@ -42,6 +46,8 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
   "job_id": "07531638-0c1f-4453-acdb-703ebb01c0f7",
   "status": "queued",
   "source_filename": "aws_cur2_sample.csv",
+  "alias": null,
+  "nome_exibicao": "aws_cur2_sample.csv",
   "created_at": "2026-04-01T00:00:00Z"
 }
 ```
@@ -54,6 +60,41 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
 | 401 | Token ausente ou inválido |
 | 413 | Arquivo > 50 MB |
 | 415 | Extensão não suportada |
+| 422 | `alias` com mais de 120 caracteres ou com caractere de controle (o billing não é criado) |
+| 422 | `FORMATO_NAO_SUPORTADO`: o que a verificação (`POST /v1/billing-file-checks`) recusa — Cost Explorer por serviço (`AWS_CE_DAILY_BY_SERVICE`, sem tipo de uso), relatório de uso da OCI (`reports_usage`, sem custo) ou arquivo que não é fatura conhecida. `mensagem` explica e diz o export certo |
+
+---
+
+## `POST /v1/billing-file-checks`
+
+Crítica do arquivo **antes** do upload: lê só a amostra, não grava nada. A tela de
+importação usa para avisar antes de enviar (PLANO_CENARIOS_DE_ENTRADA §3.4).
+
+Request igual ao upload (`multipart/form-data`, campo `file`). Response 200:
+
+```json
+{
+  "aceita": false,
+  "formato": "AWS_CE_DAILY_BY_SERVICE",
+  "nome_do_formato": "Cost Explorer da AWS (total por serviço)",
+  "provedor": "aws",
+  "com_id_de_recurso": false,
+  "problemas": [
+    {"nivel": "critico", "codigo": "cost_explorer", "titulo": "Esse arquivo é um resumo do Cost Explorer", "texto": "…"}
+  ],
+  "como_exportar": "Na AWS, crie uma exportação CUR 2.0 …"
+}
+```
+
+`aceita=false` quando o upload recusaria (Cost Explorer) ou o conteúdo não é fatura
+conhecida (`formato_nao_reconhecido`). `nivel`: `critico` (não serve), `alerta` (falta
+uma parte), `informativo` (limite do formato: fatura sem ID de recurso, que dá custo
+por aplicação **estimado** quando há inventário).
+
+O mesmo diagnóstico, com o que depende da análise (inventário ausente, de outra
+nuvem ou parcial, custo estimado, gasto não classificado), vem em
+`diagnostico_de_entrada` no `GET /v1/analyses` e no `GET /v1/analyses/{id}/result`:
+`{ "nivel": "critico" | "alerta" | null, "problemas": [...] }`, ou `null` sem nada a dizer.
 
 ### O que acontece em background
 
@@ -63,7 +104,7 @@ Upload de arquivo de billing. Dispara parsing async; retorna **202** imediatamen
 4. `delete_by_report(report_id, user_id)` + `bulk_insert` em chunks de 1000.
 5. Atualiza status para `done` ou `failed` (com `error_message` se falhar).
 
-Detecção suporta: **AWS CUR 2.0 / CUR Legacy / Cost Explorer pivotado · Azure
+Detecção suporta: **AWS CUR 2.0 / CUR Legacy / fatura detalhada legada · Azure
 PAYG / EA · GCP NDJSON / CSV / XLSX · OCI Cost Report**. Detalhes por provider
 em [`parsers.md`](../parsers.md).
 
@@ -99,6 +140,8 @@ Lista de jobs do usuário, mais recente primeiro.
     "provider": "aws",
     "schema_version": "AWS_CUR2.0",
     "source_filename": "aws_cur2_sample.csv",
+    "alias": "Fatura AWS de março",
+    "nome_exibicao": "Fatura AWS de março",
     "row_count": 4,
     "error_message": null,
     "created_at": "2026-04-01T00:00:00Z",
@@ -110,6 +153,8 @@ Lista de jobs do usuário, mais recente primeiro.
     "provider": null,
     "schema_version": null,
     "source_filename": "broken.xlsx",
+    "alias": null,
+    "nome_exibicao": "broken.xlsx",
     "row_count": 0,
     "error_message": "ValidationError: normalized DataFrame is empty",
     "created_at": "2026-04-01T00:00:00Z",
@@ -140,6 +185,9 @@ Status de um job. Usado para polling.
   "schema_version": "AWS_CUR2.0",
   "row_count": 4,
   "error_message": null,
+  "source_filename": "aws_cur2_sample.csv",
+  "alias": null,
+  "nome_exibicao": "aws_cur2_sample.csv",
   "created_at": "2026-04-01T00:00:00Z",
   "updated_at": "2026-04-01T00:00:01Z"
 }
@@ -152,6 +200,74 @@ Estados possíveis em `status`: `queued`, `processing`, `done`, `failed`.
 | Status | Quando |
 |---|---|
 | 404 | Job não existe **OU** pertence a outro usuário |
+
+---
+
+## `PUT /v1/billing-files/{job_id}/alias`
+
+Dá ao billing um nome escolhido pelo usuário (melhoria M9, 17/10). A tela mostra o
+nome de exibição no lugar do nome do arquivo.
+
+### Request
+
+```json
+{ "alias": "Fatura AWS de março" }
+```
+
+- Espaços nas pontas saem, e espaços repetidos viram um só. No máximo 120
+  caracteres; caractere de controle é recusado.
+- `null` ou texto vazio tira o alias: o nome volta a ser o do arquivo.
+- Vale em qualquer estado do billing (`queued` a `failed`) e para todas as
+  revisões da análise dele, porque a lista mostra uma linha por billing.
+
+### Response — 200 OK
+
+O mesmo item de `GET /v1/billing-files`, com os campos novos:
+
+```json
+{
+  "job_id": "07531638-0c1f-4453-acdb-703ebb01c0f7",
+  "source_filename": "aws_cur_2026-03.csv",
+  "alias": "Fatura AWS de março",
+  "nome_exibicao": "Fatura AWS de março"
+}
+```
+
+`nome_exibicao` = `alias` quando existe; senão o nome do arquivo. Sai também em
+`GET /v1/billing-files`, `GET /v1/billing-files/{job_id}` e em cada item de
+`GET /v1/analyses`. **A tela lê `nome_exibicao`.** `source_filename` continua
+igual: é o rastro do upload.
+
+### Erros
+
+| Status | Quando |
+|---|---|
+| 404 | Billing não existe **OU** é de outro usuário |
+| 422 | Mais de 120 caracteres, caractere de controle ou corpo sem `alias` |
+
+### Análise de impacto (escrita antes do código)
+
+- **Banco:** coluna nova `billing_reports.alias VARCHAR(120) NULL`, sem
+  preenchimento. Migration aditiva; o deploy do develop não roda migration, então
+  ela é aplicada no pod antes do push.
+- **Contrato:** só campos novos (`alias`, `nome_exibicao`). O front atual, que lê
+  `source_filename`, continua funcionando até passar a ler `nome_exibicao`.
+- **Análise, LLM e números:** nada muda. O nome do arquivo não entra no payload da
+  análise, no prompt nem no snapshot do agente; o alias também não. Nenhuma nota ao
+  MCP é necessária.
+- **Nome na importação (17/10):** `alias` opcional no `POST /v1/billing-files`,
+  validado antes de gravar o billing; nome inválido devolve 422 sem deixar billing
+  nem arquivo temporário. Cliente que não manda o campo continua igual.
+- **Ingestão em andamento:** o `update` do repositório (estado da ingestão) não
+  grava o alias; ele tem o próprio `rename`. Uma ingestão que leu o billing antes
+  da renomeação não apaga o nome dado.
+- **Curadoria de nomes:** o filtro que tira billings de mock olha o nome do
+  arquivo, não o alias. Renomear não tira nem põe billing na coleta.
+- **Exclusão de conta:** o alias está na linha do billing e sai com ela.
+- **Telas que passam a mostrar o alias:** lista de análises (com a busca, que
+  procura no alias e no nome do arquivo), menu de análises recentes, aviso de
+  análise concluída, trilha e título da análise, linha do tempo do billing e
+  confirmação de exclusão.
 
 ---
 

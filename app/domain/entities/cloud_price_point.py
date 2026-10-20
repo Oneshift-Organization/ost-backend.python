@@ -16,12 +16,12 @@ from decimal import Decimal
 
 @dataclass(frozen=True, slots=True)
 class CloudPricePoint:
-    provider: str          # 'azure', 'oci', … (minúsculo, normalizado)
-    sku_key: str           # chave nativa do provedor (armSkuName, partNumber…)
+    provider: str  # 'azure', 'oci', … (minúsculo, normalizado)
+    sku_key: str  # chave nativa do provedor (armSkuName, partNumber…)
     service_name: str
-    service_type: str      # 'virtual_server', 'relational_database', …
+    service_type: str  # 'virtual_server', 'relational_database', …
     region: str
-    price: Decimal         # preço na unidade abaixo
+    price: Decimal  # preço na unidade abaixo
     currency: str
     unit: str = "instance_hour"
     vcpus: Decimal | None = None
@@ -29,3 +29,7 @@ class CloudPricePoint:
     source: str = "manual"
     confidence: str = "official"
     captured_at: datetime | None = None
+    # Ciclo de vida do preço (PLANO_CICLO_DE_VIDA_DO_PRECO): só rótulo, não muda número
+    estado: str | None = None
+    confianca_score: Decimal | None = None
+    confirmado_em: datetime | None = None

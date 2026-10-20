@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,6 +31,9 @@ class BillingFileUploadResponse(BaseModel):
     external_id: UUID | None = None
     status: JobStatus
     source_filename: str
+    alias: str | None = None
+    # O que a tela mostra: o alias, ou o nome do arquivo sem ele
+    nome_exibicao: str | None = None
     created_at: datetime
 
 
@@ -57,8 +61,30 @@ class BillingJobStatusResponse(BaseModel):
     schema_version: str | None = None
     row_count: int = 0
     error_message: str | None = None
+    source_filename: str | None = None
+    alias: str | None = None
+    # O que a tela mostra: o alias, ou o nome do arquivo sem ele
+    nome_exibicao: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @classmethod
+    def from_entity(cls, r: BillingReport) -> "BillingJobStatusResponse":
+        return cls(
+            job_id=r.id,
+            report_id=r.id,
+            external_id=r.external_id,
+            status=r.status,
+            provider=r.provider,
+            schema_version=r.schema_version,
+            row_count=r.row_count,
+            error_message=r.error_message,
+            source_filename=r.source_filename,
+            alias=r.alias,
+            nome_exibicao=r.nome_exibicao,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+        )
 
 
 class BillingReportSummary(BaseModel):
@@ -86,6 +112,9 @@ class BillingReportSummary(BaseModel):
     provider: CloudProvider | None = None
     schema_version: str | None = None
     source_filename: str | None = None
+    alias: str | None = None
+    # O que a tela mostra: o alias, ou o nome do arquivo sem ele
+    nome_exibicao: str | None = None
     row_count: int = 0
     error_message: str | None = None
     created_at: datetime
@@ -101,11 +130,22 @@ class BillingReportSummary(BaseModel):
             provider=r.provider,
             schema_version=r.schema_version,
             source_filename=r.source_filename,
+            alias=r.alias,
+            nome_exibicao=r.nome_exibicao,
             row_count=r.row_count,
             error_message=r.error_message,
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
+
+
+class RenameBillingReportRequest(BaseModel):
+    """`null` ou vazio tira o alias. O limite de tamanho é o do domínio, depois de
+    normalizar os espaços; o daqui só barra corpo absurdo."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    alias: str | None = Field(..., max_length=1000)
 
 
 class BillingItemResponse(BaseModel):
@@ -132,6 +172,12 @@ class BillingItemResponse(BaseModel):
     is_correction: bool = False
     is_estimate: bool = False
     line_hash: str
+    # Só em exports detalhados (CUR, BigQuery, Azure, OCI); nulos no legado.
+    usage_type: str | None = None
+    resource_type: str | None = None
+    charge_kind: str | None = None
+    cost_billed: Decimal | None = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def from_entity(cls, i: BillingItem) -> "BillingItemResponse":
@@ -155,6 +201,11 @@ class BillingItemResponse(BaseModel):
             is_correction=i.is_correction,
             is_estimate=i.is_estimate,
             line_hash=i.line_hash,
+            usage_type=i.usage_type,
+            resource_type=i.resource_type,
+            charge_kind=i.charge_kind,
+            cost_billed=i.cost_billed,
+            attributes=i.attributes or {},
         )
 
 

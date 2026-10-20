@@ -1,16 +1,24 @@
+import asyncio
 from collections.abc import Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import timedelta
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import func, or_, update
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.domain.entities.agent_snapshot import agora
+from app.domain.entities.analysis_job import agora_utc
+from app.infrastructure.database.models.terraform_generation_job import (
+    TerraformGenerationJobModel,
+)
 from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.repositories.pg_agent_snapshot_repo import PgAgentSnapshotRepository
 from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
 
 
@@ -23,10 +31,113 @@ async def _expirar_jobs_travados() -> int:
     esta varredura o report ficaria bloqueado permanentemente — o reaper é a
     válvula que torna a idempotência segura.
     """
-    limite = timedelta(minutes=get_settings().analysis_job_timeout_minutes)
+    settings = get_settings()
+    limite = timedelta(minutes=settings.analysis_job_timeout_minutes)
+    sem_sinal = timedelta(minutes=settings.job_sem_sinal_minutes)
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
-        return await PgAnalysisJobRepository(session).expirar_travados(limite)
+        repo = PgAnalysisJobRepository(session)
+        # Processo morto primeiro: a mensagem diz o motivo e manda reanalisar
+        interrompidos = await repo.encerrar_sem_sinal(sem_sinal)
+        return interrompidos + await repo.expirar_travados(limite)
+
+
+async def _expirar_geracoes_travadas() -> int:
+    """Mesmo problema, mesma solução, outra tabela.
+
+    A geração de Terraform também roda em BackgroundTasks. Sem o reaper, um
+    restart no meio deixa o job em PROCESSING para sempre, e o frontend fica em
+    polling eterno esperando um COMPLETED que nunca vem.
+
+    Aqui não há índice único por análise — gerar duas vezes para ambientes
+    diferentes é uso legítimo —, então o travamento não bloqueia nada. Mas a
+    tela precisa saber que aquilo morreu.
+    """
+    settings = get_settings()
+    limite = agora_utc() - timedelta(minutes=settings.analysis_job_timeout_minutes)
+    # Sem sinal de vida (`sinal_de_vida`) além do limite: o processo da geração morreu
+    sem_sinal = agora_utc() - timedelta(minutes=settings.job_sem_sinal_minutes)
+    ultimo_sinal = func.coalesce(
+        TerraformGenerationJobModel.updated_at,
+        TerraformGenerationJobModel.started_at,
+        TerraformGenerationJobModel.created_at,
+    )
+    sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
+        resultado = await session.execute(
+            update(TerraformGenerationJobModel)
+            .where(
+                TerraformGenerationJobModel.status.in_(("PENDING", "PROCESSING")),
+                or_(TerraformGenerationJobModel.created_at < limite, ultimo_sinal < sem_sinal),
+            )
+            .values(
+                status="FAILED",
+                error="geração interrompida por reinício do processo; gere de novo",
+                updated_at=agora_utc(),
+            )
+        )
+        await session.commit()
+        return int(resultado.rowcount or 0)
+
+
+async def _expurgar_snapshots_do_agente() -> int:
+    """Apaga snapshots do agente vencidos há mais que a retenção e sem envio.
+
+    Só com a flag ligada: com ela desligada a tabela pode nem existir ainda (o
+    deploy vem antes da migração), e a varredura não pode logar erro a cada
+    minuto por isso. Snapshot com envio fica: é o lastro do que o agente disse
+    ao usuário e da repetição idempotente.
+    """
+    settings = get_settings()
+    if not settings.agent_snapshot_enabled:
+        return 0
+    limite = agora() - timedelta(days=settings.agent_snapshot_retention_days)
+    async with get_sessionmaker()() as session:
+        apagados = await PgAgentSnapshotRepository(session).expurgar(limite)
+        await session.commit()
+    return apagados
+
+
+# Intervalo entre varreduras. Curto o bastante para o job órfão não passar muito
+# do limite, longo o bastante para dois UPDATEs por minuto não pesarem.
+_INTERVALO_DA_VARREDURA_SEGUNDOS = 60
+
+
+async def _varrer_jobs_travados() -> None:
+    """Uma passada dos dois reapers. Nunca levanta: a varredura não pode derrubar
+    o startup nem matar o laço periódico."""
+    log = get_logger(__name__)
+    try:
+        expirados = await _expirar_jobs_travados()
+        if expirados:
+            log.warning("jobs_travados_expirados", quantidade=expirados)
+    except Exception:
+        log.exception("reaper_falhou")
+    try:
+        geracoes = await _expirar_geracoes_travadas()
+        if geracoes:
+            log.warning("geracoes_terraform_expiradas", quantidade=geracoes)
+    except Exception:
+        log.exception("reaper_terraform_falhou")
+    try:
+        snapshots = await _expurgar_snapshots_do_agente()
+        if snapshots:
+            log.info("snapshots_do_agente_expurgados", quantidade=snapshots)
+    except Exception:
+        log.exception("expurgo_de_snapshots_falhou")
+
+
+async def _varredura_periodica() -> None:
+    """Repete a varredura enquanto o processo vive.
+
+    Só no startup não basta. Num deploy o pod novo sobe enquanto o antigo ainda
+    executa a análise: a varredura do startup encontra um job recente, dentro do
+    limite, e o poupa. Minutos depois o pod antigo morre e ninguém mais olha — o
+    job ficava ativo para sempre e a tela, em polling eterno.
+    """
+    while True:
+        await asyncio.sleep(_INTERVALO_DA_VARREDURA_SEGUNDOS)
+        await _varrer_jobs_travados()
 
 
 @asynccontextmanager
@@ -36,13 +147,14 @@ async def lifespan(_app: FastAPI):
     log.info("app_startup", env=get_settings().app_env)
     # Jobs órfãos do processo anterior: quem estava executando quando o processo
     # caiu não tem mais dono.
+    await _varrer_jobs_travados()
+    varredura = asyncio.create_task(_varredura_periodica())
     try:
-        expirados = await _expirar_jobs_travados()
-        if expirados:
-            log.warning("jobs_travados_expirados", quantidade=expirados)
-    except Exception:  # startup nunca falha por causa do reaper
-        log.exception("reaper_falhou_no_startup")
-    yield
+        yield
+    finally:
+        varredura.cancel()
+        with suppress(asyncio.CancelledError):
+            await varredura
 
 
 class ErroInternoMiddleware(BaseHTTPMiddleware):
@@ -121,7 +233,8 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["X-Request-ID"],
+        # Content-Disposition: o front lê o nome do arquivo baixado (plano em .xlsx, ZIP)
+        expose_headers=["X-Request-ID", "Content-Disposition"],
     )
 
     app.include_router(api_router)

@@ -19,8 +19,10 @@ Função pura, sem I/O.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 # Cobertura mínima para um provedor ser elegível a recomendação. Abaixo disso a
 # comparação é fraca demais para sustentar uma decisão.
@@ -35,6 +37,10 @@ class ProviderTally:
     analyzed_cost: Decimal      # soma dos equivalentes do provedor
     source_covered: Decimal     # custo de ORIGEM que o provedor conseguiu precificar
     confidence: str             # elo mais fraco entre os equivalentes usados
+    # M11: a economia de cada parte pela confiança da cotação dela (e "compromisso",
+    # o compute que sai da origem), e o que custa zero no destino
+    economia_por_confianca: Mapping[str, Decimal] = field(default_factory=dict)
+    itens_gratis: tuple[Mapping[str, Any], ...] = ()
 
 
 def weakest_confidence(confidences: list[str]) -> str:
@@ -53,6 +59,8 @@ class _Row:
     economia_anual: float
     confianca: str
     cobertura: float
+    economia_por_fonte: Mapping[str, float] | None = None
+    itens_gratis: tuple[Mapping[str, Any], ...] = ()
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -63,7 +71,25 @@ class _Row:
             "economia_anual": self.economia_anual,
             "confianca": self.confianca,
             "cobertura": self.cobertura,
+            **(
+                {"economia_por_fonte": dict(self.economia_por_fonte)}
+                if self.economia_por_fonte is not None
+                else {}
+            ),
+            **({"itens_gratis": [dict(i) for i in self.itens_gratis]} if self.itens_gratis else {}),
         }
+
+
+def _por_fonte(t: ProviderTally, economia: Decimal) -> dict[str, float] | None:
+    """M11: a economia que sai de preço oficial e a que sai de referência ou premissa.
+    A estimada é o resto, para as duas somarem a economia do provedor."""
+    if not t.economia_por_confianca:
+        return None
+    oficial = t.economia_por_confianca.get("official", Decimal("0"))
+    return {
+        "preco_oficial": round(float(oficial), 2),
+        "estimada": round(float(economia - oficial), 2),
+    }
 
 
 def consolidate(
@@ -90,6 +116,8 @@ def consolidate(
             economia_anual=round(float(economia_mensal * 12), 2),
             confianca=t.confidence,
             cobertura=round(float(cobertura), 4),
+            economia_por_fonte=_por_fonte(t, economia_mensal),
+            itens_gratis=t.itens_gratis,
         ))
 
     rows.sort(key=lambda r: r.economia_mensal, reverse=True)

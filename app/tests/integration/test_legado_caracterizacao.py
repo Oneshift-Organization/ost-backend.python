@@ -142,6 +142,8 @@ async def test_result_traz_o_shape_que_o_front_consome(_app, _db_ready) -> None:
             "result",
             "llm_input_payload",
             "created_at",
+            # Aditivo (PLANO_CENARIOS_DE_ENTRADA): o que os arquivos permitem
+            "diagnostico_de_entrada",
         }
         assert corpo["status"] == "PENDING"
         assert corpo["result"] is None

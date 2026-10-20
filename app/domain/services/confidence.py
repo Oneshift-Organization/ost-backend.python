@@ -17,7 +17,8 @@ Função pura, sem I/O: entra número, sai nível.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from decimal import Decimal
 
 # Preço vindo da API oficial do provedor. Qualquer outro valor (catálogo seed,
@@ -58,6 +59,24 @@ class ConfiancaAnalise:
     custo_confiavel: float
     custo_total: float
     por_rotulo: dict[str, float]
+    # Por que o nível ficou abaixo do que a razão sozinha indicaria. Vazio
+    # quando o nível é puro resultado da conta.
+    rebaixada_por: tuple[str, ...] = ()
+
+    def com_rebaixamento(self, motivos: Sequence[str]) -> ConfiancaAnalise:
+        """Nível rebaixado por fatores fora da razão de preço, com os motivos.
+
+        Um degrau no total, não um por motivo — mesma regra da contestação do
+        agente (`agent_result.processar_sugestoes`). Sem os motivos junto, um
+        nível `low` sobre razão 0,95 pareceria bug em vez de decisão.
+        """
+        if not motivos:
+            return self
+        return replace(
+            self,
+            nivel=rebaixar(self.nivel),
+            rebaixada_por=tuple(motivos),
+        )
 
     def as_ledger(self) -> dict[str, object]:
         """Serializa para o bloco ``premissas`` do payload.
@@ -69,10 +88,14 @@ class ConfiancaAnalise:
         """
         return {
             "nivel": self.nivel,
+            # Lote v4 (V4.7): a razão é sobre o custo ATUAL coberto (origem), não sobre o
+            # valor cotado no destino. Payload sem `base` é da regra anterior.
+            "base": "custo_atual",
             "razao_custo_confiavel": round(self.razao_confiavel, 4),
             "custo_com_preco_oficial": round(self.custo_confiavel, 2),
             "custo_total_cotado": round(self.custo_total, 2),
             "custo_por_rotulo": {k: round(v, 2) for k, v in sorted(self.por_rotulo.items())},
+            "rebaixada_por": list(self.rebaixada_por),
         }
 
 
@@ -104,7 +127,12 @@ def rebaixar(nivel: str, degraus: int = 1) -> str:
 def avaliar_confianca(
     custos_por_confianca: dict[str, Decimal],
 ) -> ConfiancaAnalise:
-    """Calcula a confiança a partir do custo cotado agrupado por confiança.
+    """Calcula a confiança a partir do custo agrupado pela confiança do preço.
+
+    Desde o lote v4 (V4.7), o custo é o **atual**, da origem, que cada cotação
+    cobriu. Pesar pelo valor cotado no destino fazia a confiança cair quando o
+    compute oficial ficava mais barato e mais preciso (série B da Azure, rede por
+    tipo): a métrica punia a precisão.
 
     ``custos_por_confianca`` mapeia o rótulo de confiança do preço para o valor
     monetário cotado sob ele — por exemplo

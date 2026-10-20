@@ -139,6 +139,7 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,database,managed_relational_database,gcp,Cloud SQL,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,database,managed_relational_database,oci,Oracle Database Cloud Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,database,managed_relational_database,oci,MySQL Database Service,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,managed_relational_database,oci,OCI Database with PostgreSQL,2026-10-18T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/postgresql/home.htm
 ,database,postgresql_compatible_db,aws,Amazon Aurora PostgreSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,database,postgresql_compatible_db,azure,Azure Cosmos DB for PostgreSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,database,postgresql_compatible_db,gcp,AlloyDB for PostgreSQL,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
@@ -183,13 +184,13 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,networking,vpc_peering,azure,Azure VNet Peering,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,networking,vpc_peering,gcp,Google VPC Peering,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,networking,vpc_peering,oci,Oracle Dynamic Routing Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/
-,networking,private_connectivity,aws,AWS Direct Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dedicated_interconnect,aws,AWS Direct Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,private_connectivity,aws,AWS PrivateLink,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
-,networking,private_connectivity,azure,Azure ExpressRoute,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dedicated_interconnect,azure,Azure ExpressRoute,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,private_connectivity,azure,Azure Private Link,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
-,networking,private_connectivity,gcp,Cloud Interconnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dedicated_interconnect,gcp,Cloud Interconnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,private_connectivity,gcp,Private Service Connect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
-,networking,private_connectivity,oci,OCI FastConnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,dedicated_interconnect,oci,OCI FastConnect,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,vpn_gateway,aws,AWS Site-to-Site VPN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,vpn_gateway,aws,AWS Client VPN,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,vpn_gateway,azure,Azure VPN Gateway,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
@@ -199,6 +200,10 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,networking,dns,azure,Azure DNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,dns,gcp,Cloud DNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,networking,dns,oci,Oracle DNS,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,networking,data_transfer,aws,AWS Data Transfer,2026-10-16T00:00:00+00:00,https://aws.amazon.com/ec2/pricing/on-demand/#Data_Transfer
+,networking,data_transfer,azure,Bandwidth,2026-10-16T00:00:00+00:00,https://azure.microsoft.com/pricing/details/bandwidth/
+,networking,data_transfer,gcp,Network Service Tiers,2026-10-16T00:00:00+00:00,https://cloud.google.com/vpc/network-pricing
+,networking,data_transfer,oci,OCI Outbound Data Transfer,2026-10-16T00:00:00+00:00,https://www.oracle.com/cloud/networking/pricing/
 ,networking,global_traffic_management,aws,AWS Global Accelerator,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,networking,global_traffic_management,aws,Amazon Route 53 Traffic Flow,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,networking,global_traffic_management,azure,Azure Traffic Manager,2026-05-24T00:00:00+00:00,https://comparecloud.in/
@@ -387,10 +392,9 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,ai_ml,fraud_detection,aws,Amazon Fraud Detector,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,ai_ml,fraud_detection,gcp,Anti Money Laundering AI,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,ai_ml,data_labeling,aws,Amazon SageMaker Ground Truth,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
-,ai_ml,data_labeling,aws,AWS Entity Resolution,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
-,ai_ml,data_labeling,azure,Azure Data Factory,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,ai_ml,data_labeling,azure,Azure Machine Learning data labeling,2026-10-18T00:00:00+00:00,https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-image-labeling-projects
 ,ai_ml,data_labeling,gcp,Vertex AI Data Labeling,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
-,ai_ml,data_labeling,gcp,Dataprep,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
+,analytics,etl_data_integration,gcp,Dataprep,2026-10-18T00:00:00+00:00,https://cloud.google.com/dataprep/docs
 ,ai_ml,data_labeling,oci,OCI Data Labeling,2026-05-24T00:00:00+00:00,https://www.oracle.com/cloud/service-comparison/
 ,ai_ml,intelligent_search,aws,Amazon Kendra,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,ai_ml,intelligent_search,aws,Amazon Bedrock Knowledge Bases,2026-05-24T00:00:00+00:00,https://comparecloud.in/; https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
@@ -468,6 +472,8 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,analytics,stream_ingestion,aws,Amazon Kinesis Data Streams,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,analytics,stream_ingestion,azure,Azure Event Hubs,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,analytics,stream_ingestion,gcp,Pub/Sub,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_ingestion,aws,Amazon MSK,2026-10-16T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,analytics,stream_ingestion,oci,OCI Streaming,2026-10-16T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/Streaming/Concepts/streamingoverview.htm
 ,analytics,messaging,aws,Amazon Kinesis Data Streams,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,analytics,messaging,aws,Amazon MQ,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,analytics,messaging,azure,Azure Service Bus Messaging,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
@@ -763,7 +769,7 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,application_services,ipaas_integration,gcp,Integration Connectors,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,application_services,step_functions,aws,AWS Step Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,application_services,step_functions,azure,Azure Logic Apps,2026-05-24T00:00:00+00:00,https://comparecloud.in/
-,application_services,step_functions,azure,Azure Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/
+,application_services,step_functions,azure,Azure Durable Functions,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,application_services,step_functions,gcp,Workflows,2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,application_services,step_functions,oci,Oracle Application Express (APEX),2026-05-24T00:00:00+00:00,https://comparecloud.in/
 ,application_services,step_functions,oci,Oracle Visual Builder,2026-05-24T00:00:00+00:00,https://comparecloud.in/
@@ -815,3 +821,45 @@ id,category,service_type,provider,service_name,created_at,doc_origin
 ,compute,memory_optimized_machines,aws,Amazon EC2 U7i High Memory Instances,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,compute,memory_optimized_machines,azure,Azure M-series Mv3,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
 ,compute,memory_optimized_machines,gcp,Memory-optimized Machine Family,2026-05-24T00:00:00+00:00,https://docs.cloud.google.com/docs/get-started/aws-azure-gcp-service-comparison
+,database,in_memory_database,oci,OCI Cache,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,networking,nat_gateway,oci,NAT Gateway,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,analytics,messaging,oci,OCI Streaming,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,serverless,async_task_processing,oci,OCI Queue,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,database,key_value_nosql,oci,Oracle NoSQL Database Cloud,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,database,wide_column_nosql,oci,Oracle NoSQL Database Cloud,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,ai_ml,intelligent_search,oci,OCI Search with OpenSearch,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,ai_ml,translation,oci,OCI Language,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,secrets_management,oci,OCI Vault,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,next_generation_firewall,oci,OCI Network Firewall,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,containers,container_instances,oci,OCI Container Instances,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,containers,serverless_containers,oci,OCI Container Instances,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,compute,batch_jobs,oci,OCI Batch,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,analytics,change_data_capture,oci,OCI GoldenGate,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,application_services,ipaas_integration,oci,Oracle Integration,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,storage,high_performance_file_storage,oci,OCI File Storage with Lustre,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,certificate_management,oci,OCI Certificates,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,management_tools,audit_logging,oci,OCI Audit,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,management_tools,performance_tracing,oci,OCI Application Performance Monitoring,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,serverless,event_driven_integration,oci,OCI Events,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,networking,dynamic_routing,oci,Dynamic Routing Gateway,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,analytics,data_catalog,oci,OCI Data Catalog,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,database,postgresql_compatible_db,oci,OCI Database with PostgreSQL,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,database,oracle_database_on_bare_metal,oci,Oracle Exadata Database Service,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,consumer_identity,oci,OCI IAM Identity Domains,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,security_identity,intrusion_detection,oci,OCI Cloud Guard,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,containers,service_mesh,oci,OCI Service Mesh,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,developer_tools,cicd_build,oci,OCI DevOps,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,developer_tools,continuous_delivery,oci,OCI DevOps,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,developer_tools,source_repositories,oci,OCI DevOps,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,media,live_streaming,oci,OCI Media Streams,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,generative_ai,rag_engine,oci,OCI Generative AI Agents,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,generative_ai,model_catalog,oci,OCI Generative AI,2026-10-17T00:00:00+00:00,https://www.oracle.com/cloud/price-list/ (lido em 2026-10-17)
+,migration,data_transfer_appliance_petabyte,oci,OCI Data Transfer Appliance,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,migration,server_migration,oci,Oracle Cloud Migrations,2026-10-17T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/home.htm
+,networking,load_balancer,azure,Azure Application Gateway,2026-10-18T00:00:00+00:00,https://learn.microsoft.com/en-us/azure/application-gateway/overview
+,management_tools,policy_enforcement,oci,Oracle Cloud Guard,2026-10-18T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/cloud-guard/home.htm
+,security_identity,bastion_host,azure,Azure Bastion,2026-10-19T00:00:00+00:00,https://learn.microsoft.com/en-us/azure/bastion/bastion-overview
+,security_identity,bastion_host,oci,OCI Bastion,2026-10-19T00:00:00+00:00,https://docs.oracle.com/en-us/iaas/Content/Bastion/home.htm
+,security_identity,bastion_host,aws,AWS Systems Manager Session Manager,2026-10-19T00:00:00+00:00,https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html
+,security_identity,bastion_host,gcp,Identity-Aware Proxy,2026-10-19T00:00:00+00:00,https://cloud.google.com/iap/docs/using-tcp-forwarding
+,generative_ai,ai_coding_assistant,aws,Kiro,2026-10-19T00:00:00+00:00,https://kiro.dev/docs/

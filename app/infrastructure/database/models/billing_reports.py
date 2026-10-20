@@ -17,6 +17,7 @@ class BillingReportModel(Base):
     provider: Mapped[str | None] = mapped_column(String(10), nullable=True)
     schema_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    alias: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
     row_count: Mapped[int] = mapped_column(default=0, nullable=False)

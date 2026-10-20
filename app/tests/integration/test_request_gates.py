@@ -10,10 +10,14 @@ Rodam contra Postgres real com seeds; pulam graciosamente sem banco (conftest).
 
 from __future__ import annotations
 
+import csv
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
+from app.domain.services.service_identity import service_key
+from app.infrastructure.database.seed_service_metadata import METADATA_SEED
 from app.schemas.analysis_v2 import (
     AnalysisV2Response,
     ProviderComparison,
@@ -24,8 +28,16 @@ from app.use_cases.analysis.run_analysis_pipeline import (
     build_pipeline_llm_input_payload,
 )
 
-# ── Onda 1 — conservação e segregação de compromisso ────────────────────
+_DE_PARA = (
+    Path(__file__).resolve().parents[2]
+    / "infrastructure"
+    / "database"
+    / "models"
+    / "cloud_services_mapping.csv"
+)
 
+
+# ── Onda 1 — conservação e segregação de compromisso ────────────────────
 
 @pytest.mark.parametrize("ctx_name", ["aws_context", "gcp_context"])
 def test_conservacao_de_custo(ctx_name: str, request: pytest.FixtureRequest) -> None:
@@ -166,6 +178,14 @@ def test_object_storage_nao_mapeia_para_block_storage(aws_context) -> None:
                for a in alvos), alvos
 
 
+def test_balanced_pd_e_ssd(gcp_context) -> None:
+    """Balanced PD é SSD e é 94% do custo de disco do bill real. Quando
+    `*pd capacity*` o levava para HDD, o SSD ficava só com o pd-ssd (a relação
+    era a inversa: HDD ~5,5x o SSD) e o GB estimado pelo custo saía ~2,5x."""
+    aux = gcp_context.auxiliary
+    assert aux.storage_ssd > 5 * aux.storage_hdd
+
+
 def test_banco_gerenciado_tem_equivalente(aws_context) -> None:
     """RDS é o 2º maior custo do bill; sem DE-PARA a IA o ignorava."""
     rds = _find_service(aws_context, "AmazonRDS")
@@ -226,10 +246,17 @@ def test_tipo_inferido_e_declarado(aws_context) -> None:
     assim que object storage virou block storage); quem lê precisa saber."""
     payload, _ = build_pipeline_llm_input_payload(aws_context)
     por_nome = {s["nome"]: s for s in payload["servicos"]}
-    # MSK não está no catálogo curado: o tipo é inferência.
-    msk = por_nome.get("Amazon Managed Streaming for Apache Kafka")
-    assert msk is not None
-    assert msk.get("tipo_fonte") == "inferido"
+    # O nome do EKS no Cost Explorer não está no catálogo curado: o tipo é inferência.
+    eks = por_nome.get("Amazon Elastic Container Service for Kubernetes")
+    assert eks is not None
+    assert eks.get("tipo_fonte") == "inferido"
+    # O Kiro era o exemplo até 19/10 (item 17 do PROXIMAS_EXECUCOES): agora curado
+    assert "tipo_fonte" not in por_nome["Kiro"]
+    assert por_nome["Kiro"]["tipo"] == "ai_coding_assistant"
+    # O MSK era o exemplo até o lote v4 (V4.3): agora está no DE-PARA, curado
+    msk = por_nome["Amazon Managed Streaming for Apache Kafka"]
+    assert "tipo_fonte" not in msk
+    assert msk["tipo"] == "stream_ingestion"
     # Serviço casado no catálogo NÃO carrega a marca (o caso normal fica limpo).
     assert "tipo_fonte" not in por_nome["AmazonS3"]
     # E a fração vai para o ledger, auditável.
@@ -253,12 +280,33 @@ def test_expectativa_herda_do_tipo_quando_falta_metadata(
         assert mg["classe_migracao"] in {"rehost", "replatform", "refactor"}
 
 
-def test_classe_nao_e_inventada_sem_exemplo(aws_context) -> None:
-    """Sem nenhum serviço curado daquele tipo, o sistema CALA em vez de chutar."""
-    payload, _ = build_pipeline_llm_input_payload(aws_context)
-    waf = next(s for s in payload["servicos"] if s["nome"] == "AWS WAF")
-    # `web_application_firewall` não tem exemplo curado -> sem expectativa.
-    assert "migracao" not in waf
+def _tipos_com_exemplo_curado() -> set[str]:
+    """Tipos do DE-PARA com ao menos um serviço curado no seed da metadata."""
+    tipos: dict[tuple[str, str], set[str]] = {}
+    with _DE_PARA.open(encoding="utf-8") as arquivo:
+        for linha in csv.DictReader(arquivo):
+            provedor = linha["provider"].lower()
+            chave = (provedor, service_key(provedor, linha["service_name"]))
+            tipos.setdefault(chave, set()).add(linha["service_type"])
+    return {
+        tipo
+        for provedor, _, nome, _ in METADATA_SEED
+        for tipo in tipos.get((provedor, service_key(provedor, nome)), set())
+    }
+
+
+@pytest.mark.parametrize("ctx_name", ["aws_context", "gcp_context"])
+def test_classe_nao_e_inventada_sem_exemplo(ctx_name: str, request: pytest.FixtureRequest) -> None:
+    """Sem nenhum serviço curado daquele tipo, o sistema CALA em vez de chutar.
+
+    Até a curadoria de 16/10 o AWS WAF era o exemplo de tipo sem curado. Hoje os
+    serviços dos dois bills têm nota própria, e o invariante é conferido em todos: a
+    expectativa herdada da classe só aparece em tipo com exemplo curado."""
+    payload, _ = build_pipeline_llm_input_payload(request.getfixturevalue(ctx_name))
+    com_exemplo = _tipos_com_exemplo_curado()
+    for servico in payload["servicos"]:
+        if (servico.get("migracao") or {}).get("fonte") == "classe":
+            assert servico["tipo"] in com_exemplo, servico["nome"]
 
 
 # ── Onda 7 — contrato com o LLM ─────────────────────────────────────────

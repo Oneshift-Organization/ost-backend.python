@@ -1,38 +1,61 @@
 import logging
+from contextlib import AbstractAsyncContextManager
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import (
+    CurrentUser,
+    DbSession,
+    construtor_de_contexto,
+    consultar_acoplamento_uc,
+    payload_do_agente_uc,
+)
+from app.api.v1.envelope import erro, erro_do_payload
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.domain.analysis import MigrationContext
-from app.domain.entities.analysis_job import AnalysisJob
+from app.domain.entities.analysis_job import (
+    ACTIVE_STATUSES,
+    AnalysisJob,
+    DispStatus,
+    agora_utc,
+)
+from app.domain.services.analise_vigente import Revisao, analises_por_billing
+from app.domain.services.diagnostico_de_entrada import diagnosticar_payload
 from app.infrastructure.database.models.analysis_job import AnalysisJobModel
 from app.infrastructure.database.models.billing_reports import BillingReportModel
 from app.infrastructure.database.session import get_sessionmaker
+from app.infrastructure.database.sinal_de_vida import sinal_de_vida
 from app.infrastructure.llm.claude_client import ClaudeLLMClient
 from app.infrastructure.llm.gemini_client import GeminiLLMClient
 from app.infrastructure.llm.mock_client import MockLLMClient
+from app.infrastructure.llm.nvidia_client import NvidiaLLMClient
 from app.infrastructure.llm.openrouter_client import OpenRouterLLMClient
 from app.infrastructure.llm.orchestrator import LLMOrchestrator, log_llm_input_payload
+from app.infrastructure.mcp.prompts_client import (
+    get_mcp_prompt_client,
+)
 from app.infrastructure.repositories.pg_analysis_job_repo import PgAnalysisJobRepository
 from app.infrastructure.repositories.pg_billing_enriched_repo import (
     PgBillingEnrichedRepository,
 )
+from app.infrastructure.repositories.pg_billing_item_repo import PgBillingItemRepository
 from app.infrastructure.repositories.pg_billing_report_repo import (
     PgBillingReportRepository,
 )
-from app.infrastructure.repositories.pg_cloud_sku_repo import PgCloudSkuRepository
 from app.infrastructure.repositories.pg_cloud_price_point_repo import (
     PgCloudPricePointRepository,
 )
+from app.infrastructure.repositories.pg_cloud_sku_repo import PgCloudSkuRepository
 from app.infrastructure.repositories.pg_exchange_rate_repo import (
     PgExchangeRateRepository,
 )
+from app.infrastructure.repositories.pg_inventory_repo import PgInventoryRepository
 from app.infrastructure.repositories.service_repositories import (
     PGServiceComparisonRepository,
     PGServiceMetadataRepository,
@@ -41,6 +64,8 @@ from app.schemas.analysis import (
     AnalysisJobResponse,
     AnalysisJobSummary,
     AnalysisRequest,
+    DispStatusIn,
+    DispStatusOut,
     EquivalentServiceItem,
     FinancialEstimateItem,
     MigrationContextResponse,
@@ -51,15 +76,28 @@ from app.schemas.analysis import (
     WorkloadSummaryItem,
 )
 from app.schemas.analysis_v2 import AnalysisV2Response, LegacyAnalysisRequest
-from app.use_cases.analysis.run_analysis_pipeline import (
-    build_pipeline_llm_input_payload,
-    serialize_as_legacy,
-)
+from app.schemas.decision_support import AnalysisStartOptions
+from app.schemas.diagnostico_de_entrada import DiagnosticoDeEntradaOut
+from app.schemas.service_couplings import ServiceCouplingsResponse
 from app.use_cases.analysis.build_migration_context import (
     BuildMigrationContextInput,
     BuildMigrationContextUseCase,
 )
-from app.use_cases.analysis.run_analysis_pipeline import RunAnalysisPipelineUseCase
+from app.use_cases.analysis.consultar_acoplamento import (
+    AnaliseFalhouError,
+    AnaliseNaoConcluidaError,
+    AnaliseSemServicosError,
+)
+from app.use_cases.analysis.payload_do_agente import PayloadDoAgenteError
+from app.use_cases.analysis.run_analysis_pipeline import (
+    RunAnalysisPipelineUseCase,
+    build_pipeline_llm_input_payload,
+    serialize_as_legacy,
+)
+from app.use_cases.analysis.topologia_no_payload import (
+    MontarTopologiaUseCase,
+    compactar_topologia,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -146,13 +184,17 @@ def _build_response(ctx: MigrationContext) -> MigrationContextResponse:
                         technical_match=TechnicalMatchItem(
                             vcpus=e.technical_match.vcpus,
                             ram_gb=e.technical_match.ram_gb,
-                        ) if e.technical_match else None,
+                        )
+                        if e.technical_match
+                        else None,
                         financials=FinancialEstimateItem(
                             unit_price=e.financials.unit_price,
                             estimated_monthly_cost=e.financials.estimated_monthly_cost,
                             cost_delta=e.financials.cost_delta,
                             pricing_confidence=e.financials.pricing_confidence,
-                        ) if e.financials else None,
+                        )
+                        if e.financials
+                        else None,
                     )
                     for e in w.equivalents
                 ],
@@ -162,12 +204,87 @@ def _build_response(ctx: MigrationContext) -> MigrationContextResponse:
     )
 
 
+@router.put(
+    "/{job_id}/disp-status",
+    response_model=DispStatusOut,
+    status_code=status.HTTP_200_OK,
+    summary="Ativa ou depreciada — é o que o front chama no lugar de excluir",
+)
+async def definir_disp_status(
+    job_id: UUID,
+    corpo: DispStatusIn,
+    user: CurrentUser,
+    session: DbSession,
+) -> DispStatusOut:
+    """Depreciar não apaga.
+
+    Um DELETE levaria junto o `llm_input_payload`, que é a fonte do Terraform e
+    de qualquer reanálise — quem excluísse por engano perderia o pacote que já
+    baixou, sem volta. Aqui o registro fica, some da listagem, e o expurgo leva
+    as depreciadas há mais de um mês.
+
+    Idempotente: mandar o mesmo valor duas vezes devolve 200 e só recarimba a
+    data, o que importa porque o front pode reenviar num retry.
+    """
+    user_uuid = UUID(user.sub)
+    job = (
+        (
+            await session.execute(
+                select(AnalysisJobModel).where(
+                    AnalysisJobModel.job_id == job_id,
+                    AnalysisJobModel.user_id == user_uuid,
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+
+    # 404 e não 403: dizer "existe mas não é sua" já entrega a existência.
+    if job is None:
+        raise _erro(
+            status.HTTP_404_NOT_FOUND,
+            "ANALISE_NAO_ENCONTRADA",
+            f"análise {job_id} não existe para este usuário",
+            retryable=False,
+        )
+
+    # Uma análise por billing: excluir (ou restaurar) vale para todas as revisões do
+    # mesmo billing. Senão, excluir a vigente faria a revisão anterior voltar à lista.
+    # Carimbar é o que ancora a carência do expurgo. Sem data, o primeiro
+    # expurgo levaria tudo que já estivesse depreciado.
+    carimbo = agora_utc()
+    await session.execute(
+        update(AnalysisJobModel)
+        .where(
+            AnalysisJobModel.user_id == user_uuid,
+            AnalysisJobModel.report_id == job.report_id,
+        )
+        .values(disp_status=int(corpo.disp_status), disp_status_updated_at=carimbo)
+    )
+    await session.commit()
+    await session.refresh(job)
+
+    logger.info("disp_status_alterado job_id=%s valor=%s", job_id, corpo.disp_status)
+    return DispStatusOut(
+        job_id=job.job_id,
+        disp_status=job.disp_status,
+        disp_status_updated_at=job.disp_status_updated_at,
+    )
+
+
 @router.get("", response_model=list[AnalysisJobSummary])
 async def list_analysis_jobs(
     user: CurrentUser,
     session: DbSession,
     limit: int = 50,
+    incluir_depreciadas: bool = False,
 ) -> list[AnalysisJobSummary]:
+    """Depreciadas ficam de fora por default.
+
+    É o que faz o `PUT .../disp-status` parecer exclusão para o usuário sem ser
+    uma. `incluir_depreciadas=true` existe para uma tela de lixeira, se houver.
+    """
     if limit < 1 or limit > _MAX_ANALYSES_PER_PAGE:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -175,21 +292,66 @@ async def list_analysis_jobs(
         )
 
     user_uuid = UUID(user.sub)
+    # Uma linha por billing (domain/services/analise_vigente): primeiro as revisões,
+    # só com as colunas leves; depois o conteúdo das que a lista mostra.
+    revisoes = [
+        Revisao(
+            job_id=linha.job_id,
+            report_id=linha.report_id,
+            status=str(linha.status),
+            criada_em=linha.created_at,
+            ativa=linha.disp_status == DispStatus.ATIVA,
+        )
+        for linha in (
+            await session.execute(
+                select(
+                    AnalysisJobModel.job_id,
+                    AnalysisJobModel.report_id,
+                    AnalysisJobModel.status,
+                    AnalysisJobModel.created_at,
+                    AnalysisJobModel.disp_status,
+                )
+                .join(BillingReportModel, AnalysisJobModel.report_id == BillingReportModel.id)
+                .where(
+                    AnalysisJobModel.user_id == user_uuid,
+                    BillingReportModel.user_id == user_uuid,
+                )
+            )
+        ).all()
+    ]
+    por_billing = analises_por_billing(revisoes, incluir_depreciadas=incluir_depreciadas)[
+        :limit
+    ]
+    reanalises = {a.vigente.job_id: a.reanalise for a in por_billing}
+    ordem = {a.vigente.job_id: i for i, a in enumerate(por_billing)}
+    erros_das_reanalises = {
+        job_id: erro
+        for job_id, erro in (
+            await session.execute(
+                select(AnalysisJobModel.job_id, AnalysisJobModel.error).where(
+                    AnalysisJobModel.job_id.in_(
+                        [r.job_id for r in reanalises.values() if r is not None]
+                    )
+                )
+            )
+        ).all()
+    }
     stmt = (
         select(AnalysisJobModel, BillingReportModel)
         .join(BillingReportModel, AnalysisJobModel.report_id == BillingReportModel.id)
         .where(
             AnalysisJobModel.user_id == user_uuid,
-            BillingReportModel.user_id == user_uuid,
+            AnalysisJobModel.job_id.in_(list(ordem)),
         )
-        .order_by(AnalysisJobModel.created_at.desc())
-        .limit(limit)
     )
-    result = await session.execute(stmt)
+    linhas = sorted((await session.execute(stmt)).all(), key=lambda par: ordem[par[0].job_id])
 
     summaries: list[AnalysisJobSummary] = []
-    for job, report in result.all():
+    for job, report in linhas:
+        reanalise = reanalises.get(job.job_id)
         structured = job.ai_structured_output if isinstance(job.ai_structured_output, dict) else {}
+        decision = structured.get("decision_support") or {}
+        decision_score = decision.get("score") or {}
         try:
             summaries.append(
                 AnalysisJobSummary(
@@ -199,28 +361,44 @@ async def list_analysis_jobs(
                     status=job.status,
                     provider=report.provider,
                     source_filename=report.source_filename,
+                    alias=report.alias,
+                    nome_exibicao=report.alias or report.source_filename,
                     row_count=report.row_count or 0,
                     recommended_provider=_texto(structured.get("recommended_provider")),
                     recommendation=_texto(structured.get("recommendation")),
                     viability_score=_inteiro(structured.get("viability_score")),
                     analysis_confidence=_texto(structured.get("analysis_confidence")),
+                    decision_score_status=(
+                        decision_score.get("status", "not_scored") if decision else None
+                    ),
+                    decision_score_lower_bound=decision_score.get("lower_bound"),
+                    decision_score_upper_bound=decision_score.get("upper_bound"),
+                    decision_score_value=decision_score.get("value"),
+                    decision_score_method=decision_score.get("assessment_method"),
                     error=job.error,
                     created_at=job.created_at,
+                    diagnostico_de_entrada=_diagnostico_de_entrada(
+                        report.schema_version, report.provider, job.llm_input_payload
+                    ),
+                    reanalise_job_id=reanalise.job_id if reanalise else None,
+                    reanalise_status=reanalise.status if reanalise else None,
+                    reanalise_erro=(
+                        erros_das_reanalises.get(reanalise.job_id) if reanalise else None
+                    ),
                 )
             )
         except ValidationError:
-            # Rede de segurança: um único registro malformado não pode esconder
-            # TODAS as análises do usuário. O job continua na lista, sem os
-            # campos derivados da IA, e o defeito fica registrado no log em vez
-            # de virar um 500 opaco.
-            logger.exception("analysis_summary_invalido job_id=%s", job.job_id)
+            logger.exception(
+                "analysis_summary_invalido job_id=%s",
+                job.job_id,
+            )
             summaries.append(
                 AnalysisJobSummary(
                     job_id=job.job_id,
                     report_id=job.report_id,
                     status=str(job.status),
                     created_at=job.created_at,
-                    error="resumo indisponível: dados da análise em formato inesperado",
+                    error=("resumo indisponível: dados da análise em formato inesperado"),
                 )
             )
 
@@ -248,12 +426,21 @@ async def build_migration_context(
     )
     try:
         ctx = await uc.execute(
-            BuildMigrationContextInput(user_id=UUID(user.sub), report_id=body.report_id)
+            BuildMigrationContextInput(
+                user_id=UUID(user.sub),
+                report_id=body.report_id,
+            )
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
     return _build_response(ctx)
 
 
@@ -278,33 +465,66 @@ async def get_agents_payload(
     )
     try:
         ctx = await uc.execute(
-            BuildMigrationContextInput(user_id=UUID(user.sub), report_id=job_id)
+            BuildMigrationContextInput(
+                user_id=UUID(user.sub),
+                report_id=job_id,
+            )
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
     return _build_response(ctx)
 
 
-# ── Request de análise — a superfície que um agente consome ──────────────
-#
-# Devolve o payload determinístico da análise (pools, serviços com DE-PARA,
-# premissas com reconciliação e resumo executivo já calculado) SEM chamar LLM.
-# É o contrato pensado para consumo por agente/MCP.
-#
-# Erros são estruturados com código estável para que o consumidor saiba se deve
-# RE-TENTAR ou DESISTIR — a distinção que um agente não consegue fazer a partir
-# de um 422 com texto livre.
+def _diagnostico_de_entrada(
+    formato: str | None, provedor: str | None, payload: object
+) -> DiagnosticoDeEntradaOut | None:
+    """O que os arquivos permitem, lido do formato da fatura e do payload congelado.
+    Nunca derruba a rota: um payload antigo em forma inesperada só fica sem aviso."""
+    try:
+        d = diagnosticar_payload(
+            formato=formato,
+            provedor_da_fatura=provedor,
+            payload=payload if isinstance(payload, dict) else None,
+        )
+    except Exception:
+        logger.exception("diagnostico_de_entrada_falhou formato=%s", formato)
+        return None
+    return DiagnosticoDeEntradaOut.de(d) if d.problemas else None
 
-_ESTADOS_EM_ANDAMENTO = {"queued", "processing"}
 
-
-def _erro(status_code: int, codigo: str, mensagem: str, *, retryable: bool, **extra) -> HTTPException:
-    """Erro com código estável. `retryable` diz ao agente se insiste ou desiste."""
-    corpo: dict = {"codigo": codigo, "mensagem": mensagem, "retryable": retryable}
+def _erro(
+    status_code: int,
+    codigo: str,
+    mensagem: str,
+    *,
+    retryable: bool,
+    **extra,
+) -> HTTPException:
+    corpo: dict = {
+        "codigo": codigo,
+        "mensagem": mensagem,
+        "retryable": retryable,
+    }
     corpo.update(extra)
     return HTTPException(status_code=status_code, detail=corpo)
+
+
+async def _validar_inventario(
+    session: AsyncSession, user_id: UUID, report_id: UUID, inventory_id: UUID
+) -> None:
+    """RI14: inventário do usuário, processado e da mesma nuvem do billing."""
+    try:
+        await payload_do_agente_uc(session).validar_inventario(user_id, report_id, inventory_id)
+    except PayloadDoAgenteError as e:
+        raise erro_do_payload(e) from e
 
 
 @router.get(
@@ -317,61 +537,40 @@ async def get_analysis_request(
     user: CurrentUser,
     session: DbSession,
     recalcular: bool = False,
+    inventory_id: UUID | None = None,
 ) -> dict:
-    """Payload da análise no corpo, metadados em `_meta`.
-
-    Por padrão devolve o payload **persistido** de uma análise anterior quando
-    existe (estável e reproduzível); `recalcular=true` força recomputar a partir
-    do estado atual do billing.
-    """
     user_uuid = UUID(user.sub)
-
-    # Estado do report ANTES de montar: é o que permite distinguir
-    # "ainda processando" (re-tente) de "inválido" (desista).
-    rep = (
-        await session.execute(
-            select(BillingReportModel).where(
-                BillingReportModel.id == report_id,
-                BillingReportModel.user_id == user_uuid,
-            )
-        )
-    ).scalars().first()
-
-    if rep is None:
-        raise _erro(
-            status.HTTP_404_NOT_FOUND, "REPORT_NAO_ENCONTRADO",
-            f"report {report_id} não existe para este usuário",
-            retryable=False,
-        )
-    if rep.status in _ESTADOS_EM_ANDAMENTO:
-        raise _erro(
-            status.HTTP_409_CONFLICT, "REPORT_NAO_PRONTO",
-            f"ingestão ainda em andamento (status={rep.status})",
-            retryable=True, status_report=rep.status,
-        )
-    if rep.status != "done":
-        raise _erro(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "REPORT_FALHOU",
-            f"ingestão não concluiu (status={rep.status})",
-            retryable=False, status_report=rep.status,
-        )
+    montador = payload_do_agente_uc(session)
+    try:
+        if inventory_id is not None:
+            await montador.validar_inventario(user_uuid, report_id, inventory_id)
+            recalcular = True
+        await montador.exigir_pronto(user_uuid, report_id)
+    except PayloadDoAgenteError as e:
+        raise erro_do_payload(e) from e
 
     if not recalcular:
         row = (
-            await session.execute(
-                select(AnalysisJobModel)
-                .where(
-                    AnalysisJobModel.report_id == report_id,
-                    AnalysisJobModel.user_id == user_uuid,
-                    AnalysisJobModel.llm_input_payload.isnot(None),
+            (
+                await session.execute(
+                    select(AnalysisJobModel)
+                    .where(
+                        AnalysisJobModel.report_id == report_id,
+                        AnalysisJobModel.user_id == user_uuid,
+                        AnalysisJobModel.llm_input_payload.isnot(None),
+                    )
+                    .order_by(AnalysisJobModel.created_at.desc())
+                    .limit(1)
                 )
-                .order_by(AnalysisJobModel.created_at.desc())
-                .limit(1)
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
+
         if row is not None and row.llm_input_payload:
+            # A superfície do agente recebe a topologia compacta, como o LLM.
             return {
-                **dict(row.llm_input_payload),
+                **compactar_topologia(dict(row.llm_input_payload)),
                 "_meta": {
                     "origem": "persistida",
                     "report_id": str(report_id),
@@ -380,21 +579,15 @@ async def get_analysis_request(
             }
 
     try:
-        ctx = await _build_ctx(user_uuid, report_id, session)
-    except HTTPException as e:
-        # `_build_ctx` traduz NotFoundError/ValueError para HTTP com texto livre;
-        # aqui re-embrulhamos no envelope estruturado.
-        raise _erro(
-            e.status_code, "CONTEXTO_INDISPONIVEL", str(e.detail), retryable=False
-        ) from e
-
-    payload, sem_equivalente = build_pipeline_llm_input_payload(ctx)
+        montado = await montador.montar(user_uuid, report_id, inventory_id)
+    except PayloadDoAgenteError as e:
+        raise erro_do_payload(e) from e
     return {
-        **payload,
+        **compactar_topologia(montado.payload),
         "_meta": {
             "origem": "recalculada",
             "report_id": str(report_id),
-            "pools_sem_equivalente": sem_equivalente,
+            "pools_sem_equivalente": montado.pools_sem_equivalente,
         },
     }
 
@@ -410,8 +603,6 @@ async def get_llm_input_preview(
     user: CurrentUser,
     session: DbSession,
 ) -> dict:
-    # Prefer the persisted payload — exact record of what was sent to LLM.
-    # Falls back to recomputing when the job hasn't run yet or pre-migration rows.
     user_uuid = UUID(user.sub)
     stmt = (
         select(AnalysisJobModel)
@@ -425,6 +616,7 @@ async def get_llm_input_preview(
     )
     result = await session.execute(stmt)
     row = result.scalars().first()
+
     if row is not None and row.llm_input_payload:
         return {
             "billing_data": dict(row.llm_input_payload),
@@ -432,10 +624,10 @@ async def get_llm_input_preview(
             "source": "persisted",
         }
 
-    # Fallback: recompute from current billing_enriched data
     ctx = await _build_ctx(user_uuid, report_id, session)
     payload, missing_equiv_ids = build_pipeline_llm_input_payload(ctx)
     log_llm_input_payload("preview", payload)
+
     return {
         "billing_data": payload,
         "missing_equivalent_pool_ids": missing_equiv_ids,
@@ -443,46 +635,48 @@ async def get_llm_input_preview(
     }
 
 
+def _sinal_da_analise(
+    job_id: UUID, sessionmaker: async_sessionmaker[AsyncSession]
+) -> AbstractAsyncContextManager[None]:
+    """Grava o sinal de vida do job enquanto a análise roda (PROXIMAS_EXECUCOES, item 26)."""
+    return sinal_de_vida(
+        sessionmaker,
+        AnalysisJobModel,
+        AnalysisJobModel.job_id,
+        job_id,
+        [s.value for s in ACTIVE_STATUSES],
+        intervalo_segundos=get_settings().job_heartbeat_seconds,
+        agora=agora_utc,
+    )
+
+
 async def _run_analysis_pipeline(
     user_id: UUID,
     report_id: UUID,
     job_id: UUID,
     sessionmaker,
+    decision_context: dict | None = None,
+    *,
+    inventory_id: UUID | None = None,
+    nova_narrativa: bool = False,
 ) -> None:
-    """Executa a pipeline de análise em background com sessão isolada."""
     logger.info("pipeline_started job_id=%s", job_id)
-    async with sessionmaker() as session:
+
+    async with _sinal_da_analise(job_id, sessionmaker), sessionmaker() as session:
         job_repo = PgAnalysisJobRepository(session)
         job = await job_repo.get_by_id(job_id, user_id)
+
         if job is None:
             logger.warning("pipeline_job_not_found job_id=%s", job_id)
             return
 
-        logger.info("pipeline_job_loaded job_id=%s status=%s", job_id, job.status)
+        logger.info(
+            "pipeline_job_loaded job_id=%s status=%s",
+            job_id,
+            job.status,
+        )
 
-        settings = get_settings()
-        llm_client: MockLLMClient | GeminiLLMClient | OpenRouterLLMClient | ClaudeLLMClient
-        match settings.llm_provider:
-            case "openrouter":
-                llm_client = OpenRouterLLMClient(
-                    api_key=settings.openrouter_api_key,
-                    model=settings.openrouter_model,
-                )
-            case "gemini":
-                llm_client = GeminiLLMClient(
-                    api_key=settings.gemini_api_key,
-                    model=settings.gemini_model,
-                )
-            case "anthropic":
-                llm_client = ClaudeLLMClient(
-                    api_key=settings.anthropic_api_key,
-                    model=settings.anthropic_model,
-                )
-            case _:
-                llm_client = MockLLMClient()
-        logger.info("llm_provider_selected provider=%s", settings.llm_provider)
-
-        orchestrator = LLMOrchestrator(llm_client=llm_client)
+        orchestrator = _make_orchestrator()
 
         uc = RunAnalysisPipelineUseCase(
             analysis_job_repo=job_repo,
@@ -494,10 +688,18 @@ async def _run_analysis_pipeline(
             fx_repo=PgExchangeRateRepository(session),
             price_repo=PgCloudPricePointRepository(session),
             llm_orchestrator=orchestrator,
+            topologia=MontarTopologiaUseCase(
+                PgInventoryRepository(session), PgBillingItemRepository(session)
+            ),
         )
 
         try:
-            await uc.execute(job)
+            await uc.execute(
+                job,
+                decision_context=decision_context,
+                inventario_id=inventory_id,
+                nova_narrativa=nova_narrativa,
+            )
             await session.commit()
             logger.info("pipeline_completed job_id=%s", job_id)
         except Exception:
@@ -506,7 +708,10 @@ async def _run_analysis_pipeline(
             job.mark_failed("unexpected pipeline error")
             await job_repo.update(job)
             await session.commit()
-            logger.info("pipeline_failed_status_saved job_id=%s", job_id)
+            logger.info(
+                "pipeline_failed_status_saved job_id=%s",
+                job_id,
+            )
 
 
 @router.post(
@@ -519,17 +724,24 @@ async def start_analysis(
     user: CurrentUser,
     session: DbSession,
     background: BackgroundTasks,
+    *,
     external_id: UUID | None = None,
+    options: AnalysisStartOptions | None = None,
+    # M3: com os mesmos números, a narrativa anterior é reaproveitada; true roda o modelo
+    nova_narrativa: bool = False,
 ) -> AnalysisJobResponse:
     user_uuid = UUID(user.sub)
+    inventory_id = options.inventory_id if options else None
+    if inventory_id is not None:
+        # Antes da idempotência: um id inválido não é engolido por um job ativo.
+        await _validar_inventario(session, user_uuid, report_id, inventory_id)
     repo = PgAnalysisJobRepository(session)
 
-    # IDEMPOTÊNCIA: um retry do agente é comportamento normal, e antes cada
-    # chamada criava um job novo — ou seja, uma segunda análise PAGA. Se já
-    # existe um job em andamento para este report, devolvemos o mesmo em vez de
-    # disparar outro. O índice único parcial no banco é a garantia final, para
-    # o caso de duas requisições chegarem juntas.
-    existente = await repo.buscar_ativo_por_report(report_id, user_uuid)
+    existente = await repo.buscar_ativo_por_report(
+        report_id,
+        user_uuid,
+    )
+
     if existente is not None:
         return AnalysisJobResponse(
             job_id=existente.job_id,
@@ -545,18 +757,26 @@ async def start_analysis(
         report_id=report_id,
         external_id=external_id,
     )
+
     try:
         await repo.create(job)
         await session.commit()
     except IntegrityError as e:
-        # Corrida: outra requisição criou o job entre a consulta e o insert.
         await session.rollback()
-        concorrente = await repo.buscar_ativo_por_report(report_id, user_uuid)
+
+        concorrente = await repo.buscar_ativo_por_report(
+            report_id,
+            user_uuid,
+        )
+
         if concorrente is None:
             raise _erro(
-                status.HTTP_409_CONFLICT, "ANALISE_DUPLICADA",
-                "já existe uma análise para este report", retryable=False,
+                status.HTTP_409_CONFLICT,
+                "ANALISE_DUPLICADA",
+                "já existe uma análise para este report",
+                retryable=False,
             ) from e
+
         return AnalysisJobResponse(
             job_id=concorrente.job_id,
             report_id=concorrente.report_id,
@@ -572,6 +792,11 @@ async def start_analysis(
         report_id,
         job.job_id,
         sm,
+        options.decision_context.model_dump(exclude_none=True)
+        if options and options.decision_context
+        else None,
+        inventory_id=inventory_id,
+        nova_narrativa=nova_narrativa,
     )
 
     return AnalysisJobResponse(
@@ -594,9 +819,17 @@ async def get_analysis_by_external_id(
     session: DbSession,
 ) -> AnalysisJobResponse:
     repo = PgAnalysisJobRepository(session)
-    job = await repo.get_by_external_id(external_id, UUID(user.sub))
+    job = await repo.get_by_external_id(
+        external_id,
+        UUID(user.sub),
+    )
+
     if job is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="analysis job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="analysis job not found",
+        )
+
     return AnalysisJobResponse(
         job_id=job.job_id,
         report_id=job.report_id,
@@ -604,34 +837,91 @@ async def get_analysis_by_external_id(
         status=job.status,
         llm_output=job.llm_output,
         error=job.error,
-        result=AnalysisV2Response.resilient_parse(job.ai_structured_output) if job.ai_structured_output else None,
+        result=(
+            AnalysisV2Response.resilient_parse(
+                job.ai_structured_output,
+            )
+            if job.ai_structured_output
+            else None
+        ),
         llm_input_payload=job.llm_input_payload,
         created_at=job.created_at,
     )
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-def _make_llm_client() -> MockLLMClient | GeminiLLMClient | OpenRouterLLMClient | ClaudeLLMClient:
+def _make_llm_client() -> (
+    MockLLMClient | GeminiLLMClient | OpenRouterLLMClient | ClaudeLLMClient | NvidiaLLMClient
+):
     settings = get_settings()
+
     match settings.llm_provider:
         case "openrouter":
             return OpenRouterLLMClient(
-                api_key=settings.openrouter_api_key, model=settings.openrouter_model
+                api_key=settings.openrouter_api_key,
+                model=settings.openrouter_model,
             )
+
         case "gemini":
             return GeminiLLMClient(
-                api_key=settings.gemini_api_key, model=settings.gemini_model
+                api_key=settings.gemini_api_key,
+                model=settings.gemini_model,
             )
+
         case "anthropic":
             return ClaudeLLMClient(
-                api_key=settings.anthropic_api_key, model=settings.anthropic_model
+                api_key=settings.anthropic_api_key,
+                model=settings.anthropic_model,
             )
+
+        case "nvidia":
+            return _make_nvidia_client()
+
         case _:
             return MockLLMClient()
 
 
-# ── Legacy direct endpoint ────────────────────────────────────────────────────
+def _make_nvidia_client() -> NvidiaLLMClient:
+    settings = get_settings()
+
+    return NvidiaLLMClient(
+        api_key=settings.nvidia_api_key,
+        model=settings.nvidia_model,
+        base_url=settings.nvidia_base_url,
+        timeout_seconds=settings.nvidia_timeout_seconds,
+    )
+
+
+def _make_orchestrator() -> LLMOrchestrator:
+    settings = get_settings()
+
+    primary_client = _make_llm_client()
+
+    primary_uses_mcp = settings.llm_provider == "nvidia" and settings.mcp_prompts_enabled
+    primary_mcp_client = get_mcp_prompt_client() if primary_uses_mcp else None
+
+    fallback_enabled = (
+        settings.llm_provider == "anthropic" and settings.llm_fallback_provider == "nvidia"
+    )
+    fallback_client = _make_nvidia_client() if fallback_enabled else None
+
+    fallback_uses_mcp = fallback_enabled and settings.mcp_prompts_enabled
+    fallback_mcp_client = get_mcp_prompt_client() if fallback_uses_mcp else None
+
+    logger.info(
+        "llm_runtime_selected primary=%s fallback=%s primary_mcp=%s fallback_mcp=%s",
+        settings.llm_provider,
+        settings.llm_fallback_provider if fallback_enabled else "none",
+        primary_uses_mcp,
+        fallback_uses_mcp,
+    )
+
+    return LLMOrchestrator(
+        llm_client=primary_client,
+        mcp_client=primary_mcp_client,
+        fallback_client=fallback_client,
+        fallback_mcp_client=fallback_mcp_client,
+    )
+
 
 @router.post(
     "/direct",
@@ -643,28 +933,29 @@ async def direct_analysis(
     body: LegacyAnalysisRequest,
     user: CurrentUser,
 ) -> AnalysisV2Response:
-    """Accepts a pre-computed workload payload (no CSV upload required).
-
-    Returns ``AnalysisV2Response`` synchronously. Use this when billing data
-    and cross-cloud equivalents are already computed by the client.
-    """
     billing_data = {
         "source_provider": body.source_provider,
         "billing_period": body.billing_period,
         "currency": body.currency,
         "total_spend": body.total_spend,
-        "company_context": body.company_context.model_dump() if body.company_context else None,
-        "workloads": [w.model_dump() for w in body.workloads],
+        "company_context": (body.company_context.model_dump() if body.company_context else None),
+        "workloads": [workload.model_dump() for workload in body.workloads],
     }
+    if body.decision_context:
+        billing_data["decision_context"] = body.decision_context.model_dump(exclude_none=True)
 
-    orchestrator = LLMOrchestrator(llm_client=_make_llm_client())
+    orchestrator = _make_orchestrator()
+
     logger.info(
         "direct_analysis_started provider=%s period=%s",
-        body.source_provider, body.billing_period,
+        body.source_provider,
+        body.billing_period,
     )
 
     try:
-        result = await orchestrator.generate_from_legacy(billing_data)
+        result = await orchestrator.generate_from_legacy(
+            billing_data,
+        )
     except Exception as exc:
         logger.exception("direct_analysis_failed")
         raise HTTPException(
@@ -672,7 +963,10 @@ async def direct_analysis(
             detail=f"LLM analysis failed: {exc}",
         ) from exc
 
-    logger.info("direct_analysis_completed viability=%s", result.viability_score)
+    logger.info(
+        "direct_analysis_completed viability=%s",
+        result.viability_score,
+    )
     return result
 
 
@@ -688,8 +982,14 @@ async def get_analysis_result(
 ) -> AnalysisJobResponse:
     repo = PgAnalysisJobRepository(session)
     job = await repo.get_by_id(job_id, UUID(user.sub))
+
     if job is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="analysis job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="analysis job not found",
+        )
+    report = await PgBillingReportRepository(session).get_by_id(job.report_id, UUID(user.sub))
+
     return AnalysisJobResponse(
         job_id=job.job_id,
         report_id=job.report_id,
@@ -697,15 +997,59 @@ async def get_analysis_result(
         status=job.status,
         llm_output=job.llm_output,
         error=job.error,
-        result=AnalysisV2Response.resilient_parse(job.ai_structured_output) if job.ai_structured_output else None,
+        result=(
+            AnalysisV2Response.resilient_parse(
+                job.ai_structured_output,
+            )
+            if job.ai_structured_output
+            else None
+        ),
         llm_input_payload=job.llm_input_payload,
         created_at=job.created_at,
+        diagnostico_de_entrada=(
+            _diagnostico_de_entrada(
+                report.schema_version,
+                report.provider.value if report.provider else None,
+                job.llm_input_payload,
+            )
+            if report is not None
+            else None
+        ),
     )
 
 
-# ── Legacy pipeline ───────────────────────────────────────────────────────────
-# Same data as /start/{report_id} but serialized in the legacy workload format
-# before being sent to the LLM. Existing endpoints above are NOT modified.
+@router.get(
+    "/{job_id}/service-couplings",
+    response_model=ServiceCouplingsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Acoplamento por serviço da fatura, com o nível que o score usa",
+)
+async def get_service_couplings(
+    job_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+) -> ServiceCouplingsResponse:
+    """Uma linha por serviço, calculada do payload salvo da análise.
+
+    Substitui, na tela de acoplamento, a leitura de `cross_cloud_equivalents`
+    (tabela de preço por destino). `409 ANALISE_NAO_CONCLUIDA` (repetir) ou
+    `409 ANALISE_SEM_SERVICOS` (análise anterior à lista de serviços).
+    Contrato: docs/endpoints/service-couplings.md.
+    """
+    try:
+        visao = await consultar_acoplamento_uc(session).da_analise(UUID(user.sub), job_id)
+    except NotFoundError as e:
+        raise erro(
+            status.HTTP_404_NOT_FOUND, "ANALISE_NAO_ENCONTRADA", str(e), retryable=False
+        ) from e
+    except AnaliseNaoConcluidaError as e:
+        raise erro(status.HTTP_409_CONFLICT, "ANALISE_NAO_CONCLUIDA", str(e), retryable=True) from e
+    except AnaliseFalhouError as e:
+        raise erro(status.HTTP_409_CONFLICT, "ANALISE_FALHOU", str(e), retryable=False) from e
+    except AnaliseSemServicosError as e:
+        raise erro(status.HTTP_409_CONFLICT, "ANALISE_SEM_SERVICOS", str(e), retryable=False) from e
+    return ServiceCouplingsResponse.de(visao)
+
 
 async def _run_legacy_analysis_pipeline(
     user_id: UUID,
@@ -713,36 +1057,55 @@ async def _run_legacy_analysis_pipeline(
     job_id: UUID,
     sessionmaker,
 ) -> None:
-    """Legacy-format pipeline: builds context via the normal pipeline, then
-    serializes it as workloads[] JSON before sending to the LLM."""
-    logger.info("legacy_pipeline_started job_id=%s", job_id)
-    async with sessionmaker() as session:
+    logger.info(
+        "legacy_pipeline_started job_id=%s",
+        job_id,
+    )
+
+    async with _sinal_da_analise(job_id, sessionmaker), sessionmaker() as session:
         job_repo = PgAnalysisJobRepository(session)
         job = await job_repo.get_by_id(job_id, user_id)
+
         if job is None:
-            logger.warning("legacy_pipeline_job_not_found job_id=%s", job_id)
+            logger.warning(
+                "legacy_pipeline_job_not_found job_id=%s",
+                job_id,
+            )
             return
 
         job.mark_processing()
         await job_repo.update(job)
 
         try:
-            ctx = await _build_ctx(user_id, report_id, session)
+            ctx = await _build_ctx(
+                user_id,
+                report_id,
+                session,
+            )
             legacy_payload = serialize_as_legacy(ctx)
-            orchestrator = LLMOrchestrator(llm_client=_make_llm_client())
-            v2_result = await orchestrator.generate_from_legacy(legacy_payload)
+
+            orchestrator = _make_orchestrator()
+            v2_result = await orchestrator.generate_from_legacy(
+                legacy_payload,
+            )
 
             if not isinstance(v2_result, AnalysisV2Response):
+                raw_result = v2_result.model_dump() if hasattr(v2_result, "model_dump") else {}
                 v2_result = AnalysisV2Response.resilient_parse(
-                    v2_result.model_dump() if hasattr(v2_result, "model_dump") else {}
+                    raw_result,
                 )
 
             llm_output = (
-                f"Viability score: {v2_result.viability_score}/1000. "
-                f"Recommendation: {v2_result.recommendation}. "
-                f"Provider: {v2_result.recommended_provider}. "
-                f"Savings: ${v2_result.savings_summary.total_monthly_savings_usd:.2f}/mo."
+                f"Viability score: "
+                f"{v2_result.viability_score}/1000. "
+                f"Recommendation: "
+                f"{v2_result.recommendation}. "
+                f"Provider: "
+                f"{v2_result.recommended_provider}. "
+                f"Savings: "
+                f"${v2_result.savings_summary.total_monthly_savings_usd:.2f}/mo."
             )
+
             job.mark_completed(
                 output=llm_output,
                 structured=v2_result.model_dump(),
@@ -750,36 +1113,40 @@ async def _run_legacy_analysis_pipeline(
             )
             await job_repo.update(job)
             await session.commit()
-            logger.info("legacy_pipeline_completed job_id=%s", job_id)
+
+            logger.info(
+                "legacy_pipeline_completed job_id=%s",
+                job_id,
+            )
 
         except Exception:
             await session.rollback()
-            logger.exception("legacy_pipeline_failed job_id=%s", job_id)
+            logger.exception(
+                "legacy_pipeline_failed job_id=%s",
+                job_id,
+            )
             job.mark_failed("unexpected pipeline error")
             await job_repo.update(job)
             await session.commit()
 
 
-async def _build_ctx(user_id: UUID, report_id: UUID, session) -> "MigrationContext":
-    """Build MigrationContext — shared by both legacy endpoints."""
-    from app.core.exceptions import NotFoundError
-    uc = BuildMigrationContextUseCase(
-        PgBillingReportRepository(session),
-        PgBillingEnrichedRepository(session),
-        PGServiceMetadataRepository(session),
-        PGServiceComparisonRepository(session),
-        sku_repo=PgCloudSkuRepository(session),
-        fx_repo=PgExchangeRateRepository(session),
-        price_repo=PgCloudPricePointRepository(session),
-    )
+async def _build_ctx(
+    user_id: UUID,
+    report_id: UUID,
+    session,
+) -> MigrationContext:
     try:
-        return await uc.execute(
-            BuildMigrationContextInput(user_id=user_id, report_id=report_id)
-        )
+        return await construtor_de_contexto(session)(user_id, report_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
 
 
 @router.post(
@@ -795,23 +1162,24 @@ async def legacy_start_analysis(
     background: BackgroundTasks,
     external_id: UUID | None = None,
 ) -> AnalysisJobResponse:
-    """Same pipeline as /start/{report_id} but sends the legacy workloads[]
-    format to the LLM. Returns a job_id; poll GET /{job_id}/result for the
-    AnalysisV2Response.
-    """
     job = AnalysisJob(
         job_id=uuid4(),
         user_id=UUID(user.sub),
         report_id=report_id,
         external_id=external_id,
     )
+
     repo = PgAnalysisJobRepository(session)
     await repo.create(job)
     await session.commit()
 
     sm = get_sessionmaker()
     background.add_task(
-        _run_legacy_analysis_pipeline, UUID(user.sub), report_id, job.job_id, sm,
+        _run_legacy_analysis_pipeline,
+        UUID(user.sub),
+        report_id,
+        job.job_id,
+        sm,
     )
 
     return AnalysisJobResponse(
@@ -825,18 +1193,16 @@ async def legacy_start_analysis(
 
 @router.get(
     "/legacy/{job_id}/agents-payload",
-    summary="Return the legacy workload JSON sent to the LLM (inspection endpoint)",
+    summary=("Return the legacy workload JSON sent to the LLM (inspection endpoint)"),
 )
 async def get_legacy_agents_payload(
     job_id: UUID,
     user: CurrentUser,
     session: DbSession,
 ) -> dict:
-    """Returns the legacy workload[] serialization of the migration context.
-
-    Mirrors GET /{job_id}/agents-payload but in the legacy format so callers
-    can inspect exactly what the LLM receives in the legacy pipeline.
-    report_id == job_id (same as the existing agents-payload convention).
-    """
-    ctx = await _build_ctx(UUID(user.sub), job_id, session)
+    ctx = await _build_ctx(
+        UUID(user.sub),
+        job_id,
+        session,
+    )
     return serialize_as_legacy(ctx)

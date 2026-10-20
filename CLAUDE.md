@@ -29,8 +29,27 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Schema do banco / DDL / `raw_payload` conventions | [`docs/data-model.md`](docs/data-model.md) |
 | Parsers de cloud / adicionar novo / política `global_zero` | [`docs/parsers.md`](docs/parsers.md) |
 | Capacity Pool Model / FOCUS / WorkloadPool / aggregator | [`docs/capacity-pool-model.md`](docs/capacity-pool-model.md) |
+| Exports detalhados (CUR 2.0, BigQuery, Azure, OCI) / base amortizada / fatos medidos / mocks | [`PLANO_CUR_BIGQUERY.md`](PLANO_CUR_BIGQUERY.md) |
+| Inventário (AWS Config, Asset Inventory, Resource Graph) / topologia / dependências / ondas / Terraform com rede | [`PLANO_INVENTARIO_API.md`](PLANO_INVENTARIO_API.md) |
+| Acoplamento (lock-in) por serviço / endpoint `service-couplings` / inventário como evidência | [`docs/endpoints/service-couplings.md`](docs/endpoints/service-couplings.md) · [`PLANO_LOCKIN_INVENTARIO.md`](PLANO_LOCKIN_INVENTARIO.md) |
 | Convenções de rota / paginação / serialização | [`docs/api-conventions.md`](docs/api-conventions.md) |
 | Catálogo `/v1/billing-files` | [`docs/endpoints/billing.md`](docs/endpoints/billing.md) |
+| Catálogo `/v1/inventories` / export de cada nuvem / efeito na análise e no Terraform | [`docs/endpoints/inventories.md`](docs/endpoints/inventories.md) |
+| Preço por região / zonas / fontes oficiais / família (arquitetura, burstable) / payback | [`PLANO_PRECO_REGIONAL.md`](PLANO_PRECO_REGIONAL.md) · [`docs/precision-engine.md`](docs/precision-engine.md) |
+| Caminho do agente (MCP): snapshot de leitura, envio idempotente, versões | [`docs/endpoints/agent-snapshots.md`](docs/endpoints/agent-snapshots.md) · [`PLANO_SNAPSHOT_AGENTE.md`](PLANO_SNAPSHOT_AGENTE.md) |
+| `decision_support` compacto para o agente (`agent-snapshot-v2`, rota de detalhe) | [`PLANO_DECISION_SUPPORT_COMPACTO.md`](PLANO_DECISION_SUPPORT_COMPACTO.md) |
+| Cotação de compute pela capacidade-hora / Savings Plan e reserva de compute na comparação / antes e depois nos seis relatórios | [`PLANO_EMPACOTAMENTO.md`](PLANO_EMPACOTAMENTO.md) |
+| Lote da autoridade (entregue como v4: contestação verificável, provedor não avaliado, classificação, pool coberto por compromisso, confiança pelo custo atual) e fila de precisão (custos por zona, `perf_coef`) | [`PLANO_AUTORIDADE_V3_E_PRECISAO.md`](PLANO_AUTORIDADE_V3_E_PRECISAO.md) |
+| Migrar uma aplicação ou um serviço com tudo que vai junto / rotas `applications` e `migration-plans` / custo do escopo / exportação / Terraform do escopo | [`PLANO_ESCOPO_DE_MIGRACAO.md`](PLANO_ESCOPO_DE_MIGRACAO.md) · [`docs/endpoints/migration-plans.md`](docs/endpoints/migration-plans.md) |
+| Estratégia da sprint: fechamento do 13/10, decisões do usuário, pendências do MCP, sprint de Terraform em blocos (T0–T7) | [`PLANO_ESTRATEGIA_SPRINT_TERRAFORM.md`](PLANO_ESTRATEGIA_SPRINT_TERRAFORM.md) |
+| Fila de prioridades do que está aberto (faça agora / assim que possível / fora do MVP) e o que já foi concluído | [`PROXIMAS_EXECUCOES.md`](PROXIMAS_EXECUCOES.md) |
+| Lock-in pelo inventário e pela classe no score (V4.4 e V4.5): regra `lock_in_efetivo`, metadata curada pelo nome do DE-PARA, tarefas do `score-7rs-v5` para o autor do #32, curadoria pendente | [`PLANO_SCORE_V5_LOCKIN.md`](PLANO_SCORE_V5_LOCKIN.md) |
+| Ciclo de vida do preço (VIVO → ADUBO, duração de cada estado, agente não revive preço, revitalização por billing, quórum) — P3.0–P3.2 feitos | [`PLANO_CICLO_DE_VIDA_DO_PRECO.md`](PLANO_CICLO_DE_VIDA_DO_PRECO.md) |
+| Rede por tipo (balanceador, NAT, IP, VPN, tráfego entre zonas, CDN) cotada pela quantidade medida / destino grátis / taxas oficiais / plano de controle do Kubernetes, segredos e chaves (R4) / Cloud Run como serverless | [`PLANO_PRECO_NAO_COMPUTE.md`](PLANO_PRECO_NAO_COMPUTE.md) |
+| Tabela de equivalentes: tipo, portabilidade e risco / logs, DNS, WAF, registro de imagens e métricas cotados pela quantidade / DE-PARA (Functions da Azure, PostgreSQL da OCI) e curadoria | [`PLANO_EQUIVALENTES_E_TARIFAS.md`](PLANO_EQUIVALENTES_E_TARIFAS.md) |
+| Cenários de entrada (Cost Explorer, fatura sem ID, CUR, com ou sem inventário) / custo estimado pelo tipo / diagnóstico de entrada da análise | [`PLANO_CENARIOS_DE_ENTRADA.md`](PLANO_CENARIOS_DE_ENTRADA.md) |
+| Curadoria de nomes de serviço das faturas (fila de sugestões, aprovação pela OneShift, apelido do DE-PARA) | [`docs/endpoints/curadoria.md`](docs/endpoints/curadoria.md) |
+| Mudanças de tela decididas, para o front (premissa 1 vCPU = 1 vCPU, estado da reanálise na lista) | [`PLANO_ALTERACOES_DE_TELA.md`](PLANO_ALTERACOES_DE_TELA.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
 
@@ -153,13 +172,19 @@ existe").
   preços de API oficial em `cloud_price_points` (Azure/OCI), shape de instância
   (instance-hours → vCPU/RAM), packing por custo total, categorias não-compute
   por razão de taxa, consolidação por provedor com recomendação determinística,
-  ledger `premissas` e **camada de reconciliação** (a análise auditando a si
-  mesma). Pendente: preços AWS/GCP, `family_equivalence`, payback.
+  ledger `premissas`, **camada de reconciliação** (a análise auditando a si
+  mesma) e **cotação por região** (cada pool na zona dele, preços oficiais dos
+  4 provedores, arquitetura e burstable no packer, payback do agente derivado
+  da premissa — [`PLANO_PRECO_REGIONAL.md`](PLANO_PRECO_REGIONAL.md)).
+  Compute cotado pela capacidade-hora medida, com o compromisso de compute
+  saindo da origem junto com os pools ([`PLANO_EMPACOTAMENTO.md`](PLANO_EMPACOTAMENTO.md)).
+  Custos auxiliares por zona e burstable na origem feitos em 16/10. Pendente: `perf_coef`
+  (espera a fonte, decisão 2.7) e payback na tela (falta a fonte do custo da migração).
 - **O backend manda no número; a IA narra.** `use_cases/analysis/backend_authority.py`
   sobrescreve custo, economia e provedor recomendado da resposta do LLM com o
   cálculo determinístico de `resumo_executivo`. O qualitativo do modelo é
   preservado. Sem isso a resposta da API poderia contradizer a reconciliação.
-- **Seeds têm ordem.** `seed_from_csv` (816 linhas, DE-PARA autoritativo) roda
+- **Seeds têm ordem.** `seed_from_csv` (864 linhas, DE-PARA autoritativo) roda
   **por último** — ver [`docs/dev-setup.md`](docs/dev-setup.md#41-seeds-de-referência--a-ordem-importa).
   Na ordem errada o ambiente novo fica com `service_type` grosseiro.
 - **Gates de integração:** `app/tests/integration/` roda a pipeline inteira sobre

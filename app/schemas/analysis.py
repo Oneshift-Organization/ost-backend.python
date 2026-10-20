@@ -1,11 +1,12 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.analysis_v2 import AnalysisV2Response
+from app.schemas.diagnostico_de_entrada import DiagnosticoDeEntradaOut
 
 
 class TechnicalMatchItem(BaseModel):
@@ -86,6 +87,28 @@ class AnalysisJobResponse(BaseModel):
     result: AnalysisV2Response | None = None
     llm_input_payload: dict | None = None
     created_at: datetime
+    # O que os arquivos enviados permitem; null quando não há problema a dizer
+    diagnostico_de_entrada: DiagnosticoDeEntradaOut | None = None
+
+
+class DispStatusIn(BaseModel):
+    """Corpo do `PUT /v1/analyses/{job_id}/disp-status`.
+
+    Um campo só, de propósito: esta rota muda visibilidade e nada mais. Aceitar
+    outros campos abriria caminho para o front editar resultado de análise.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    disp_status: Literal[0, 1] = Field(
+        description="1 = ativa (visível na listagem); 0 = depreciada (some da lista)."
+    )
+
+
+class DispStatusOut(BaseModel):
+    job_id: UUID
+    disp_status: int
+    disp_status_updated_at: datetime | None = None
 
 
 class AnalysisJobSummary(BaseModel):
@@ -95,10 +118,29 @@ class AnalysisJobSummary(BaseModel):
     status: str
     provider: str | None = None
     source_filename: str | None = None
+    # Nome do billing dado pelo usuário, e o que a tela mostra (alias ou arquivo)
+    alias: str | None = None
+    nome_exibicao: str | None = None
     row_count: int = 0
     recommended_provider: str | None = None
     recommendation: str | None = None
     viability_score: int | None = None
     analysis_confidence: str | None = None
+    decision_score_status: str | None = None
+    decision_score_lower_bound: float | None = None
+    decision_score_upper_bound: float | None = None
+    decision_score_value: float | None = None
+    decision_score_method: str | None = None
+    # Só informativo na listagem — a tela de lixeira precisa distinguir. O
+    # `GET /v1/analyses` já esconde as depreciadas por default.
+    disp_status: int = 1
     error: str | None = None
     created_at: datetime
+    # O que os arquivos enviados permitem: `nivel` dá a cor do aviso na lista
+    diagnostico_de_entrada: DiagnosticoDeEntradaOut | None = None
+    # Uma linha por billing: refazer a análise (anexar inventário, reanalisar) cria
+    # uma revisão, e a lista mostra a vigente. Se uma revisão mais nova ainda não
+    # concluiu, o estado e o erro dela vêm aqui; a vigente segue valendo.
+    reanalise_job_id: UUID | None = None
+    reanalise_status: str | None = None
+    reanalise_erro: str | None = None

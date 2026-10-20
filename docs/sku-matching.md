@@ -111,8 +111,20 @@ Two new columns, propagated to the agent payload:
 
 ```
 mapping_confidence ∈ { high | medium | low }
-match_layer        ∈ { L0 | L1 | L2 | L3 | L4 | L5 }
+match_layer        ∈ { L0 | L1 | L2 | L3 | L4 | L5 | LN }
 ```
+
+`LN` (natureza) fica fora da escada: linha de compromisso de export detalhado
+(`SavingsPlanRecurringFee`, `RIFee`, SKU `Commitment…` do GCP) é classificada
+pela natureza que o próprio provedor informa (`charge_kind = commitment`), com
+confiança `high`. Pela escada, `ComputeSP:3yrNoUpfront` casava `computesp:*`
+como `core`, e as horas do plano viravam vCPU. Linhas de imposto, crédito,
+reembolso e ajuste (`charge_kind` fora da base) nem chegam à escada. Ver
+[`PLANO_CUR_BIGQUERY.md`](../PLANO_CUR_BIGQUERY.md) (RN2).
+
+O **descritor** vem de `billing_items.usage_type` quando o parser é de export
+detalhado (CUR `line_item_usage_type`, BigQuery `sku.description`); o caminho
+legado continua lendo do `raw_payload` (`UsageType`, `SKU description`).
 
 Relationship to existing enums ([`architecture.md`](architecture.md)): `match_layer`
 is *orthogonal* to `pricing_source`/`pricing_confidence`. `mapping_confidence`
@@ -188,6 +200,8 @@ flowchart TD
 | `*Kubernetes*cluster*fee*` / `*GKE*management*` | `gke_control_plane` | — |
 | `*Network*Egress*` / `*Inter-region*` | `network_egress` | — |
 | `*SSD*` storage | `storage_ssd` | — |
+| `*Balanced PD Capacity*` / `*Extreme PD Capacity*` | `storage_ssd` | — |
+| `*PD Capacity*` (o que sobra: Standard PD) | `storage_hdd` | — |
 | `*Cloud SQL*` / `*db-custom-*` | `database` | — |
 
 ### 4.1 `sku_classification_rules` (new table)

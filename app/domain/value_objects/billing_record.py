@@ -42,6 +42,21 @@ class NormalizedBillingRecord(TypedDict, total=False):
     source_file: str
     line_hash: str
 
+    # ── Exports detalhados (CUR, BigQuery, Azure, OCI) ──────────────────
+    # Opcionais: parser legado não os preenche e continua como antes.
+    # Descritor por SKU (`BoxUsage:m7g.2xlarge`, `N2 Instance Core running
+    # in Americas`). É o que a escada de SKU casa; antes o enriquecimento o
+    # procurava no raw_payload pelo nome da coluna de cada formato.
+    usage_type: str | None
+    # Natureza da linha — ver `value_objects/charge_kind.py`.
+    charge_kind: str | None
+    # Valor como aparece na fatura (unblended). `cost` é o amortizado.
+    cost_billed: Decimal | None
+    # Fatos MEDIDOS pelo provedor: vcpus, memory_gib, instance_type,
+    # project_id, first_usage… Nunca estimativa — estimativa gravada aqui
+    # chegaria a jusante como fato.
+    attributes: dict[str, object]
+
 
 NORMALIZED_COLUMNS: tuple[str, ...] = (
     "user_id",
@@ -69,4 +84,8 @@ NORMALIZED_COLUMNS: tuple[str, ...] = (
     "raw_payload",
     "source_file",
     "line_hash",
+    "usage_type",
+    "charge_kind",
+    "cost_billed",
+    "attributes",
 )

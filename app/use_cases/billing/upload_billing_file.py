@@ -12,6 +12,8 @@ class UploadBillingFileInput:
     file_path: Path
     source_filename: str
     external_id: UUID | None = None
+    # Nome dado na importação (M9); None ou vazio fica com o nome do arquivo
+    alias: str | None = None
 
 
 class UploadBillingFileUseCase:
@@ -31,4 +33,6 @@ class UploadBillingFileUseCase:
             status=JobStatus.QUEUED,
             external_id=payload.external_id,
         )
+        # Valida antes de gravar: nome inválido não deixa billing pela metade
+        report.renomear(payload.alias)
         return await self._repo.save(report)

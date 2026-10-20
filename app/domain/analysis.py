@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from app.domain.entities.inventario_medido import InventarioMedido
 from app.domain.entities.workload_pool import AuxiliaryCosts, FamilyPool, WorkloadPool
 
 
@@ -47,6 +48,10 @@ class FinancialEstimate:
     # payload, silenciosamente.
     price_source: str | None = None
     price_captured_at: datetime | None = None
+    price_region: str | None = None
+    price_region_approximate: bool = False
+    price_lifecycle_state: str | None = None
+    price_lifecycle_score: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +60,13 @@ class EquivalentService:
     service_name: str
     category: str
     service_type: str
+    # Chave nativa do provedor de destino — `n2-standard-8`, `m6i.2xlarge`,
+    # `VM.Standard.E4.Flex`. O matcher já a calcula (`EquivalentOption.sku_id`)
+    # e ela vinha sendo descartada aqui: `service_name` é rótulo humano
+    # ("Compute Engine N2"), não shape. Sem isto não há `machine_type` para
+    # escrever num Terraform, e nenhum consumidor consegue reproduzir a escolha.
+    # `None` quando o equivalente veio do catálogo curado, que não tem shape.
+    sku_id: str | None = None
     # match_basis: "pool_capacity" (L2 hardware) or "curated_only" (L3 only)
     match_basis: str = "pool_capacity"
     instances: int = 1
@@ -62,6 +74,9 @@ class EquivalentService:
     docs_costs: str | None = None
     technical_match: TechnicalMatch | None = None
     financials: FinancialEstimate | None = None
+    # Candidato de outra arquitetura (x86 ↔ ARM), usado porque nenhum da mesma
+    # cobria o pool. Migrar assim é replataforma (`perfil_de_familia`).
+    architecture_mismatch: bool = False
 
 
 @dataclass(frozen=True)
@@ -81,6 +96,8 @@ class BillingItemSummary:
     # inferido pode gerar DE-PARA errado (foi assim que object storage virou
     # block storage) — quem lê precisa saber a diferença.
     type_source: str = "curado"
+    # Raw evidence preserves missing values that legacy expectation rules default.
+    migration_metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -135,5 +152,10 @@ class MigrationContext:
     analysis_currency: str = "USD"
     # Ledger de premissas: fx aplicado, fonte de preços, janela, cobertura.
     premissas: dict[str, Any] = field(default_factory=dict)
+    # Pool → fração do preço sob demanda que o compromisso pagou (V4.6)
+    coberto_por_compromisso_estimado: dict[str, Decimal] = field(default_factory=dict)
     # Roll-up por provedor + recomendação (backend calcula, LLM narra).
     resumo_executivo: dict[str, Any] = field(default_factory=dict)
+    # Fatos medidos de export detalhado (armazenamento, bancos). None no
+    # caminho agregado — e o payload dele não ganha a seção.
+    inventario: InventarioMedido | None = None

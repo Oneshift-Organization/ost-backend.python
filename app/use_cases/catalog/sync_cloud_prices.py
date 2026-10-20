@@ -24,6 +24,10 @@ class SyncCloudPricesResult:
     provider: str
     fetched: int
     upserted: int
+    # Preços do mesmo conjunto (provedor, região, tipo, fonte) que a coleta não
+    # trouxe: tipo descontinuado ou nome que a coleta antiga gerava errado. Ficam
+    # marcados como ausentes (saem da cotação e envelhecem no ciclo de vida).
+    removed: int = 0
 
 
 class SyncCloudPricesUseCase:
@@ -35,11 +39,16 @@ class SyncCloudPricesUseCase:
         if not points:
             logger.warning("price_sync_empty", extra={"provider": provider})
             return SyncCloudPricesResult(provider=provider, fetched=0, upserted=0)
-        upserted, _ = await self._repo.bulk_upsert(points)
+        upserted, removed = await self._repo.substituir(points)
         logger.info(
             "price_sync_done",
-            extra={"provider": provider, "fetched": len(points), "upserted": upserted},
+            extra={
+                "provider": provider,
+                "fetched": len(points),
+                "upserted": upserted,
+                "removed": removed,
+            },
         )
         return SyncCloudPricesResult(
-            provider=provider, fetched=len(points), upserted=upserted
+            provider=provider, fetched=len(points), upserted=upserted, removed=removed
         )

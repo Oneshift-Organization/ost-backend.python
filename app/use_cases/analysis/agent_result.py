@@ -1,0 +1,354 @@
+"""Recepção da análise do agente: autoridade + sugestões.
+
+O agente busca a request, produz a análise e devolve aqui. Este módulo:
+
+1. traduz o payload determinístico do backend num mapa de caminho → valor;
+2. aplica `domain/services/authority.aplicar_autoridade` — sobrescreve só o que
+   é **derivação**, preserva estimativa e julgamento;
+3. processa as **sugestões**: contestação de severidade alta rebaixa a confiança
+   **sem trocar o número**;
+4. devolve o corrigido, com o bruto do agente ao lado para auditoria.
+
+O passo 3 é o que faz a inteligência do modelo entrar sem contaminar o cálculo.
+Ele vira sinal, não fonte.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+from typing import Any
+
+from app.domain.services.authority import ResultadoAutoridade, Substituicao, aplicar_autoridade
+from app.domain.services.confidence import rebaixar
+from app.domain.services.contestacao import (
+    VERIFICADO,
+    ObservacaoDoAgente,
+    PedidoDeSync,
+    acoes_da_contestacao,
+    verificar_contestacao,
+)
+from app.domain.services.payback import calcular_payback
+from app.schemas.analysis_v2 import AnalysisNarrativeDraft, AnalysisV2Response
+from app.use_cases.analysis.decision_support import impose_decision
+
+# Tipos de sugestão que afetam a confiança quando a severidade é alta. Os demais
+# (oportunidade, risco, dado_faltante) são informativos — o agente comentando o
+# contexto, não duvidando de um insumo nosso.
+_CONTESTACOES = frozenset({"contestacao_preco", "contestacao_equivalencia"})
+
+_EFEITO_REBAIXOU = "confianca_rebaixada"
+_EFEITO_INFO = "informativo"
+
+# Carimbado aqui, nunca aceito do agente — pelo mesmo motivo que
+# `efeito_backend`: ele não pode afirmar na tela que uma dúvida dele é nossa.
+_ORIGEM_AGENTE = "agente"
+
+# Campos que o backend reescreve, descartando o que vier na entrada.
+_CARIMBADOS = frozenset({"efeito_backend", "origem", "verificacao"})
+
+
+@dataclass(frozen=True, slots=True)
+class ResultadoRecepcao:
+    resposta: dict[str, Any]
+    sugestoes: list[dict[str, Any]]
+    confianca_final: str
+    autoridade: ResultadoAutoridade
+    # Para a rota gravar (V4.1): preço contestado a reconfirmar e o que o agente
+    # disse do preço, que o ciclo de vida guarda sem nunca reviver o preço
+    pedidos_de_sync: tuple[PedidoDeSync, ...] = ()
+    observacoes_do_agente: tuple[ObservacaoDoAgente, ...] = ()
+
+
+def mapear_verdade(
+    payload_backend: dict[str, Any],
+    resposta_agente: dict[str, Any],
+) -> dict[str, Any]:
+    """Traduz o payload determinístico em caminhos de campo da resposta.
+
+    Precisa ver a resposta do agente porque o **índice** de
+    `provider_comparison` depende da ordem em que ELE mandou. Casar por posição
+    escreveria o custo da OCI no item do Azure — o número certo no lugar errado,
+    que é pior que número errado, porque parece plausível.
+
+    Só emite caminhos que existem na resposta: campo ausente é assunto de
+    emissão, não de autoridade (ver `authority._escrever`).
+    """
+    resumo = payload_backend.get("resumo_executivo") or {}
+    por_provedor = resumo.get("por_provedor") or []
+    if not por_provedor:
+        return {}
+
+    verdade: dict[str, Any] = {}
+    do_backend = {str(p.get("provedor", "")).lower(): p for p in por_provedor}
+
+    recomendado = resumo.get("recomendado")
+    if recomendado:
+        verdade["recommended_provider"] = str(recomendado).upper()
+
+    for i, pc in enumerate(resposta_agente.get("provider_comparison") or []):
+        chave = str(pc.get("provider", "")).lower()
+        real = do_backend.get(chave)
+        if real is None:
+            # Provedor que o agente inventou e o backend não avaliou. Não há
+            # verdade a impor — a limpeza dele é outra decisão.
+            continue
+        verdade[f"provider_comparison.{i}.estimated_monthly_cost"] = float(
+            real["custo_estimado_total"]
+        )
+        verdade[f"provider_comparison.{i}.estimated_monthly_savings"] = float(
+            real["economia_mensal"]
+        )
+        verdade[f"provider_comparison.{i}.confidence_level"] = str(real.get("confianca", "low"))
+
+    melhor = do_backend.get(str(recomendado).lower()) if recomendado else None
+    atual = float(resumo.get("custo_mensal_atual") or 0.0)
+    economia = float(melhor["economia_mensal"]) if melhor else 0.0
+    verdade["savings_summary.total_monthly_savings_usd"] = economia
+    verdade["savings_summary.percentage_reduction"] = (
+        round(economia / atual * 100, 2) if atual > 0 else 0.0
+    )
+    verdade["savings_summary.confidence_level"] = (
+        str(melhor.get("confianca", "low")) if melhor else "low"
+    )
+
+    conf = (payload_backend.get("premissas") or {}).get("confianca_analise") or {}
+    if conf.get("nivel"):
+        verdade["analysis_confidence"] = conf["nivel"]
+
+    return verdade
+
+
+def processar_sugestoes(
+    sugestoes: list[dict[str, Any]],
+    confianca_inicial: str,
+    payload: Mapping[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], str]:
+    """Preenche `efeito_backend` e devolve a confiança após as contestações.
+
+    `efeito_backend` e `origem` **nunca** vêm do agente — se viessem, ele
+    poderia afirmar na tela que "a confiança foi rebaixada" quando não foi, ou
+    assinar a própria dúvida como se fosse do backend. Qualquer valor que chegue
+    nesses campos é descartado e reescrito aqui.
+
+    Só contestação com severidade alta rebaixa, e **um degrau no total**, não um
+    por sugestão: dez contestações não tornam a análise dez vezes menos
+    confiável, e permitir isso daria ao agente um jeito de zerar a confiança
+    repetindo a mesma queixa.
+
+    Com o snapshot (`payload`), a contestação de preço é conferida (V4.1): contra
+    preço oficial, da região e vivo, não rebaixa (`verificado_mantido`).
+    """
+    processadas: list[dict[str, Any]] = []
+    houve_contestacao_alta = False
+
+    for s in sugestoes:
+        tipo = str(s.get("tipo", ""))
+        alta = str(s.get("severidade", "")).lower() == "alta"
+        contesta = tipo in _CONTESTACOES and alta
+        efeito = _EFEITO_REBAIXOU if contesta else _EFEITO_INFO
+        verificacao: dict[str, Any] = {}
+        if tipo == "contestacao_preco" and payload is not None:
+            v = verificar_contestacao(s.get("referencia"), payload)
+            verificacao = {"verificacao": {"resultado": v.resultado, **v.evidencia}}
+            if v.resultado == VERIFICADO:
+                contesta, efeito = False, VERIFICADO
+        houve_contestacao_alta = houve_contestacao_alta or contesta
+        processadas.append(
+            {
+                **{k: v for k, v in s.items() if k not in _CARIMBADOS},
+                **verificacao,
+                "efeito_backend": efeito,
+                "origem": _ORIGEM_AGENTE,
+            }
+        )
+
+    final = rebaixar(confianca_inicial) if houve_contestacao_alta else confianca_inicial
+    return processadas, final
+
+
+def sugestoes_do_backend(payload_backend: dict[str, Any]) -> list[dict[str, Any]]:
+    """Alertas que o próprio backend levantou ao montar o payload.
+
+    Chegam com `efeito_backend` preenchido na origem (`Alerta.as_sugestao`) —
+    não é promessa, é o que já foi aplicado à confiança. Reescrevê-los aqui
+    perderia o `origem: backend`, e é ele que permite à tela distinguir "o
+    modelo desconfia do nosso preço" de "nós desconfiamos do nosso preço".
+    """
+    premissas = payload_backend.get("premissas") or {}
+    return [dict(s) for s in (premissas.get("sugestoes_backend") or [])]
+
+
+def _economia_do_selecionado(resposta: dict[str, Any], payload_backend: dict[str, Any]) -> Decimal:
+    """Economia mensal do provedor que a análise corrigida recomenda.
+
+    Com decisão do backend, `savings_summary` já sai dela. Sem decisão (payload
+    antigo), vem do `resumo_executivo` — a mesma fonte que `mapear_verdade` usa.
+    """
+    resumo_resposta = resposta.get("savings_summary")
+    if isinstance(resumo_resposta, dict) and "total_monthly_savings_usd" in resumo_resposta:
+        bruto: Any = resumo_resposta["total_monthly_savings_usd"]
+    else:
+        resumo = payload_backend.get("resumo_executivo") or {}
+        recomendado = str(resumo.get("recomendado") or "").lower()
+        linha = next(
+            (
+                p
+                for p in resumo.get("por_provedor") or []
+                if str(p.get("provedor", "")).lower() == recomendado
+            ),
+            None,
+        )
+        bruto = linha.get("economia_mensal") if linha and recomendado else 0
+    try:
+        return Decimal(str(bruto or 0))
+    except InvalidOperation:
+        return Decimal("0")
+
+
+def _derivar_payback(
+    autoridade: ResultadoAutoridade, payload_backend: dict[str, Any]
+) -> ResultadoAutoridade:
+    """`payback.meses` = ⌈premissa do agente ÷ economia do backend⌉ (PLANO D11).
+
+    A premissa (custo de migração) continua do agente: o backend não a modela.
+    A divisão passa a ser do backend, e o `meses` que o agente mandou vira
+    sobrescrita registrada, como qualquer número que ele calculasse.
+    """
+    resposta = autoridade.resposta
+    payback = resposta.get("payback")
+    if not isinstance(payback, dict) or payback.get("premissa_custo_migracao_usd") is None:
+        return autoridade
+    try:
+        custo = Decimal(str(payback["premissa_custo_migracao_usd"]))
+    except InvalidOperation:
+        return autoridade
+    economia = _economia_do_selecionado(resposta, payload_backend)
+    calculado = calcular_payback(custo, economia)
+
+    novo_payback = {
+        **payback,
+        "meses": calculado.meses,
+        "economia_mensal_usd": float(economia),
+        "calculado_pelo_backend": True,
+    }
+    if calculado.motivo:
+        novo_payback["motivo_backend"] = calculado.motivo
+    corrigida = {**resposta, "payback": novo_payback}
+    resumo = corrigida.get("savings_summary")
+    if isinstance(resumo, dict):
+        corrigida["savings_summary"] = {**resumo, "payback_period_months": calculado.meses}
+
+    substituicoes = autoridade.substituicoes
+    if payback.get("meses") != calculado.meses:
+        substituicoes = (
+            *substituicoes,
+            Substituicao("payback.meses", payback.get("meses"), calculado.meses),
+        )
+    return ResultadoAutoridade(corrigida, substituicoes)
+
+
+_NAO_AVALIADO = "provedor_nao_avaliado"
+# Texto que o agente pode dizer de um provedor; nota e custo dele não passam
+_TEXTO_DA_COMPARACAO = ("migration_complexity", "portability", "strengths", "weaknesses")
+
+
+def provedores_nao_avaliados(
+    payload_backend: dict[str, Any], resposta_agente: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Provedor que o agente comparou e o backend não avaliou (lote v4, V4.2).
+
+    `impose_decision` tira da `provider_comparison` todo provedor sem score do
+    backend: o que o agente disse dele sumia em silêncio. Vira sugestão
+    informativa, com o texto do agente e sem nenhum número dele."""
+    decisao = payload_backend.get("decision_support")
+    if not isinstance(decisao, dict):
+        return []
+    avaliados = {
+        str(s.get("provider", "")).lower()
+        for s in decisao.get("provider_scores") or []
+        if isinstance(s, dict)
+    }
+    origem = str(payload_backend.get("provedor_origem") or "").lower()
+    sugestoes: list[dict[str, Any]] = []
+    vistos: set[str] = set()
+    for item in resposta_agente.get("provider_comparison") or []:
+        if not isinstance(item, dict):
+            continue
+        provedor = str(item.get("provider") or "").strip()
+        chave = provedor.lower()
+        if not chave or chave in avaliados or chave == origem or chave in vistos:
+            continue
+        vistos.add(chave)
+        sugestoes.append(
+            {
+                "tipo": _NAO_AVALIADO,
+                "titulo": f"{provedor.upper()}: comparado pelo agente, sem avaliação do backend",
+                "detalhe": "O backend não cotou nem pontuou este provedor; o que segue é só "
+                "o que o agente disse.",
+                "provedor": chave,
+                "o_que_o_agente_disse": {
+                    k: item[k] for k in _TEXTO_DA_COMPARACAO if item.get(k) not in (None, "", [])
+                },
+            }
+        )
+    return sugestoes
+
+
+def receber_analise_do_agente(
+    payload_backend: dict[str, Any],
+    resposta_agente: dict[str, Any],
+    sugestoes: list[dict[str, Any]] | None = None,
+) -> ResultadoRecepcao:
+    """Aplica autoridade e sugestões. Função pura — persistência é da rota."""
+    verdade = mapear_verdade(payload_backend, resposta_agente)
+    autoridade = aplicar_autoridade(resposta_agente, verdade)
+
+    if "decision_support" in payload_backend:
+        finalized = impose_decision(
+            AnalysisNarrativeDraft.model_validate(autoridade.resposta),
+            payload_backend,
+        )
+        imposed = AnalysisV2Response.model_validate(finalized.model_dump()).model_dump(mode="json")
+        # Preserve other agent-surface fields (payback, provenance, etc.).
+        corrected = {**autoridade.resposta, **imposed}
+        overrides = tuple(
+            Substituicao(key, autoridade.resposta.get(key), value)
+            for key, value in imposed.items()
+            if autoridade.resposta.get(key) != value
+        )
+        autoridade = ResultadoAutoridade(corrected, autoridade.substituicoes + overrides)
+
+    autoridade = _derivar_payback(autoridade, payload_backend)
+
+    conf_inicial = str(
+        autoridade.resposta.get("analysis_confidence")
+        or (payload_backend.get("premissas") or {}).get("confianca_analise", {}).get("nivel")
+        or "low"
+    )
+    processadas, conf_final = processar_sugestoes(
+        [*(sugestoes or []), *provedores_nao_avaliados(payload_backend, resposta_agente)],
+        conf_inicial,
+        payload=payload_backend,
+    )
+    pedidos, observacoes = acoes_da_contestacao(sugestoes or [], payload_backend)
+
+    # As do backend vêm primeiro e **já processadas**: o efeito delas foi
+    # aplicado em `build_migration_context`, e `conf_inicial` já sai de lá
+    # rebaixada. Passá-las de novo por `processar_sugestoes` contaria o mesmo
+    # rebaixamento duas vezes.
+    todas = sugestoes_do_backend(payload_backend) + processadas
+
+    resposta = dict(autoridade.resposta)
+    resposta["analysis_confidence"] = conf_final
+    resposta["sugestoes"] = todas
+
+    return ResultadoRecepcao(
+        resposta=resposta,
+        sugestoes=todas,
+        confianca_final=conf_final,
+        autoridade=autoridade,
+        pedidos_de_sync=tuple(pedidos),
+        observacoes_do_agente=tuple(observacoes),
+    )

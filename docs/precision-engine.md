@@ -21,10 +21,10 @@ de 2026-07-28, também na **informação enviada ao agente**:
 | # | Defeito | Status |
 |---|---|---|
 | 1 | `delta_custo` comparava BRL (origem) com USD (catálogo) | ✅ resolvido (§3.1) |
-| 2 | Preços do catálogo eram seeds mock | ✅ Azure/OCI oficiais · ⚠️ AWS/GCP seguem seed |
+| 2 | Preços do catálogo eram seeds mock | ✅ oficiais nos 4 provedores, por região (PLANO_PRECO_REGIONAL) |
 | 3 | `match_pool` escolhia SKU mais barato e multiplicava (14×1vCPU) | ✅ resolvido (§4.2) |
-| 4 | Matching por vCPU/RAM ≥ apenas (ignora classe de família) | ❌ pendente (§7) |
-| 5 | `payback_period_months` vinha do LLM | ⚠️ LLM não calcula mais, mas payback ainda não é calculado (§7) |
+| 4 | Matching por vCPU/RAM ≥ apenas (ignora classe de família) | ⚠️ arquitetura e burstable resolvidos (§3.3); `perf_coef` pendente |
+| 5 | `payback_period_months` vinha do LLM | ⚠️ no envio do agente, derivado da premissa dele (§3.8); na tela, sem custo de migração, continua nulo |
 | 6 | Serviços não-VM sem modelo de unidade | ⚠️ parcial — razão de taxa (§3.5) |
 | 7 | Custo de compromisso (Savings Plan/RI/CUD) inflava o preço/vCPU do pool | ✅ resolvido (§4.1) |
 | 8 | Instance-hours tratados como vCPU-hours (pool 8× subdimensionado) | ✅ resolvido (§3.6) |
@@ -40,11 +40,11 @@ Pilar E (§5).
 ## 1. Goals — status
 
 - **G1** Todo `delta_custo` em moeda única, com taxa registrada — ✅
-- **G2** `confianca_preco` alta para ≥90% do custo comparado — ⚠️ hoje 2 de 3
-  alvos são `official`; o provedor-origem-oposto segue em seed
+- **G2** `confianca_preco` alta para ≥90% do custo comparado — ⚠️ compute
+  oficial nos 4 provedores; disco da Azure e banco gerenciado seguem `reference`
 - **G3** Mix alvo ótimo por custo total com desperdício controlado — ✅
 - **G4** Calculadora por categoria, zero if/else por cloud — ⚠️ parcial (§3.5)
-- **G5** `payback_period_months` calculado no backend — ❌ (§7)
+- **G5** `payback_period_months` calculado no backend — ⚠️ com a premissa do agente (§3.8)
 - **G6** Ledger de premissas em 100% dos payloads — ✅
 
 ## 2. Non-Goals
@@ -102,17 +102,31 @@ Fontes implementadas (`infrastructure/pricing/`):
 
 | Fonte | Módulo | O que traz |
 |---|---|---|
-| Azure Retail Prices API (público) | `azure_price_client.py` | ~900 VMs Linux on-demand (famílias B/D/E/F) |
-| OCI cetools API (público) | `oci_price_client.py` | taxas flex (OCPU/h + GB/h) → configs sintéticas |
-| Azure + OCI, categorias | `category_rate_client.py` | egress e block storage ($/GB, $/GB-mês) |
-| Referência publicada | `seed_category_rates.py` | storage/egress/database dos 4 provedores |
+| AWS, calculadora pública | `aws_price_client.py` | EC2 Linux on-demand por região (famílias m/c/r/t) |
+| GCP Cloud Billing Catalog (API key) | `gcp_price_client.py` | taxas vCPU/h e GB/h → tipos reais (E2, N2, N2D, N4, C3, C4A, T2A; standard/highmem/highcpu) |
+| Azure Retail Prices API (público) | `azure_price_client.py` | VMs Linux on-demand por região (B/D/E/F, sem DC/EC confidenciais) |
+| OCI cetools API (público) | `oci_price_client.py` | taxas flex → configs com 4, 8 e 16 GB por OCPU, gravadas em cada região |
+| Categorias, 4 provedores | `category_rate_client.py` | SSD, HDD, objeto e egress por região; disco da Azure fica de fora (preço por disco). Rede por tipo: balanceador, processamento, NAT, IP, VPN e tráfego entre zonas |
+| Referência publicada | `seed_category_rates.py` | storage/egress/database dos 4 provedores (`us-east`) |
 
-AWS (bulk de 480 MB) e GCP (exige API key) seguem pendentes — §7.
-Sync offline: `python scripts/sync_prices.py --providers azure,oci,categories,categories-live`.
+Sync offline por zona: `python scripts/sync_prices.py --providers aws,gcp,azure,oci,categories,categories-live`
+(`--zonas`, padrão `virginia,meio-oeste,sao-paulo,texas,california`).
 
-### 3.3 `family_equivalence` — ❌ NÃO implementado
-Segue no backlog (§7). O matching de compute continua por capacidade + custo,
-sem classe semântica nem `perf_coef`.
+**Cotação por região (PLANO_PRECO_REGIONAL).** Cada pool é cotado na zona dele
+(`domain/services/regioes.py`, 11 metrópoles equivalentes). Sem preço da
+região, outra da mesma zona; preço global (compute e armazenamento da OCI); por
+último a Virgínia, com o rótulo rebaixado para `reference`. Categorias usam a
+zona dominante do bill. O payload carrega `financeiro.preco_regiao`,
+`taxa_origem_regiao`/`taxa_destino_regiao` e `premissas.regioes`. São Paulo
+custa ~1,6x a Virgínia em AWS, Azure e GCP; a OCI cobra o mesmo.
+
+### 3.3 `family_equivalence` — ⚠️ arquitetura e burstable (PLANO_PRECO_REGIONAL R5)
+`domain/services/perfil_de_familia.py` lê do nome a arquitetura (x86/ARM) e se a
+família é burstable. O packer não cota carga sustentada em burstable e tenta a
+mesma arquitetura primeiro; a outra só entra quando nenhum mix da mesma cobre o
+pool, marcada `arquitetura_diferente`. A classe por razão RAM/vCPU fica com a
+penalidade de desperdício do packer. `perf_coef` segue pendente (§7): não há
+fonte pública confiável de desempenho por vCPU entre gerações.
 
 ### 3.4 `premissas` (assumption ledger) — implementado, mais rico que o plano
 ```json
@@ -150,6 +164,23 @@ unidade fino (IOPS, engine, requests, tiers de egress).
 
 Confiança do resultado = **elo mais fraco** entre a taxa de origem e a de destino.
 
+**Rede por tipo, pela quantidade medida** ([`PLANO_PRECO_NAO_COMPUTE.md`](../PLANO_PRECO_NAO_COMPUTE.md)).
+O balde `network_egress` misturava egress, balanceador, NAT, IP público, VPN e
+tráfego entre zonas, e tudo saía pela taxa de egress. `domain/services/rede_por_uso.py`
+separa cada linha pelo uso (tabela por nuvem). Balanceador (hora e processamento),
+NAT (hora e GB), IP, VPN e tráfego entre zonas são cotados por **quantidade medida ×
+taxa do destino**, sem precisar da taxa da origem; a linha sem quantidade usa o preço
+efetivo das medidas. Taxa zero é destino grátis (NAT, VPN e IP da OCI). A confiança é
+a da taxa do destino. Endpoint, DNS, resolver e log (`network_other`) ficam ao custo
+atual. O egress de verdade segue pela razão.
+
+A taxa de `storage_ssd` é a do SSD **de propósito geral** de cada provedor: gp3,
+Premium SSD, **pd-balanced** e Block Volume balanceado. No GCP era a do pd-ssd
+(US$ 0,170, o tier de desempenho). Somado à regra que levava o Balanced PD para
+HDD, isso tratava o disco padrão do GCP como magnético na origem e como o SSD
+mais caro no destino. `terraform_plan._TAXA_GB_MES` é uma cópia pura destas
+taxas; um teste trava as duas juntas.
+
 ### 3.6 Shape de instância — não estava no plano
 `domain/services/instance_shape.py` e `azure_shape.py` derivam (vCPU, RAM) do
 **esquema de nomenclatura**, não de tabela por instância:
@@ -172,6 +203,14 @@ portável, sem reescrita         → rehost      (baixo)
 ```
 Sem metadata retorna `None` — a IA saber que não temos o dado é melhor que
 receber palpite. Alimenta o campo `migracao` de cada serviço no payload.
+
+
+### 3.8 Payback — derivado da premissa do agente (PLANO_PRECO_REGIONAL R6)
+O backend não modela o custo único de migração. Quando o agente declara
+`payback.premissa_custo_migracao_usd`, `agent_result._derivar_payback` calcula
+`meses = ⌈premissa ÷ economia mensal do provedor selecionado⌉` e sobrescreve o
+`meses` dele (registrado em `campos_sobrescritos`). Sem economia, `meses: null`
+com `motivo_backend`. Autoridade `agent-authority-v2`.
 
 ## 4. Behavior (regras-chave, as-built)
 
@@ -243,14 +282,16 @@ DE-PARA e `migracao`), `premissas`, `resumo_executivo`, `confianca_classificacao
 
 | Item | Por que ainda não |
 |---|---|
-| Preços AWS | bulk de 480 MB — exige job offline |
-| Preços GCP | Cloud Billing Catalog exige API key |
-| `family_equivalence` + `perf_coef` | matching segue casando burstable com compute-opt |
+| `perf_coef` | sem fonte pública de desempenho por vCPU entre gerações |
+| Custos auxiliares por zona | disco, objeto e egress usam a zona dominante do bill; um bill com 12% em São Paulo cota tudo no meio-oeste |
+| Disco da Azure e banco gerenciado oficiais | a Azure cobra por disco (P10, P20…), não por GB; banco não tem índice $/vCPU único |
 | Commitment tiers (1yr/3yr) | custo é segregado, mas não há cenário |
-| `payback_period_months` | falta input de custo one-time de migração |
-| `ICategoryCalculator` pleno | falta modelo de unidade fino por categoria |
+| `payback_period_months` na tela | o fluxo do LLM não tem de onde tirar o custo de migração |
+| `ICategoryCalculator` pleno | falta modelo de unidade fino por categoria; a rede por tipo já cota pela quantidade medida |
 | **Validade externa das taxas** | 61% do custo AWS é reprecificado por taxa `reference` digitada; a reconciliação não pega viés (ex.: um provedor mais barato em *todas* as categorias) |
 | `fator_utilizacao` por telemetria | knob existe fixo em 1.0 |
+| Filestore como `storage_hdd` | é arquivo (NFS), não bloco; não há categoria `file_storage`. No mock BigQuery são 234 GiB e US$ 358/mês que viram volume HDD no Terraform |
+| SKU `Storage` do Source Repositories | cai no catch-all `*storage*` → `storage_hdd` (custo zero, mas 185 GiB medidos viram volume). A regra L2 só vê a descrição do SKU, que não diz o serviço |
 
 ## 8. Verificação contínua
 

@@ -98,11 +98,18 @@ def test_ledger_carrega_os_numeros_da_conta() -> None:
     d = avaliar_confianca(_c(official="47259", low="34143")).as_ledger()
     assert set(d) == {
         "nivel",
+        "base",
         "razao_custo_confiavel",
         "custo_com_preco_oficial",
         "custo_total_cotado",
         "custo_por_rotulo",
+        "rebaixada_por",
     }
+    # Vazio quando o nível é puro resultado da conta. Preenchido só quando algo
+    # de fora da razão de preço rebaixou — hoje, o câmbio (ver `alertas`).
+    assert d["rebaixada_por"] == []
+    # Lote v4 (V4.7): a razão é sobre o custo atual coberto
+    assert d["base"] == "custo_atual"
     assert d["custo_com_preco_oficial"] == 47259.0
     assert d["custo_total_cotado"] == 81402.0
     # A quebra por rótulo evita que a razão engane para o lado pessimista:

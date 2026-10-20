@@ -269,8 +269,9 @@ async def test_match_pool_single_instance_covering_capacity():
     assert o.technical_match.vcpus == Decimal("8")
     assert o.technical_match.ram_gb == Decimal("32")
     assert o.financials is not None
-    # 0.272 * 730 * 1 = 198.56
-    assert o.financials.estimated_monthly_cost == Decimal("0.272") * Decimal("730")
+    # Capacidade-hora: o pool ocupa 6/8 = 24/32 = 0,75 da máquina.
+    esperado = Decimal("0.272") * Decimal("730") * Decimal("0.75")
+    assert o.financials.estimated_monthly_cost == esperado
     assert o.financials.cost_delta is not None
     assert o.financials.cost_delta < 0  # cheaper than source
 
@@ -299,8 +300,57 @@ async def test_match_pool_multiple_instances_when_pool_exceeds_sku():
     assert o.technical_match is not None
     assert o.technical_match.vcpus == Decimal("16")  # 4 vcpus * 4 instances
     assert o.financials is not None
-    expected = Decimal("0.134") * Decimal("730") * 4
+    # Provisiona 4, mas cobra as 3,25 instâncias de capacidade que o pool usou.
+    expected = Decimal("0.134") * Decimal("730") * Decimal("3.25")
     assert o.financials.estimated_monthly_cost == expected
+
+
+async def test_match_pool_tiny_pool_pays_used_capacity_on_the_smallest_machine():
+    # N1 de São Paulo no bill GCP real: 0,13 vCPU médio, US$ 7,43. Cobrar uma
+    # c6a.large inteira ligada 730 h dava US$ 86 (11,6x).
+    small = _source_sku(
+        sku_id="m7a.medium", provider="aws",
+        vcpus=Decimal("1"), ram_gb=Decimal("4"), price_per_unit=Decimal("0.058"),
+    )
+    big = _source_sku(
+        sku_id="m7a.8xlarge", provider="aws",
+        vcpus=Decimal("32"), ram_gb=Decimal("128"), price_per_unit=Decimal("1.855"),
+    )
+    repo = _MockSkuRepo(equivalents_by_provider={"aws": [big, small]})
+    matcher = EquivalenceMatcher(sku_repo=repo)
+
+    opts = await matcher.match_pool(
+        vcpus=Decimal("0.13"),
+        ram_gib=Decimal("0.47"),
+        monthly_cost=Decimal("7.43"),
+        service_type="virtual_server",
+        target_providers=["aws"],
+    )
+
+    o = opts[0]
+    # A máquina grande sairia quase pelo mesmo custo por capacidade, mas o
+    # desperdício de provisionar 32 vCPU para 0,13 a descarta.
+    assert (o.sku_id, o.instances) == ("m7a.medium", 1)
+    assert o.financials is not None
+    esperado = Decimal("0.058") * Decimal("730") * Decimal("0.13")
+    assert o.financials.estimated_monthly_cost == esperado
+
+
+async def test_match_pool_rounding_slack_does_not_provision_a_second_machine():
+    # 2,04 GiB medidos num SKU de 2 GiB: a mesma máquina, não duas.
+    sku = _source_sku(
+        sku_id="t3.small", provider="aws",
+        vcpus=Decimal("2"), ram_gb=Decimal("2"), price_per_unit=Decimal("0.0208"),
+    )
+    repo = _MockSkuRepo(equivalents_by_provider={"aws": [sku]})
+    opts = await EquivalenceMatcher(sku_repo=repo).match_pool(
+        vcpus=Decimal("0.51"),
+        ram_gib=Decimal("2.04"),
+        monthly_cost=Decimal("21.24"),
+        service_type="virtual_server",
+        target_providers=["aws"],
+    )
+    assert opts[0].instances == 1
 
 
 async def test_match_pool_no_candidates_returns_empty():

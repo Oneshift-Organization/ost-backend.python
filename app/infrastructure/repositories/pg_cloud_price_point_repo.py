@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.cloud_price_point import CloudPricePoint
+from app.domain.services.guarda_de_coleta import coleta_parcial
 from app.infrastructure.database.models.cloud_price_point import CloudPricePointModel
 
 
@@ -25,7 +27,15 @@ def _to_entity(row: CloudPricePointModel) -> CloudPricePoint:
         source=row.source,
         confidence=row.confidence,
         captured_at=row.captured_at,
+        estado=row.estado,
+        confianca_score=row.confianca_score,
+        confirmado_em=row.confirmado_em,
     )
+
+
+# Só o preço que a última coleta ainda trouxe entra na cotação
+_VIGENTE = CloudPricePointModel.ausente_desde.is_(None)
+logger = logging.getLogger(__name__)
 
 
 class PgCloudPricePointRepository:
@@ -42,6 +52,7 @@ class PgCloudPricePointRepository:
         stmt = select(CloudPricePointModel).where(
             CloudPricePointModel.provider.ilike(provider),
             CloudPricePointModel.service_type == service_type,
+            _VIGENTE,
         )
         if region is not None:
             stmt = stmt.where(CloudPricePointModel.region == region)
@@ -54,7 +65,7 @@ class PgCloudPricePointRepository:
     async def rates_for_category(self, category: str) -> list[CloudPricePoint]:
         stmt = (
             select(CloudPricePointModel)
-            .where(CloudPricePointModel.service_type == category)
+            .where(CloudPricePointModel.service_type == category, _VIGENTE)
             .order_by(CloudPricePointModel.provider, CloudPricePointModel.sku_key)
         )
         result = await self._session.execute(stmt)
@@ -63,11 +74,81 @@ class PgCloudPricePointRepository:
     async def providers_with_prices(self, service_type: str) -> list[str]:
         stmt = (
             select(CloudPricePointModel.provider)
-            .where(CloudPricePointModel.service_type == service_type)
+            .where(CloudPricePointModel.service_type == service_type, _VIGENTE)
             .distinct()
         )
         result = await self._session.execute(stmt)
         return [row[0] for row in result.all()]
+
+    async def regioes_com_preco(self, provider: str, service_type: str) -> list[str]:
+        stmt = (
+            select(CloudPricePointModel.region)
+            .where(
+                CloudPricePointModel.provider.ilike(provider),
+                CloudPricePointModel.service_type == service_type,
+                _VIGENTE,
+            )
+            .distinct()
+        )
+        result = await self._session.execute(stmt)
+        return sorted(row[0] for row in result.all())
+
+    async def _vigentes(self, provider: str, region: str, service_type: str, source: str) -> int:
+        total = await self._session.scalar(
+            select(func.count())
+            .select_from(CloudPricePointModel)
+            .where(
+                CloudPricePointModel.provider == provider,
+                CloudPricePointModel.region == region,
+                CloudPricePointModel.service_type == service_type,
+                CloudPricePointModel.source == source,
+                _VIGENTE,
+            )
+        )
+        return int(total or 0)
+
+    async def substituir(self, points: list[CloudPricePoint]) -> tuple[int, int]:
+        if not points:
+            return (0, 0)
+        conjuntos: dict[tuple[str, str, str, str], set[str]] = {}
+        for p in points:
+            chave = (p.provider.lower(), p.region, p.service_type, p.source)
+            conjuntos.setdefault(chave, set()).add(p.sku_key)
+        vigentes = {chave: await self._vigentes(*chave) for chave in conjuntos}
+        gravados, _ = await self.bulk_upsert(points)
+        # O que a coleta deixou de trazer fica, marcado como ausente: envelhece no
+        # ciclo de vida até ADUBO e segue de referência, mas sai da cotação
+        # (PLANO_CICLO_DE_VIDA_DO_PRECO §6, decisão 4). Coleta que parece cortada
+        # não marca nada (domain/services/guarda_de_coleta).
+        ausentes = 0
+        agora = datetime.now(UTC)
+        for (provider, region, service_type, source), chaves in conjuntos.items():
+            antes = vigentes[(provider, region, service_type, source)]
+            if coleta_parcial(antes, len(chaves)):
+                logger.warning(
+                    "coleta parcial: %s %s %s (%s) trouxe %d de %d; ausência não marcada",
+                    provider,
+                    region,
+                    service_type,
+                    source,
+                    len(chaves),
+                    antes,
+                )
+                continue
+            result = await self._session.execute(
+                update(CloudPricePointModel)
+                .where(
+                    CloudPricePointModel.provider == provider,
+                    CloudPricePointModel.region == region,
+                    CloudPricePointModel.service_type == service_type,
+                    CloudPricePointModel.source == source,
+                    CloudPricePointModel.sku_key.not_in(chaves),
+                    _VIGENTE,
+                )
+                .values(ausente_desde=agora)
+            )
+            ausentes += int(getattr(result, "rowcount", 0) or 0)
+        return (gravados, ausentes)
 
     async def bulk_upsert(self, points: list[CloudPricePoint]) -> tuple[int, int]:
         if not points:
@@ -89,13 +170,24 @@ class PgCloudPricePointRepository:
                 "source": p.source,
                 "confidence": p.confidence,
                 "captured_at": p.captured_at or now,
+                # A coleta trouxe: deixa de estar ausente
+                "ausente_desde": None,
             }
             stmt = pg_insert(CloudPricePointModel).values(**values)
             update_cols = {
                 c: stmt.excluded[c]
                 for c in (
-                    "service_name", "service_type", "price", "currency", "unit",
-                    "vcpus", "ram_gib", "source", "confidence", "captured_at",
+                    "service_name",
+                    "service_type",
+                    "price",
+                    "currency",
+                    "unit",
+                    "vcpus",
+                    "ram_gib",
+                    "source",
+                    "confidence",
+                    "captured_at",
+                    "ausente_desde",
                 )
             }
             stmt = stmt.on_conflict_do_update(

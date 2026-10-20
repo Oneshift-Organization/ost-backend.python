@@ -28,6 +28,22 @@ class ICloudPricePointRepository(ABC):
         ...
 
     @abstractmethod
+    async def regioes_com_preco(self, provider: str, service_type: str) -> list[str]:
+        """Regiões que têm ao menos um preço para o provedor e o tipo, em ordem."""
+        ...
+
+    @abstractmethod
     async def bulk_upsert(self, points: list[CloudPricePoint]) -> tuple[int, int]:
         """Upsert por (provider, sku_key, region). Retorna (inseridos, atualizados)."""
+        ...
+
+    @abstractmethod
+    async def substituir(self, points: list[CloudPricePoint]) -> tuple[int, int]:
+        """Grava a coleta como o estado atual de cada conjunto que ela cobre.
+
+        Conjunto = (provedor, região, tipo, fonte). Upsert do que veio e remoção,
+        no mesmo conjunto, do que não veio: um tipo que o provedor deixou de
+        vender, ou um nome que a coleta antiga gerava errado, não fica cotando.
+        Retorna (gravados, removidos).
+        """
         ...

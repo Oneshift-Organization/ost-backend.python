@@ -17,6 +17,7 @@ Signature: header contains both "ProductCode" AND "CostBeforeTax".
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,25 @@ from app.infrastructure.file_ingestion.base_parser import BaseParser
 from app.infrastructure.file_ingestion.loaders import read_tabular
 
 _SIGNATURE_COLS = ("ProductCode", "CostBeforeTax")
+
+# Instância-hora de EC2, com ou sem prefixo de região. `startswith("BoxUsage")`
+# deixava sem unidade o Spot (`SpotUsage:c7g.2xlarge`), o Dedicated e o
+# `SAE1-BoxUsage:…` de São Paulo: sem unidade o agregador não soma capacidade e
+# joga o custo em "compromisso" — no bill real, ~150 vCPU sumiam dos pools e
+# US$ 1,7 mil de Spot viravam compromisso.
+_HORA_DE_INSTANCIA = re.compile(r"(?:^|-)(?:BoxUsage|SpotUsage|DedicatedUsage|HostUsage):")
+
+# Motor do RDS (PLANO_EQUIVALENTES_E_TARIFAS §10): o que a descrição diz ("db.t4g.medium
+# (PostgreSQL)") e, sem ele, o código da operação. Só os códigos de motor aberto, que a AWS
+# documenta; Oracle e SQL Server ficam sem motor, como antes
+_MOTOR_DA_OPERACAO = {
+    "0002": "MySQL",
+    "0014": "PostgreSQL",
+    "0016": "Aurora MySQL",
+    "0018": "MariaDB",
+    "0021": "Aurora PostgreSQL",
+}
+_MOTOR_NA_DESCRICAO = re.compile(r"(?:aurora[ -])?(?:postgresql|postgres|mysql|mariadb)", re.I)
 
 
 def _clean(value: object) -> str:
@@ -74,6 +94,7 @@ class AwsDetailedBillingParser(BaseParser):
                 for k, v in row.items()
                 if _clean(v)
             }
+            motor = _motor_do_rds(row)
 
             record = {
                 "user_id": str(self.user_id),
@@ -94,8 +115,11 @@ class AwsDetailedBillingParser(BaseParser):
                 "cost_discounted": cost,
                 "currency": _clean(row.get("CurrencyCode", "USD")) or "USD",
                 "usage_amount": self._cost_to_decimal(_clean(row.get("UsageQuantity", "0"))),
-                "usage_unit": "hours" if usage_type and usage_type.startswith("BoxUsage") else None,
+                "usage_unit": (
+                    "hours" if usage_type and _HORA_DE_INSTANCIA.search(usage_type) else None
+                ),
                 "tags": {},
+                "attributes": {"database_engine": motor} if motor else {},
                 "is_correction": False,
                 "is_estimate": False,
                 "raw_payload": raw_payload,
@@ -105,6 +129,16 @@ class AwsDetailedBillingParser(BaseParser):
             records.append(record)
 
         return pd.DataFrame(records)
+
+
+def _motor_do_rds(row: pd.Series) -> str | None:
+    if _clean(row.get("ProductCode", "")) != "AmazonRDS":
+        return None
+    descricao = _MOTOR_NA_DESCRICAO.search(_clean(row.get("ItemDescription", "")))
+    if descricao:
+        return descricao.group(0)
+    operacao, _, codigo = _clean(row.get("Operation", "")).partition(":")
+    return _MOTOR_DA_OPERACAO.get(codigo) if operacao == "CreateDBInstance" else None
 
 
 def _parse_dt_invoice(value: object):

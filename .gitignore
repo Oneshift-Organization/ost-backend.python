@@ -71,6 +71,9 @@ temp/
 # ── Relatórios de auditoria (documentos de trabalho, não versionados) ─────
 AUDITORIA_PRONTIDAO_AGENTE.md
 
+# ── Notas de entrega para o time (documentos de trabalho, não versionados) ─
+docs/entrega-2026-09-27.md
+
 # ── Brain do arquiteto (local-only, não versionado) ───────────────────────
 ost-docs.backend.plan/
 
@@ -84,3 +87,8 @@ SKU ID
 
 # ── Knowledge graph local (graphify) ─────────────────────────────────────
 graphify-out/
+
+# ── Mocks de billing gerados (scripts/gerar_mocks_billing.py) ─────────────
+# Determinísticos e maiores que o limite de 500 KB do pre-commit: gerados na
+# sessão de testes ou sob demanda, nunca versionados.
+app/tests/integration/fixtures/mocks/

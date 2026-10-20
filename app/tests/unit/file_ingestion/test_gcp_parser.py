@@ -21,8 +21,11 @@ def test_gcp_cost_is_decimal_not_float(gcp_billing_json, user_id, job_id):
     df = parser.parse(gcp_billing_json)
     for c in df["cost"]:
         assert isinstance(c, Decimal)
-    # Compute Engine line: 15.234567
-    assert df.iloc[0]["cost"] == Decimal("15.234567")
+    # Compute Engine: cost 15.234567 com crédito DISCOUNT de -1.5. RN1 do
+    # PLANO_CUR_BIGQUERY: desconto estrutural entra no custo efetivo; o valor
+    # antes dos créditos fica preservado nos atributos.
+    assert df.iloc[0]["cost"] == Decimal("13.734567")
+    assert df.iloc[0]["attributes"]["cost_before_credits"] == "15.234567"
 
 
 def test_gcp_credits_applied_to_cost_discounted(gcp_billing_json, user_id, job_id):

@@ -1,11 +1,14 @@
 """Calculadora por categoria — reprecificação por razão de taxa (Wave 4)."""
+
 from __future__ import annotations
 
 from decimal import Decimal
 
+from app.domain.services.categoria_por_uso import FRANQUIA_DE_CHAVES
 from app.domain.services.category_calculator import (
     CategoryRate,
     estimate_by_cost_ratio,
+    estimate_by_quantity,
 )
 
 
@@ -20,9 +23,12 @@ def test_reprices_by_ratio() -> None:
         "gcp": _rate("gcp", "0.16"),
         "oci": _rate("oci", "0.02"),
     }
-    out = {e.provider: e for e in estimate_by_cost_ratio(
-        source_provider="aws", source_cost=Decimal("1000"), rates=rates
-    )}
+    out = {
+        e.provider: e
+        for e in estimate_by_cost_ratio(
+            source_provider="aws", source_cost=Decimal("1000"), rates=rates
+        )
+    }
     assert out["gcp"].estimated_monthly_cost == Decimal("2000")
     assert out["gcp"].cost_delta == Decimal("1000")
     assert out["oci"].estimated_monthly_cost == Decimal("250")  # 0.02/0.08 * 1000
@@ -32,9 +38,10 @@ def test_reprices_by_ratio() -> None:
 def test_no_source_rate_yields_nothing() -> None:
     """Sem taxa de origem não dá para inferir a quantidade → vazio (honesto)."""
     rates = {"gcp": _rate("gcp", "0.16")}
-    assert estimate_by_cost_ratio(
-        source_provider="aws", source_cost=Decimal("1000"), rates=rates
-    ) == []
+    assert (
+        estimate_by_cost_ratio(source_provider="aws", source_cost=Decimal("1000"), rates=rates)
+        == []
+    )
 
 
 def test_confidence_is_weakest_link() -> None:
@@ -42,15 +49,152 @@ def test_confidence_is_weakest_link() -> None:
         "aws": _rate("aws", "0.08", conf="official"),
         "gcp": _rate("gcp", "0.16", conf="reference"),
     }
-    out = estimate_by_cost_ratio(
-        source_provider="aws", source_cost=Decimal("1000"), rates=rates
-    )
+    out = estimate_by_cost_ratio(source_provider="aws", source_cost=Decimal("1000"), rates=rates)
     assert out[0].pricing_confidence == "reference"  # min(official, reference)
 
 
-def test_zero_rate_targets_skipped() -> None:
+def test_zero_rate_target_is_free() -> None:
+    # Taxa zero é serviço grátis no destino (NAT e VPN da OCI); taxa ausente é que
+    # deixa o destino sem cotação. Antes, zero era descartado como se faltasse.
     rates = {"aws": _rate("aws", "0.08"), "gcp": _rate("gcp", "0")}
-    out = estimate_by_cost_ratio(
-        source_provider="aws", source_cost=Decimal("1000"), rates=rates
+    out = estimate_by_cost_ratio(source_provider="aws", source_cost=Decimal("1000"), rates=rates)
+    assert [(e.provider, e.estimated_monthly_cost, e.cost_delta) for e in out] == [
+        ("gcp", Decimal("0"), Decimal("-1000"))
+    ]
+
+
+def test_zero_source_rate_yields_nothing() -> None:
+    rates = {"aws": _rate("aws", "0"), "gcp": _rate("gcp", "0.16")}
+    assert (
+        estimate_by_cost_ratio(source_provider="aws", source_cost=Decimal("1000"), rates=rates)
+        == []
+    )
+
+
+def _hora(provider: str, rate: str, conf: str = "official") -> CategoryRate:
+    return CategoryRate(provider=provider, rate=Decimal(rate), unit="hour", confidence=conf)
+
+
+def test_quantity_times_target_rate() -> None:
+    # NAT de São Paulo: 730 h a US$ 0,093 na origem; o destino cobra a taxa dele
+    rates = {
+        "azure": _hora("azure", "0.045"),
+        "gcp": _hora("gcp", "0.044", conf="reference"),
+        "oci": _hora("oci", "0", conf="reference"),
+    }
+    out = estimate_by_quantity(
+        source_provider="aws",
+        source_cost=Decimal("67.89"),
+        quantity=Decimal("730"),
+        measured_cost=Decimal("67.89"),
+        effective_price=Decimal("0.093"),
+        rates=rates,
+        unit="hour",
+    )
+    custos = {e.provider: e.estimated_monthly_cost for e in out}
+    assert custos == {"azure": Decimal("32.850"), "gcp": Decimal("32.120"), "oci": Decimal("0")}
+    assert {e.provider: e.pricing_confidence for e in out}["gcp"] == "reference"
+
+
+def test_cost_without_quantity_uses_the_effective_price() -> None:
+    # 100 de 130 têm quantidade (1.000 h a 0,10); os 30 restantes valem 300 h
+    out = estimate_by_quantity(
+        source_provider="aws",
+        source_cost=Decimal("130"),
+        quantity=Decimal("1000"),
+        measured_cost=Decimal("100"),
+        effective_price=Decimal("0.10"),
+        rates={"gcp": _hora("gcp", "0.05")},
+        unit="hour",
+    )
+    assert out[0].estimated_monthly_cost == Decimal("65.00")
+
+
+def test_target_in_other_unit_or_without_rate_is_left_out() -> None:
+    gb = CategoryRate(provider="gcp", rate=Decimal("0.01"), unit="gb")
+    out = estimate_by_quantity(
+        source_provider="aws",
+        source_cost=Decimal("10"),
+        quantity=Decimal("100"),
+        measured_cost=Decimal("10"),
+        effective_price=Decimal("0.10"),
+        rates={"gcp": gb, "aws": _hora("aws", "0.10")},
+        unit="hour",
     )
     assert out == []
+
+
+def test_no_effective_price_yields_nothing() -> None:
+    assert (
+        estimate_by_quantity(
+            source_provider="aws",
+            source_cost=Decimal("10"),
+            quantity=Decimal("0"),
+            measured_cost=Decimal("0"),
+            effective_price=Decimal("0"),
+            rates={"gcp": _hora("gcp", "0.05")},
+            unit="hour",
+        )
+        == []
+    )
+
+
+def _gb(provider: str, rate: str) -> CategoryRate:
+    return CategoryRate(provider=provider, rate=Decimal(rate), unit="gb", confidence="official")
+
+
+def test_franquia_de_egress_sai_da_quantidade_do_destino() -> None:
+    """Egress (PLANO_PRECISAO_OCI P1.5): a OCI não cobra os primeiros 10 TB do mês; a
+    Azure, os primeiros 100 GB. Abaixo da franquia, o destino sai de graça."""
+    out = estimate_by_quantity(
+        source_provider="aws",
+        source_cost=Decimal("900"),
+        quantity=Decimal("10000"),
+        measured_cost=Decimal("900"),
+        effective_price=Decimal("0.09"),
+        rates={"oci": _gb("oci", "0.0085"), "azure": _gb("azure", "0.087")},
+        unit="gb",
+        franquia={"oci": Decimal("10240"), "azure": Decimal("100")},
+    )
+    custos = {e.provider: e.estimated_monthly_cost for e in out}
+    assert custos["oci"] == Decimal("0")
+    assert custos["azure"] == Decimal("861.300")  # (10.000 - 100) x 0,087
+
+
+def test_franquia_maior_que_a_parte_nao_fica_negativa() -> None:
+    out = estimate_by_quantity(
+        source_provider="aws",
+        source_cost=Decimal("9"),
+        quantity=Decimal("100"),
+        measured_cost=Decimal("9"),
+        effective_price=Decimal("0.09"),
+        rates={"oci": _gb("oci", "0.0085")},
+        unit="gb",
+        franquia={"oci": Decimal("10240")},
+    )
+    assert out[0].estimated_monthly_cost == Decimal("0")
+    assert out[0].cost_delta == Decimal("-9")
+
+
+def test_franquia_de_chaves_da_oci() -> None:
+    """Item 16: a OCI não cobra as primeiras 20 versões de chave HSM; acima, 0,5334 cada."""
+
+    def cotar(chaves: str) -> Decimal:
+        out = estimate_by_quantity(
+            source_provider="aws",
+            source_cost=Decimal(chaves),
+            quantity=Decimal(chaves),
+            measured_cost=Decimal(chaves),
+            effective_price=Decimal("1"),
+            rates={
+                "oci": CategoryRate(
+                    provider="oci", rate=Decimal("0.5334"), unit="month", confidence="official"
+                )
+            },
+            unit="month",
+            franquia=FRANQUIA_DE_CHAVES,
+        )
+        return out[0].estimated_monthly_cost
+
+    assert cotar("12") == Decimal("0")
+    assert cotar("25") == Decimal("2.6670")  # (25 - 20) x 0,5334

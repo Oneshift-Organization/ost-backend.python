@@ -125,7 +125,7 @@ def test_monta_price_points_do_payload_real(monkeypatch: pytest.MonkeyPatch) -> 
             }
         }
     }
-    monkeypatch.setattr(aws, "_get_json", lambda *a, **k: payload)
+    monkeypatch.setattr(aws, "get_json", lambda *a, **k: payload)
 
     pontos = aws.fetch_aws_ec2_prices(region="us-east-1")
 
@@ -179,12 +179,12 @@ def test_preco_ignora_faixa_gratuita() -> None:
             }
         ]
     }
-    assert gcp._preco_unitario(sku) == Decimal("0.031611")
+    assert gcp.preco_unitario(sku) == Decimal("0.031611")
 
 
 def test_preco_de_sku_malformado_e_none() -> None:
-    assert gcp._preco_unitario({}) is None
-    assert gcp._preco_unitario({"pricingInfo": []}) is None
+    assert gcp.preco_unitario({}) is None
+    assert gcp.preco_unitario({"pricingInfo": []}) is None
 
 
 def test_classifica_taxa_de_cpu_e_ram() -> None:
