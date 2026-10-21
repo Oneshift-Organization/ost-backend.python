@@ -12,6 +12,7 @@ from app.infrastructure.database.models.inventory import InventoryModel
 from app.infrastructure.database.models.terraform_generation_job import (
     TerraformGenerationJobModel,
 )
+from app.infrastructure.repositories.pg_institution_repo import PgInstitutionRepository
 
 # Só as tabelas-raiz. Itens, enriquecimento e linhas não mapeadas caem com
 # `billing_reports`; recursos e relações caem com `inventories` (FK ON DELETE
@@ -29,5 +30,6 @@ class PgAccountRepository(IAccountRepository):
         self._s = session
 
     async def delete_user_data(self, user_id: UUID) -> None:
+        await PgInstitutionRepository(self._s).prepare_account_deletion(user_id)
         for model in _ROOT_MODELS:
             await self._s.execute(delete(model).where(model.user_id == user_id))
