@@ -11,9 +11,18 @@
   ressalvas. Não dispara IA, reanálise ou recálculo e não concede ações de migração.
 - A publicação é imutável e única por `(institution_id, source_job_id)`;
   repetir o envio devolve a mesma cópia. Uma nova análise exige nova publicação.
-- O resumo usa `institution-summary-v1`, com projeção explícita dos campos.
+- Novas publicações usam `institution-dashboard-v2`, com projeção explícita dos campos.
   Prompts, inventário e fatura bruta não são copiados. O score determinístico e
   suas ausências têm precedência sobre o score legado na apresentação.
+- `dashboard.agent_views` contém os três pareceres estruturados; `dashboard.workload_strategies`
+  contém os 7 R’s por recurso, destino, justificativa e pendências. Não inclui evidências
+  brutas, IDs de inventário, fingerprint ou comandos. Nomes de workloads e os textos
+  dos pareceres fazem parte do conteúdo explicitamente compartilhado.
+- Publicações `institution-summary-v1` continuam imutáveis e legíveis. Não há backfill
+  nem leitura da análise pessoal ao consultar o painel. Para incluir os novos detalhes,
+  o autor retira e publica novamente, com confirmação do escopo ampliado. Repetir POST
+  sem retirar a publicação continua retornando a mesma cópia.
+- Esta evolução só amplia o JSONB publicado; não exige nova migration nem chamada de IA.
 - Nenhuma soma de publicações: diferentes análises podem cobrir a mesma fatura.
 
 ## Acesso

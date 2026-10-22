@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from app.core.exceptions import ConflictError, ForbiddenError
+from app.domain.entities.institution_dashboard import dashboard_snapshot
 
 
 class InstitutionRole(StrEnum):
@@ -107,7 +108,8 @@ def publication_snapshot(source: PublicationSource) -> dict[str, Any]:
                 if isinstance(axis, dict)
             ]
     return {
-        "version": "institution-summary-v1",
+        "version": "institution-dashboard-v2",
+        "dashboard": dashboard_snapshot(source.result),
         "provider": source.provider,
         "analyzed_at": source.analyzed_at.replace(tzinfo=UTC).isoformat()
         if source.analyzed_at.tzinfo is None
