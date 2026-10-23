@@ -123,7 +123,7 @@ Verificado lendo o código, com o efeito concreto de cada defeito.
 | D17 | `str(row.get("ServiceName"))` sem a coluna (EA/MCA) | serviço literal **`"None"`** em todo export EA/MCA |
 | D18 | `Tags` sem chaves externas (`"env": "prod","app": "x"`) não é JSON | tags vazias |
 | D19 | `ChargeType`/`PricingModel` ignorados | compra de reserva somada como uso |
-| D20 | `UnitOfMeasure` com multiplicador (`"1 Hour"`, `"10 Hours"`) | unidade não reconhecida → capacidade zero |
+| D20 | `UnitOfMeasure` com bloco de preço (`"1 Hour"`, `"10 Hours"`) | unidade não reconhecida → capacidade zero |
 | D21 | `AdditionalInfo` ignorado | tamanho da VM e vCPU medidos se perdem |
 
 ### Parser OCI (`oci_parser.py`)
@@ -257,9 +257,12 @@ Estimativa gravada em `attributes` apareceria a jusante como fato.
 
 **RN5: unidade canônica.** O parser entrega a quantidade na unidade de preço
 normalizada: horas (`hours`), GiB-hora (`gibibyte hour`), GB-mês
-(`gibibyte month`). O multiplicador vai para a quantidade (`"10 Hours"`,
-quantidade 3 → 30 horas). OCPU x86 carrega `vcpus_per_unit = 2`; Ampere (A1),
-`1`. O agregador continua sem saber de nuvem.
+(`gibibyte month`). Na Azure o número da unidade é o bloco de preço e não
+multiplica a quantidade: `Quantity` já vem na unidade base (24 em `"1000 Hours"`
+é um servidor ligado o dia todo, 24 horas). Corrigido em 23/10, no primeiro export
+real; a regra anterior multiplicava e inflava a quantidade de 10 a 1000 vezes.
+OCPU x86 carrega `vcpus_per_unit = 2`; Ampere (A1), `1`. O agregador continua sem
+saber de nuvem.
 
 **RN6: consolidação na ingestão.** Primeiro a deduplicação: pela identidade da
 linha quando o export a tem (`identity_line_item_id` + `identity_time_interval`

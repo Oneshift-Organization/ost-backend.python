@@ -86,8 +86,8 @@ negócio estão em [`PLANO_CUR_BIGQUERY.md`](../PLANO_CUR_BIGQUERY.md):
   identidade da linha. O `raw_payload` guarda a chave e a contagem, não a linha
   original.
 - **Unidade canônica** ([`unidades.py`](../app/infrastructure/file_ingestion/unidades.py)):
-  `hours`, `gibibyte hour`, `gibibyte month`. O multiplicador embutido
-  (`10 Hours`) vai para a quantidade.
+  `hours`, `gibibyte hour`, `gibibyte month`. Na Azure o número da unidade
+  (`10 Hours`) é o bloco de preço: a quantidade já vem na unidade base.
 - **Fatos medidos** (`attributes`): `instance_type`, `vcpus`, `memory_gib`,
   `project_id`, `capacity_unit` (`instance` | `vcpu` | `gib`),
   `instance_family`, `storage_kind`. Só entra fato informado pelo provedor,
@@ -263,10 +263,10 @@ aparece como compromisso (é o que `cobertura_por_compromisso` declara).
 | natureza | `ChargeType` + `PricingModel` (compra de reserva/SP e reserva ociosa = compromisso) |
 | `usage_type` | `MeterCategory | MeterSubCategory | MeterName` |
 | `service` | `ServiceName` (só PAYG) ou `MeterCategory` |
-| `region` | `ResourceLocation` normalizada (`East US` vira `eastus`) |
+| `region` | `ResourceLocation` normalizada (`East US` e o nome antigo `US East` viram `eastus`; `Unknown` e `Intercontinental` ficam sem região) |
 | `resource_id` | `ResourceId`, em minúsculas (o ARM não diferencia) |
 | `attributes` | `AdditionalInfo`: `ServiceType` (tamanho, família), `VCPUs` |
-| `usage_amount` | `Quantity` x multiplicador de `UnitOfMeasure`; disco por tier (P30) vira GB-mês |
+| `usage_amount` | `Quantity` como vem (o número de `UnitOfMeasure` é o bloco de preço); disco por tier (P30) vira GB-mês |
 
 ### Armadilhas
 

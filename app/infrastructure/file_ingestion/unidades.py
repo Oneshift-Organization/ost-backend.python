@@ -6,7 +6,8 @@ GiB-hora; se o parser entregar a grafia do provedor, a capacidade simplesmente
 não acumula — sem erro, só um pool vazio e o custo indo para o balde errado.
 
 Então o parser normaliza **aqui**, e o agregador continua sem saber de nuvem.
-O multiplicador embutido na unidade (`10 Hours`) vai para a quantidade.
+O número na frente da unidade (`10 Hours`) volta separado, e cada parser decide o
+que ele é: na Azure é o bloco de preço, e a quantidade já vem na unidade base.
 """
 
 from __future__ import annotations
