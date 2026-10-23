@@ -127,10 +127,41 @@ def test_azure_regiao_normalizada_e_recurso_minusculo(tmp_path) -> None:
     assert linha["resource_id"] == "/subscriptions/sub-1/vm-a"
 
 
-def test_azure_multiplicador_da_unidade(tmp_path) -> None:
-    df = _parse_azure(_azure(tmp_path, [{"UnitOfMeasure": "10 Hours", "Quantity": "3"}]))
+def test_azure_bloco_de_preco_nao_multiplica_a_quantidade(tmp_path) -> None:
+    # Export real (23/10): um servidor ligado o dia todo vem com 24 em "1000 Hours",
+    # e custo ÷ quantidade dá o preço por hora. São 24 horas, não 24.000.
+    linha = {
+        "UnitOfMeasure": "1000 Hours",
+        "Quantity": "24",
+        "CostInBillingCurrency": "0.96",
+        "PayGPrice": "0.04",
+    }
+    df = _parse_azure(_azure(tmp_path, [linha]))
     assert df.iloc[0]["usage_unit"] == "hours"
-    assert df.iloc[0]["usage_amount"] == Decimal("30")
+    assert df.iloc[0]["usage_amount"] == Decimal("24")
+    assert Decimal(df.iloc[0]["attributes"]["on_demand_cost"]) == Decimal("0.96")
+
+
+@pytest.mark.parametrize(
+    ("local", "regiao"),
+    [
+        ("East US", "eastus"),
+        ("brazilsouth", "brazilsouth"),
+        ("BR South", "brazilsouth"),
+        ("BRSouth", "brazilsouth"),
+        ("US East", "eastus"),
+        ("US West 2", "westus2"),
+        ("EU West", "westeurope"),
+        ("AP Southeast", "southeastasia"),
+        ("Unassigned", None),
+        ("Unknown", None),
+        ("Intercontinental", None),
+        ("Zone 1", None),
+    ],
+)
+def test_azure_regiao_no_nome_antigo_vira_a_do_arm(tmp_path, local, regiao) -> None:
+    valor = _parse_azure(_azure(tmp_path, [{"ResourceLocation": local}])).iloc[0]["region"]
+    assert (None if pd.isna(valor) else valor) == regiao
 
 
 def test_azure_vm_com_tamanho_e_vcpu_medido(tmp_path) -> None:
