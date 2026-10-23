@@ -49,6 +49,7 @@ structlog. PostgreSQL 16 em OCI compartilhado (não rodar local).
 | Tabela de equivalentes: tipo, portabilidade e risco / logs, DNS, WAF, registro de imagens e métricas cotados pela quantidade / DE-PARA (Functions da Azure, PostgreSQL da OCI) e curadoria | [`PLANO_EQUIVALENTES_E_TARIFAS.md`](PLANO_EQUIVALENTES_E_TARIFAS.md) |
 | Cenários de entrada (Cost Explorer, fatura sem ID, CUR, com ou sem inventário) / custo estimado pelo tipo / diagnóstico de entrada da análise | [`PLANO_CENARIOS_DE_ENTRADA.md`](PLANO_CENARIOS_DE_ENTRADA.md) |
 | Curadoria de nomes de serviço das faturas (fila de sugestões, aprovação pela OneShift, apelido do DE-PARA) | [`docs/endpoints/curadoria.md`](docs/endpoints/curadoria.md) |
+| Conferência de serviços nas quatro nuvens (o que cada serviço vira na análise), reconhecidos sem cotação, prefixo de marca no DE-PARA, scripts de exportação da fatura | [`PLANO_CONFERENCIA_DE_SERVICOS.md`](PLANO_CONFERENCIA_DE_SERVICOS.md) · [`scripts/exportar_fatura/`](scripts/exportar_fatura/README.md) |
 | Mudanças de tela decididas, para o front (premissa 1 vCPU = 1 vCPU, estado da reanálise na lista) | [`PLANO_ALTERACOES_DE_TELA.md`](PLANO_ALTERACOES_DE_TELA.md) |
 | Rodar local / venv / podman / troubleshooting | [`docs/dev-setup.md`](docs/dev-setup.md) |
 | Índice geral + fluxo de leitura | [`docs/README.md`](docs/README.md) |
