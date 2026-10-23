@@ -70,12 +70,19 @@ async def test_cloud_run_sai_da_rede_e_o_trafego_dele_fica() -> None:
         ),
     ]
     aux = (await BillingAggregator().aggregate(linhas, "gcp")).auxiliary
-    assert aux.por_uso == {"serverless_compute": Decimal("45")}
+    # R5: a CPU do Cloud Run é cotada pela vCPU-hora, ociosa (instância mínima) e ativa
+    assert aux.por_uso == {
+        "serverless_vcpu_idle": Decimal("40"),
+        "serverless_vcpu_active": Decimal("5"),
+    }
     assert aux.network_egress == Decimal("2")
     assert aux.network_other == Decimal("0")
     assert aux.orphan == Decimal("0")
-    # Serverless fica ao custo atual: sem quantidade medida
-    assert "serverless_compute" not in aux.quantidade_por_regiao
+    # Segundo vira hora pelo rótulo do catálogo; a linha sem quantidade não mede
+    assert sum(aux.quantidade_por_regiao["serverless_vcpu_idle"].values()) == Decimal(
+        1000
+    ) / Decimal(3600)
+    assert "serverless_vcpu_active" not in aux.quantidade_por_regiao
 
 
 @pytest.mark.asyncio
@@ -258,3 +265,93 @@ def test_custo_da_categoria_le_o_campo_ou_o_mapa() -> None:
     assert aux.custo("orphan_skus") == Decimal("0")
     assert aux.any_positive
     assert AuxiliaryCosts(por_uso={"secrets": Decimal("1")}).any_positive
+
+
+@pytest.mark.asyncio
+async def test_bastion_defender_e_container_apps_da_azure() -> None:
+    """R5, com as linhas do export real da Azure (23/10). A quantidade vem na unidade da
+    Retail Prices API; o rótulo do export não serve ("10 PiB Seconds", "10000000")."""
+    defender = "Microsoft Defender for Cloud"
+    aca = "Azure Container Apps"
+    linhas = [
+        _linha(
+            "azure",
+            "Azure Bastion",
+            "Azure Bastion | Standard Gateway",
+            "15.59",
+            "unclassified",
+            medida=("47.383056", "hours"),
+        ),
+        _linha(
+            "azure",
+            "Azure Bastion",
+            "Azure Bastion | Basic Data Transfer Out",
+            "0.01",
+            "unclassified",
+            medida=("0.079244", "gibibyte"),
+        ),
+        _linha(
+            "azure",
+            defender,
+            f"{defender} | Azure Container Registry | Standard Image",
+            "17.44",
+            "unclassified",
+            medida=("53", "100"),
+        ),
+        _linha(
+            "azure",
+            defender,
+            f"{defender} | Azure ARM service layers | Standard Events",
+            "0.12",
+            "unclassified",
+            medida=("0.026881", "10000000"),
+        ),
+        _linha(
+            "azure",
+            defender,
+            f"{defender} | Servers | Standard P2 Node",
+            "0.07",
+            "unclassified",
+            medida=("3", "/Hour"),
+        ),
+        _linha(
+            "azure",
+            aca,
+            f"{aca} | Standard vCPU Idle Usage",
+            "1.30",
+            "serverless",
+            medida=("384493", "Seconds"),
+        ),
+        _linha(
+            "azure",
+            aca,
+            f"{aca} | Standard Memory Idle Usage",
+            "2.59",
+            "serverless",
+            medida=("769168", "PiB Seconds"),
+        ),
+    ]
+    aux = (await BillingAggregator().aggregate(linhas, "azure")).auxiliary
+    assert aux.por_uso == {
+        "bastion_hours": Decimal("15.59"),
+        "security_image_scans": Decimal("17.44"),
+        "security_control_events": Decimal("0.12"),
+        "security_other": Decimal("0.07"),
+        "serverless_vcpu_idle": Decimal("1.30"),
+        "serverless_memory_idle": Decimal("2.59"),
+    }
+    # A saída de dados do Bastion é rede, e nada fica órfão
+    assert aux.network_egress == Decimal("0.01")
+    assert aux.orphan == Decimal("0")
+
+    def medida(categoria: str) -> Decimal:
+        return sum(aux.quantidade_por_regiao[categoria].values(), Decimal(0))
+
+    assert medida("bastion_hours") == Decimal("47.383056")
+    assert medida("security_image_scans") == Decimal("53")
+    # Milhão de eventos em lotes de 10 mil; segundo em hora
+    assert medida("security_control_events") == Decimal("2.6881")
+    assert medida("serverless_vcpu_idle") == Decimal(384493) / Decimal(3600)
+    assert medida("serverless_memory_idle") == Decimal(769168) / Decimal(3600)
+    # Servidor do Defender fica ao custo atual
+    assert "security_other" not in aux.quantidade_por_regiao

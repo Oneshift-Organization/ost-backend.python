@@ -61,8 +61,11 @@ _MODULO_DA_TOPOLOGIA = "app.use_cases.analysis.topologia_no_payload"
 # fmt: off
 _HASH_POR_VERSAO = {
     # v5.1: atualização informativa dos benefícios OCI, sem mudar score/preços.
+    # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE R5): `_CATEGORIES` ganhou
+    # bastion, segurança e contêiner serverless. As chaves só existem em payload
+    # preparado depois da mudança; snapshot antigo anexa os mesmos preços.
     "agent-authority-v5.1": (
-        "ca31d210fb34be5cc9bb9a5d6650f83553d988884f032e2245ad24667a0a89e0"
+        "501f8e7686c05145cb2125cae18b37d724bf589252736fa8ff1d11fa4771fa8a"
     ),
     # v5: lock-in da origem efetiva; classe/inventário estimado são provisórios.
     "agent-authority-v5": (
