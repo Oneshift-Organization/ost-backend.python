@@ -9,8 +9,11 @@ Campos conferidos na documentação da Microsoft (fontes em
   que não é JSON: as tags sumiam;
 - ``ChargeType``/``PricingModel`` decidem a natureza: compra de reserva ou de
   Savings Plan é compromisso, não uso;
-- ``UnitOfMeasure`` traz multiplicador (``"10 Hours"``): a quantidade é
-  normalizada, senão a capacidade não acumula;
+- ``UnitOfMeasure`` traz o bloco de preço (``"100 Hours"``), e a ``Quantity`` já
+  vem na unidade base: custo ÷ quantidade dá o preço por hora. Multiplicar pelo
+  bloco inflava a quantidade de 10 a 1000 vezes (primeiro export real, 23/10);
+- ``ResourceLocation`` pode vir no nome antigo da Azure (``BR South``,
+  ``US East``): vira o nome do ARM, senão a zona não é reconhecida;
 - ``AdditionalInfo`` traz o tamanho da VM (``ServiceType``) e o vCPU medido.
 
 Base de custo: o valor exportado. No dataset *amortized* ele já distribui a
@@ -79,6 +82,32 @@ _GIB_POR_TIER = {
     1: 4, 2: 8, 3: 16, 4: 32, 6: 64, 10: 128, 15: 256, 20: 512, 30: 1024,
     40: 2048, 50: 4096, 60: 8192, 70: 16384, 80: 32767,
 }
+
+# Nome antigo da Azure (o do medidor) → nome do ARM, já sem espaço e minúsculo.
+# Sem a tradução a zona não é reconhecida e a cotação cai na zona padrão.
+_REGIAO_LEGADA = {
+    "useast": "eastus", "useast2": "eastus2", "uscentral": "centralus",
+    "usnorthcentral": "northcentralus", "ussouthcentral": "southcentralus",
+    "uswestcentral": "westcentralus", "uswest": "westus", "uswest2": "westus2",
+    "uswest3": "westus3", "cacentral": "canadacentral", "caeast": "canadaeast",
+    "mxcentral": "mexicocentral", "brsouth": "brazilsouth", "brsoutheast": "brazilsoutheast",
+    "euwest": "westeurope", "eunorth": "northeurope", "frcentral": "francecentral",
+    "frsouth": "francesouth", "dewestcentral": "germanywestcentral", "denorth": "germanynorth",
+    "chnorth": "switzerlandnorth", "chwest": "switzerlandwest", "noeast": "norwayeast",
+    "nowest": "norwaywest", "secentral": "swedencentral", "plcentral": "polandcentral",
+    "itnorth": "italynorth", "escentral": "spaincentral", "zanorth": "southafricanorth",
+    "zawest": "southafricawest", "aenorth": "uaenorth", "aecentral": "uaecentral",
+    "qacentral": "qatarcentral", "ilcentral": "israelcentral", "apeast": "eastasia",
+    "apsoutheast": "southeastasia", "jaeast": "japaneast", "jawest": "japanwest",
+    "krcentral": "koreacentral", "krsouth": "koreasouth", "incentral": "centralindia",
+    "insouth": "southindia", "inwest": "westindia", "aueast": "australiaeast",
+    "ausoutheast": "australiasoutheast", "aucentral": "australiacentral",
+    "aucentral2": "australiacentral2", "nznorth": "newzealandnorth",
+}  # fmt: skip
+# Não são regiões: medidor global, ou zona de tráfego ("Intercontinental", "Zone 1")
+_NAO_E_REGIAO = frozenset({"unassigned", "global", "allregions", "unknown", "intercontinental"})
+_ZONA_DE_TRAFEGO = re.compile(r"zone\d+$")
+
 
 # `Standard_D4s_v5` → família `DSV5` (letra de família + sufixos + geração).
 def _dec(valor: object) -> Decimal | None:
@@ -153,11 +182,11 @@ def _natureza(charge_type: str, pricing_model: str) -> ChargeKind:
 
 
 def _regiao(bruto: str) -> str | None:
-    """`East US` / `EastUS` / `eastus` → `eastus` (a forma do ARM)."""
-    texto = (bruto or "").strip()
-    if not texto or texto.casefold() in {"unassigned", "global", "all regions"}:
+    """`East US` / `EastUS` / `eastus` / `US East` → `eastus` (a forma do ARM)."""
+    chave = (bruto or "").replace(" ", "").casefold()
+    if not chave or chave in _NAO_E_REGIAO or _ZONA_DE_TRAFEGO.search(chave):
         return None
-    return texto.replace(" ", "").casefold()
+    return _REGIAO_LEGADA.get(chave, chave)
 
 
 def _disco_em_gb(
@@ -227,10 +256,9 @@ class AzureParser(BaseParser):
             descritor = " | ".join(
                 p for p in (categoria, valores["meter_subcategory"], valores["meter_name"]) if p
             )
-            unidade, mult = normalizar_unidade(valores["unit"])
+            # O número da unidade é o bloco de preço; a quantidade já está na base
+            unidade, _bloco = normalizar_unidade(valores["unit"])
             quantidade = _dec(valores["quantity"])
-            if quantidade is not None:
-                quantidade *= mult
             # Preço de lista vale para a quantidade NA UNIDADE DO MEDIDOR (disco-mês);
             # depois da conversão para GB-mês, multiplicar dava sob demanda x1024.
             preco_lista = _dec(valores["payg_price"])
