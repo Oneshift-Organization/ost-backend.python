@@ -90,6 +90,12 @@ SERVERLESS_VCPU_OCIOSA = "serverless_vcpu_idle"
 SERVERLESS_MEMORIA = "serverless_memory_active"
 SERVERLESS_MEMORIA_OCIOSA = "serverless_memory_idle"
 SERVERLESS_REQUISICOES = "serverless_requests"
+# Serviço que o DE-PARA reconhece, mas cuja linha nenhuma regra classifica: ao custo
+# atual, com nome (PLANO_CONFERENCIA_DE_SERVICOS C5). "Não classificado" fica só para o
+# que ninguém reconhece
+RECONHECIDO_SEM_COTACAO = "recognized_unquoted"
+# Plano de suporte da nuvem: o destino também cobra o dele; fica ao custo atual
+SUPORTE = "support_plan"
 
 # Tipo de componente da linha → categoria do que nenhuma regra separa (ao custo atual)
 BALDES: Mapping[str, str] = {
@@ -104,6 +110,7 @@ BALDES: Mapping[str, str] = {
     "metrics": METRICAS_OUTROS,
     "bastion": BASTION_OUTROS,
     "security_posture": SEGURANCA_OUTROS,
+    "support": SUPORTE,
 }
 
 # Observabilidade e borda (PLANO_EQUIVALENTES_E_TARIFAS §3): custo que não vira recurso
@@ -150,6 +157,8 @@ CATEGORIAS: tuple[str, ...] = (
     ARQUIVOS,
     *OBSERVABILIDADE_E_BORDA,
     *BASTION_SEGURANCA_E_SERVERLESS,
+    RECONHECIDO_SEM_COTACAO,
+    SUPORTE,
 )
 
 CHAVE_NO_PAYLOAD: Mapping[str, str] = {
@@ -186,6 +195,8 @@ CHAVE_NO_PAYLOAD: Mapping[str, str] = {
     SERVERLESS_MEMORIA: "serverless_memoria_ativa",
     SERVERLESS_MEMORIA_OCIOSA: "serverless_memoria_ociosa",
     SERVERLESS_REQUISICOES: "serverless_requisicoes",
+    RECONHECIDO_SEM_COTACAO: "reconhecidos_sem_cotacao",
+    SUPORTE: "suporte",
 }
 
 # Categoria cotada pela quantidade → unidade dela
@@ -220,6 +231,11 @@ _POR_DEZ_MIL = Decimal("0.0001")
 # Segundo (vCPU-segundo, GiB-segundo) em hora, e milhão em lotes de 10 mil
 _SEGUNDO = Decimal(1) / Decimal(3600)
 _MILHAO = Decimal(100)
+# mCPU-hora do Autopilot em vCPU-hora
+_MILI = Decimal("0.001")
+_AUTOPILOT_FORA = (
+    r"(tpu|gpu|a100|h100|h200|b200|l4|t4|accelerator|premium|storage|ephemeral|hyperdisk)"
+)
 
 # Provedor → categorias em que a quantidade vem na unidade da regra, e não na do
 # rótulo (R5). Na Azure a `Quantity` está na unidade da Retail Prices API, e o rótulo
@@ -388,6 +404,9 @@ REGRAS: Mapping[str, Mapping[str, _Regras]] = {
     # Contêiner serverless; Functions, Lambda e o plano Dedicated ficam ao custo atual
     "serverless": {
         "azure": (
+            # Container Instances: vCPU por hora e memória por GB-hora, sempre ativos
+            (_r(r"container instances.*\bvcpu duration"), SERVERLESS_VCPU, _1),
+            (_r(r"container instances.*\bmemory duration"), SERVERLESS_MEMORIA, _1),
             (_r(r"standard vcpu active usage"), SERVERLESS_VCPU, _SEGUNDO),
             (_r(r"standard vcpu idle usage"), SERVERLESS_VCPU_OCIOSA, _SEGUNDO),
             (_r(r"standard memory active usage"), SERVERLESS_MEMORIA, _SEGUNDO),
@@ -395,6 +414,11 @@ REGRAS: Mapping[str, Mapping[str, _Regras]] = {
             (_r(r"\|\s*standard requests$"), SERVERLESS_REQUISICOES, _MILHAO),
         ),
         "gcp": (
+            # GKE Autopilot: o pod pede mCPU (por hora) e memória (GiB-hora). GPU, TPU,
+            # disco e armazenamento efêmero ficam ao custo atual
+            (_r(r"autopilot (?!.*" + _AUTOPILOT_FORA + r").*\bmcpu\b"), SERVERLESS_VCPU, _MILI),
+            (_r(r"autopilot (?!.*" + _AUTOPILOT_FORA + r").*\bcpu\b"), SERVERLESS_VCPU, _1),
+            (_r(r"autopilot (?!.*" + _AUTOPILOT_FORA + r").*\bmemory\b"), SERVERLESS_MEMORIA, _1),
             (_r(r"services min instance cpu"), SERVERLESS_VCPU_OCIOSA, _1),
             (_r(r"services min instance memory"), SERVERLESS_MEMORIA_OCIOSA, _1),
             # Por instância (instance-based) entra como tempo ativo

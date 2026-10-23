@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 import logging
 from collections import defaultdict
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any
@@ -39,6 +40,7 @@ from app.domain.services.banco_por_uso import CATEGORIA as _BANCO
 from app.domain.services.categoria_por_uso import BALDES as _BALDES_POR_USO
 from app.domain.services.categoria_por_uso import CATEGORIAS as _CATEGORIAS_POR_USO
 from app.domain.services.categoria_por_uso import PLANO_DE_CONTROLE as _PLANO_DE_CONTROLE
+from app.domain.services.categoria_por_uso import RECONHECIDO_SEM_COTACAO as _RECONHECIDO
 from app.domain.services.categoria_por_uso import quantidade_por_uso, tipo_por_uso
 from app.domain.services.compromisso_de_compute import paga_maquina_virtual
 from app.domain.services.instance_shape import InstanceShape, parse_instance_shape
@@ -162,7 +164,11 @@ class BillingAggregator:
         self,
         items: list[BillingEnriched],
         source_provider: str,
+        servicos_reconhecidos: Collection[str] = (),
     ) -> AggregateResult:
+        """``servicos_reconhecidos``: os nomes de serviço que o DE-PARA identificou
+        (curado ou apelido). A linha deles que nenhuma regra classifica vai para
+        ``recognized_unquoted``, ao custo atual; sem o nome, para o não classificado."""
         if not items:
             return AggregateResult(
                 pools=(),
@@ -207,6 +213,7 @@ class BillingAggregator:
         custo_sob_demanda = _ZERO
         custo_referenciado = _ZERO
         custo_por_base: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+        reconhecidos = frozenset(servicos_reconhecidos)
 
         for item in items:
             cost = item.cost
@@ -295,6 +302,11 @@ class BillingAggregator:
                     )
                 if _da_linha_detalhada(atributos):
                     _medir_auxiliar(item, component_type, armazenamento, bancos)
+            elif item.service_name in reconhecidos:
+                regiao = regiao_da_linha(item.provider, item.region, item.usage_type) or ""
+                aux_totals[_RECONHECIDO] += cost
+                aux_por_regiao[_RECONHECIDO][regiao] += cost
+                aux_por_servico[_RECONHECIDO][item.service_name] += cost
             else:
                 orphan_cost += cost
                 orphan_skus.append(item.sku_id or item.usage_type or "unknown")

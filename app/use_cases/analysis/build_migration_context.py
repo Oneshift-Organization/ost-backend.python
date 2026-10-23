@@ -112,6 +112,7 @@ from app.domain.services.service_identity import (
     is_financial_component,
     service_key,
     service_type_hint,
+    variantes_de_marca,
 )
 from app.domain.services.servico_pelo_uso import servico_pelo_uso
 from app.domain.services.technical_assessment import CURATED
@@ -208,6 +209,12 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         ),
         "Amazon Elastic Container Registry": "Amazon Elastic Container Registry (ECR)",
         "Amazon Elastic File System": "Amazon Elastic File System (EFS)",
+        # Curadoria de 18/10 (service_name_suggestions), versionada aqui para um ambiente
+        # novo nascer com ela (PLANO_CONFERENCIA_DE_SERVICOS C6)
+        "Amazon EC2 Container Registry (ECR)": "Amazon Elastic Container Registry (ECR)",
+        "Amazon Elastic Compute Cloud - Compute": "Amazon EC2",
+        "AWS IoT": "AWS IoT Core",
+        "AWSIoT": "AWS IoT Core",
     },
     # Categoria de medidor do Cost Details (`MeterCategory`). "Storage" fica de fora:
     # é disco ou blob, e o classificador decide pelo medidor.
@@ -230,6 +237,14 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         "VPN Gateway": "Azure VPN Gateway",
         "Content Delivery Network": "Azure CDN",
         "Application Gateway": "Azure Application Gateway",
+        # Curadoria de 18/10
+        "API Management": "Azure API Management",
+        "Azure Data Factory v2": "Azure Data Factory",
+        "Azure Firewall": "Azure Firewall Premium",
+        "Azure OpenAI": "Azure OpenAI Service",
+        "ExpressRoute": "Azure ExpressRoute",
+        # MeterCategory dos modelos de IA (Azure OpenAI e afins) desde 2025
+        "Foundry Models": "Azure OpenAI Service",
     },
     # Descrição do serviço (Cost Table, BigQuery). "Networking" fica de fora: é
     # balanceador, NAT, IP ou VPN, e o classificador decide pelo SKU.
@@ -241,6 +256,9 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         "Source Repository": "Cloud Source Repositories",
         "Cloud Memorystore for Redis": "Memorystore",
         "Cloud Functions": "Cloud Run functions",
+        # Curadoria de 18/10
+        "Gemini API": "Vertex AI Studio",
+        "AlloyDB": "AlloyDB for PostgreSQL",
     },
     # Código do serviço no relatório de custos. "DATABASE" e "NETWORK" ficam de fora:
     # cobrem mais de um serviço (Autonomous, Base DB, MySQL; VCN, egress, FastConnect).
@@ -259,6 +277,37 @@ PROVIDER_SERVICE_ALIASES: dict[str, dict[str, str]] = {
         "MONITORING": "OCI Monitoring",
         "LOGGING": "OCI Logging",
         "DNS": "Oracle DNS",
+        # Códigos confirmados num relatório real da OCI (o balanceador e o objeto têm
+        # outro nome no relatório que na documentação)
+        "ORALB": "OCI Load Balancing",
+        "OBJECTSTORE": "Oracle Cloud Infrastructure Object Storage",
+        "OKE_CONTROL_PLANE": "Container Engine for Kubernetes (OKE)",
+        "TELEMETRY": "OCI Monitoring",
+        # Curadoria de 18/10
+        "API_GATEWAY": "Oracle API Platform",
+        "AUTONOMOUS_DATABASE": "Oracle Database Cloud Service",
+        "CACHE": "OCI Cache",
+        "DATA_FLOW": "Oracle Cloud Infrastructure Data Flow",
+        "FASTCONNECT": "OCI FastConnect",
+        "GENERATIVE_AI": "OCI Generative AI",
+        "GOLDENGATE": "OCI GoldenGate",
+        "NETWORK_FIREWALL": "OCI Network Firewall",
+        "STREAMING": "OCI Streaming",
+        "WAF": "OCI Web Application Firewall",
+        # Códigos inferidos da lista de preços (sem relatório real que os confirme);
+        # sem efeito se o código do relatório for outro
+        "NOSQL": "Oracle NoSQL Database Cloud Service",
+        "OPENSEARCH": "OCI Search with OpenSearch",
+        "REDIS": "OCI Cache",
+        "EMAIL_DELIVERY": "OCI Email Delivery",
+        "BASTION": "OCI Bastion",
+        "CLOUD_GUARD": "OCI Cloud Guard",
+        "LOG_ANALYTICS": "OCI Logging Analytics",
+        "INTEGRATION": "Oracle Integration",
+        "ANALYTICS": "Oracle Analytics Cloud",
+        "POSTGRESQL": "OCI Database with PostgreSQL",
+        "MYSQL": "MySQL Database Service",
+        "CONTAINER_INSTANCES": "OCI Container Instances",
     },
 }
 
@@ -816,7 +865,15 @@ class BuildMigrationContextUseCase:
             # Ponte concatenado <-> espaçado. Quando o serviço tem várias
             # capacidades, prefere a que bate com o tipo que o classificador
             # sugeriu; senão a primeira em ordem determinística.
-            candidates = canonicals_squashed.get(service_key(source_provider, name))
+            chave = service_key(source_provider, name)
+            candidates = canonicals_squashed.get(chave) or next(
+                (
+                    canonicals_squashed[v]
+                    for v in variantes_de_marca(source_provider, chave)
+                    if v in canonicals_squashed
+                ),
+                None,
+            )
             if candidates:
                 # Sem o tipo do classificador, o tipo curado
                 curado = tipo_preferido.get(service_key(source_provider, name))
@@ -1017,7 +1074,15 @@ class BuildMigrationContextUseCase:
         estimated_capacity_cost = Decimal("0")
         agg_result = None
         if self._aggregator is not None:
-            agg_result = await self._aggregator.aggregate(items, source_provider)
+            # Serviço que o DE-PARA identificou: a linha dele sem regra fica com nome,
+            # ao custo atual, e não em "não classificado" (PLANO_CONFERENCIA_DE_SERVICOS C5)
+            reconhecidos = {
+                svc.service_name
+                for grupo in categories.values()
+                for svc in grupo["services"]
+                if svc.type_source in ("curado", "catalog_alias")
+            }
+            agg_result = await self._aggregator.aggregate(items, source_provider, reconhecidos)
             pools = agg_result.pools
             auxiliary = agg_result.auxiliary
             mapping_confidence = agg_result.confidence_breakdown

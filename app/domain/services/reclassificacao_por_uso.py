@@ -40,6 +40,14 @@ PLANO_PRECO_NAO_COMPUTE R5:
   Security Command Center, verificação de imagem do GCP, Cloud Guard): saía não
   classificada.
 
+PLANO_CONFERENCIA_DE_SERVICOS (C3 e C4):
+- **banco que a linha não nomeia**: DynamoDB (`USE1-ReadCapacityUnit-Hrs`), OpenSearch
+  (`ESInstance:r6g.large`), AlloyDB ("Instance vCPU Cores"), Bigtable ("Server Node"),
+  Spanner, Firestore e Memorystore saíam não classificados, ou o armazenamento do
+  DynamoDB como objeto. A transferência de dados deles segue como rede;
+- **contêiner por duração**: Container Instances da Azure e pods do GKE Autopilot são
+  contêiner serverless (`categoria_por_uso`), não órfãos.
+
 Corrigir aqui, e não só nas regras de SKU, vale para faturas já processadas sem
 reenriquecer. Tabela de dados por nuvem, sem ``if``. Módulo puro, sem I/O.
 """
@@ -63,6 +71,10 @@ REGISTRO = "container_registry"
 METRICAS = "metrics"
 BASTION = "bastion"
 SEGURANCA = "security_posture"
+BANCO = "database"
+SUPORTE = "support"
+# Transferência de dados do próprio serviço: continua rede
+_SEM_TRANSFERENCIA = r"(?!.*(datatransfer|data transfer|network|egress))"
 
 # Uso de log da CloudWatch; o resto do serviço é métrica, alarme e painel
 _LOG_DA_CLOUDWATCH = r"(dataprocessing|vendedlog|timedstorage|datascanned|logs?\b)"
@@ -88,6 +100,16 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^(aws ?waf|awswaf)"), WAF),
         (_r(r"^(amazon ?ecr|amazon elastic container registry)[^|]*\|.*timedstorage"), REGISTRO),
         (_r(r"^(amazon ?guardduty|amazon ?inspector|aws ?security ?hub)"), SEGURANCA),
+        # Plano de suporte (Business, Enterprise, Developer, Enterprise On-Ramp)
+        (_r(r"^(aws ?support|aws ?developer ?support|aws ?enterprise ?on ?ramp)"), SUPORTE),
+        (_r(r"^(amazon ?dynamodb)[^|]*\|" + _SEM_TRANSFERENCIA), BANCO),
+        (
+            _r(
+                r"^(amazon ?es|amazon ?opensearch( service)?|amazon elasticsearch service)[^|]*\|"
+                + _SEM_TRANSFERENCIA
+            ),
+            BANCO,
+        ),
     ),
     "gcp": (
         (_r(r"source repositor[^|]*\| *storage$"), "object_storage"),
@@ -104,10 +126,22 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
             _r(r"^(security command center|container registry vulnerability|on-demand scanning)"),
             SEGURANCA,
         ),
+        (
+            _r(
+                r"^(alloydb|cloud bigtable|cloud spanner|cloud firestore|firestore|cloud datastore"
+                r"|cloud memorystore[^|]*)\s*\|" + _SEM_TRANSFERENCIA
+            ),
+            BANCO,
+        ),
+        (_r(r"^kubernetes engine[^|]*\|\s*autopilot"), SERVERLESS),
+        (_r(r"^(google cloud support|cloud support|support)\s*\|"), SUPORTE),
     ),
     "azure": (
         (
-            _r(r"^(functions|azure container apps)[^|]*\|(?!.*(data transfer|bandwidth))"),
+            _r(
+                r"^(functions|azure container apps|container instances)[^|]*\|"
+                r"(?!.*(data transfer|bandwidth))"
+            ),
             SERVERLESS,
         ),
         (_r(r"^key vault"), SEGREDOS),
