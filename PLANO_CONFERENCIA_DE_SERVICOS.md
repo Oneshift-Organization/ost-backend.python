@@ -203,3 +203,112 @@ Candidatos, na ordem do ganho:
 
 Data warehouse, IA generativa e analytics seguem ao custo atual: a unidade não se traduz
 (nó contra TiB lido; tokens de modelos diferentes).
+
+## 7. Lote 2 — App Service, API Gateway, requisição de objeto e arquivos (23/10)
+
+Pedido do usuário: "faça e teste" os quatro primeiros do §6. Correção geral, com
+taxas das quatro nuvens, conferidas nas fontes oficiais em 23/10.
+
+### 7.1 O que muda
+
+- **L1, App Service como capacidade de compute.**
+  - O plano (`P1 v3 App` em "Premium v3 Plan") é cobrado por instância-hora, e a
+    Microsoft publica o tamanho de cada plano. Exemplos: B1 tem 1 vCPU e 1,75 GiB; P1v3,
+    2 vCPU e 8 GiB; I1v2, 2 vCPU e 8 GiB.
+  - O parser da Azure grava `instance_type` `AppService_P1v3` e a família `APPSERVICE_PV3`.
+    O `azure_shape` dá o tamanho pela tabela publicada; a capacidade entra no pool como
+    estimada, não como medida.
+  - O destino é cotado pelas máquinas do mesmo tamanho (Elastic Beanstalk, App Engine
+    flexível e OCI cobram a máquina).
+  - Ficam ao custo atual: o que não é o plano (IP SSL, domínio, certificado, ambiente
+    isolado) e os planos sem tamanho publicado (Free, Shared, Premium v4).
+- **L2, API Gateway por chamada** (`api_requests`, por 10 mil):
+
+  | nuvem | taxa por 10 mil | o quê |
+  |---|---|---|
+  | AWS | US$ 0,035 | REST API |
+  | Azure | US$ 0,035 | API Management Consumption |
+  | GCP | US$ 0,03 | API Gateway; cobra como Service Control |
+  | OCI | US$ 0,03 | API Gateway |
+
+  - Como origem, contam a chamada do REST e do HTTP API da AWS, a do Consumption e do
+    v2 da Azure e a da OCI.
+  - A unidade do APIM clássico (Developer, Basic, Standard, Premium por hora), o cache e
+    o WebSocket ficam ao custo atual.
+- **L3, requisição de armazenamento de objetos** (por 10 mil):
+
+  | categoria | AWS (S3 Standard) | Azure (Blob Hot) | GCP (Standard regional) | OCI |
+  |---|---|---|---|---|
+  | escrita (`object_requests_write`; Tier1, Write, Class A) | US$ 0,05 | US$ 0,05 | US$ 0,05 | US$ 0,0034 |
+  | leitura (`object_requests_read`; Tier2, Read, Class B) | US$ 0,004 | US$ 0,004 | US$ 0,004 | US$ 0,0034 |
+
+  - A OCI cobra uma taxa só por requisição. Como origem, ela não separa escrita de
+    leitura e fica ao custo atual.
+- **L4, arquivos por GB-mês** (`file_storage_capacity`), o tier de uso geral em SSD:
+
+  | AWS | Azure | GCP | OCI |
+  |---|---|---|---|
+  | US$ 0,30 (EFS Standard) | US$ 0,16 (Files Premium LRS) | US$ 0,30 (Filestore Basic SSD) | US$ 0,30 (File Storage) |
+
+  - Como origem: EFS Standard e One Zone, Azure Files (Premium provisionado e Hot, Cool e
+    Transaction Optimized armazenado), capacidade do Filestore e File Storage da OCI.
+  - IA e Archive do EFS, operações e snapshots ficam ao custo atual, em
+    `armazenamento_arquivos`.
+
+Fontes:
+- AWS Price List bulk us-east-1: `AmazonApiGateway`, `AmazonS3`, `AmazonEFS`.
+- Azure Retail Prices eastus: API Management, Storage, Azure App Service.
+- Catálogo do GCP: Cloud Storage, Filestore. A página de preços do API Gateway: o SKU não
+  está no catálogo, a cobrança sai como Service Control.
+- OCI cetools: B92072, B91627, B89057.
+- Tamanhos do App Service: página de preços da Microsoft.
+
+Premissas, declaradas:
+- **App Service:** o plano Windows embute a licença. Cotado como capacidade, o destino
+  sai sem ela, como já acontece com a VM Windows da Azure.
+- **API Gateway:** a chamada do HTTP API da AWS (US$ 1 por milhão) é cotada no destino
+  pela taxa do produto gerenciado equivalente (US$ 3 a 3,50).
+- **Sem camada gratuita no destino**, como nas outras categorias.
+
+### 7.2 Análise de impacto
+
+| quem consome | o que muda | risco | como fica coberto |
+|---|---|---|---|
+| parser da Azure (L1) | linha do plano do App Service ganha `instance_type`, família e `capacity_unit` | marcar como plano o que não é | o padrão exige o nome do medidor de plano (`P1 v3 App`); o resto fica como está |
+| `azure_shape` (L1) | tabela de tamanhos dos planos | tamanho errado | tabela da página de preços; teste de cada tier |
+| pools e cotação de compute (L1) | App Service entra no pool e é cotado por máquinas do mesmo tamanho | economia de plano Windows otimista | premissa declarada; medido na fatura típica |
+| Terraform (L1) | o pool do App Service vira máquina no pacote | criar VM onde o cliente queria PaaS | aviso: o App Service entra como máquinas; o PaaS do destino se cria à parte |
+| `reclassificacao_por_uso` e `categoria_por_uso` (L2 a L4) | baldes `api_gateway` e `object_requests`; regras novas em `file_storage` | levar linha de outro serviço | padrão pelo nome do serviço e do medidor; teste por nuvem |
+| taxas (`seed_category_rates`) | 16 taxas novas, referência | confiança cair | medido; o sync oficial fica para depois, se a confiança cair |
+| payload | chaves novas: `api_requisicoes`, `api_outros`, `objeto_requisicoes_escrita`, `objeto_requisicoes_leitura`, `objeto_requisicoes_outros`, `arquivos_capacidade`, e os `equivalentes_`; diminuem `reconhecidos_sem_cotacao` e `armazenamento_arquivos` | o agente somar errado | aditivo; a autoridade manda no número; nota ao MCP |
+| `equivalence_pricing` | rótulos novos na tabela de categorias | hash da autoridade | troca o hash sem subir a versão, como antes |
+| decisão e cobertura | o custo cotado sobe onde há esses serviços | decisão mudar | medido nas faturas típicas e na regressão |
+
+### 7.3 Resultado (23/10)
+
+Medido como no §4: develop `6d26e59` contra a branch carregada no mesmo processo.
+
+| fatura típica | custo cotado antes | depois | o que passou a ser cotado |
+|---|---|---|---|
+| AWS | 78% | 79% | chamadas do API Gateway, requisições do S3, EFS |
+| Azure | 77% | 82% | planos do App Service (P1v3, B1) como máquinas, operações de Blob, Azure Files |
+| GCP | 83% | 88% | Filestore, operações do Cloud Storage |
+| OCI | 89% | 91% | API Gateway, File Storage |
+
+O que segue ao custo atual é o declarado: a unidade do APIM clássico e a requisição da OCI
+como origem.
+
+Regressão (faturas reais e mocks):
+- decisão igual nas oito;
+- cobertura sobe de 0,3 a 1,3 ponto onde há requisição de objeto, arquivo ou API;
+- economia:
+  - OCI no AWS Cost Explorer real: US$ 35.964 → 36.162 (requisição do S3 cotada pela taxa
+    da OCI);
+  - Azure no GCP Cost Table: −102 → −69 (Filestore cotado pelo Azure Files);
+  - o resto, centavos;
+- score: +0,1 a +0,4.
+
+Testes de unidade: 2.672.
+
+Achado de método: com saída grande, o stream do `kubectl exec` às vezes corta no meio
+(o JSON termina sem fechar). Não é erro da análise: a mesma rodada, repetida, sai inteira.

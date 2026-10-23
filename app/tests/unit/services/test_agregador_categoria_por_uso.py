@@ -193,7 +193,11 @@ async def test_cdn_tem_categoria_propria_e_a_requisicao_do_s3_nao() -> None:
     assert aux.cdn == Decimal("8.5")
     assert aux.cdn_requests == Decimal("1")
     assert aux.network_egress == Decimal("0")
-    assert aux.orphan == Decimal("0.5")
+    # A requisição do S3 não é CDN: é requisição de objeto, cotada pela escrita
+    # (PLANO_CONFERENCIA_DE_SERVICOS §7), e não mais órfã
+    assert aux.orphan == Decimal("0")
+    assert aux.por_uso["object_requests_write"] == Decimal("0.5")
+    assert sum(aux.quantidade_por_regiao["object_requests_write"].values()) == Decimal("10")
 
 
 @pytest.mark.asyncio

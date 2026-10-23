@@ -13,17 +13,31 @@ import pytest
 
 from app.domain.entities.billing_enriched import BillingEnriched
 from app.domain.entities.sku_classification_rule import SkuClassificationRule
+from app.domain.services.azure_shape import (
+    familia_app_service,
+    parse_azure_shape,
+    plano_app_service,
+)
 from app.domain.services.categoria_por_uso import (
+    API_OUTROS,
+    API_REQUISICOES,
+    ARQUIVOS,
+    ARQUIVOS_CAPACIDADE,
+    OBJETO_ESCRITA,
+    OBJETO_LEITURA,
+    OBJETO_OUTROS,
     RECONHECIDO_SEM_COTACAO,
     SERVERLESS,
     SERVERLESS_MEMORIA,
     SERVERLESS_VCPU,
+    UNIDADE,
     quantidade_por_uso,
     tipo_por_uso,
 )
 from app.domain.services.reclassificacao_por_uso import reclassificar
 from app.domain.services.service_identity import variantes_de_marca
 from app.domain.services.sku_matcher import SkuMatcher
+from app.infrastructure.database.seed_category_rates import category_rate_points
 from app.infrastructure.database.seed_classification_rules import (
     AWS_RULES,
     GCP_RULES,
@@ -296,3 +310,301 @@ def test_variante_nao_reduz_o_nome_a_quase_nada() -> None:
 )
 def test_plano_de_suporte_tem_balde_proprio(provedor, servico, uso) -> None:
     assert reclassificar(provedor, servico, uso, "unclassified") == "support"
+
+
+# ── Lote 2 (§7): App Service, API Gateway, requisição de objeto e arquivos ─
+
+
+@pytest.mark.parametrize(
+    ("medidor", "tipo", "familia", "vcpus", "ram"),
+    [
+        (
+            "Azure App Service | Premium v3 Plan | P1 v3 App",
+            "AppService_P1v3",
+            "APPSERVICE_PV3",
+            2,
+            "8",
+        ),
+        (
+            "Azure App Service | Premium v3 Plan | P0v3 App",
+            "AppService_P0v3",
+            "APPSERVICE_PV3",
+            1,
+            "4",
+        ),
+        (
+            "Azure App Service | Premium v3 Plan | P1mv3 App",
+            "AppService_P1mv3",
+            "APPSERVICE_PMV3",
+            2,
+            "16",
+        ),
+        ("Azure App Service | Basic Plan | B1 App", "AppService_B1", "APPSERVICE_B", 1, "1.75"),
+        (
+            "Azure App Service | Isolated v2 Plan | I1 v2 App",
+            "AppService_I1v2",
+            "APPSERVICE_IV2",
+            2,
+            "8",
+        ),
+    ],
+)
+def test_plano_do_app_service_tem_tamanho(medidor, tipo, familia, vcpus, ram) -> None:
+    assert plano_app_service(medidor) == tipo
+    assert familia_app_service(tipo) == familia
+    forma = parse_azure_shape(tipo)
+    assert (forma.vcpus, forma.ram_gib) == (Decimal(vcpus), Decimal(ram))
+
+
+@pytest.mark.parametrize(
+    "medidor",
+    [
+        "Azure App Service | Premium Plan | P4 App",  # sem tamanho publicado
+        "Azure App Service | Isolated Plan | Front End App",
+        "Azure App Service | IP SSL | IP SSL Connection",
+        "Virtual Machines | BS Series | B1s",
+    ],
+)
+def test_o_que_nao_e_plano_com_tamanho_fica_de_fora(medidor) -> None:
+    assert plano_app_service(medidor) is None
+
+
+def test_plano_do_app_service_e_compute_pela_reclassificacao() -> None:
+    servico = "Azure App Service"
+    assert (
+        reclassificar("azure", servico, f"{servico} | Premium v3 Plan | P1 v3 App", "unclassified")
+        == "core"
+    )
+    assert (
+        reclassificar("azure", servico, f"{servico} | Basic Plan | B2 App", "unclassified")
+        == "core"
+    )
+    # O que não é plano com tamanho continua como estava
+    assert (
+        reclassificar("azure", servico, f"{servico} | IP SSL | IP SSL Connection", "unclassified")
+        == "unclassified"
+    )
+    assert (
+        reclassificar("azure", servico, f"{servico} | Premium Plan | P4 App", "unclassified")
+        == "unclassified"
+    )
+
+
+@pytest.mark.asyncio
+async def test_app_service_vira_pool_estimado() -> None:
+    linha = BillingEnriched(
+        user_id=uuid4(),
+        report_id=uuid4(),
+        provider="azure",
+        billing_period="2026-09",
+        service_name="Azure App Service",
+        cost=Decimal("220"),
+        currency="USD",
+        source_line_hash=uuid4().hex,
+        pricing_source="cur",
+        pricing_confidence="high",
+        usage_type="Azure App Service | Premium v3 Plan | P1 v3 App",
+        usage_amount=Decimal("1460"),
+        usage_unit="hours",
+        region="eastus",
+        component_type="unclassified",
+        attributes={
+            "instance_type": "AppService_P1v3",
+            "instance_family": "APPSERVICE_PV3",
+            "capacity_unit": "instance",
+            "charge_kind": "usage",
+        },
+    )
+    resultado = await BillingAggregator().aggregate([linha], "azure")
+    (pool,) = resultado.pools
+    assert pool.pool_key.machine_family == "APPSERVICE_PV3"
+    # 1.460 instâncias-hora x (2 vCPU, 8 GiB), estimado pelo tamanho publicado, na média
+    # da janela de horas do mês
+    assert pool.capacity.vcpus == Decimal("2920") / resultado.hours_window
+    assert pool.capacity.ram_gib == Decimal("11680") / resultado.hours_window
+    assert resultado.auxiliary.orphan == Decimal("0")
+
+
+CASOS_DO_LOTE_2 = [
+    # API Gateway: chamada da AWS contada uma a uma; a Azure em 10 mil; a OCI em 1 milhão
+    (
+        ("api_gateway", "aws", "AmazonApiGateway", "USE1-ApiGatewayRequest", "20000", "Requests"),
+        API_REQUISICOES,
+        "2",
+    ),
+    (
+        ("api_gateway", "aws", "AmazonApiGateway", "USE1-ApiGatewayHttpRequest", "10000", None),
+        API_REQUISICOES,
+        "1",
+    ),
+    (
+        (
+            "api_gateway",
+            "azure",
+            "API Management",
+            "API Management | Consumption Calls",
+            "300",
+            "10K",
+        ),
+        API_REQUISICOES,
+        "300",
+    ),
+    (
+        ("api_gateway", "oci", "API_GATEWAY", "API Gateway  - 1,000,000 API Calls", "3", "x"),
+        API_REQUISICOES,
+        "300",
+    ),
+    (
+        (
+            "api_gateway",
+            "azure",
+            "API Management",
+            "API Management | Developer Unit",
+            "730",
+            "1 Hour",
+        ),
+        API_OUTROS,
+        None,
+    ),
+    # Requisição de objeto: escrita e leitura
+    (
+        ("object_requests", "aws", "AmazonS3", "USE1-Requests-Tier1", "50000", "Requests"),
+        OBJETO_ESCRITA,
+        "5",
+    ),
+    (
+        ("object_requests", "aws", "AmazonS3", "Requests-Tier2", "100000", None),
+        OBJETO_LEITURA,
+        "10",
+    ),
+    (
+        ("object_requests", "aws", "AmazonS3", "SAE1-Requests-INT-Tier1", "10000", None),
+        OBJETO_ESCRITA,
+        "1",
+    ),
+    (
+        (
+            "object_requests",
+            "azure",
+            "Storage",
+            "Storage | Blob Storage | Hot LRS Write Operations",
+            "7",
+            "10K",
+        ),
+        OBJETO_ESCRITA,
+        "7",
+    ),
+    (
+        (
+            "object_requests",
+            "azure",
+            "Storage",
+            "Storage | Blob Storage | Hot Read Operations",
+            "9",
+            "10K",
+        ),
+        OBJETO_LEITURA,
+        "9",
+    ),
+    (
+        (
+            "object_requests",
+            "gcp",
+            "Cloud Storage",
+            "Regional Standard Class A Operations",
+            "30000",
+            "count",
+        ),
+        OBJETO_ESCRITA,
+        "3",
+    ),
+    (
+        ("object_requests", "oci", "OBJECTSTORE", "Object Storage - Requests", "5", "x"),
+        OBJETO_OUTROS,
+        None,
+    ),
+    # Arquivos por GB-mês; IA e Archive do EFS ficam ao custo atual
+    (
+        ("file_storage", "aws", "AmazonEFS", "USE1-TimedStorage-ByteHrs", "100", "GB-Mo"),
+        ARQUIVOS_CAPACIDADE,
+        "100",
+    ),
+    (
+        ("file_storage", "aws", "AmazonEFS", "USE1-IATimedStorage-ByteHrs", "100", "GB-Mo"),
+        ARQUIVOS,
+        None,
+    ),
+    (
+        (
+            "file_storage",
+            "azure",
+            "Storage",
+            "Storage | Premium Files | Premium LRS Provisioned",
+            "1024",
+            "1 GB/Month",
+        ),
+        ARQUIVOS_CAPACIDADE,
+        "1024",
+    ),
+    (
+        (
+            "file_storage",
+            "gcp",
+            "Cloud Filestore",
+            "Filestore Capacity Basic HDD (Standard) Iowa",
+            "1024",
+            "gibibyte month",
+        ),
+        ARQUIVOS_CAPACIDADE,
+        "1024",
+    ),
+    (
+        ("file_storage", "oci", "FILE_STORAGE", "File Storage - Storage", "500", "x"),
+        ARQUIVOS_CAPACIDADE,
+        "500",
+    ),
+]
+
+
+@pytest.mark.parametrize(("linha", "categoria", "medida"), CASOS_DO_LOTE_2)
+def test_lote_2_categoria_e_quantidade(linha, categoria, medida) -> None:
+    balde, provedor, servico, uso, quantidade, unidade = linha
+    tipo = tipo_por_uso(balde, provedor, servico, uso)
+    assert tipo.categoria == categoria
+    valor = quantidade_por_uso(provedor, tipo, Decimal(quantidade), unidade)
+    assert valor == (Decimal(medida) if medida else None)
+
+
+@pytest.mark.parametrize(
+    ("provedor", "servico", "uso", "esperado"),
+    [
+        ("aws", "AmazonApiGateway", "USE1-ApiGatewayRequest", "api_gateway"),
+        ("aws", "AmazonApiGateway", "USE1-DataTransfer-Out-Bytes", "network_egress"),
+        ("aws", "AmazonS3", "USE1-Requests-Tier2", "object_requests"),
+        ("aws", "AmazonS3", "USE1-TimedStorage-ByteHrs", "object_storage"),
+        ("azure", "API Management", "API Management | Consumption Calls", "api_gateway"),
+        (
+            "azure",
+            "Storage",
+            "Storage | Blob Storage | Hot LRS Write Operations",
+            "object_requests",
+        ),
+        ("azure", "Storage", "Storage | Files v2 | Hot LRS Write Operations", "file_storage"),
+        ("gcp", "Cloud Storage", "Regional Standard Class B Operations", "object_requests"),
+        ("oci", "API_GATEWAY", "API Gateway  - 1,000,000 API Calls", "api_gateway"),
+        ("oci", "OBJECTSTORE", "Object Storage - Requests", "object_requests"),
+    ],
+)
+def test_lote_2_reclassificacao(provedor, servico, uso, esperado) -> None:
+    antes = {
+        "USE1-DataTransfer-Out-Bytes": "network_egress",
+        "USE1-TimedStorage-ByteHrs": "object_storage",
+    }
+    assert reclassificar(provedor, servico, uso, antes.get(uso, "unclassified")) == esperado
+
+
+def test_taxas_do_lote_2() -> None:
+    taxas = {(p.provider, p.service_type): p for p in category_rate_points()}
+    for categoria in (API_REQUISICOES, OBJETO_ESCRITA, OBJETO_LEITURA, ARQUIVOS_CAPACIDADE):
+        for prov in ("aws", "azure", "gcp", "oci"):
+            assert taxas[(prov, categoria)].unit == UNIDADE[categoria], (prov, categoria)

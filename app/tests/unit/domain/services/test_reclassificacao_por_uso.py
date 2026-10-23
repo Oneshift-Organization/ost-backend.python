@@ -126,8 +126,8 @@ from app.domain.services.reclassificacao_por_uso import (
         # Requisição da CloudFront e consulta ao cache do Cloud CDN são rede (CDN)
         ("aws", "Amazon CloudFront", "US-Requests-Tier2-HTTPS", "unclassified", "network_egress"),
         ("aws", "Amazon CloudFront", "US-Requests-Tier2-HTTPS", "storage_hdd", "network_egress"),
-        # A requisição do S3 não muda
-        ("aws", "AmazonS3", "USE1-Requests-Tier1", "unclassified", "unclassified"),
+        # A requisição do S3 não é CDN: vai para requisição de objeto (§7 da conferência)
+        ("aws", "AmazonS3", "USE1-Requests-Tier1", "unclassified", "object_requests"),
         (
             "gcp",
             "Networking",

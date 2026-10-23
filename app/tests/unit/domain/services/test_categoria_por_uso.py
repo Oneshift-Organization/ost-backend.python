@@ -3,7 +3,10 @@ from decimal import Decimal
 import pytest
 
 from app.domain.services.categoria_por_uso import (
+    API_OUTROS,
+    API_REQUISICOES,
     ARQUIVOS,
+    ARQUIVOS_CAPACIDADE,
     BALDES,
     BASTION_HORAS,
     BASTION_OUTROS,
@@ -21,6 +24,9 @@ from app.domain.services.categoria_por_uso import (
     LOGS_RETENCAO,
     METRICAS,
     METRICAS_OUTROS,
+    OBJETO_ESCRITA,
+    OBJETO_LEITURA,
+    OBJETO_OUTROS,
     OBSERVABILIDADE_E_BORDA,
     PLANO_DE_CONTROLE,
     RECONHECIDO_SEM_COTACAO,
@@ -196,6 +202,8 @@ def test_balde_desconhecido_ou_sem_uso_vai_para_o_resto_do_balde():
         "bastion": BASTION_OUTROS,
         "security_posture": SEGURANCA_OUTROS,
         "support": SUPORTE,
+        "api_gateway": API_OUTROS,
+        "object_requests": OBJETO_OUTROS,
     }
 
 
@@ -224,6 +232,10 @@ def test_unidade_de_cada_categoria_cotada():
         SERVERLESS_MEMORIA: "gib_hour",
         SERVERLESS_MEMORIA_OCIOSA: "gib_hour",
         SERVERLESS_REQUISICOES: "10k",
+        API_REQUISICOES: "10k",
+        OBJETO_ESCRITA: "10k",
+        OBJETO_LEITURA: "10k",
+        ARQUIVOS_CAPACIDADE: "gb_month",
     }
     # O resto de cada balde fica ao custo atual
     for categoria in (
@@ -250,6 +262,12 @@ def test_chave_no_payload():
         *BASTION_SEGURANCA_E_SERVERLESS,
         RECONHECIDO_SEM_COTACAO,
         SUPORTE,
+        API_REQUISICOES,
+        API_OUTROS,
+        OBJETO_ESCRITA,
+        OBJETO_LEITURA,
+        OBJETO_OUTROS,
+        ARQUIVOS_CAPACIDADE,
     }
 
 
