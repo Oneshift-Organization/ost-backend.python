@@ -936,6 +936,10 @@ def _banco_do_grupo(
 # ── lacunas ─────────────────────────────────────────────────────────────
 
 
+def _familia_app_service(pool: dict[str, Any]) -> bool:
+    return str(pool.get("familia") or "").upper().startswith("APPSERVICE_")
+
+
 def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
     """O que o billing não contém, dito em voz alta.
 
@@ -980,7 +984,16 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "anexado). As aplicações de dentro do cluster não viajam pelo Terraform: o "
             "inventário da nuvem não vê Deployment nem Service."
         )
-    if _decimal(auxiliares.get("armazenamento_arquivos")):
+    pools = [p for p in payload.get("pools_computacao") or [] if isinstance(p, dict)]
+    if any(_familia_app_service(p) for p in pools):
+        plano.nao_suportado.append(
+            "O plano do App Service entra como máquinas do mesmo tamanho. Para manter a "
+            "aplicação em PaaS no destino (Elastic Beanstalk, App Engine, Container "
+            "Instances da OCI), crie o serviço à parte e descarte essas máquinas."
+        )
+    if _decimal(auxiliares.get("armazenamento_arquivos")) or _decimal(
+        auxiliares.get("arquivos_capacidade")
+    ):
         # T4: o Filestore saía como disco HDD e virava ~1.570 GB de disco que não existe
         plano.nao_suportado.append(
             "Armazenamento de arquivos (Filestore, EFS, Azure Files, File Storage da OCI) "

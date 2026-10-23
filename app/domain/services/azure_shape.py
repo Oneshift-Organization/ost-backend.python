@@ -65,8 +65,63 @@ class AzureShape:
     confidence: str = "estimado"
 
 
+# Plano do App Service: tamanho publicado pela Microsoft (vCPU, GiB), por instância
+# (PLANO_CONFERENCIA_DE_SERVICOS L1). Free, Shared, Premium v4 e os Isolated sem tamanho
+# publicado ficam de fora: sem o tamanho, o plano não vira capacidade.
+_PLANOS_APP_SERVICE: dict[str, tuple[int, str]] = {
+    "b1": (1, "1.75"), "b2": (2, "3.5"), "b3": (4, "7"),
+    "s1": (1, "1.75"), "s2": (2, "3.5"), "s3": (4, "7"),
+    "p1": (1, "1.75"), "p2": (2, "3.5"), "p3": (4, "7"),
+    "p1v2": (1, "3.5"), "p2v2": (2, "7"), "p3v2": (4, "14"),
+    "p0v3": (1, "4"), "p1v3": (2, "8"), "p2v3": (4, "16"), "p3v3": (8, "32"),
+    "p1mv3": (2, "16"), "p2mv3": (4, "32"), "p3mv3": (8, "64"), "p4mv3": (16, "128"),
+    "p5mv3": (32, "256"),
+    "i1": (1, "3.5"), "i2": (2, "7"), "i3": (4, "14"),
+    "i1v2": (2, "8"), "i2v2": (4, "16"), "i3v2": (8, "32"), "i4v2": (16, "64"),
+    "i5v2": (32, "128"), "i6v2": (64, "256"),
+    "i1mv2": (2, "16"), "i2mv2": (4, "32"), "i3mv2": (8, "64"), "i4mv2": (16, "128"),
+    "i5mv2": (32, "256"),
+    "pc2": (2, "8"), "pc3": (4, "16"), "pc4": (8, "32"),
+}  # fmt: skip
+# Último pedaço do medidor: `P1 v3 App`, `P0v3 App`, `P1mv3 App`, `B1 App`
+_PLANO = re.compile(r"^((?:B|S|PC|P|I)\d+m?)\s*(v\d)?\s+App$", re.IGNORECASE)
+_PREFIXO_APP_SERVICE = "AppService_"
+
+
+def plano_app_service(medidor: str | None) -> str | None:
+    """`... | P1 v3 App` → `AppService_P1v3`; None se não for plano com tamanho publicado."""
+    if not medidor:
+        return None
+    m = _PLANO.match(medidor.rsplit("|", 1)[-1].strip())
+    if not m:
+        return None
+    chave = (m.group(1) + (m.group(2) or "")).lower()
+    if chave not in _PLANOS_APP_SERVICE:
+        return None
+    tier = re.match(r"[a-z]+", chave).group(0)  # type: ignore[union-attr]
+    return _PREFIXO_APP_SERVICE + tier.upper() + chave[len(tier) :]
+
+
+def familia_app_service(instance_type: str | None) -> str | None:
+    """`AppService_P1v3` → `APPSERVICE_PV3`: o tier do plano, sem o tamanho."""
+    if not instance_type or not instance_type.startswith(_PREFIXO_APP_SERVICE):
+        return None
+    plano = instance_type[len(_PREFIXO_APP_SERVICE) :]
+    # Tira só o tamanho (o número logo depois do tier); a geração fica: P1v3 → PV3
+    return "APPSERVICE_" + re.sub(r"^([A-Za-z]+)\d+", r"\1", plano).upper()
+
+
 def parse_azure_shape(arm_sku_name: str | None) -> AzureShape | None:
-    """Deriva (vCPU, RAM) de um ``armSkuName``, ou None se não for uma VM."""
+    """Deriva (vCPU, RAM) de um ``armSkuName`` ou de um plano do App Service, ou None."""
+    if arm_sku_name and arm_sku_name.startswith(_PREFIXO_APP_SERVICE):
+        tamanho = _PLANOS_APP_SERVICE.get(arm_sku_name[len(_PREFIXO_APP_SERVICE) :].lower())
+        return (
+            AzureShape(vcpus=Decimal(tamanho[0]), ram_gib=Decimal(tamanho[1])) if tamanho else None
+        )
+    return _forma_da_vm(arm_sku_name)
+
+
+def _forma_da_vm(arm_sku_name: str | None) -> AzureShape | None:
     if not arm_sku_name:
         return None
     m = _AZURE_VM.search(arm_sku_name)

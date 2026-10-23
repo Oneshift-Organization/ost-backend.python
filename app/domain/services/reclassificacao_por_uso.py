@@ -48,6 +48,12 @@ PLANO_CONFERENCIA_DE_SERVICOS (C3 e C4):
 - **contêiner por duração**: Container Instances da Azure e pods do GKE Autopilot são
   contêiner serverless (`categoria_por_uso`), não órfãos.
 
+PLANO_CONFERENCIA_DE_SERVICOS (lote 2):
+- **plano do App Service** com tamanho publicado é compute (o parser grava o tamanho);
+- **API Gateway** (REST e HTTP da AWS, API Management, API Gateway da OCI) e
+  **requisição de objeto** (S3, Blob, Cloud Storage, Object Storage da OCI) têm balde
+  próprio, cotados pela chamada (`categoria_por_uso`).
+
 Corrigir aqui, e não só nas regras de SKU, vale para faturas já processadas sem
 reenriquecer. Tabela de dados por nuvem, sem ``if``. Módulo puro, sem I/O.
 """
@@ -73,6 +79,14 @@ BASTION = "bastion"
 SEGURANCA = "security_posture"
 BANCO = "database"
 SUPORTE = "support"
+COMPUTE = "core"
+API = "api_gateway"
+OBJETO = "object_requests"
+# Medidor de plano do App Service com tamanho publicado (`azure_shape._PLANOS_APP_SERVICE`)
+_PLANO_APP_SERVICE = (
+    r"(b[1-3]|s[1-3]|p[1-3]|p[1-3]\s*v2|p[0-3]\s*v3|p[1-5]mv3|i[1-3]|i[1-6]\s*v2|i[1-5]mv2|pc[2-4])"
+    r"\s+app$"
+)
 # Transferência de dados do próprio serviço: continua rede
 _SEM_TRANSFERENCIA = r"(?!.*(datatransfer|data transfer|network|egress))"
 
@@ -100,6 +114,8 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^(aws ?waf|awswaf)"), WAF),
         (_r(r"^(amazon ?ecr|amazon elastic container registry)[^|]*\|.*timedstorage"), REGISTRO),
         (_r(r"^(amazon ?guardduty|amazon ?inspector|aws ?security ?hub)"), SEGURANCA),
+        (_r(r"^(amazon ?api ?gateway)[^|]*\|(?!.*(datatransfer|-bytes))"), API),
+        (_r(r"^(amazon ?s3|amazon simple storage service)[^|]*\|.*\brequests-"), OBJETO),
         # Plano de suporte (Business, Enterprise, Developer, Enterprise On-Ramp)
         (_r(r"^(aws ?support|aws ?developer ?support|aws ?enterprise ?on ?ramp)"), SUPORTE),
         (_r(r"^(amazon ?dynamodb)[^|]*\|" + _SEM_TRANSFERENCIA), BANCO),
@@ -135,6 +151,7 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         ),
         (_r(r"^kubernetes engine[^|]*\|\s*autopilot"), SERVERLESS),
         (_r(r"^(google cloud support|cloud support|support)\s*\|"), SUPORTE),
+        (_r(r"^cloud storage[^|]*\|.*class [ab] operations"), OBJETO),
     ),
     "azure": (
         (
@@ -151,6 +168,9 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^azure dns"), DNS),
         (_r(r"^azure front door service[^|]*\|.*\b(policy|rule)\b"), WAF),
         (_r(r"^container registry"), REGISTRO),
+        (_r(r"^azure app service[^|]*\|.*\b" + _PLANO_APP_SERVICE), COMPUTE),
+        (_r(r"^api management[^|]*\|(?!.*(data transfer|bandwidth))"), API),
+        (_r(r"^storage[^|]*\|.*\bblob\b[^|]*\|[^|]*operations$"), OBJETO),
         (_r(r"^azure bastion[^|]*\|.*data transfer"), REDE),
         (_r(r"^azure bastion"), BASTION),
         (_r(r"^(microsoft defender|azure defender|azure security center)"), SEGURANCA),
@@ -164,6 +184,8 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^dns|\|.*networking - dns"), DNS),
         (_r(r"^waf|\|.*web application firewall"), WAF),
         (_r(r"^(cloud guard|vulnerability scanning)"), SEGURANCA),
+        (_r(r"\|\s*api gateway\b"), API),
+        (_r(r"\|\s*object storage - requests"), OBJETO),
     ),
 }
 

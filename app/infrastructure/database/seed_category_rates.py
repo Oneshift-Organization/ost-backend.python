@@ -289,6 +289,31 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("azure", "serverless_requests", "10k", "0.004"),
     ("gcp", "serverless_requests", "10k", "0.004"),
     ("oci", "serverless_requests", "10k", "0"),
+    # Lote 2 (PLANO_CONFERENCIA_DE_SERVICOS §7), conferidos em 23/10/2026: AWS Price List
+    # bulk us-east-1 (AmazonApiGateway, AmazonS3, AmazonEFS); Azure Retail Prices eastus
+    # (API Management, Storage); catálogo do GCP (Cloud Storage, Filestore) e página de
+    # preços do API Gateway; OCI cetools (B92072, B91627, B89057).
+    # Chamada de API Gateway, por 10 mil (US$ 3,50, 3,50, 3,00 e 3,00 por milhão)
+    ("aws", "api_requests", "10k", "0.035"),
+    ("azure", "api_requests", "10k", "0.035"),
+    ("gcp", "api_requests", "10k", "0.03"),
+    ("oci", "api_requests", "10k", "0.03"),
+    # Requisição de objeto, por 10 mil: S3 Standard, Blob Hot, Cloud Storage Standard
+    # regional. A OCI cobra uma taxa só (escrita e leitura)
+    ("aws", "object_requests_write", "10k", "0.05"),
+    ("azure", "object_requests_write", "10k", "0.05"),
+    ("gcp", "object_requests_write", "10k", "0.05"),
+    ("oci", "object_requests_write", "10k", "0.0034"),
+    ("aws", "object_requests_read", "10k", "0.004"),
+    ("azure", "object_requests_read", "10k", "0.004"),
+    ("gcp", "object_requests_read", "10k", "0.004"),
+    ("oci", "object_requests_read", "10k", "0.0034"),
+    # Arquivos por GB-mês, o tier de uso geral em SSD: EFS Standard, Azure Files Premium
+    # LRS, Filestore Basic SSD, File Storage da OCI
+    ("aws", "file_storage_capacity", "gb_month", "0.30"),
+    ("azure", "file_storage_capacity", "gb_month", "0.16"),
+    ("gcp", "file_storage_capacity", "gb_month", "0.30"),
+    ("oci", "file_storage_capacity", "gb_month", "0.30"),
 )
 
 
@@ -319,7 +344,8 @@ _CONFERIDO_EM: dict[tuple[str, str], date] = {
        for c in (
            "bastion_hours", "security_image_scans", "security_control_events",
            "serverless_vcpu_active", "serverless_vcpu_idle", "serverless_memory_active",
-           "serverless_memory_idle", "serverless_requests",
+           "serverless_memory_idle", "serverless_requests", "api_requests",
+           "object_requests_write", "object_requests_read", "file_storage_capacity",
        )},
 }
 _REDE_CONFERIDA_EM = date(2026, 10, 16)

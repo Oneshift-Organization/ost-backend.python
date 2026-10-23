@@ -96,6 +96,13 @@ SERVERLESS_REQUISICOES = "serverless_requests"
 RECONHECIDO_SEM_COTACAO = "recognized_unquoted"
 # Plano de suporte da nuvem: o destino também cobra o dele; fica ao custo atual
 SUPORTE = "support_plan"
+# Lote 2 (PLANO_CONFERENCIA_DE_SERVICOS §7): API Gateway, requisição de objeto e arquivos
+API_REQUISICOES = "api_requests"
+API_OUTROS = "api_gateway_other"
+OBJETO_ESCRITA = "object_requests_write"
+OBJETO_LEITURA = "object_requests_read"
+OBJETO_OUTROS = "object_requests_other"
+ARQUIVOS_CAPACIDADE = "file_storage_capacity"
 
 # Tipo de componente da linha → categoria do que nenhuma regra separa (ao custo atual)
 BALDES: Mapping[str, str] = {
@@ -111,6 +118,8 @@ BALDES: Mapping[str, str] = {
     "bastion": BASTION_OUTROS,
     "security_posture": SEGURANCA_OUTROS,
     "support": SUPORTE,
+    "api_gateway": API_OUTROS,
+    "object_requests": OBJETO_OUTROS,
 }
 
 # Observabilidade e borda (PLANO_EQUIVALENTES_E_TARIFAS §3): custo que não vira recurso
@@ -159,6 +168,12 @@ CATEGORIAS: tuple[str, ...] = (
     *BASTION_SEGURANCA_E_SERVERLESS,
     RECONHECIDO_SEM_COTACAO,
     SUPORTE,
+    API_REQUISICOES,
+    API_OUTROS,
+    OBJETO_ESCRITA,
+    OBJETO_LEITURA,
+    OBJETO_OUTROS,
+    ARQUIVOS_CAPACIDADE,
 )
 
 CHAVE_NO_PAYLOAD: Mapping[str, str] = {
@@ -197,6 +212,12 @@ CHAVE_NO_PAYLOAD: Mapping[str, str] = {
     SERVERLESS_REQUISICOES: "serverless_requisicoes",
     RECONHECIDO_SEM_COTACAO: "reconhecidos_sem_cotacao",
     SUPORTE: "suporte",
+    API_REQUISICOES: "api_requisicoes",
+    API_OUTROS: "api_outros",
+    OBJETO_ESCRITA: "objeto_requisicoes_escrita",
+    OBJETO_LEITURA: "objeto_requisicoes_leitura",
+    OBJETO_OUTROS: "objeto_requisicoes_outros",
+    ARQUIVOS_CAPACIDADE: "arquivos_capacidade",
 }
 
 # Categoria cotada pela quantidade → unidade dela
@@ -224,6 +245,10 @@ UNIDADE: Mapping[str, str] = {
     SERVERLESS_MEMORIA: GIB_HORA,
     SERVERLESS_MEMORIA_OCIOSA: GIB_HORA,
     SERVERLESS_REQUISICOES: DEZ_MIL,
+    API_REQUISICOES: DEZ_MIL,
+    OBJETO_ESCRITA: DEZ_MIL,
+    OBJETO_LEITURA: DEZ_MIL,
+    ARQUIVOS_CAPACIDADE: GB_MES,
 }
 
 _1 = Decimal(1)
@@ -253,9 +278,15 @@ PELA_REGRA: Mapping[str, frozenset[str]] = {
             SERVERLESS_MEMORIA,
             SERVERLESS_MEMORIA_OCIOSA,
             SERVERLESS_REQUISICOES,
+            API_REQUISICOES,
+            OBJETO_ESCRITA,
+            OBJETO_LEITURA,
+            ARQUIVOS_CAPACIDADE,
         }
     ),
     "gcp": frozenset({SEGURANCA_IMAGENS}),
+    # A OCI dá a chamada em lotes de 1 milhão e o arquivo em GB-mês
+    "oci": frozenset({API_REQUISICOES, ARQUIVOS_CAPACIDADE}),
 }
 
 
@@ -378,6 +409,43 @@ REGRAS: Mapping[str, Mapping[str, _Regras]] = {
         "gcp": ((_r(r"prometheus samples ingested"), METRICAS, _1),),
         # A OCI não tem Prometheus gerenciado: o ponto do Monitoring não é amostra de
         # Prometheus e fica ao custo atual
+    },
+    # Lote 2: chamada de API Gateway (REST e HTTP da AWS; Consumption e v2 da Azure; OCI
+    # em lotes de 1 milhão). A unidade do APIM clássico, cache e WebSocket ficam
+    "api_gateway": {
+        "aws": ((_r(r"apigateway(http)?request$"), API_REQUISICOES, _POR_DEZ_MIL),),
+        "azure": (
+            (_r(r"\|\s*(consumption|basic v2|standard v2|premium v2) calls$"), API_REQUISICOES, _1),
+        ),
+        "oci": ((_r(r"api gateway\s*-\s*1,000,000 api calls"), API_REQUISICOES, _MILHAO),),
+    },
+    # Requisição de objeto: escrita (Tier1, Write, Class A) e leitura (Tier2, Read, Class B).
+    # A OCI cobra uma taxa só e não separa: como origem, fica ao custo atual
+    "object_requests": {
+        "aws": (
+            (_r(r"requests-(?:[a-z]+-)?tier1$"), OBJETO_ESCRITA, _POR_DEZ_MIL),
+            (_r(r"requests-(?:[a-z]+-)?tier2$"), OBJETO_LEITURA, _POR_DEZ_MIL),
+        ),
+        "azure": (
+            (
+                _r(r"\b(write|list and create container|list|create container) operations$"),
+                OBJETO_ESCRITA,
+                _1,
+            ),
+            (_r(r"\bread operations$"), OBJETO_LEITURA, _1),
+        ),
+        "gcp": (
+            (_r(r"class a operations"), OBJETO_ESCRITA, _1),
+            (_r(r"class b operations"), OBJETO_LEITURA, _1),
+        ),
+    },
+    # Arquivos por GB-mês: EFS Standard e One Zone, Azure Files armazenado ou provisionado,
+    # capacidade do Filestore, File Storage da OCI. IA, Archive, operação e snapshot ficam
+    "file_storage": {
+        "aws": ((_r(r"-timedstorage(-z)?-bytehrs$"), ARQUIVOS_CAPACIDADE, _1),),
+        "azure": ((_r(r"\b(data stored|provisioned)$"), ARQUIVOS_CAPACIDADE, _1),),
+        "gcp": ((_r(r"filestore (instance )?capacity"), ARQUIVOS_CAPACIDADE, _1),),
+        "oci": ((_r(r"file storage - storage$"), ARQUIVOS_CAPACIDADE, _1),),
     },
     # R5. Só a Azure cobra o bastion: Session Manager, IAP e OCI Bastion não cobram
     "bastion": {
