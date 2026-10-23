@@ -23,6 +23,7 @@ from app.domain.services.categoria_por_uso import (
     METRICAS_OUTROS,
     OBSERVABILIDADE_E_BORDA,
     PLANO_DE_CONTROLE,
+    RECONHECIDO_SEM_COTACAO,
     REGISTRO,
     REGISTRO_OUTROS,
     SEGREDO,
@@ -36,6 +37,7 @@ from app.domain.services.categoria_por_uso import (
     SERVERLESS_REQUISICOES,
     SERVERLESS_VCPU,
     SERVERLESS_VCPU_OCIOSA,
+    SUPORTE,
     UNIDADE,
     WAF_OUTROS,
     WAF_POLITICAS,
@@ -193,6 +195,7 @@ def test_balde_desconhecido_ou_sem_uso_vai_para_o_resto_do_balde():
         "metrics": METRICAS_OUTROS,
         "bastion": BASTION_OUTROS,
         "security_posture": SEGURANCA_OUTROS,
+        "support": SUPORTE,
     }
 
 
@@ -245,6 +248,8 @@ def test_chave_no_payload():
         ARQUIVOS,
         *OBSERVABILIDADE_E_BORDA,
         *BASTION_SEGURANCA_E_SERVERLESS,
+        RECONHECIDO_SEM_COTACAO,
+        SUPORTE,
     }
 
 

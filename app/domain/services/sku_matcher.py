@@ -63,13 +63,16 @@ _SERVICE_TYPE_ROLE = {
 }
 
 # resource-group tokens for the L3 fallback (family + group), matched against
-# the descriptor and the usage unit (e.g. "gibibyte hour" -> ram).
+# the descriptor and the usage unit (e.g. "gibibyte hour" -> ram). Memória é
+# GiB-hora; "gibibyte" sozinho é volume (transferência, armazenamento), e com o
+# código de região no meio do tipo de uso (`USE1-USW2-...`) parecendo família, a
+# transferência entre regiões virava RAM e entrava no pool de máquinas.
 _GROUP_TOKENS = (
     ("core", "core"),
     ("cpu", "core"),
     ("ram", "ram"),
     ("memory", "ram"),
-    ("gibibyte", "ram"),
+    ("gibibyte hour", "ram"),
 )
 
 

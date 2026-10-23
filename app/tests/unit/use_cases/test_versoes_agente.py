@@ -64,8 +64,10 @@ _HASH_POR_VERSAO = {
     # Hash trocado sem subir a versão (PLANO_PRECO_NAO_COMPUTE R5): `_CATEGORIES` ganhou
     # bastion, segurança e contêiner serverless. As chaves só existem em payload
     # preparado depois da mudança; snapshot antigo anexa os mesmos preços.
+    # De novo em PLANO_CONFERENCIA_DE_SERVICOS C6: `service_identity` ganhou
+    # `variantes_de_marca`, que a autoridade não usa; `service_key` não mudou.
     "agent-authority-v5.1": (
-        "501f8e7686c05145cb2125cae18b37d724bf589252736fa8ff1d11fa4771fa8a"
+        "7625bde98b9a4697de6eebcf23cbc87a774800a0da8852a08159d0960cbab2e2"
     ),
     # v5: lock-in da origem efetiva; classe/inventário estimado são provisórios.
     "agent-authority-v5": (

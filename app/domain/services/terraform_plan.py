@@ -999,6 +999,13 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "segurança aparecem no custo e não viram recurso: crie no destino o serviço de "
             "contêiner, o acesso às máquinas sem IP público e a verificação de imagens."
         )
+    reconhecidos = (auxiliares.get("por_servico") or {}).get("reconhecidos_sem_cotacao") or {}
+    if _decimal(auxiliares.get("reconhecidos_sem_cotacao")):
+        nomes = ", ".join(sorted(reconhecidos)[:6]) or "serviços gerenciados"
+        plano.nao_suportado.append(
+            f"Serviços sem equivalente cotado ({nomes}) aparecem no custo e não viram "
+            "recurso: crie o serviço do destino à parte."
+        )
     nao_classificado = auxiliares.get("nao_classificado") or {}
     if _decimal(nao_classificado.get("custo")):
         plano.nao_suportado.append(
