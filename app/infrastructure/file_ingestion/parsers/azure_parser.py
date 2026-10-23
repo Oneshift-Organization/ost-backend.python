@@ -34,7 +34,7 @@ from typing import Any
 
 import pandas as pd
 
-from app.domain.services.azure_shape import familia_vm
+from app.domain.services.azure_shape import familia_app_service, familia_vm, plano_app_service
 from app.domain.value_objects.charge_kind import ChargeKind
 from app.infrastructure.file_ingestion.base_parser import BaseParser
 from app.infrastructure.file_ingestion.consolidacao import Consolidador
@@ -74,6 +74,7 @@ _COLUNAS_MCA = frozenset(
 )
 # Linhas de VM cobradas por hora de instância (MeterCategory + unidade de hora).
 _CATEGORIA_VM = "virtual machines"
+_CATEGORIA_APP_SERVICE = "azure app service"
 # Disco gerenciado é cobrado por disco-mês ("1/Month") no TIER (P30, E20, S10…).
 # O tamanho do tier é publicado; convertido, vira GB-mês MEDIDO — sem isso a
 # Azure seria a única nuvem sem tamanho de disco.
@@ -283,6 +284,18 @@ class AzureParser(BaseParser):
                 atributos["resource_group"] = valores["resource_group"]
             if categoria.casefold() == _CATEGORIA_VM and unidade == "hours" and tamanho:
                 atributos["capacity_unit"] = "instance"
+            # Plano do App Service: capacidade pelo tamanho publicado do plano
+            # (PLANO_CONFERENCIA_DE_SERVICOS L1)
+            plano = (
+                plano_app_service(valores["meter_name"])
+                if categoria.casefold() == _CATEGORIA_APP_SERVICE
+                else None
+            )
+            if plano:
+                atributos["instance_type"] = plano
+                atributos["instance_family"] = familia_app_service(plano) or ""
+                if unidade == "hours":
+                    atributos["capacity_unit"] = "instance"
             if "snapshot" in descritor.casefold():
                 atributos["storage_kind"] = "snapshot"
             periodo = valores["billing_period_start"][:7] if valores["billing_period_start"] else ""

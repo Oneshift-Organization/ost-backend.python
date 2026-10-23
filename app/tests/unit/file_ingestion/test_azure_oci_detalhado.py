@@ -310,3 +310,22 @@ def test_oci_correcao_substitui_em_qualquer_ordem(tmp_path, correcao_primeiro) -
     linhas = [correcao, original] if correcao_primeiro else [original, correcao]
     df = _parse_oci(_oci(tmp_path, linhas))
     assert _soma(df["cost"]) == Decimal("4")
+
+
+def test_azure_plano_do_app_service_vira_capacidade(tmp_path) -> None:
+    """PLANO_CONFERENCIA_DE_SERVICOS §7: o plano tem tamanho publicado; o resto não."""
+    base = {"MeterCategory": "Azure App Service", "UnitOfMeasure": "1 Hour", "Quantity": "730"}
+    df = _parse_azure(
+        _azure(
+            tmp_path,
+            [
+                {**base, "MeterSubCategory": "Premium v3 Plan", "MeterName": "P1 v3 App"},
+                {**base, "MeterSubCategory": "IP SSL", "MeterName": "IP SSL Connection"},
+            ],
+        )
+    )
+    plano, ssl = (df.iloc[i]["attributes"] for i in range(2))
+    assert plano["instance_type"] == "AppService_P1v3"
+    assert plano["instance_family"] == "APPSERVICE_PV3"
+    assert plano["capacity_unit"] == "instance"
+    assert "instance_type" not in ssl and "capacity_unit" not in ssl

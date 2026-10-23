@@ -66,8 +66,10 @@ _HASH_POR_VERSAO = {
     # preparado depois da mudança; snapshot antigo anexa os mesmos preços.
     # De novo em PLANO_CONFERENCIA_DE_SERVICOS C6: `service_identity` ganhou
     # `variantes_de_marca`, que a autoridade não usa; `service_key` não mudou.
+    # E no §7 da conferência: `_CATEGORIES` ganhou API Gateway, requisição de objeto e
+    # arquivos; as chaves só existem em payload preparado depois da mudança.
     "agent-authority-v5.1": (
-        "7625bde98b9a4697de6eebcf23cbc87a774800a0da8852a08159d0960cbab2e2"
+        "490b04beec7238f9118454adecd90a4a938bb80faecf368ada7aa17de1e22cd2"
     ),
     # v5: lock-in da origem efetiva; classe/inventário estimado são provisórios.
     "agent-authority-v5": (

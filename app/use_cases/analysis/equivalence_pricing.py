@@ -53,6 +53,11 @@ _CATEGORIES = {
         {"serverless_containers"},
     ),
     "serverless_requisicoes": ("Requisições de contêiner serverless", {"serverless_containers"}),
+    # PLANO_CONFERENCIA_DE_SERVICOS §7: API Gateway, requisição de objeto e arquivos
+    "api_requisicoes": ("Chamadas de API Gateway", {"api_gateway"}),
+    "objeto_requisicoes_escrita": ("Requisições de escrita (objeto)", {"object_storage"}),
+    "objeto_requisicoes_leitura": ("Requisições de leitura (objeto)", {"object_storage"}),
+    "arquivos_capacidade": ("Armazenamento de arquivos", {"file_storage"}),
 }
 
 
