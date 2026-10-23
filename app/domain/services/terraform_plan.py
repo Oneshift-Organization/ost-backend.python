@@ -36,8 +36,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.domain.services.categoria_por_uso import (
+    BASTION_SEGURANCA_E_SERVERLESS,
+    OBSERVABILIDADE_E_BORDA,
+)
 from app.domain.services.categoria_por_uso import CHAVE_NO_PAYLOAD as CHAVE_POR_USO
-from app.domain.services.categoria_por_uso import OBSERVABILIDADE_E_BORDA
 from app.domain.services.instance_shape import parse_instance_shape
 from app.domain.services.perfil_de_familia import perfil
 
@@ -989,6 +992,12 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "Logs, DNS, WAF, registro de imagens e métricas aparecem no custo e não viram "
             "recurso: crie no destino a retenção de log, as zonas de DNS, as regras do WAF e "
             "o repositório de imagens."
+        )
+    if any(_decimal(auxiliares.get(CHAVE_POR_USO[c])) for c in BASTION_SEGURANCA_E_SERVERLESS):
+        plano.nao_suportado.append(
+            "Contêiner serverless (Container Apps, Cloud Run), bastion e verificação de "
+            "segurança aparecem no custo e não viram recurso: crie no destino o serviço de "
+            "contêiner, o acesso às máquinas sem IP público e a verificação de imagens."
         )
     nao_classificado = auxiliares.get("nao_classificado") or {}
     if _decimal(nao_classificado.get("custo")):

@@ -42,6 +42,9 @@ MES = "month"
 DEZ_MIL = "10k"
 # Armazenamento de log e de imagem (PLANO_EQUIVALENTES_E_TARIFAS §3)
 GB_MES = "gb_month"
+# Memória de contêiner serverless e imagem verificada (PLANO_PRECO_NAO_COMPUTE R5)
+GIB_HORA = "gib_hour"
+IMAGEM = "image"
 
 # Todas as categorias em que o balde de rede se divide, na ordem de exibição
 CATEGORIAS: tuple[str, ...] = (
@@ -195,6 +198,7 @@ def tipo_de_rede(provedor: str, servico: str | None, uso: str | None) -> TipoDeR
 
 
 _ESCALA_1 = Decimal(1)
+_SEGUNDO_EM_HORA = Decimal(1) / Decimal(3600)
 
 # Rótulo de unidade da linha → (dimensão, quanto um vale nela). A Mbps-hora da OCI
 # entra como GB pelo fator da regra; a requisição contada uma a uma vira 10 mil aqui.
@@ -236,6 +240,14 @@ _UNIDADES: Mapping[str, tuple[str, Decimal]] = {
         )
     },
     **{rotulo: (DEZ_MIL, Decimal(1000)) for rotulo in ("10m", "10m samples")},
+    # Contêiner serverless do GCP (R5): o catálogo cobra CPU por segundo e memória por
+    # GiB-segundo; sem a unidade de preço, o parser já entrega hora e GiB-hora
+    **{rotulo: (HORA, _SEGUNDO_EM_HORA) for rotulo in ("s", "second", "seconds")},
+    **{
+        rotulo: (GIB_HORA, _SEGUNDO_EM_HORA)
+        for rotulo in ("gibibyte second", "gibibyte seconds", "gibibyte-second", "gib second")
+    },
+    **{rotulo: (GIB_HORA, _ESCALA_1) for rotulo in ("gibibyte hour", "gib hour")},
 }
 
 
