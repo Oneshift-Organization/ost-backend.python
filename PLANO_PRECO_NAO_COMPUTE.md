@@ -339,3 +339,148 @@ Ficam iguais:
 2. `python - --providers categories,categories-live < scripts/sync_prices.py`.
 
 Fatura já processada não precisa reenriquecer: a correção está na agregação.
+
+## 7. R5 — Bastion, Defender e contêiner serverless (23/10)
+
+Pedido do usuário: "faz a cotação do Defender, Bastion e Container Apps". Veio do
+primeiro export real da Azure (23/10): 61% do gasto sem cotação e a análise sem
+recomendação ("não há destino elegível"). Correção geral, com regras e taxas das
+quatro nuvens.
+
+### 7.1 O que a medição mostrou
+
+Export real da Azure, US$ 68,62/mês (R$ 346,19), cobertura 0,39:
+
+| serviço | US$/mês | onde cai hoje | o que ele é, medidor a medidor |
+|---|---|---|---|
+| Microsoft Defender for Cloud | 17,64 | `nao_classificado` | 98,9% é verificação de imagem (`Standard Image`, US$ 0,29 por imagem, 53 imagens); o resto é evento do Resource Manager (US$ 4 por milhão), servidor P2, transação de Storage e de Key Vault |
+| Azure Bastion | 15,69 | `nao_classificado` | gateway Standard (US$ 0,29/h) e Basic (US$ 0,19/h), 47,8 h; saída de dados por GB |
+| Azure Container Apps | 4,07 | `computacao_serverless`, sem cotação | vCPU ativa e ociosa (por segundo), memória ativa e ociosa (por GiB-segundo); 96% é tempo ocioso (réplica mínima) |
+
+**Unidade da Azure:** a `Quantity` vem na unidade da Retail Prices API, e o rótulo do
+export não é confiável para lê-la. O medidor de GiB-segundo vem rotulado
+`10 PiB Seconds`, o evento por milhão vem como `10000000` e a imagem vem como `100`.
+Conferido pelo custo: custo ÷ quantidade dá o preço da API nos três casos. Por isso,
+nas regras da Azure deste lote a unidade é a da regra (`pela_regra`), como já é na
+AWS. No GCP vale o rótulo do catálogo (`second`, `gibibyte second`, `count`).
+
+### 7.2 O que muda
+
+- **Classificação na agregação** (`reclassificacao_por_uso`):
+  - Azure Bastion: o gateway vai para o balde `bastion`, e a saída de dados vai para rede.
+  - Defender for Cloud, GuardDuty, Inspector, Security Hub, Security Command Center,
+    verificação de imagem do GCP e Cloud Guard: vão para o balde `security_posture`.
+- **Categorias pela quantidade** (`categoria_por_uso`). O que nenhuma regra separa fica
+  ao custo atual: `bastion_outros`, `seguranca_outros` e `computacao_serverless`.
+
+| categoria | unidade | AWS | GCP | Azure | OCI |
+|---|---|---|---|---|---|
+| hora de bastion (`bastion_hours`) | hora | 0 (Session Manager) | 0 (IAP, encaminhamento TCP) | 0,19 (Basic) | 0 (OCI Bastion) |
+| imagem verificada (`security_image_scans`) | imagem | 0,09 (Inspector, primeira verificação) | 0,26 (Artifact Analysis) | 0,29 (Defender for Containers) | 0 (Vulnerability Scanning) |
+| evento do plano de controle (`security_control_events`) | 10 mil | 0,04 (GuardDuty, CloudTrail) | — | 0,04 (Defender for Resource Manager) | 0 (Cloud Guard) |
+| vCPU ativa de contêiner serverless (`serverless_vcpu_active`) | vCPU-hora | 0,04048 (Fargate) | 0,0864 (Cloud Run) | 0,0864 (Container Apps) | 0,0125 (Container Instances, E4) |
+| vCPU ociosa (`serverless_vcpu_idle`) | vCPU-hora | 0,04048 | 0,009 (instância mínima) | 0,0108 | 0,0125 |
+| memória ativa (`serverless_memory_active`) | GiB-hora | 0,004445 | 0,009 | 0,0108 | 0,0015 |
+| memória ociosa (`serverless_memory_idle`) | GiB-hora | 0,004445 | 0,009 | 0,0108 | 0,0015 |
+| requisição (`serverless_requests`) | 10 mil | 0 | 0,004 | 0,004 | 0 |
+
+Valores das fontes oficiais em 23/10/2026, primeira faixa paga, sem camada gratuita
+(como nas outras categorias):
+- AWS Price List bulk, us-east-1: `AmazonInspectorV2` (`container-image-initial-scan`),
+  `AmazonGuardDuty` (`PaidEventsAnalyzed`) e `AmazonECS` (`Fargate-vCPU-Hours`,
+  `Fargate-GB-Hours`).
+- Azure Retail Prices API, eastus: Azure Bastion, Defender for Containers e
+  Azure Container Apps. O medidor antigo do Resource Manager (por chamada) não está
+  mais na API; o preço vem do próprio export (custo ÷ quantidade).
+- Catálogo do GCP: Cloud Run `152E-C115-5142` (request-based e instância mínima),
+  Container Registry Vulnerability Scanning `82AF-DE7A-51D0` e página de preços do
+  Artifact Analysis.
+- OCI cetools: B93113 e B93114 (E4, o shape do Container Instances). Bastion,
+  Vulnerability Scanning e Cloud Guard não cobram.
+
+Premissas, declaradas:
+- **Bastion:** o destino não cobra pelo acesso às máquinas sem IP público (Session
+  Manager, IAP, OCI Bastion). A saída de dados segue como rede, pela taxa de egress.
+  Gravação de sessão e link compartilhável do Premium ficam fora.
+- **Imagem:** cada imagem da origem é uma primeira verificação no destino. A
+  reverificação da AWS (US$ 0,01) fica ao custo atual.
+- **Evento:** o GCP não cobra evento avulso (o Event Threat Detection vem na assinatura do
+  Security Command Center Premium). Sem taxa, a cotação do GCP não cobre essa parte.
+- **Ficam ao custo atual:** Defender for Servers, Storage, Key Vault, DNS e CSPM. A
+  proteção de servidor não se traduz uma a uma: o Inspector cobra por instância e o
+  GuardDuty por vCPU, e a linha do Defender não traz a vCPU.
+- **Contêiner serverless:**
+  - Tempo ocioso é o da réplica ou instância mínima. Fargate e Container Instances não
+    têm preço de ocioso e cobram o tempo todo pelo preço cheio.
+  - O Cloud Run por instância (instance-based) entra como tempo ativo.
+  - O balanceador que o Fargate e o Container Instances precisam para receber
+    requisição não entra.
+  - Functions (Lambda, Azure Functions, Cloud Run functions, OCI Functions) e o plano
+    Dedicated do Container Apps continuam ao custo atual.
+
+### 7.3 Análise de impacto
+
+| quem consome | o que muda | risco | como fica coberto |
+|---|---|---|---|
+| `reclassificacao_por_uso` | Bastion, Defender e afins saem de `unclassified` e entram em `bastion` e `security_posture`; a saída de dados do Bastion vai para rede | levar linha de outro serviço junto | padrão ancorado no nome do serviço; teste com linha de cada nuvem |
+| `billing_aggregator` | sem mudança de código: os baldes novos entram pelo mesmo caminho do R4 | perder custo | conservação na `reconciliation`; teste do agregador |
+| `categoria_por_uso` | 8 categorias novas e a unidade pela regra (`pela_regra`) nas regras da Azure | quantidade errada se o medidor não for o esperado | o padrão casa o nome do medidor; sem casar, fica ao custo atual |
+| `rede_por_uso._UNIDADES` | rótulos `second`, `gibibyte second` e `gibibyte hour` (GCP) | rótulo igual em outro serviço | só serve à categoria da mesma dimensão (hora, GiB-hora) |
+| taxas (`seed_category_rates`) | 31 taxas novas, referência conferida em 23/10 | confiança da análise cair (taxa de referência pesa menos que oficial) | medido nos relatórios; o sync oficial dessas categorias fica para depois, se a confiança cair |
+| payload (`custos_auxiliares`) | chaves novas: `bastion_horas`, `bastion_outros`, `seguranca_imagens`, `seguranca_eventos`, `serverless_vcpu_ativo`, `serverless_vcpu_ocioso`, `serverless_memoria_ativa`, `serverless_memoria_ociosa`, `serverless_requisicoes` e os `equivalentes_` de cada uma; `nao_classificado` e `computacao_serverless` diminuem | o agente somar errado | aditivo; a autoridade manda no número; nota ao MCP |
+| `equivalence_pricing` (trava da autoridade) | as chaves novas entram na tabela de categorias | mudar a análise de snapshot antigo | snapshot antigo não tem as chaves; troca o hash da v4, como no R2 e no R4 |
+| Terraform (`_registrar_lacunas`) | bastion, segurança e contêiner serverless entram na lista do que não vira recurso | caracterização mudar | aviso novo só quando a categoria tem custo |
+| decisão e cobertura | o custo cotado sobe (no export real, de 0,39 para perto de 0,95) | a recomendação aparecer onde antes era inconclusiva | é o objetivo; medido nos relatórios |
+| outras nuvens como origem | GuardDuty, Inspector, Security Command Center e verificação de imagem do GCP passam a ser cotados quando a linha casa | regra de AWS e GCP sem fatura real que a confirme | nomes tirados das listas oficiais (usage type, descrição do SKU); sem casar, ao custo atual |
+| análises antigas | nada; o payload é congelado | — | — |
+
+### 7.4 Achado no caminho: câmbio da Azure
+
+A Microsoft fatura em real pelo câmbio dela: US$ 0,29/h do Bastion saiu a R$ 1,66/h,
+ou seja, 5,72 reais por dólar. A análise converte o real em dólar pelo câmbio de
+mercado (5,0453 em 20/10), então a origem fica 13% acima do preço de tabela em dólar,
+e a economia contra destinos em dólar fica otimista na mesma proporção. Vale para
+qualquer fatura em moeda local cujo provedor aplique câmbio próprio. Fica para um
+lote à parte.
+
+### 7.5 Resultado (23/10)
+
+Medido no pod do develop, com a IA em mock e o usuário de teste. "Antes" é o develop
+de `85f9048`; "depois" carrega os módulos do R5 no mesmo processo, com as taxas novas
+em memória (mesmos preços e mesmo banco nas duas rodadas). Economia em US$/mês.
+
+| fatura | decisão | cobertura do escolhido | economia antes → depois |
+|---|---|---|---|
+| Azure, export real (23/10) | inconclusiva → OCI | 0,39 → 0,93 | OCI 11,81 → 47,44 · AWS 0,27 → 27,37 · GCP 3,17 → 23,53 |
+| GCP Cost Table (real) | OCI = OCI | 0,9522 → 0,9713 | OCI 2.862,98 → 2.898,57 · AWS 378,71 → 259,28 · Azure −98,21 → −102,43 |
+| GCP BigQuery (mock) | OCI = OCI | 0,9518 → 0,9710 | OCI 2.860,99 → 2.896,57 · AWS 345,70 → 226,26 · Azure −128,51 → −132,74 |
+| AWS Cost Explorer (real) | OCI = OCI | igual | iguais |
+| AWS CUR (mock) | OCI = OCI | igual | iguais |
+| fatura AWS (real, 09/2026) | OCI = OCI | igual | iguais |
+| Azure (mock) | OCI = OCI | igual | iguais |
+| OCI (mock) | — | igual | iguais |
+
+O que mudou, e por quê:
+- **Azure real:**
+  - Bastion (US$ 15,68) e verificação de imagem (US$ 17,44) passam a ser cotados. O
+    destino não cobra o bastion, e a imagem custa US$ 0,09 na AWS, 0,26 no GCP e zero na OCI.
+  - O não classificado vai de US$ 33,50 para 0,18.
+  - Com 93% cotado, a análise volta a ter destino elegível.
+- **GCP (Cloud Run):** a instância mínima ociosa (US$ 49,25 de vCPU, 50,42 de memória)
+  sai do custo atual e é cotada:
+  - no Fargate, a vCPU ociosa vai a US$ 201,78, porque ele não tem preço de ocioso e a
+    economia da AWS cai US$ 119;
+  - na OCI, o conjunto fica mais barato.
+- **AWS:** o Security Hub (US$ 0,06) sai do não classificado para `seguranca_outros`,
+  ao custo atual. Nenhum número muda.
+- **Score:** sobe 0,1 no GCP, pela cobertura.
+
+Ficam iguais:
+- a conservação do custo;
+- a confiança (referência nos dois lados);
+- os testes de unidade (2.540).
+
+**Para o develop:** depois do deploy, rodar no pod
+`python - --providers categories < scripts/sync_prices.py`. Sem as taxas no banco, as
+categorias novas ficam sem cotação. Fatura já processada não precisa reenriquecer: a
+correção está na agregação.

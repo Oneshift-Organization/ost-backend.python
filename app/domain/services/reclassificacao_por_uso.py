@@ -34,6 +34,12 @@ PLANO_EQUIVALENTES_E_TARIFAS §3:
 - **métricas** (CloudWatch fora dos logs, Prometheus gerenciado, Cloud Monitoring,
   Monitoring da OCI).
 
+PLANO_PRECO_NAO_COMPUTE R5:
+- **bastion** (Azure Bastion): saía não classificado. A saída de dados dele é rede;
+- **postura de segurança** (Defender for Cloud, GuardDuty, Inspector, Security Hub,
+  Security Command Center, verificação de imagem do GCP, Cloud Guard): saía não
+  classificada.
+
 Corrigir aqui, e não só nas regras de SKU, vale para faturas já processadas sem
 reenriquecer. Tabela de dados por nuvem, sem ``if``. Módulo puro, sem I/O.
 """
@@ -55,6 +61,8 @@ DNS = "dns"
 WAF = "waf"
 REGISTRO = "container_registry"
 METRICAS = "metrics"
+BASTION = "bastion"
+SEGURANCA = "security_posture"
 
 # Uso de log da CloudWatch; o resto do serviço é métrica, alarme e painel
 _LOG_DA_CLOUDWATCH = r"(dataprocessing|vendedlog|timedstorage|datascanned|logs?\b)"
@@ -79,6 +87,7 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^amazon ?route ?53"), DNS),
         (_r(r"^(aws ?waf|awswaf)"), WAF),
         (_r(r"^(amazon ?ecr|amazon elastic container registry)[^|]*\|.*timedstorage"), REGISTRO),
+        (_r(r"^(amazon ?guardduty|amazon ?inspector|aws ?security ?hub)"), SEGURANCA),
     ),
     "gcp": (
         (_r(r"source repositor[^|]*\| *storage$"), "object_storage"),
@@ -91,6 +100,10 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^cloud dns"), DNS),
         (_r(r"\|.*cloud armor"), WAF),
         (_r(r"^artifact registry[^|]*\|.*storage"), REGISTRO),
+        (
+            _r(r"^(security command center|container registry vulnerability|on-demand scanning)"),
+            SEGURANCA,
+        ),
     ),
     "azure": (
         (
@@ -104,6 +117,9 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^azure dns"), DNS),
         (_r(r"^azure front door service[^|]*\|.*\b(policy|rule)\b"), WAF),
         (_r(r"^container registry"), REGISTRO),
+        (_r(r"^azure bastion[^|]*\|.*data transfer"), REDE),
+        (_r(r"^azure bastion"), BASTION),
+        (_r(r"^(microsoft defender|azure defender|azure security center)"), SEGURANCA),
     ),
     "oci": (
         (_r(r"^functions"), SERVERLESS),
@@ -113,6 +129,7 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^monitoring|\|.*\bmonitoring\b"), METRICAS),
         (_r(r"^dns|\|.*networking - dns"), DNS),
         (_r(r"^waf|\|.*web application firewall"), WAF),
+        (_r(r"^(cloud guard|vulnerability scanning)"), SEGURANCA),
     ),
 }
 
