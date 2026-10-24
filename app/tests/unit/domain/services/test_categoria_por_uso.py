@@ -3,8 +3,14 @@ from decimal import Decimal
 import pytest
 
 from app.domain.services.categoria_por_uso import (
+    API_OUTROS,
+    API_REQUISICOES,
     ARQUIVOS,
+    ARQUIVOS_CAPACIDADE,
     BALDES,
+    BASTION_HORAS,
+    BASTION_OUTROS,
+    BASTION_SEGURANCA_E_SERVERLESS,
     CHAVE,
     CHAVE_NO_PAYLOAD,
     CHAVE_OPERACOES,
@@ -18,14 +24,26 @@ from app.domain.services.categoria_por_uso import (
     LOGS_RETENCAO,
     METRICAS,
     METRICAS_OUTROS,
+    OBJETO_ESCRITA,
+    OBJETO_LEITURA,
+    OBJETO_OUTROS,
     OBSERVABILIDADE_E_BORDA,
     PLANO_DE_CONTROLE,
+    RECONHECIDO_SEM_COTACAO,
     REGISTRO,
     REGISTRO_OUTROS,
     SEGREDO,
     SEGREDO_OPERACOES,
+    SEGURANCA_EVENTOS,
+    SEGURANCA_IMAGENS,
     SEGURANCA_OUTROS,
     SERVERLESS,
+    SERVERLESS_MEMORIA,
+    SERVERLESS_MEMORIA_OCIOSA,
+    SERVERLESS_REQUISICOES,
+    SERVERLESS_VCPU,
+    SERVERLESS_VCPU_OCIOSA,
+    SUPORTE,
     UNIDADE,
     WAF_OUTROS,
     WAF_POLITICAS,
@@ -34,10 +52,13 @@ from app.domain.services.categoria_por_uso import (
     quantidade_por_uso,
     tipo_por_uso,
 )
+from app.infrastructure.database.seed_category_rates import category_rate_points
 
 _EKS = "Amazon Elastic Container Service for Kubernetes"
 _AKS = "Azure Kubernetes Service"
 _KMS_GCP = "Cloud Key Management Service (KMS)"
+_DEFENDER = "Microsoft Defender for Cloud"
+_ACA = "Azure Container Apps"
 
 
 @pytest.mark.parametrize(
@@ -92,10 +113,59 @@ _KMS_GCP = "Cloud Key Management Service (KMS)"
         ("secrets", "oci", "KEY_MANAGEMENT", "Key Management Service - Key Versions", CHAVE),
         ("secrets", "oci", "KEY_MANAGEMENT", "OCI - Key Management - Private Vault",
          SEGURANCA_OUTROS),
-        # Serverless: um balde só, ao custo atual
+        # Contêiner serverless (R5): vCPU e memória, ativa e ociosa, e requisição
         ("serverless", "gcp", "Cloud Run", "Services Min Instance CPU (Request-based billing)",
-         SERVERLESS),
+         SERVERLESS_VCPU_OCIOSA),
+        ("serverless", "gcp", "Cloud Run",
+         "Services Min Instance Memory (Request-based billing)", SERVERLESS_MEMORIA_OCIOSA),
+        ("serverless", "gcp", "Cloud Run", "Services CPU (Request-based billing)",
+         SERVERLESS_VCPU),
+        ("serverless", "gcp", "Cloud Run", "Services CPU (Instance-based billing) in us-east4",
+         SERVERLESS_VCPU),
+        ("serverless", "gcp", "Cloud Run", "Services Memory (Request-based billing)",
+         SERVERLESS_MEMORIA),
+        ("serverless", "gcp", "Cloud Run", "Requests", SERVERLESS_REQUISICOES),
+        ("serverless", "azure", _ACA, f"{_ACA} | Standard vCPU Active Usage", SERVERLESS_VCPU),
+        ("serverless", "azure", _ACA, f"{_ACA} | Standard vCPU Idle Usage",
+         SERVERLESS_VCPU_OCIOSA),
+        ("serverless", "azure", _ACA, f"{_ACA} | Standard Memory Active Usage",
+         SERVERLESS_MEMORIA),
+        ("serverless", "azure", _ACA, f"{_ACA} | Standard Memory Idle Usage",
+         SERVERLESS_MEMORIA_OCIOSA),
+        ("serverless", "azure", _ACA, f"{_ACA} | Standard Requests", SERVERLESS_REQUISICOES),
+        # Functions, Lambda, Jobs e o plano Dedicated: ao custo atual
+        ("serverless", "azure", _ACA, f"{_ACA} | Dedicated vCPU Usage", SERVERLESS),
+        ("serverless", "azure", "Functions", "Functions | Standard Execution Time", SERVERLESS),
+        ("serverless", "gcp", "Cloud Run", "Jobs CPU in us-central1", SERVERLESS),
         ("serverless", "aws", "AWS Lambda", "USE1-Lambda-GB-Second", SERVERLESS),
+        # Bastion (R5): a hora do gateway; só a Azure cobra
+        ("bastion", "azure", "Azure Bastion", "Azure Bastion | Standard Gateway", BASTION_HORAS),
+        ("bastion", "azure", "Azure Bastion", "Azure Bastion | Premium Additional Gateway",
+         BASTION_HORAS),
+        ("bastion", "azure", "Azure Bastion", "Azure Bastion | Developer", BASTION_OUTROS),
+        # Postura de segurança (R5): imagem verificada e evento do plano de controle
+        ("security_posture", "azure", _DEFENDER,
+         f"{_DEFENDER} | Azure Container Registry | Standard Image", SEGURANCA_IMAGENS),
+        ("security_posture", "azure", _DEFENDER,
+         f"{_DEFENDER} | Microsoft Defender for Containers | Standard Images", SEGURANCA_IMAGENS),
+        ("security_posture", "azure", _DEFENDER,
+         f"{_DEFENDER} | Azure ARM service layers | Standard Events", SEGURANCA_EVENTOS),
+        ("security_posture", "azure", _DEFENDER, f"{_DEFENDER} | Servers | Standard P2 Node",
+         SEGURANCA_OUTROS),
+        ("security_posture", "azure", _DEFENDER, f"{_DEFENDER} | Free Images", SEGURANCA_OUTROS),
+        ("security_posture", "aws", "AmazonInspectorV2", "USE1-container-image-initial-scan",
+         SEGURANCA_IMAGENS),
+        ("security_posture", "aws", "AmazonInspectorV2", "USE1-container-image-re-scan",
+         SEGURANCA_OUTROS),
+        ("security_posture", "aws", "AmazonGuardDuty", "USE1-PaidEventsAnalyzed",
+         SEGURANCA_EVENTOS),
+        ("security_posture", "aws", "AmazonGuardDuty", "USE1-PaidEventsAnalyzed-Bytes",
+         SEGURANCA_OUTROS),
+        ("security_posture", "gcp", "Container Registry Vulnerability Scanning",
+         "Container Images Scanned", SEGURANCA_IMAGENS),
+        ("security_posture", "gcp", "On-Demand Scanning", "Successful Scans", SEGURANCA_IMAGENS),
+        ("security_posture", "gcp", "Security Command Center",
+         "Security Command Center Premium for Compute Engine - Core Running", SEGURANCA_OUTROS),
     ],
 )
 def test_tipo_por_uso(balde, provedor, servico, uso, esperado):
@@ -129,6 +199,11 @@ def test_balde_desconhecido_ou_sem_uso_vai_para_o_resto_do_balde():
         "waf": WAF_OUTROS,
         "container_registry": REGISTRO_OUTROS,
         "metrics": METRICAS_OUTROS,
+        "bastion": BASTION_OUTROS,
+        "security_posture": SEGURANCA_OUTROS,
+        "support": SUPORTE,
+        "api_gateway": API_OUTROS,
+        "object_requests": OBJETO_OUTROS,
     }
 
 
@@ -149,11 +224,23 @@ def test_unidade_de_cada_categoria_cotada():
         WAF_REGRAS: "month",
         REGISTRO: "gb_month",
         METRICAS: "10k",
+        BASTION_HORAS: "hour",
+        SEGURANCA_IMAGENS: "image",
+        SEGURANCA_EVENTOS: "10k",
+        SERVERLESS_VCPU: "hour",
+        SERVERLESS_VCPU_OCIOSA: "hour",
+        SERVERLESS_MEMORIA: "gib_hour",
+        SERVERLESS_MEMORIA_OCIOSA: "gib_hour",
+        SERVERLESS_REQUISICOES: "10k",
+        API_REQUISICOES: "10k",
+        OBJETO_ESCRITA: "10k",
+        OBJETO_LEITURA: "10k",
+        ARQUIVOS_CAPACIDADE: "gb_month",
     }
     # O resto de cada balde fica ao custo atual
     for categoria in (
         KUBERNETES_OUTROS, SEGURANCA_OUTROS, SERVERLESS, ARQUIVOS, LOGS_OUTROS, DNS_OUTROS,
-        WAF_OUTROS, REGISTRO_OUTROS, METRICAS_OUTROS,
+        WAF_OUTROS, REGISTRO_OUTROS, METRICAS_OUTROS, BASTION_OUTROS,
     ):
         assert categoria not in UNIDADE
 
@@ -172,6 +259,15 @@ def test_chave_no_payload():
         SERVERLESS,
         ARQUIVOS,
         *OBSERVABILIDADE_E_BORDA,
+        *BASTION_SEGURANCA_E_SERVERLESS,
+        RECONHECIDO_SEM_COTACAO,
+        SUPORTE,
+        API_REQUISICOES,
+        API_OUTROS,
+        OBJETO_ESCRITA,
+        OBJETO_LEITURA,
+        OBJETO_OUTROS,
+        ARQUIVOS_CAPACIDADE,
     }
 
 
@@ -196,6 +292,29 @@ def test_chave_no_payload():
         # Categoria não cotada e quantidade não positiva
         ("gke_control_plane", "gcp", "Extended Period Kubernetes Clusters", ("10", "hour"), None),
         ("gke_control_plane", "gcp", "Zonal Kubernetes Clusters", ("0", "hour"), None),
+        # R5, Azure: a quantidade vem na unidade da Retail Prices API e o rótulo do export
+        # não serve (export real de 23/10). Segundo vira hora; milhão vira 10 mil
+        ("serverless", "azure", "Standard vCPU Idle Usage", ("384493", "Seconds"),
+         str(Decimal(384493) / Decimal(3600))),
+        ("serverless", "azure", "Standard Memory Idle Usage", ("769168", "PiB Seconds"),
+         str(Decimal(769168) / Decimal(3600))),
+        ("bastion", "azure", "Azure Bastion | Standard Gateway", ("47.383056", "hours"),
+         "47.383056"),
+        ("security_posture", "azure", "Azure Container Registry | Standard Image",
+         ("53", "100"), "53"),
+        ("security_posture", "azure", "Azure ARM service layers | Standard Events",
+         ("0.026881", "10000000"), "2.6881"),
+        # R5, GCP: o rótulo do catálogo diz a escala; a imagem vem em "count"
+        ("serverless", "gcp", "Services Min Instance CPU (Request-based billing)",
+         ("7200", "second"), "2"),
+        ("serverless", "gcp", "Services Memory (Request-based billing)",
+         ("3600", "gibibyte second"), "1"),
+        ("serverless", "gcp", "Services CPU (Request-based billing)", ("3", "hours"), "3"),
+        ("serverless", "gcp", "Requests", ("2000000", "count"), "200"),
+        ("security_posture", "gcp", "Container Images Scanned", ("40", "count"), "40"),
+        # R5, AWS: o evento contado um a um vira 10 mil
+        ("security_posture", "aws", "USE1-PaidEventsAnalyzed", ("26881", "Events"), "2.6881"),
+        ("security_posture", "aws", "USE1-container-image-initial-scan", ("12", None), "12"),
     ],
 )
 def test_quantidade_por_uso(balde, provedor, uso, linha, esperado):
@@ -203,3 +322,21 @@ def test_quantidade_por_uso(balde, provedor, uso, linha, esperado):
     tipo = tipo_por_uso(balde, provedor, "x", uso)
     valor = quantidade_por_uso(provedor, tipo, Decimal(quantidade), unidade)
     assert valor == (Decimal(esperado) if esperado else None)
+
+
+def test_taxas_do_r5_na_unidade_da_categoria():
+    taxas = {(p.provider, p.service_type): p for p in category_rate_points()}
+    for categoria in BASTION_SEGURANCA_E_SERVERLESS:
+        if categoria not in UNIDADE:
+            continue
+        provedores = {prov for prov, cat in taxas if cat == categoria}
+        # O GCP não cobra evento avulso (vem na assinatura do Security Command Center)
+        esperado = {"aws", "azure", "oci"} if categoria == SEGURANCA_EVENTOS else {
+            "aws", "azure", "gcp", "oci"
+        }
+        assert provedores == esperado, categoria
+        for prov in provedores:
+            assert taxas[(prov, categoria)].unit == UNIDADE[categoria], (prov, categoria)
+    # O destino que não cobra o acesso sem IP público vale zero, não fica sem cotação
+    assert taxas[("aws", BASTION_HORAS)].price == 0
+    assert taxas[("azure", SEGURANCA_IMAGENS)].price == Decimal("0.29")

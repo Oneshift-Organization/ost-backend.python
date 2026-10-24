@@ -2,7 +2,9 @@ import pytest
 
 from app.domain.services.reclassificacao_por_uso import (
     ARQUIVOS,
+    BASTION,
     SEGREDOS,
+    SEGURANCA,
     SEM_COTACAO,
     SERVERLESS,
     reclassificar,
@@ -124,14 +126,51 @@ from app.domain.services.reclassificacao_por_uso import (
         # Requisição da CloudFront e consulta ao cache do Cloud CDN são rede (CDN)
         ("aws", "Amazon CloudFront", "US-Requests-Tier2-HTTPS", "unclassified", "network_egress"),
         ("aws", "Amazon CloudFront", "US-Requests-Tier2-HTTPS", "storage_hdd", "network_egress"),
-        # A requisição do S3 não muda
-        ("aws", "AmazonS3", "USE1-Requests-Tier1", "unclassified", "unclassified"),
+        # A requisição do S3 não é CDN: vai para requisição de objeto (§7 da conferência)
+        ("aws", "AmazonS3", "USE1-Requests-Tier1", "unclassified", "object_requests"),
         (
             "gcp",
             "Networking",
             "Networking Cloud Cdn Cache Lookups",
             "unclassified",
             "network_egress",
+        ),
+        # R5: o gateway do Bastion é bastion; a saída de dados dele é rede
+        ("azure", "Azure Bastion", "Azure Bastion | Standard Gateway", "unclassified", BASTION),
+        (
+            "azure",
+            "Azure Bastion",
+            "Azure Bastion | Basic Data Transfer Out",
+            "unclassified",
+            "network_egress",
+        ),
+        # R5: postura de segurança, nas quatro nuvens
+        (
+            "azure",
+            "Microsoft Defender for Cloud",
+            "Microsoft Defender for Cloud | Azure Container Registry | Standard Image",
+            "unclassified",
+            SEGURANCA,
+        ),
+        ("aws", "AmazonGuardDuty", "USE1-PaidEventsAnalyzed", "unclassified", SEGURANCA),
+        ("aws", "AmazonInspectorV2", "USE1-EC2-Scanning", "unclassified", SEGURANCA),
+        ("aws", "AWSSecurityHub", "USE1-PaidComplianceCheck", "unclassified", SEGURANCA),
+        (
+            "gcp",
+            "Container Registry Vulnerability Scanning",
+            "Container Images Scanned",
+            "unclassified",
+            SEGURANCA,
+        ),
+        ("gcp", "Security Command Center", "Premium Trial", "unclassified", SEGURANCA),
+        ("oci", "Cloud Guard", "Cloud Guard - Targets", "unclassified", SEGURANCA),
+        # O registro de imagens continua registro: só a verificação é segurança
+        (
+            "azure",
+            "Container Registry",
+            "Container Registry | Basic Registry Unit",
+            "x",
+            "container_registry",
         ),
     ],
 )

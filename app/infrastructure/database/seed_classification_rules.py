@@ -169,6 +169,10 @@ AWS_RULES: list[tuple[str, str, str, str | None, str, int]] = [
     ("*datatransfer*", "glob", "network_egress", None, "high", 42),
     ("*-out-bytes", "glob", "network_egress", None, "medium", 43),
     ("*-in-bytes", "glob", "network_egress", None, "medium", 44),
+    # Transferência entre regiões com sufixo de faixa (`USE1-USW2-AWS-Out-ABytes-T2`):
+    # não termina em `-bytes` e caía na L3, que a lia como memória
+    ("*-out-abytes*", "glob", "network_egress", None, "medium", 54),
+    ("*-in-abytes*", "glob", "network_egress", None, "medium", 55),
     ("*loadbalancer*", "glob", "network_egress", None, "medium", 45),
     ("*lcubytes*", "glob", "network_egress", None, "medium", 46),
     ("*lcuusage*", "glob", "network_egress", None, "medium", 47),
@@ -228,25 +232,33 @@ AZURE_RULES: list[tuple[str, str, str, str | None, str, int]] = [
 
 # (pattern, kind, component_type, family, confidence, priority) — OCI.
 # Descritor: `product/description` ("Compute - Standard - E4 - OCPU").
+# Sem âncora no começo: o cost report usa o nome da lista de preços da Oracle, que às
+# vezes leva o produto no meio ("Storage - Block Volume - Storage", "OCI - FastConnect
+# 1 Gbps", "Oracle Base Database Service - Database Storage"). Com `block volume*` o
+# disco da OCI caía inteiro em não classificado (PLANO_CONFERENCIA_DE_SERVICOS D2).
 OCI_RULES: list[tuple[str, str, str, str | None, str, int]] = [
-    ("container engine*", "glob", "gke_control_plane", None, "high", 8),
-    ("database*", "glob", "database", None, "high", 10),
+    ("*container engine*", "glob", "gke_control_plane", None, "high", 8),
+    ("*kubernetes engine*", "glob", "gke_control_plane", None, "high", 9),
+    ("*database*", "glob", "database", None, "high", 10),
     ("*autonomous*", "glob", "database", None, "high", 11),
     ("mysql*", "glob", "database", None, "high", 12),
     ("*heatwave*", "glob", "database", None, "medium", 13),
+    # Cache e busca gerenciados, como o ElastiCache e o OpenSearch da AWS
+    ("*cache with redis*", "glob", "database", None, "medium", 14),
+    ("*opensearch*", "glob", "database", None, "medium", 15),
     ("compute*ocpu*", "glob", "core", None, "high", 20),
     ("compute*ecpu*", "glob", "core", None, "high", 21),
     ("compute*memory*", "glob", "ram", None, "high", 22),
     ("*backup*", "glob", "storage_hdd", None, "medium", 29),
-    ("block volume*", "glob", "storage_ssd", None, "high", 30),
-    ("object storage*", "glob", "object_storage", None, "high", 31),
-    ("archive storage*", "glob", "object_storage", None, "high", 32),
-    ("file storage*", "glob", "file_storage", None, "medium", 33),
+    ("*block volume*", "glob", "storage_ssd", None, "high", 30),
+    ("*object storage*", "glob", "object_storage", None, "high", 31),
+    ("*archive storage*", "glob", "object_storage", None, "high", 32),
+    ("*file storage*", "glob", "file_storage", None, "medium", 33),
     ("*outbound data transfer*", "glob", "network_egress", None, "high", 40),
     ("*data transfer*", "glob", "network_egress", None, "medium", 41),
-    ("load balancer*", "glob", "network_egress", None, "high", 42),
+    ("*load balancer*", "glob", "network_egress", None, "high", 42),
     ("networking*", "glob", "network_egress", None, "medium", 43),
-    ("fastconnect*", "glob", "network_egress", None, "medium", 44),
+    ("*fastconnect*", "glob", "network_egress", None, "medium", 44),
     ("*vpn*", "glob", "network_egress", None, "medium", 45),
 ]
 

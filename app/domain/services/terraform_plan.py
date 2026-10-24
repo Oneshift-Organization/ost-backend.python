@@ -36,8 +36,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.domain.services.categoria_por_uso import (
+    BASTION_SEGURANCA_E_SERVERLESS,
+    OBSERVABILIDADE_E_BORDA,
+)
 from app.domain.services.categoria_por_uso import CHAVE_NO_PAYLOAD as CHAVE_POR_USO
-from app.domain.services.categoria_por_uso import OBSERVABILIDADE_E_BORDA
 from app.domain.services.instance_shape import parse_instance_shape
 from app.domain.services.perfil_de_familia import perfil
 
@@ -933,6 +936,10 @@ def _banco_do_grupo(
 # ── lacunas ─────────────────────────────────────────────────────────────
 
 
+def _familia_app_service(pool: dict[str, Any]) -> bool:
+    return str(pool.get("familia") or "").upper().startswith("APPSERVICE_")
+
+
 def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
     """O que o billing não contém, dito em voz alta.
 
@@ -977,7 +984,16 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "anexado). As aplicações de dentro do cluster não viajam pelo Terraform: o "
             "inventário da nuvem não vê Deployment nem Service."
         )
-    if _decimal(auxiliares.get("armazenamento_arquivos")):
+    pools = [p for p in payload.get("pools_computacao") or [] if isinstance(p, dict)]
+    if any(_familia_app_service(p) for p in pools):
+        plano.nao_suportado.append(
+            "O plano do App Service entra como máquinas do mesmo tamanho. Para manter a "
+            "aplicação em PaaS no destino (Elastic Beanstalk, App Engine, Container "
+            "Instances da OCI), crie o serviço à parte e descarte essas máquinas."
+        )
+    if _decimal(auxiliares.get("armazenamento_arquivos")) or _decimal(
+        auxiliares.get("arquivos_capacidade")
+    ):
         # T4: o Filestore saía como disco HDD e virava ~1.570 GB de disco que não existe
         plano.nao_suportado.append(
             "Armazenamento de arquivos (Filestore, EFS, Azure Files, File Storage da OCI) "
@@ -989,6 +1005,19 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "Logs, DNS, WAF, registro de imagens e métricas aparecem no custo e não viram "
             "recurso: crie no destino a retenção de log, as zonas de DNS, as regras do WAF e "
             "o repositório de imagens."
+        )
+    if any(_decimal(auxiliares.get(CHAVE_POR_USO[c])) for c in BASTION_SEGURANCA_E_SERVERLESS):
+        plano.nao_suportado.append(
+            "Contêiner serverless (Container Apps, Cloud Run), bastion e verificação de "
+            "segurança aparecem no custo e não viram recurso: crie no destino o serviço de "
+            "contêiner, o acesso às máquinas sem IP público e a verificação de imagens."
+        )
+    reconhecidos = (auxiliares.get("por_servico") or {}).get("reconhecidos_sem_cotacao") or {}
+    if _decimal(auxiliares.get("reconhecidos_sem_cotacao")):
+        nomes = ", ".join(sorted(reconhecidos)[:6]) or "serviços gerenciados"
+        plano.nao_suportado.append(
+            f"Serviços sem equivalente cotado ({nomes}) aparecem no custo e não viram "
+            "recurso: crie o serviço do destino à parte."
         )
     nao_classificado = auxiliares.get("nao_classificado") or {}
     if _decimal(nao_classificado.get("custo")):

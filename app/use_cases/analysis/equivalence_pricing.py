@@ -41,6 +41,23 @@ _CATEGORIES = {
     "waf_regras": ("Regras do WAF", set()),
     "registro_imagens": ("Registro de imagens", set()),
     "metricas_amostras": ("Amostras de métricas", set()),
+    # PLANO_PRECO_NAO_COMPUTE R5: bastion, postura de segurança e contêiner serverless
+    "bastion_horas": ("Bastion (hora de gateway)", {"bastion_host"}),
+    "seguranca_imagens": ("Verificação de imagens", {"security_command_center"}),
+    "seguranca_eventos": ("Eventos do plano de controle", {"security_command_center"}),
+    "serverless_vcpu_ativo": ("vCPU de contêiner serverless", {"serverless_containers"}),
+    "serverless_vcpu_ocioso": ("vCPU ociosa de contêiner serverless", {"serverless_containers"}),
+    "serverless_memoria_ativa": ("Memória de contêiner serverless", {"serverless_containers"}),
+    "serverless_memoria_ociosa": (
+        "Memória ociosa de contêiner serverless",
+        {"serverless_containers"},
+    ),
+    "serverless_requisicoes": ("Requisições de contêiner serverless", {"serverless_containers"}),
+    # PLANO_CONFERENCIA_DE_SERVICOS §7: API Gateway, requisição de objeto e arquivos
+    "api_requisicoes": ("Chamadas de API Gateway", {"api_gateway"}),
+    "objeto_requisicoes_escrita": ("Requisições de escrita (objeto)", {"object_storage"}),
+    "objeto_requisicoes_leitura": ("Requisições de leitura (objeto)", {"object_storage"}),
+    "arquivos_capacidade": ("Armazenamento de arquivos", {"file_storage"}),
 }
 
 

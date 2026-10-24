@@ -243,6 +243,77 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("aws", "metric_samples", "10k", "0.0009"),
     ("azure", "metric_samples", "10k", "0.00011"),
     ("gcp", "metric_samples", "10k", "0.0006"),
+    # R5 (PLANO_PRECO_NAO_COMPUTE §7), conferidos nas fontes oficiais em 23/10/2026: AWS
+    # Price List bulk us-east-1 (AmazonInspectorV2, AmazonGuardDuty, AmazonECS); Azure
+    # Retail Prices eastus (Azure Bastion, Defender for Containers, Azure Container Apps);
+    # catálogo do GCP (152E-C115-5142 Cloud Run, 82AF-DE7A-51D0 verificação de imagem);
+    # OCI cetools (B93113, B93114).
+    # Hora de bastion. Session Manager, IAP e OCI Bastion não cobram; Azure é o Basic
+    ("aws", "bastion_hours", "hour", "0"),
+    ("azure", "bastion_hours", "hour", "0.19"),
+    ("gcp", "bastion_hours", "hour", "0"),
+    ("oci", "bastion_hours", "hour", "0"),
+    # Imagem verificada: Inspector (primeira verificação), Defender for Containers,
+    # Artifact Analysis; o Vulnerability Scanning da OCI não cobra
+    ("aws", "security_image_scans", "image", "0.09"),
+    ("azure", "security_image_scans", "image", "0.29"),
+    ("gcp", "security_image_scans", "image", "0.26"),
+    ("oci", "security_image_scans", "image", "0"),
+    # Evento do plano de controle, por 10 mil (US$ 4 por milhão): GuardDuty sobre o
+    # CloudTrail e o Defender for Resource Manager por chamada (preço do export: o medidor
+    # saiu da API). O Cloud Guard não cobra; o GCP não cobra evento avulso e fica sem taxa
+    ("aws", "security_control_events", "10k", "0.04"),
+    ("azure", "security_control_events", "10k", "0.04"),
+    ("oci", "security_control_events", "10k", "0"),
+    # Contêiner serverless por vCPU-hora e GiB-hora: Fargate, Cloud Run (request-based e
+    # instância mínima), Container Apps (consumo), Container Instances (E4: a OCPU tem 2
+    # vCPU). Fargate e Container Instances não têm preço de ocioso
+    ("aws", "serverless_vcpu_active", "hour", "0.04048"),
+    ("azure", "serverless_vcpu_active", "hour", "0.0864"),
+    ("gcp", "serverless_vcpu_active", "hour", "0.0864"),
+    ("oci", "serverless_vcpu_active", "hour", "0.0125"),
+    ("aws", "serverless_vcpu_idle", "hour", "0.04048"),
+    ("azure", "serverless_vcpu_idle", "hour", "0.0108"),
+    ("gcp", "serverless_vcpu_idle", "hour", "0.009"),
+    ("oci", "serverless_vcpu_idle", "hour", "0.0125"),
+    ("aws", "serverless_memory_active", "gib_hour", "0.004445"),
+    ("azure", "serverless_memory_active", "gib_hour", "0.0108"),
+    ("gcp", "serverless_memory_active", "gib_hour", "0.009"),
+    ("oci", "serverless_memory_active", "gib_hour", "0.0015"),
+    ("aws", "serverless_memory_idle", "gib_hour", "0.004445"),
+    ("azure", "serverless_memory_idle", "gib_hour", "0.0108"),
+    ("gcp", "serverless_memory_idle", "gib_hour", "0.009"),
+    ("oci", "serverless_memory_idle", "gib_hour", "0.0015"),
+    # Requisição, por 10 mil (US$ 0,40 por milhão); Fargate e Container Instances não cobram
+    ("aws", "serverless_requests", "10k", "0"),
+    ("azure", "serverless_requests", "10k", "0.004"),
+    ("gcp", "serverless_requests", "10k", "0.004"),
+    ("oci", "serverless_requests", "10k", "0"),
+    # Lote 2 (PLANO_CONFERENCIA_DE_SERVICOS §7), conferidos em 23/10/2026: AWS Price List
+    # bulk us-east-1 (AmazonApiGateway, AmazonS3, AmazonEFS); Azure Retail Prices eastus
+    # (API Management, Storage); catálogo do GCP (Cloud Storage, Filestore) e página de
+    # preços do API Gateway; OCI cetools (B92072, B91627, B89057).
+    # Chamada de API Gateway, por 10 mil (US$ 3,50, 3,50, 3,00 e 3,00 por milhão)
+    ("aws", "api_requests", "10k", "0.035"),
+    ("azure", "api_requests", "10k", "0.035"),
+    ("gcp", "api_requests", "10k", "0.03"),
+    ("oci", "api_requests", "10k", "0.03"),
+    # Requisição de objeto, por 10 mil: S3 Standard, Blob Hot, Cloud Storage Standard
+    # regional. A OCI cobra uma taxa só (escrita e leitura)
+    ("aws", "object_requests_write", "10k", "0.05"),
+    ("azure", "object_requests_write", "10k", "0.05"),
+    ("gcp", "object_requests_write", "10k", "0.05"),
+    ("oci", "object_requests_write", "10k", "0.0034"),
+    ("aws", "object_requests_read", "10k", "0.004"),
+    ("azure", "object_requests_read", "10k", "0.004"),
+    ("gcp", "object_requests_read", "10k", "0.004"),
+    ("oci", "object_requests_read", "10k", "0.0034"),
+    # Arquivos por GB-mês, o tier de uso geral em SSD: EFS Standard, Azure Files Premium
+    # LRS, Filestore Basic SSD, File Storage da OCI
+    ("aws", "file_storage_capacity", "gb_month", "0.30"),
+    ("azure", "file_storage_capacity", "gb_month", "0.16"),
+    ("gcp", "file_storage_capacity", "gb_month", "0.30"),
+    ("oci", "file_storage_capacity", "gb_month", "0.30"),
 )
 
 
@@ -268,6 +339,13 @@ _CONFERIDO_EM: dict[tuple[str, str], date] = {
            "logs_ingestion", "logs_ingestion_basic", "logs_retention", "dns_queries",
            "dns_zones", "waf_requests", "waf_policies", "waf_rules",
            "container_registry_storage", "metric_samples",
+       )},
+    **{(p, c): date(2026, 10, 23) for p in ("aws", "gcp", "azure", "oci")
+       for c in (
+           "bastion_hours", "security_image_scans", "security_control_events",
+           "serverless_vcpu_active", "serverless_vcpu_idle", "serverless_memory_active",
+           "serverless_memory_idle", "serverless_requests", "api_requests",
+           "object_requests_write", "object_requests_read", "file_storage_capacity",
        )},
 }
 _REDE_CONFERIDA_EM = date(2026, 10, 16)

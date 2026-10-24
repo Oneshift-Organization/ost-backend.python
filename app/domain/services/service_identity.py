@@ -2,13 +2,27 @@
 
 from app.domain.services.sku_normalization import squash_key
 
-_FINANCIAL_CATEGORIES = frozenset({
-    "tax", "taxes", "imposto", "impostos", "commitment", "compromisso",
-    "discount", "credits", "credit", "support",
-})
+_FINANCIAL_CATEGORIES = frozenset(
+    {
+        "tax",
+        "taxes",
+        "imposto",
+        "impostos",
+        "commitment",
+        "compromisso",
+        "discount",
+        "credits",
+        "credit",
+        "support",
+    }
+)
 _FINANCIAL_PREFIXES = (
-    "savingsplan", "computesavingsplan", "ec2instancesavingsplan",
-    "committedusediscount", "awssupport", "amazonsupport",
+    "savingsplan",
+    "computesavingsplan",
+    "ec2instancesavingsplan",
+    "committedusediscount",
+    "awssupport",
+    "amazonsupport",
 )
 _ALIASES = {
     "aws": {
@@ -36,6 +50,34 @@ def service_key(provider: str, name: str) -> str:
         name = stem
     key = squash_key(name)
     return _ALIASES.get(provider.lower(), {}).get(key, key)
+
+
+# Prefixo de marca que a fatura e o DE-PARA escrevem de um jeito ou de outro: "Event Grid"
+# (MeterCategory da Azure) e "Azure Event Grid"; "Cloud Dataflow" e "Dataflow";
+# "AmazonBedrock" (código do CUR) e "AWS Bedrock" (PLANO_CONFERENCIA_DE_SERVICOS C6)
+_MARCAS: dict[str, tuple[str, ...]] = {
+    "aws": ("amazon", "aws"),
+    "azure": ("microsoftazure", "microsoft", "azure"),
+    "gcp": ("googlecloud", "google", "cloud"),
+    "oci": ("oraclecloudinfrastructure", "oracle", "oci"),
+}
+# Sem o prefixo, o resto precisa dizer o que é (não "q" de "AmazonQ")
+_RESTO_MINIMO = 3
+
+
+def variantes_de_marca(provider: str, chave: str) -> list[str]:
+    """A chave sem o prefixo de marca e com cada um dos outros, para quando o nome exato
+    não está no DE-PARA. Ordem fixa: o nome sem marca primeiro."""
+    marcas = _MARCAS.get(provider.lower(), ())
+    resto = next(
+        (
+            chave[len(m) :]
+            for m in marcas
+            if chave.startswith(m) and len(chave) - len(m) >= _RESTO_MINIMO
+        ),
+        chave,
+    )
+    return [v for v in (resto, *(m + resto for m in marcas)) if v != chave]
 
 
 def service_type_hint(provider: str, name: str) -> tuple[str, str] | None:

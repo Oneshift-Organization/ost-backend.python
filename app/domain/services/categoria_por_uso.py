@@ -20,6 +20,13 @@ quatro nuvens; o resto de cada balde fica ao custo atual:
 - `container_registry`: armazenamento da imagem; a taxa diária do ACR fica;
 - `metrics`: amostra de Prometheus gerenciado; métrica customizada, alarme e painel ficam.
 
+PLANO_PRECO_NAO_COMPUTE R5, pela quantidade; o resto fica ao custo atual:
+- `bastion`: hora de gateway (Azure Bastion); o destino não cobra o acesso sem IP público;
+- `security_posture`: imagem verificada e evento do plano de controle (Defender for
+  Cloud, Inspector, GuardDuty, verificação do GCP); servidor, Storage e Key Vault ficam;
+- `serverless`: vCPU e memória de contêiner (ativa e ociosa) e requisição, do Container
+  Apps e do Cloud Run; Functions e o plano Dedicated ficam.
+
 Cada categoria cotada tem uma unidade, e o destino é cotado pela quantidade medida
 vezes a taxa dele. O fator traduz a unidade da linha para a da categoria (requisição
 da AWS contada uma a uma, a categoria em 10 mil). Tabela de dados, sem ``if`` por
@@ -33,7 +40,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.domain.services.rede_por_uso import DEZ_MIL, GB, GB_MES, HORA, MES, converter_quantidade
+from app.domain.services.rede_por_uso import (
+    DEZ_MIL,
+    GB,
+    GB_MES,
+    GIB_HORA,
+    HORA,
+    IMAGEM,
+    MES,
+    converter_quantidade,
+)
 
 # Mantém o nome do campo e a chave do payload de sempre: só a hora do cluster
 PLANO_DE_CONTROLE = "gke_control_plane"
@@ -64,6 +80,29 @@ REGISTRO = "container_registry_storage"
 REGISTRO_OUTROS = "container_registry_other"
 METRICAS = "metric_samples"
 METRICAS_OUTROS = "metrics_other"
+# R5: bastion, postura de segurança e contêiner serverless
+BASTION_HORAS = "bastion_hours"
+BASTION_OUTROS = "bastion_other"
+SEGURANCA_IMAGENS = "security_image_scans"
+SEGURANCA_EVENTOS = "security_control_events"
+SERVERLESS_VCPU = "serverless_vcpu_active"
+SERVERLESS_VCPU_OCIOSA = "serverless_vcpu_idle"
+SERVERLESS_MEMORIA = "serverless_memory_active"
+SERVERLESS_MEMORIA_OCIOSA = "serverless_memory_idle"
+SERVERLESS_REQUISICOES = "serverless_requests"
+# Serviço que o DE-PARA reconhece, mas cuja linha nenhuma regra classifica: ao custo
+# atual, com nome (PLANO_CONFERENCIA_DE_SERVICOS C5). "Não classificado" fica só para o
+# que ninguém reconhece
+RECONHECIDO_SEM_COTACAO = "recognized_unquoted"
+# Plano de suporte da nuvem: o destino também cobra o dele; fica ao custo atual
+SUPORTE = "support_plan"
+# Lote 2 (PLANO_CONFERENCIA_DE_SERVICOS §7): API Gateway, requisição de objeto e arquivos
+API_REQUISICOES = "api_requests"
+API_OUTROS = "api_gateway_other"
+OBJETO_ESCRITA = "object_requests_write"
+OBJETO_LEITURA = "object_requests_read"
+OBJETO_OUTROS = "object_requests_other"
+ARQUIVOS_CAPACIDADE = "file_storage_capacity"
 
 # Tipo de componente da linha → categoria do que nenhuma regra separa (ao custo atual)
 BALDES: Mapping[str, str] = {
@@ -76,6 +115,11 @@ BALDES: Mapping[str, str] = {
     "waf": WAF_OUTROS,
     "container_registry": REGISTRO_OUTROS,
     "metrics": METRICAS_OUTROS,
+    "bastion": BASTION_OUTROS,
+    "security_posture": SEGURANCA_OUTROS,
+    "support": SUPORTE,
+    "api_gateway": API_OUTROS,
+    "object_requests": OBJETO_OUTROS,
 }
 
 # Observabilidade e borda (PLANO_EQUIVALENTES_E_TARIFAS §3): custo que não vira recurso
@@ -97,6 +141,19 @@ OBSERVABILIDADE_E_BORDA: tuple[str, ...] = (
     METRICAS_OUTROS,
 )
 
+# R5: custo que não vira recurso no Terraform
+BASTION_SEGURANCA_E_SERVERLESS: tuple[str, ...] = (
+    BASTION_HORAS,
+    BASTION_OUTROS,
+    SEGURANCA_IMAGENS,
+    SEGURANCA_EVENTOS,
+    SERVERLESS_VCPU,
+    SERVERLESS_VCPU_OCIOSA,
+    SERVERLESS_MEMORIA,
+    SERVERLESS_MEMORIA_OCIOSA,
+    SERVERLESS_REQUISICOES,
+)
+
 CATEGORIAS: tuple[str, ...] = (
     PLANO_DE_CONTROLE,
     KUBERNETES_OUTROS,
@@ -108,6 +165,15 @@ CATEGORIAS: tuple[str, ...] = (
     SERVERLESS,
     ARQUIVOS,
     *OBSERVABILIDADE_E_BORDA,
+    *BASTION_SEGURANCA_E_SERVERLESS,
+    RECONHECIDO_SEM_COTACAO,
+    SUPORTE,
+    API_REQUISICOES,
+    API_OUTROS,
+    OBJETO_ESCRITA,
+    OBJETO_LEITURA,
+    OBJETO_OUTROS,
+    ARQUIVOS_CAPACIDADE,
 )
 
 CHAVE_NO_PAYLOAD: Mapping[str, str] = {
@@ -135,6 +201,23 @@ CHAVE_NO_PAYLOAD: Mapping[str, str] = {
     REGISTRO_OUTROS: "registro_outros",
     METRICAS: "metricas_amostras",
     METRICAS_OUTROS: "metricas_outros",
+    BASTION_HORAS: "bastion_horas",
+    BASTION_OUTROS: "bastion_outros",
+    SEGURANCA_IMAGENS: "seguranca_imagens",
+    SEGURANCA_EVENTOS: "seguranca_eventos",
+    SERVERLESS_VCPU: "serverless_vcpu_ativo",
+    SERVERLESS_VCPU_OCIOSA: "serverless_vcpu_ocioso",
+    SERVERLESS_MEMORIA: "serverless_memoria_ativa",
+    SERVERLESS_MEMORIA_OCIOSA: "serverless_memoria_ociosa",
+    SERVERLESS_REQUISICOES: "serverless_requisicoes",
+    RECONHECIDO_SEM_COTACAO: "reconhecidos_sem_cotacao",
+    SUPORTE: "suporte",
+    API_REQUISICOES: "api_requisicoes",
+    API_OUTROS: "api_outros",
+    OBJETO_ESCRITA: "objeto_requisicoes_escrita",
+    OBJETO_LEITURA: "objeto_requisicoes_leitura",
+    OBJETO_OUTROS: "objeto_requisicoes_outros",
+    ARQUIVOS_CAPACIDADE: "arquivos_capacidade",
 }
 
 # Categoria cotada pela quantidade → unidade dela
@@ -154,10 +237,57 @@ UNIDADE: Mapping[str, str] = {
     WAF_REGRAS: MES,
     REGISTRO: GB_MES,
     METRICAS: DEZ_MIL,
+    BASTION_HORAS: HORA,
+    SEGURANCA_IMAGENS: IMAGEM,
+    SEGURANCA_EVENTOS: DEZ_MIL,
+    SERVERLESS_VCPU: HORA,
+    SERVERLESS_VCPU_OCIOSA: HORA,
+    SERVERLESS_MEMORIA: GIB_HORA,
+    SERVERLESS_MEMORIA_OCIOSA: GIB_HORA,
+    SERVERLESS_REQUISICOES: DEZ_MIL,
+    API_REQUISICOES: DEZ_MIL,
+    OBJETO_ESCRITA: DEZ_MIL,
+    OBJETO_LEITURA: DEZ_MIL,
+    ARQUIVOS_CAPACIDADE: GB_MES,
 }
 
 _1 = Decimal(1)
 _POR_DEZ_MIL = Decimal("0.0001")
+# Segundo (vCPU-segundo, GiB-segundo) em hora, e milhão em lotes de 10 mil
+_SEGUNDO = Decimal(1) / Decimal(3600)
+_MILHAO = Decimal(100)
+# mCPU-hora do Autopilot em vCPU-hora
+_MILI = Decimal("0.001")
+_AUTOPILOT_FORA = (
+    r"(tpu|gpu|a100|h100|h200|b200|l4|t4|accelerator|premium|storage|ephemeral|hyperdisk)"
+)
+
+# Provedor → categorias em que a quantidade vem na unidade da regra, e não na do
+# rótulo (R5). Na Azure a `Quantity` está na unidade da Retail Prices API, e o rótulo
+# do export não diz qual é: o GiB-segundo vem como "10 PiB Seconds", o evento por
+# milhão como "10000000" e a imagem como "100" (custo ÷ quantidade = preço da API,
+# conferido no export real de 23/10). No GCP, a imagem verificada vem em "count".
+PELA_REGRA: Mapping[str, frozenset[str]] = {
+    "azure": frozenset(
+        {
+            BASTION_HORAS,
+            SEGURANCA_IMAGENS,
+            SEGURANCA_EVENTOS,
+            SERVERLESS_VCPU,
+            SERVERLESS_VCPU_OCIOSA,
+            SERVERLESS_MEMORIA,
+            SERVERLESS_MEMORIA_OCIOSA,
+            SERVERLESS_REQUISICOES,
+            API_REQUISICOES,
+            OBJETO_ESCRITA,
+            OBJETO_LEITURA,
+            ARQUIVOS_CAPACIDADE,
+        }
+    ),
+    "gcp": frozenset({SEGURANCA_IMAGENS}),
+    # A OCI dá a chamada em lotes de 1 milhão e o arquivo em GB-mês
+    "oci": frozenset({API_REQUISICOES, ARQUIVOS_CAPACIDADE}),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,6 +410,91 @@ REGRAS: Mapping[str, Mapping[str, _Regras]] = {
         # A OCI não tem Prometheus gerenciado: o ponto do Monitoring não é amostra de
         # Prometheus e fica ao custo atual
     },
+    # Lote 2: chamada de API Gateway (REST e HTTP da AWS; Consumption e v2 da Azure; OCI
+    # em lotes de 1 milhão). A unidade do APIM clássico, cache e WebSocket ficam
+    "api_gateway": {
+        "aws": ((_r(r"apigateway(http)?request$"), API_REQUISICOES, _POR_DEZ_MIL),),
+        "azure": (
+            (_r(r"\|\s*(consumption|basic v2|standard v2|premium v2) calls$"), API_REQUISICOES, _1),
+        ),
+        "oci": ((_r(r"api gateway\s*-\s*1,000,000 api calls"), API_REQUISICOES, _MILHAO),),
+    },
+    # Requisição de objeto: escrita (Tier1, Write, Class A) e leitura (Tier2, Read, Class B).
+    # A OCI cobra uma taxa só e não separa: como origem, fica ao custo atual
+    "object_requests": {
+        "aws": (
+            (_r(r"requests-(?:[a-z]+-)?tier1$"), OBJETO_ESCRITA, _POR_DEZ_MIL),
+            (_r(r"requests-(?:[a-z]+-)?tier2$"), OBJETO_LEITURA, _POR_DEZ_MIL),
+        ),
+        "azure": (
+            (
+                _r(r"\b(write|list and create container|list|create container) operations$"),
+                OBJETO_ESCRITA,
+                _1,
+            ),
+            (_r(r"\bread operations$"), OBJETO_LEITURA, _1),
+        ),
+        "gcp": (
+            (_r(r"class a operations"), OBJETO_ESCRITA, _1),
+            (_r(r"class b operations"), OBJETO_LEITURA, _1),
+        ),
+    },
+    # Arquivos por GB-mês: EFS Standard e One Zone, Azure Files armazenado ou provisionado,
+    # capacidade do Filestore, File Storage da OCI. IA, Archive, operação e snapshot ficam
+    "file_storage": {
+        "aws": ((_r(r"-timedstorage(-z)?-bytehrs$"), ARQUIVOS_CAPACIDADE, _1),),
+        "azure": ((_r(r"\b(data stored|provisioned)$"), ARQUIVOS_CAPACIDADE, _1),),
+        "gcp": ((_r(r"filestore (instance )?capacity"), ARQUIVOS_CAPACIDADE, _1),),
+        "oci": ((_r(r"file storage - storage$"), ARQUIVOS_CAPACIDADE, _1),),
+    },
+    # R5. Só a Azure cobra o bastion: Session Manager, IAP e OCI Bastion não cobram
+    "bastion": {
+        "azure": ((_r(r"\bgateway$"), BASTION_HORAS, _1),),
+    },
+    # Reverificação de imagem (AWS) e servidor, Storage, Key Vault, DNS e CSPM ficam
+    "security_posture": {
+        "aws": (
+            (_r(r"container-image-initial-scan$"), SEGURANCA_IMAGENS, _1),
+            (_r(r"paideventsanalyzed$"), SEGURANCA_EVENTOS, _POR_DEZ_MIL),
+        ),
+        "azure": (
+            (_r(r"\|\s*standard images?$"), SEGURANCA_IMAGENS, _1),
+            (_r(r"\|\s*standard events$"), SEGURANCA_EVENTOS, _MILHAO),
+        ),
+        "gcp": (
+            (
+                _r(r"container images scanned|successful scans|images scanned"),
+                SEGURANCA_IMAGENS,
+                _1,
+            ),
+        ),
+    },
+    # Contêiner serverless; Functions, Lambda e o plano Dedicated ficam ao custo atual
+    "serverless": {
+        "azure": (
+            # Container Instances: vCPU por hora e memória por GB-hora, sempre ativos
+            (_r(r"container instances.*\bvcpu duration"), SERVERLESS_VCPU, _1),
+            (_r(r"container instances.*\bmemory duration"), SERVERLESS_MEMORIA, _1),
+            (_r(r"standard vcpu active usage"), SERVERLESS_VCPU, _SEGUNDO),
+            (_r(r"standard vcpu idle usage"), SERVERLESS_VCPU_OCIOSA, _SEGUNDO),
+            (_r(r"standard memory active usage"), SERVERLESS_MEMORIA, _SEGUNDO),
+            (_r(r"standard memory idle usage"), SERVERLESS_MEMORIA_OCIOSA, _SEGUNDO),
+            (_r(r"\|\s*standard requests$"), SERVERLESS_REQUISICOES, _MILHAO),
+        ),
+        "gcp": (
+            # GKE Autopilot: o pod pede mCPU (por hora) e memória (GiB-hora). GPU, TPU,
+            # disco e armazenamento efêmero ficam ao custo atual
+            (_r(r"autopilot (?!.*" + _AUTOPILOT_FORA + r").*\bmcpu\b"), SERVERLESS_VCPU, _MILI),
+            (_r(r"autopilot (?!.*" + _AUTOPILOT_FORA + r").*\bcpu\b"), SERVERLESS_VCPU, _1),
+            (_r(r"autopilot (?!.*" + _AUTOPILOT_FORA + r").*\bmemory\b"), SERVERLESS_MEMORIA, _1),
+            (_r(r"services min instance cpu"), SERVERLESS_VCPU_OCIOSA, _1),
+            (_r(r"services min instance memory"), SERVERLESS_MEMORIA_OCIOSA, _1),
+            # Por instância (instance-based) entra como tempo ativo
+            (_r(r"services cpu \((request|instance)-based"), SERVERLESS_VCPU, _1),
+            (_r(r"services memory \((request|instance)-based"), SERVERLESS_MEMORIA, _1),
+            (_r(r"\|\s*requests$"), SERVERLESS_REQUISICOES, _1),
+        ),
+    },
 }
 
 
@@ -296,6 +511,8 @@ def quantidade_por_uso(
     provedor: str, tipo: TipoPorUso, quantidade: Decimal | None, unidade: str | None
 ) -> Decimal | None:
     """Quantidade da linha na unidade da categoria, ou None quando não serve."""
+    if tipo.categoria in PELA_REGRA.get(provedor.lower(), frozenset()):
+        return quantidade * tipo.fator if quantidade is not None and quantidade > 0 else None
     return converter_quantidade(
         UNIDADE.get(tipo.categoria), provedor, tipo.fator, quantidade, unidade
     )
