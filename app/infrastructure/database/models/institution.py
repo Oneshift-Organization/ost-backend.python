@@ -13,7 +13,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base
@@ -35,6 +35,7 @@ class InstitutionMemberModel(Base):
     display_name: Mapped[str] = mapped_column(String(80))
     role: Mapped[str] = mapped_column(String(20))
     profile: Mapped[str] = mapped_column(String(20))
+    views: Mapped[list[str]] = mapped_column(ARRAY(String(20)))
     can_publish: Mapped[bool] = mapped_column(Boolean)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     __table_args__ = (
@@ -42,6 +43,11 @@ class InstitutionMemberModel(Base):
         CheckConstraint(
             "profile IN ('administrative','financial','strategic','economist','technical')",
             name="ck_institution_member_profile",
+        ),
+        CheckConstraint(
+            "cardinality(views) >= 1"
+            " AND views <@ ARRAY['financial','technical','strategic']::varchar[]",
+            name="ck_institution_member_views",
         ),
     )
 

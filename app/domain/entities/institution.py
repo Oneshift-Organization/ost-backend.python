@@ -24,6 +24,37 @@ class InstitutionProfile(StrEnum):
     TECHNICAL = "technical"
 
 
+class InstitutionView(StrEnum):
+    """O que um membro vê de uma análise compartilhada; combináveis entre si."""
+
+    FINANCIAL = "financial"
+    TECHNICAL = "technical"
+    STRATEGIC = "strategic"
+
+
+ALL_VIEWS = frozenset(InstitutionView)
+
+# O perfil único de antes vira as visões que ele mostrava
+_VIEWS_OF_PROFILE = {
+    InstitutionProfile.ADMINISTRATIVE: ALL_VIEWS,
+    InstitutionProfile.FINANCIAL: frozenset({InstitutionView.FINANCIAL}),
+    InstitutionProfile.ECONOMIST: frozenset({InstitutionView.FINANCIAL}),
+    InstitutionProfile.TECHNICAL: frozenset({InstitutionView.TECHNICAL}),
+    InstitutionProfile.STRATEGIC: frozenset({InstitutionView.STRATEGIC}),
+}
+
+
+def views_of_profile(profile: InstitutionProfile) -> frozenset[InstitutionView]:
+    return _VIEWS_OF_PROFILE[profile]
+
+
+def profile_of_views(views: frozenset[InstitutionView]) -> InstitutionProfile:
+    """`profile` segue gravado para quem ainda o lê: uma visão é ela mesma; mais de uma, a geral."""
+    if len(views) == 1:
+        return InstitutionProfile(next(iter(views)).value)
+    return InstitutionProfile.ADMINISTRATIVE
+
+
 @dataclass(frozen=True)
 class Membership:
     institution_id: UUID
@@ -33,6 +64,13 @@ class Membership:
     profile: InstitutionProfile
     can_publish: bool
     joined_at: datetime
+    views: frozenset[InstitutionView] = frozenset()
+
+    def visible_views(self) -> frozenset[InstitutionView]:
+        """Administrador vê a análise inteira; membro, as visões que um administrador marcou."""
+        if self.role == InstitutionRole.ADMIN:
+            return ALL_VIEWS
+        return self.views or views_of_profile(self.profile)
 
     def require_admin(self) -> None:
         if self.role != InstitutionRole.ADMIN:
@@ -48,6 +86,19 @@ def protect_last_admin(member: Membership, admin_count: int) -> None:
         raise ConflictError(
             "Transfira a administração para outro membro ou exclua a instituição antes de sair."
         )
+
+
+@dataclass(frozen=True)
+class SharedAnalysisAccess:
+    """A análise por trás de uma publicação, com o que quem a abre pode ver."""
+
+    owner_id: UUID
+    job_id: UUID
+    views: frozenset[InstitutionView]
+
+    def require(self, *any_of: InstitutionView) -> None:
+        if self.views.isdisjoint(any_of):
+            raise ForbiddenError("Esta parte da análise não faz parte da sua visão.")
 
 
 @dataclass(frozen=True)
