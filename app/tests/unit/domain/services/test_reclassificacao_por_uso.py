@@ -3,6 +3,9 @@ import pytest
 from app.domain.services.reclassificacao_por_uso import (
     ARQUIVOS,
     BASTION,
+    ENDPOINT_PRIVADO,
+    FUNCOES,
+    LINK_DEDICADO,
     SEGREDOS,
     SEGURANCA,
     SEM_COTACAO,
@@ -53,7 +56,7 @@ from app.domain.services.reclassificacao_por_uso import (
             "Cloud Run Functions",
             "Cloud Run functions Min-Instance Memory (Request-based billing) in us-central1",
             "network_egress",
-            SERVERLESS,
+            FUNCOES,
         ),
         # O tráfego do Cloud Run continua rede
         (
@@ -63,10 +66,11 @@ from app.domain.services.reclassificacao_por_uso import (
             "network_egress",
             "network_egress",
         ),
-        ("aws", "AWS Lambda", "USE1-Lambda-GB-Second", "unclassified", SERVERLESS),
-        ("aws", "AWSLambda", "USE1-Request", "unclassified", SERVERLESS),
+        # Functions têm balde próprio (§8 da conferência)
+        ("aws", "AWS Lambda", "USE1-Lambda-GB-Second", "unclassified", FUNCOES),
+        ("aws", "AWSLambda", "USE1-Request", "unclassified", FUNCOES),
         ("aws", "AWS Lambda", "USE1-DataTransfer-Out-Bytes", "network_egress", "network_egress"),
-        ("azure", "Functions", "Functions | | Standard Execution Time", "unclassified", SERVERLESS),
+        ("azure", "Functions", "Functions | | Standard Execution Time", "unclassified", FUNCOES),
         (
             "azure",
             "Azure Container Apps",
@@ -74,7 +78,47 @@ from app.domain.services.reclassificacao_por_uso import (
             "unclassified",
             SERVERLESS,
         ),
-        ("oci", "FUNCTIONS", "Functions - Execution Time", "unclassified", SERVERLESS),
+        ("oci", "FUNCTIONS", "Functions - Execution Time", "unclassified", FUNCOES),
+        # Link dedicado e endpoint privado (§8 da conferência)
+        ("aws", "AWSDirectConnect", "USE1-165HS-PortUsage:1G", "unclassified", LINK_DEDICADO),
+        ("aws", "AmazonVPC", "USE1-VpcEndpoint-Hours", "network_egress", ENDPOINT_PRIVADO),
+        (
+            "azure",
+            "ExpressRoute",
+            "ExpressRoute | ExpressRoute | Metered Data - Data Transfer Out",
+            "network_egress",
+            LINK_DEDICADO,
+        ),
+        (
+            "azure",
+            "Virtual Network",
+            "Virtual Network | Virtual Network Private Link | Standard Private Endpoint",
+            "unclassified",
+            ENDPOINT_PRIVADO,
+        ),
+        (
+            "gcp",
+            "Networking",
+            "Cloud Interconnect - Local Data Transfer in UnitedStates",
+            "network_egress",
+            LINK_DEDICADO,
+        ),
+        (
+            "gcp",
+            "Networking",
+            "Networking Private Service Connect Consumer End Point",
+            "unclassified",
+            ENDPOINT_PRIVADO,
+        ),
+        ("oci", "NETWORK", "OCI - FastConnect 1 Gbps", "network_egress", LINK_DEDICADO),
+        # Vizinhos: o endpoint do Container Apps fica com o Container Apps
+        (
+            "azure",
+            "Azure Container Apps",
+            "Azure Container Apps | Azure Container Apps | Environment Private Endpoint",
+            "unclassified",
+            SERVERLESS,
+        ),
         # Segredos e chaves: nem disco nem órfão
         ("aws", "AWS Secrets Manager", "USE1-AWSSecretsManager-Secrets", "unclassified", SEGREDOS),
         (

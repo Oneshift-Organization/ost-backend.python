@@ -68,8 +68,10 @@ _HASH_POR_VERSAO = {
     # `variantes_de_marca`, que a autoridade não usa; `service_key` não mudou.
     # E no §7 da conferência: `_CATEGORIES` ganhou API Gateway, requisição de objeto e
     # arquivos; as chaves só existem em payload preparado depois da mudança.
+    # E no §8: `_CATEGORIES` ganhou Functions, link dedicado e endpoint privado, do mesmo
+    # jeito.
     "agent-authority-v5.1": (
-        "490b04beec7238f9118454adecd90a4a938bb80faecf368ada7aa17de1e22cd2"
+        "eb5f26ae2213c1087cc5d02876e0f9befe2475688be38237658ed23017d9efd1"
     ),
     # v5: lock-in da origem efetiva; classe/inventário estimado são provisórios.
     "agent-authority-v5": (

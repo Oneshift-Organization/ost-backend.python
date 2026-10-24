@@ -54,6 +54,15 @@ PLANO_CONFERENCIA_DE_SERVICOS (lote 2):
   **requisição de objeto** (S3, Blob, Cloud Storage, Object Storage da OCI) têm balde
   próprio, cotados pela chamada (`categoria_por_uso`).
 
+PLANO_CONFERENCIA_DE_SERVICOS (lote 3, §8):
+- **Functions** (Lambda, Azure Functions, Cloud Run functions, Oracle Functions) têm
+  balde próprio, cotadas por GB-segundo e por chamada; saíam em `serverless`, ao custo
+  atual;
+- **link dedicado** (Direct Connect, ExpressRoute, Cloud Interconnect, FastConnect) e
+  **endpoint privado** (VPC Endpoint, Private Endpoint da Azure, Private Service Connect)
+  têm balde próprio. A saída pelo ExpressRoute e pelo Interconnect caía no egress de
+  internet.
+
 Corrigir aqui, e não só nas regras de SKU, vale para faturas já processadas sem
 reenriquecer. Tabela de dados por nuvem, sem ``if``. Módulo puro, sem I/O.
 """
@@ -82,6 +91,9 @@ SUPORTE = "support"
 COMPUTE = "core"
 API = "api_gateway"
 OBJETO = "object_requests"
+FUNCOES = "functions"
+LINK_DEDICADO = "dedicated_link"
+ENDPOINT_PRIVADO = "private_endpoint"
 # Medidor de plano do App Service com tamanho publicado (`azure_shape._PLANOS_APP_SERVICE`)
 _PLANO_APP_SERVICE = (
     r"(b[1-3]|s[1-3]|p[1-3]|p[1-3]\s*v2|p[0-3]\s*v3|p[1-5]mv3|i[1-3]|i[1-6]\s*v2|i[1-5]mv2|pc[2-4])"
@@ -104,7 +116,9 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"heavyusage:(db|cache)\."), "database"),
         (_r(r"(kafka|msk).*\|.*kafka\."), SEM_COTACAO),
         (_r(r"cloudfront[^|]*\|.*requests"), REDE),
-        (_r(r"^aws ?lambda[^|]*\|(?!.*(datatransfer|-bytes))"), SERVERLESS),
+        (_r(r"^aws ?lambda[^|]*\|(?!.*(datatransfer|-bytes))"), FUNCOES),
+        (_r(r"^(aws ?direct ?connect|awsdirectconnect)"), LINK_DEDICADO),
+        (_r(r"vpcendpoint-(hours|bytes)$"), ENDPOINT_PRIVADO),
         (_r(r"^(aws ?secrets ?manager|aws ?key ?management|awskms)"), SEGREDOS),
         (_r(r"^(amazon ?efs|amazon elastic file system)"), ARQUIVOS),
         (_r(r"^amazon ?cloudwatch[^|]*\|.*" + _LOG_DA_CLOUDWATCH), LOGS),
@@ -129,7 +143,10 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     ),
     "gcp": (
         (_r(r"source repositor[^|]*\| *storage$"), "object_storage"),
+        (_r(r"^(cloud run functions|cloud functions)[^|]*\|(?!.*(data transfer|egress))"), FUNCOES),
         (_r(r"^cloud run[^|]*\|(?!.*(data transfer|egress))"), SERVERLESS),
+        (_r(r"\|\s*(cloud|cross-cloud) interconnect\b"), LINK_DEDICADO),
+        (_r(r"\|.*\bprivate service connect\b"), ENDPOINT_PRIVADO),
         (_r(r"^(secret manager|cloud key management)"), SEGREDOS),
         (_r(r"\|.*cdn.*lookup"), REDE),
         (_r(r"filestore"), ARQUIVOS),
@@ -154,9 +171,12 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^cloud storage[^|]*\|.*class [ab] operations"), OBJETO),
     ),
     "azure": (
+        (_r(r"^functions[^|]*\|(?!.*(data transfer|bandwidth))"), FUNCOES),
+        (_r(r"^expressroute"), LINK_DEDICADO),
+        (_r(r"^virtual network[^|]*\|.*\bprivate link\b"), ENDPOINT_PRIVADO),
         (
             _r(
-                r"^(functions|azure container apps|container instances)[^|]*\|"
+                r"^(azure container apps|container instances)[^|]*\|"
                 r"(?!.*(data transfer|bandwidth))"
             ),
             SERVERLESS,
@@ -176,7 +196,8 @@ REGRAS: Mapping[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (_r(r"^(microsoft defender|azure defender|azure security center)"), SEGURANCA),
     ),
     "oci": (
-        (_r(r"^functions"), SERVERLESS),
+        (_r(r"^functions"), FUNCOES),
+        (_r(r"\|\s*oci - fastconnect\b"), LINK_DEDICADO),
         (_r(r"^(key[ _]management|vault|kms)|\|.*key management"), SEGREDOS),
         (_r(r"file storage"), ARQUIVOS),
         (_r(r"^logging|\|.*\blogging\b"), LOGS),

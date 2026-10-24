@@ -11,6 +11,8 @@ from uuid import UUID
 import pandas as pd
 import pytest
 
+from app.domain.services.categoria_por_uso import quantidade_por_uso, tipo_por_uso
+from app.domain.services.reclassificacao_por_uso import reclassificar
 from app.infrastructure.file_ingestion.parsers import AzureParser, OCIParser
 
 _USER = UUID("11111111-1111-1111-1111-111111111111")
@@ -329,3 +331,57 @@ def test_azure_plano_do_app_service_vira_capacidade(tmp_path) -> None:
     assert plano["instance_family"] == "APPSERVICE_PV3"
     assert plano["capacity_unit"] == "instance"
     assert "instance_type" not in ssl and "capacity_unit" not in ssl
+
+
+@pytest.mark.parametrize(
+    ("linha", "categoria", "esperado"),
+    [
+        # O relatório dá a quantidade na unidade da lista de preços e o parser multiplica
+        # pelo número dela. A regra não pode multiplicar de novo: a chamada saía 1 milhão de
+        # vezes maior (PLANO_CONFERENCIA_DE_SERVICOS §8)
+        (
+            (
+                "API_GATEWAY",
+                "API Gateway  - 1,000,000 API Calls",
+                "5",
+                "1,000,000 API Calls Per Month",
+            ),
+            "api_requests",
+            "500",
+        ),
+        (
+            ("FUNCTIONS", "Oracle Functions - Execution Time", "36", "10,000 GB Memory-Seconds"),
+            "function_compute",
+            "100",
+        ),
+        # "1MIL" não é separado pelo parser: a quantidade continua em milhões
+        (
+            ("FUNCTIONS", "Oracle Functions - Invocations", "3", "1MIL Function Invocations"),
+            "function_requests",
+            "300",
+        ),
+        (("NETWORK", "OCI - FastConnect 1 Gbps", "744", "Port Hour"), "dedicated_link_1g", "744"),
+    ],
+)
+def test_oci_quantidade_do_parser_chega_na_unidade_da_categoria(
+    tmp_path, linha, categoria, esperado
+) -> None:
+    servico, descricao, quantidade, unidade = linha
+    lida = _parse_oci(
+        _oci(
+            tmp_path,
+            [
+                {
+                    "product/service": servico,
+                    "product/Description": descricao,
+                    "usage/billedQuantity": quantidade,
+                    "cost/billingUnitReadable": unidade,
+                }
+            ],
+        )
+    ).iloc[0]
+    balde = reclassificar("oci", lida["service"], lida["usage_type"], "unclassified")
+    tipo = tipo_por_uso(balde, "oci", lida["service"], lida["usage_type"])
+    assert tipo.categoria == categoria
+    medida = quantidade_por_uso("oci", tipo, Decimal(str(lida["usage_amount"])), lida["usage_unit"])
+    assert medida == Decimal(esperado)

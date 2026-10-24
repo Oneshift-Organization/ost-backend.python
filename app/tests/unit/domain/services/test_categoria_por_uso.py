@@ -17,7 +17,21 @@ from app.domain.services.categoria_por_uso import (
     DNS_CONSULTAS,
     DNS_OUTROS,
     DNS_ZONAS,
+    ENDPOINT_DADOS,
+    ENDPOINT_HORAS,
+    ENDPOINT_OUTROS,
+    FUNCAO_COMPUTE,
+    FUNCAO_CPU,
+    FUNCAO_REQUISICOES,
+    FUNCOES_LINK_E_ENDPOINT,
+    FUNCOES_OUTROS,
     KUBERNETES_OUTROS,
+    LINK_1G,
+    LINK_10G,
+    LINK_100G,
+    LINK_DADOS,
+    LINK_GATEWAY,
+    LINK_OUTROS,
     LOGS_INGESTAO,
     LOGS_INGESTAO_BASICA,
     LOGS_OUTROS,
@@ -204,6 +218,9 @@ def test_balde_desconhecido_ou_sem_uso_vai_para_o_resto_do_balde():
         "support": SUPORTE,
         "api_gateway": API_OUTROS,
         "object_requests": OBJETO_OUTROS,
+        "functions": FUNCOES_OUTROS,
+        "dedicated_link": LINK_OUTROS,
+        "private_endpoint": ENDPOINT_OUTROS,
     }
 
 
@@ -236,11 +253,22 @@ def test_unidade_de_cada_categoria_cotada():
         OBJETO_ESCRITA: "10k",
         OBJETO_LEITURA: "10k",
         ARQUIVOS_CAPACIDADE: "gb_month",
+        FUNCAO_COMPUTE: "gib_hour",
+        FUNCAO_CPU: "hour",
+        FUNCAO_REQUISICOES: "10k",
+        LINK_1G: "hour",
+        LINK_10G: "hour",
+        LINK_100G: "hour",
+        LINK_DADOS: "gb",
+        LINK_GATEWAY: "hour",
+        ENDPOINT_HORAS: "hour",
+        ENDPOINT_DADOS: "gb",
     }
     # O resto de cada balde fica ao custo atual
     for categoria in (
         KUBERNETES_OUTROS, SEGURANCA_OUTROS, SERVERLESS, ARQUIVOS, LOGS_OUTROS, DNS_OUTROS,
-        WAF_OUTROS, REGISTRO_OUTROS, METRICAS_OUTROS, BASTION_OUTROS,
+        WAF_OUTROS, REGISTRO_OUTROS, METRICAS_OUTROS, BASTION_OUTROS, FUNCOES_OUTROS,
+        LINK_OUTROS, ENDPOINT_OUTROS,
     ):
         assert categoria not in UNIDADE
 
@@ -268,6 +296,7 @@ def test_chave_no_payload():
         OBJETO_LEITURA,
         OBJETO_OUTROS,
         ARQUIVOS_CAPACIDADE,
+        *FUNCOES_LINK_E_ENDPOINT,
     }
 
 

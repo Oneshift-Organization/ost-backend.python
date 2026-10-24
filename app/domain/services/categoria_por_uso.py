@@ -27,6 +27,14 @@ PLANO_PRECO_NAO_COMPUTE R5, pela quantidade; o resto fica ao custo atual:
 - `serverless`: vCPU e memória de contêiner (ativa e ociosa) e requisição, do Container
   Apps e do Cloud Run; Functions e o plano Dedicated ficam.
 
+PLANO_CONFERENCIA_DE_SERVICOS §8 (lote 3), pela quantidade; o resto fica ao custo atual:
+- `functions`: memória vezes tempo (GiB-hora) e chamada. A CPU que o GCP cobra à parte entra
+  a zero: o GB-segundo do destino já a inclui. Concorrência provisionada, plano Premium
+  e instância mínima ficam;
+- `dedicated_link`: porta de 1, 10 e 100 Gbps por hora e a saída pelo link. O gateway e o
+  anexo que acompanham o link entram a zero: a taxa da porta do destino já os cobre;
+- `private_endpoint`: endpoint por hora e dado processado.
+
 Cada categoria cotada tem uma unidade, e o destino é cotado pela quantidade medida
 vezes a taxa dele. O fator traduz a unidade da linha para a da categoria (requisição
 da AWS contada uma a uma, a categoria em 10 mil). Tabela de dados, sem ``if`` por
@@ -103,6 +111,20 @@ OBJETO_ESCRITA = "object_requests_write"
 OBJETO_LEITURA = "object_requests_read"
 OBJETO_OUTROS = "object_requests_other"
 ARQUIVOS_CAPACIDADE = "file_storage_capacity"
+# Lote 3 (PLANO_CONFERENCIA_DE_SERVICOS §8): Functions, link dedicado e endpoint privado
+FUNCAO_COMPUTE = "function_compute"
+FUNCAO_CPU = "function_cpu"
+FUNCAO_REQUISICOES = "function_requests"
+FUNCOES_OUTROS = "functions_other"
+LINK_1G = "dedicated_link_1g"
+LINK_10G = "dedicated_link_10g"
+LINK_100G = "dedicated_link_100g"
+LINK_DADOS = "dedicated_link_data"
+LINK_GATEWAY = "dedicated_link_gateway"
+LINK_OUTROS = "dedicated_link_other"
+ENDPOINT_HORAS = "private_endpoint_hours"
+ENDPOINT_DADOS = "private_endpoint_data"
+ENDPOINT_OUTROS = "private_endpoint_other"
 
 # Tipo de componente da linha → categoria do que nenhuma regra separa (ao custo atual)
 BALDES: Mapping[str, str] = {
@@ -120,6 +142,9 @@ BALDES: Mapping[str, str] = {
     "support": SUPORTE,
     "api_gateway": API_OUTROS,
     "object_requests": OBJETO_OUTROS,
+    "functions": FUNCOES_OUTROS,
+    "dedicated_link": LINK_OUTROS,
+    "private_endpoint": ENDPOINT_OUTROS,
 }
 
 # Observabilidade e borda (PLANO_EQUIVALENTES_E_TARIFAS §3): custo que não vira recurso
@@ -139,6 +164,23 @@ OBSERVABILIDADE_E_BORDA: tuple[str, ...] = (
     REGISTRO_OUTROS,
     METRICAS,
     METRICAS_OUTROS,
+)
+
+# Lote 3: custo que não vira recurso no Terraform
+FUNCOES_LINK_E_ENDPOINT: tuple[str, ...] = (
+    FUNCAO_COMPUTE,
+    FUNCAO_CPU,
+    FUNCAO_REQUISICOES,
+    FUNCOES_OUTROS,
+    LINK_1G,
+    LINK_10G,
+    LINK_100G,
+    LINK_DADOS,
+    LINK_GATEWAY,
+    LINK_OUTROS,
+    ENDPOINT_HORAS,
+    ENDPOINT_DADOS,
+    ENDPOINT_OUTROS,
 )
 
 # R5: custo que não vira recurso no Terraform
@@ -174,6 +216,7 @@ CATEGORIAS: tuple[str, ...] = (
     OBJETO_LEITURA,
     OBJETO_OUTROS,
     ARQUIVOS_CAPACIDADE,
+    *FUNCOES_LINK_E_ENDPOINT,
 )
 
 CHAVE_NO_PAYLOAD: Mapping[str, str] = {
@@ -218,6 +261,19 @@ CHAVE_NO_PAYLOAD: Mapping[str, str] = {
     OBJETO_LEITURA: "objeto_requisicoes_leitura",
     OBJETO_OUTROS: "objeto_requisicoes_outros",
     ARQUIVOS_CAPACIDADE: "arquivos_capacidade",
+    FUNCAO_COMPUTE: "funcoes_computacao",
+    FUNCAO_CPU: "funcoes_cpu",
+    FUNCAO_REQUISICOES: "funcoes_requisicoes",
+    FUNCOES_OUTROS: "funcoes_outros",
+    LINK_1G: "link_dedicado_1g",
+    LINK_10G: "link_dedicado_10g",
+    LINK_100G: "link_dedicado_100g",
+    LINK_DADOS: "link_dedicado_dados",
+    LINK_GATEWAY: "link_dedicado_gateway",
+    LINK_OUTROS: "link_dedicado_outros",
+    ENDPOINT_HORAS: "endpoint_privado_horas",
+    ENDPOINT_DADOS: "endpoint_privado_dados",
+    ENDPOINT_OUTROS: "endpoint_privado_outros",
 }
 
 # Categoria cotada pela quantidade → unidade dela
@@ -249,6 +305,16 @@ UNIDADE: Mapping[str, str] = {
     OBJETO_ESCRITA: DEZ_MIL,
     OBJETO_LEITURA: DEZ_MIL,
     ARQUIVOS_CAPACIDADE: GB_MES,
+    FUNCAO_COMPUTE: GIB_HORA,
+    FUNCAO_CPU: HORA,
+    FUNCAO_REQUISICOES: DEZ_MIL,
+    LINK_1G: HORA,
+    LINK_10G: HORA,
+    LINK_100G: HORA,
+    LINK_DADOS: GB,
+    LINK_GATEWAY: HORA,
+    ENDPOINT_HORAS: HORA,
+    ENDPOINT_DADOS: GB,
 }
 
 _1 = Decimal(1)
@@ -256,8 +322,12 @@ _POR_DEZ_MIL = Decimal("0.0001")
 # Segundo (vCPU-segundo, GiB-segundo) em hora, e milhão em lotes de 10 mil
 _SEGUNDO = Decimal(1) / Decimal(3600)
 _MILHAO = Decimal(100)
-# mCPU-hora do Autopilot em vCPU-hora
+# mCPU-hora do Autopilot em vCPU-hora; na Azure, execução em lotes de 10 vira 10 mil
 _MILI = Decimal("0.001")
+_DEZ_EM_DEZ_MIL = Decimal("0.001")
+# Circuito do ExpressRoute cobrado por mês, na categoria por hora
+_MES_EM_HORAS = Decimal(730)
+_CLASSE_FRIA_DO_GCP = r"(nearline|coldline|archive|durable reduced)"
 _AUTOPILOT_FORA = (
     r"(tpu|gpu|a100|h100|h200|b200|l4|t4|accelerator|premium|storage|ephemeral|hyperdisk)"
 )
@@ -282,11 +352,22 @@ PELA_REGRA: Mapping[str, frozenset[str]] = {
             OBJETO_ESCRITA,
             OBJETO_LEITURA,
             ARQUIVOS_CAPACIDADE,
+            FUNCAO_COMPUTE,
+            FUNCAO_REQUISICOES,
+            LINK_1G,
+            LINK_10G,
+            LINK_100G,
+            LINK_DADOS,
+            LINK_GATEWAY,
+            ENDPOINT_HORAS,
+            ENDPOINT_DADOS,
         }
     ),
     "gcp": frozenset({SEGURANCA_IMAGENS}),
-    # A OCI dá a chamada em lotes de 1 milhão e o arquivo em GB-mês
-    "oci": frozenset({API_REQUISICOES, ARQUIVOS_CAPACIDADE}),
+    # A OCI dá o arquivo em GB-mês. A chamada não: o parser já multiplica pelo número da
+    # unidade ("1,000,000 API Calls Per Month" vira chamada unitária), e o rótulo que
+    # sobra diz a escala (§8 da conferência: aqui ela era multiplicada de novo)
+    "oci": frozenset({ARQUIVOS_CAPACIDADE}),
 }
 
 
@@ -417,26 +498,31 @@ REGRAS: Mapping[str, Mapping[str, _Regras]] = {
         "azure": (
             (_r(r"\|\s*(consumption|basic v2|standard v2|premium v2) calls$"), API_REQUISICOES, _1),
         ),
-        "oci": ((_r(r"api gateway\s*-\s*1,000,000 api calls"), API_REQUISICOES, _MILHAO),),
+        "oci": ((_r(r"api gateway\s*-\s*1,000,000 api calls"), API_REQUISICOES, _1),),
     },
-    # Requisição de objeto: escrita (Tier1, Write, Class A) e leitura (Tier2, Read, Class B).
-    # A OCI cobra uma taxa só e não separa: como origem, fica ao custo atual
+    # Requisição de objeto: escrita (Tier1, Write, Class A) e leitura (Tier2, Read, Class B),
+    # só da classe padrão (S3 Standard e Intelligent-Tiering, Blob Hot, Cloud Storage
+    # Standard). A escrita da classe fria custa de 2 a 7 vezes mais e fica (§8). A OCI
+    # cobra uma taxa só e não separa: como origem, fica ao custo atual
     "object_requests": {
         "aws": (
-            (_r(r"requests-(?:[a-z]+-)?tier1$"), OBJETO_ESCRITA, _POR_DEZ_MIL),
-            (_r(r"requests-(?:[a-z]+-)?tier2$"), OBJETO_LEITURA, _POR_DEZ_MIL),
+            (_r(r"requests-(?:int-)?tier1$"), OBJETO_ESCRITA, _POR_DEZ_MIL),
+            (_r(r"requests-(?:int-)?tier2$"), OBJETO_LEITURA, _POR_DEZ_MIL),
         ),
         "azure": (
             (
-                _r(r"\b(write|list and create container|list|create container) operations$"),
+                _r(
+                    r"^(?!.*\b(cool|cold|archive)\b)"
+                    r".*\b(write|list and create container|list|create container) operations$"
+                ),
                 OBJETO_ESCRITA,
                 _1,
             ),
-            (_r(r"\bread operations$"), OBJETO_LEITURA, _1),
+            (_r(r"^(?!.*\b(cool|cold|archive)\b).*\bread operations$"), OBJETO_LEITURA, _1),
         ),
         "gcp": (
-            (_r(r"class a operations"), OBJETO_ESCRITA, _1),
-            (_r(r"class b operations"), OBJETO_LEITURA, _1),
+            (_r(r"^(?!.*" + _CLASSE_FRIA_DO_GCP + r").*class a operations"), OBJETO_ESCRITA, _1),
+            (_r(r"^(?!.*" + _CLASSE_FRIA_DO_GCP + r").*class b operations"), OBJETO_LEITURA, _1),
         ),
     },
     # Arquivos por GB-mês: EFS Standard e One Zone, Azure Files armazenado ou provisionado,
@@ -493,6 +579,101 @@ REGRAS: Mapping[str, Mapping[str, _Regras]] = {
             (_r(r"services cpu \((request|instance)-based"), SERVERLESS_VCPU, _1),
             (_r(r"services memory \((request|instance)-based"), SERVERLESS_MEMORIA, _1),
             (_r(r"\|\s*requests$"), SERVERLESS_REQUISICOES, _1),
+        ),
+    },
+    # Lote 3. GB-segundo e chamada; Edge, concorrência provisionada, SnapStart, plano
+    # Premium, Always Ready e instância mínima ficam ao custo atual
+    "functions": {
+        "aws": (
+            (_r(r"\|\s*([a-z0-9]+-)?lambda-gb-second(-arm)?$"), FUNCAO_COMPUTE, _SEGUNDO),
+            (_r(r"\|\s*([a-z0-9]+-)?request(-arm)?$"), FUNCAO_REQUISICOES, _POR_DEZ_MIL),
+        ),
+        "azure": (
+            (_r(r"\b(standard|on demand) execution time$"), FUNCAO_COMPUTE, _SEGUNDO),
+            (_r(r"\b(standard|on demand) total executions$"), FUNCAO_REQUISICOES, _DEZ_EM_DEZ_MIL),
+        ),
+        "gcp": (
+            (_r(r"\|(?!.*min[- ]?instance).*\bmemory\b"), FUNCAO_COMPUTE, _1),
+            (_r(r"\|(?!.*min[- ]?instance).*\bcpu\b"), FUNCAO_CPU, _1),
+            (_r(r"\|.*\binvocations\b"), FUNCAO_REQUISICOES, _1),
+        ),
+        # Pelo rótulo: "GB Memory-Seconds" e "1MIL Function Invocations"
+        "oci": (
+            (_r(r"functions - execution time"), FUNCAO_COMPUTE, _1),
+            (_r(r"functions - invocations"), FUNCAO_REQUISICOES, _1),
+        ),
+    },
+    # Porta por velocidade e saída pelo link. Circuitos Unlimited, Premium, Local, Global
+    # Reach, portas Metro, de tarifa fixa e de outras velocidades ficam ao custo atual
+    "dedicated_link": {
+        "aws": (
+            # Porta dedicada e conexão hospedada (`HCPortUsage`)
+            (_r(r"portusage:1g$"), LINK_1G, _1),
+            (_r(r"portusage:10g$"), LINK_10G, _1),
+            (_r(r"portusage:100g$"), LINK_100G, _1),
+            # O `:dxfr` é outro produto, a US$ 0
+            (_r(r"dataxfer-out(:dc\.\d+)?$"), LINK_DADOS, _1),
+        ),
+        "azure": (
+            (_r(r"\bstandard metered data 1 gbps circuit$"), LINK_1G, _MES_EM_HORAS),
+            (_r(r"\bstandard metered data 10 gbps circuit$"), LINK_10G, _MES_EM_HORAS),
+            (_r(r"\|\s*port 10 gbps port$"), LINK_10G, _MES_EM_HORAS),
+            (_r(r"\|\s*port 100 gbps port$"), LINK_100G, _MES_EM_HORAS),
+            (_r(r"\bmetered data - data transfer out$"), LINK_DADOS, _1),
+            (_r(r"\bgateway$"), LINK_GATEWAY, _1),
+        ),
+        "gcp": (
+            (
+                _r(r"\|\s*cloud interconnect - 1gbps vlan attachment via google partner$"),
+                LINK_1G,
+                _1,
+            ),
+            (
+                _r(r"\|\s*cloud interconnect - 10gbps vlan attachment via google partner$"),
+                LINK_10G,
+                _1,
+            ),
+            (_r(r"\|\s*cloud interconnect - 10gbps dedicated circuit$"), LINK_10G, _1),
+            (_r(r"\|\s*cloud interconnect - 100gbps dedicated circuit$"), LINK_100G, _1),
+            (
+                _r(
+                    r"\|\s*cloud interconnect - \d+gbps vlan attachment"
+                    r" via dedicated interconnect$"
+                ),
+                LINK_GATEWAY,
+                _1,
+            ),
+            (_r(r"\|\s*cloud interconnect - (local|remote) data transfer"), LINK_DADOS, _1),
+        ),
+        # A OCI não cobra o dado que passa pelo FastConnect
+        "oci": (
+            (_r(r"fastconnect 1 gbps$"), LINK_1G, _1),
+            (_r(r"fastconnect 10 gbps$"), LINK_10G, _1),
+            (_r(r"fastconnect 100 gbps$"), LINK_100G, _1),
+        ),
+    },
+    # Endpoint de interface por hora e dado processado. Endpoint de Gateway Load
+    # Balancer, de recurso e de serviço da AWS e o Fixed Private Endpoint ficam
+    "private_endpoint": {
+        "aws": (
+            (_r(r"vpcendpoint-hours$"), ENDPOINT_HORAS, _1),
+            (_r(r"vpcendpoint-bytes$"), ENDPOINT_DADOS, _1),
+        ),
+        "azure": (
+            (_r(r"\|\s*standard private endpoint$"), ENDPOINT_HORAS, _1),
+            (_r(r"\|\s*standard data processed - (ingress|egress)$"), ENDPOINT_DADOS, _1),
+        ),
+        "gcp": (
+            (
+                _r(r"private service connect (consumer|partner select) end ?point$"),
+                ENDPOINT_HORAS,
+                _1,
+            ),
+            (
+                _r(r"private service connect (?!.*google managed).*data processing"),
+                ENDPOINT_DADOS,
+                _1,
+            ),
         ),
     },
 }
