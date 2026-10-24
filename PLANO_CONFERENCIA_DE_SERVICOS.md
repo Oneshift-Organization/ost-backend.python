@@ -164,7 +164,7 @@ Testes de unidade: 2.632 (54 novos em `test_conferencia_de_servicos.py`).
 
 ## 5. Scripts de exportação
 
-`scripts/exportar_fatura/` (README no diretório). Um por nuvem, no estilo do da Azure:
+`scripts/clouds/`, uma pasta por nuvem com o script e um `MANUAL.md` de passo a passo (visão geral em `LEIA-ME.md`). Um por nuvem, no estilo do da Azure:
 rodam no shell do console, só leem, conferem o arquivo antes de entregar e explicam a
 permissão que falta.
 
