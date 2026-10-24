@@ -38,6 +38,7 @@ from typing import Any
 
 from app.domain.services.categoria_por_uso import (
     BASTION_SEGURANCA_E_SERVERLESS,
+    FUNCOES_LINK_E_ENDPOINT,
     OBSERVABILIDADE_E_BORDA,
 )
 from app.domain.services.categoria_por_uso import CHAVE_NO_PAYLOAD as CHAVE_POR_USO
@@ -1011,6 +1012,12 @@ def _registrar_lacunas(payload: dict[str, Any], plano: PlanoDerivado) -> None:
             "Contêiner serverless (Container Apps, Cloud Run), bastion e verificação de "
             "segurança aparecem no custo e não viram recurso: crie no destino o serviço de "
             "contêiner, o acesso às máquinas sem IP público e a verificação de imagens."
+        )
+    if any(_decimal(auxiliares.get(CHAVE_POR_USO[c])) for c in FUNCOES_LINK_E_ENDPOINT):
+        plano.nao_suportado.append(
+            "Functions, link dedicado e endpoint privado aparecem no custo e não viram "
+            "recurso: publique as funções no serviço do destino, contrate o link com o "
+            "parceiro de conectividade e crie os endpoints privados à parte."
         )
     reconhecidos = (auxiliares.get("por_servico") or {}).get("reconhecidos_sem_cotacao") or {}
     if _decimal(auxiliares.get("reconhecidos_sem_cotacao")):

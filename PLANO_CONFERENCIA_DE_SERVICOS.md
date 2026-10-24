@@ -312,3 +312,159 @@ Testes de unidade: 2.672.
 
 Achado de método: com saída grande, o stream do `kubectl exec` às vezes corta no meio
 (o JSON termina sem fechar). Não é erro da análise: a mesma rodada, repetida, sai inteira.
+
+## 8. Lote 3 — Functions, link dedicado e endpoint privado; correção do lote 2 (24/10)
+
+Pedido do usuário: Functions por GB-segundo e por chamada, e link dedicado e endpoint
+privado, "já na develop e na main". Taxas conferidas nas fontes oficiais em 24/10.
+
+### 8.1 Defeito do lote 2, achado na medição deste lote
+
+- **A chamada do API Gateway da OCI saía 1 milhão de vezes maior.**
+  - O parser da OCI já multiplica a quantidade pelo número da unidade ("1,000,000 API
+    Calls Per Month" → chamadas). A regra do §7 multiplicava de novo, por 100, como se
+    viesse em milhões.
+  - Na fatura típica da OCI, US$ 15 de chamadas viravam US$ 15 a 17,5 milhões por mês
+    em cada destino. Está na produção desde a promoção de 23/10.
+  - O teste do §7 congelou a premissa errada (quantidade "3" com unidade "x").
+- **Por que a conferência não pegou.** "Cotado" só dizia se a linha tinha preço no
+  destino, não o tamanho. A conferência agora mede também o preço implícito na origem
+  (custo ÷ quantidade) contra a taxa de referência da própria nuvem
+  (`Testes/conferencia/magnitude.py`). Quantidade na escala errada aparece como preço
+  implícito longe da referência.
+- **Classe fria cotada pela taxa da classe padrão.** A regra de requisição de objeto do
+  §7 levava qualquer classe:
+  - Archive, Cool e Cold do Blob;
+  - Nearline, Coldline, Archive e Durable Reduced do Cloud Storage;
+  - Standard-IA, Glacier e as requisições do Backup e do FSx no S3.
+
+  A escrita dessas classes custa de 2 a 7 vezes a da classe padrão, e o destino saía
+  barato demais. Ficam ao custo atual, em `objeto_requisicoes_outros`.
+
+Correção: na OCI, a unidade da linha diz a escala ("API Calls Per Month" é chamada
+unitária). Cada regra de requisição de objeto passa a valer só para a classe padrão:
+S3 Standard e Intelligent-Tiering, Blob Hot e Cloud Storage Standard.
+
+### 8.2 O que muda
+
+- **F, Functions** (balde `functions`). Lambda, Azure Functions (Consumption e Flex sob
+  demanda), Cloud Run functions (1ª e 2ª geração) e Oracle Functions:
+
+  | categoria | unidade | AWS | Azure | GCP | OCI |
+  |---|---|---|---|---|---|
+  | `function_compute` (memória × tempo) | GiB-hora | US$ 0,06 | 0,0576 | 0,0594 | 0,051 |
+  | `function_requests` | 10 mil chamadas | 0,002 | 0,002 | 0,004 | 0,002 |
+  | `function_cpu` (CPU cobrada à parte) | vCPU-hora | 0 | 0 | 0 | 0 |
+
+  - O GB-segundo da AWS, da Azure e da OCI já inclui a CPU. O GCP cobra CPU e memória à
+    parte. A taxa dele no destino é a de uma função de 1 GiB com a CPU padrão (0,583
+    vCPU): 0,0000025 + 0,583 × 0,000024 por GiB-segundo.
+  - Como origem, a linha de CPU do GCP entra a zero em todos os destinos: o GB-segundo
+    do destino já a cobre. Premissa declarada: a função usa a CPU padrão do tamanho.
+  - Ficam ao custo atual, em `functions_other`:
+    - concorrência provisionada, Lambda@Edge e SnapStart;
+    - o plano Premium e o Always Ready da Azure;
+    - instância mínima do GCP;
+    - o resto de cada serviço.
+  - A Lambda deixa o balde `serverless` (Cloud Run e Container Apps continuam nele).
+- **L, link dedicado** (balde `dedicated_link`). Direct Connect, ExpressRoute, Cloud
+  Interconnect e FastConnect:
+
+  | categoria | unidade | AWS | Azure | GCP | OCI |
+  |---|---|---|---|---|---|
+  | `dedicated_link_1g` | hora | US$ 0,30 | 0,7873 | 0,2778 | 0,2125 |
+  | `dedicated_link_10g` | hora | 2,25 | 6,5275 | 2,428 | 1,275 |
+  | `dedicated_link_100g` | hora | 22,50 | 70,3632 | 24,28 | 10,75 |
+  | `dedicated_link_data` (saída pelo link) | GB | 0,02 | 0,025 | 0,02 | 0 |
+  | `dedicated_link_gateway` (gateway ou anexo que acompanha o link) | hora | 0 | 0 | 0 | 0 |
+
+  - O que entra em cada taxa:
+    - **AWS:** a porta dedicada.
+    - **Azure:** o circuito Standard Metered (1 e 10 Gbps) ou a porta do ExpressRoute
+      Direct (100 Gbps), mais o gateway que aguenta a velocidade: Standard para 1 Gbps
+      e Ultra Performance para os outros.
+    - **GCP:** o anexo do Partner Interconnect (1 Gbps), ou o circuito dedicado mais um
+      anexo VLAN (10 e 100 Gbps).
+    - **OCI:** a porta do FastConnect. A OCI não cobra o dado que passa pelo link.
+  - Como origem, o gateway do ExpressRoute e o anexo VLAN do Dedicated Interconnect
+    entram a zero em todos os destinos: a taxa da porta do destino já cobre o que o link
+    precisa.
+  - A taxa do parceiro de conectividade (operadora, colocation) fica fora nas quatro.
+  - Ficam ao custo atual, em `dedicated_link_other`:
+    - circuitos Unlimited, Premium, Local e Global Reach;
+    - portas Metro e de outras velocidades (50 Mbps a 5 Gbps, 400 Gbps);
+    - Cross-Cloud Interconnect e a versão MPS;
+    - a porta de tarifa fixa da AWS.
+  - A saída pelo link deixa o egress: o ExpressRoute e o Interconnect caíam na taxa de
+    internet (US$ 0,087 a 0,12 por GB, contra 0,02 a 0,025).
+- **E, endpoint privado** (balde `private_endpoint`). VPC Endpoint de interface,
+  Private Endpoint da Azure, Private Service Connect:
+
+  | categoria | unidade | AWS | Azure | GCP | OCI |
+  |---|---|---|---|---|---|
+  | `private_endpoint_hours` | hora | US$ 0,01 | 0,01 | 0,01 | 0 |
+  | `private_endpoint_data` | GB | 0,01 | 0,01 | 0,01 | 0 |
+
+  - A lista de preços da Oracle não tem item de endpoint privado.
+  - Ficam ao custo atual, em `private_endpoint_other`: endpoint de Gateway Load
+    Balancer, de recurso e de serviço da AWS, e o Fixed Private Endpoint da Azure.
+
+Fontes:
+- AWS Price List bulk us-east-1: `AWSLambda`, `AWSDirectConnect`, `AmazonVPC`.
+- Azure Retail Prices: Functions e Private Link (eastus e global); ExpressRoute (Zone 1,
+  consultado em 24/10).
+- Catálogo do GCP: Cloud Run Functions, Cloud Interconnect, Private Service Connect.
+- OCI cetools: B88325, B88326, B93126 (FastConnect), B90617 e B90618 (Functions).
+
+Premissas, declaradas:
+- **Sem camada gratuita no destino**, como nas outras categorias. Na Lambda, ela vale
+  US$ 6,67 por mês.
+- **Function de 1 GiB com a CPU padrão** na taxa do GCP e na linha de CPU a zero.
+- **Link sem a taxa do parceiro** e com um gateway ou anexo por link.
+
+### 8.3 Análise de impacto
+
+| quem consome | o que muda | risco | como fica coberto |
+|---|---|---|---|
+| `reclassificacao_por_uso` | baldes `functions`, `dedicated_link` e `private_endpoint`; a Lambda, as Functions da Azure e da OCI e as Cloud Run functions saem de `serverless` | levar linha de outro serviço (Cloud Run, endpoint do Container Apps, SQS) | padrão pelo nome do serviço; teste por nuvem e dos vizinhos |
+| `categoria_por_uso` | 13 categorias novas; na Azure, pela unidade da regra; na OCI, pelo rótulo da unidade | escala da quantidade | preço implícito na origem igual à taxa de referência, por categoria, na fatura típica |
+| `rede_por_uso` | rótulos novos da OCI (GB memory-seconds, invocações, chamadas de API) | nenhum para as categorias de rede | só converte o que tem a dimensão da categoria |
+| correção do §7 | a chamada da OCI cai 1 milhão de vezes; a classe fria vai para `objeto_requisicoes_outros` | cobertura cair um pouco | medido; o custo cotado fica certo |
+| egress | a saída pelo ExpressRoute e pelo Interconnect sai do `egresso_rede` | egress cair | o mesmo custo, cotado pela taxa do link |
+| taxas (`seed_category_rates`) | 40 taxas novas, referência, e a data de 24/10 | confiança cair | medido; rodar o seed das categorias no develop e na produção |
+| payload | chaves novas (`funcoes_*`, `link_dedicado_*`, `endpoint_privado_*` e os `equivalentes_`); `computacao_serverless` e `rede_outros` diminuem | o agente somar errado | aditivo; a autoridade manda no número; nota ao MCP |
+| `equivalence_pricing` | rótulos novos | hash da autoridade | troca o hash sem subir a versão, como antes |
+| Terraform | aviso de que Functions, link e endpoint não viram recurso | criar recurso errado | o pacote não cria; o aviso diz o que criar à parte |
+| decisão e cobertura | o custo cotado sobe onde há esses serviços; na OCI como origem, a decisão volta a existir | decisão mudar | medido nas faturas típicas e na regressão |
+
+### 8.4 Resultado (24/10)
+
+Medido como no §4: develop (`894d0bc`, o mesmo código da produção) contra a branch
+carregada no mesmo processo. As faturas típicas ganharam as linhas deste lote; o S3 do
+gerador saía com o preço do SQS (mesmo UsageType), e o Blob e o Cloud Storage com a
+classe fria.
+
+| fatura típica | custo cotado antes | depois | destinos antes → depois |
+|---|---|---|---|
+| AWS | 77,0% | 81,3% | OCI 4.979 → 4.858; GCP 8.510 → 8.501; Azure 8.720 → 9.078 |
+| Azure | 72,9% | 84,1% | OCI 3.709 → 3.116; AWS 5.360 → 4.875; GCP 5.377 → 4.880 |
+| GCP | 82,5% | 89,2% | OCI 3.550 → 3.467; AWS 5.711 → 5.656; Azure 5.788 → 6.094 |
+| OCI | 91,0% | 96,8% | GCP, AWS e Azure: 15 a 17,5 milhões → 6.606 a 6.712 |
+
+- O preço implícito na origem bate com a taxa de referência da própria nuvem em todas
+  as categorias. A exceção é a memória das Functions do GCP: a CPU está na outra linha,
+  cotada a zero, e as duas linhas somadas (US$ 99) batem com o destino (US$ 100).
+- No GCP, o dado do Interconnect saiu do egress de internet: o egress cotado no destino
+  caiu de US$ 153 para 63. O Private Service Connect saiu de "não classificado".
+- Na Azure, o link de 1 Gbps de origem (circuito 436 + gateway 264) vira a porta do
+  destino (AWS 219). Como destino, a Azure custa o circuito mais o gateway (575).
+
+Regressão (faturas reais e mocks):
+- decisão igual nas oito;
+- AWS Cost Explorer real e mock do CUR: cobertura +0,16 ponto (Lambda cotada); economia
+  na OCI +US$ 146; score +0,07;
+- as outras seis: iguais.
+
+Testes de unidade: todos passando. Novo teste de ponta a ponta da OCI: o arquivo passa
+pelo parser real e a quantidade chega na unidade da categoria (o teste do §7 usava uma
+unidade inventada e não pegou a escala).

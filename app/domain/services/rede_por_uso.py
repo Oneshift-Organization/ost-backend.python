@@ -248,6 +248,18 @@ _UNIDADES: Mapping[str, tuple[str, Decimal]] = {
         for rotulo in ("gibibyte second", "gibibyte seconds", "gibibyte-second", "gib second")
     },
     **{rotulo: (GIB_HORA, _ESCALA_1) for rotulo in ("gibibyte hour", "gib hour")},
+    # OCI (PLANO_CONFERENCIA_DE_SERVICOS §8). O parser já multiplica a quantidade pelo
+    # número da unidade ("10,000 GB Memory-Seconds", "1,000,000 API Calls Per Month") e o
+    # rótulo chega sem ele; "1MIL" não é separado, e a quantidade continua em milhões
+    **{
+        rotulo: (GIB_HORA, _SEGUNDO_EM_HORA)
+        for rotulo in ("gb memory-seconds", "gb memory seconds")
+    },
+    **{
+        rotulo: (DEZ_MIL, _POR_DEZ_MIL)
+        for rotulo in ("api calls", "api calls per month", "function invocations")
+    },
+    "1mil function invocations": (DEZ_MIL, Decimal(100)),
 }
 
 

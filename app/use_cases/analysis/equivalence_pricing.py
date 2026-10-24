@@ -58,6 +58,17 @@ _CATEGORIES = {
     "objeto_requisicoes_escrita": ("Requisições de escrita (objeto)", {"object_storage"}),
     "objeto_requisicoes_leitura": ("Requisições de leitura (objeto)", {"object_storage"}),
     "arquivos_capacidade": ("Armazenamento de arquivos", {"file_storage"}),
+    # PLANO_CONFERENCIA_DE_SERVICOS §8: Functions, link dedicado e endpoint privado
+    "funcoes_computacao": ("Execução de functions (GB-segundo)", {"function_as_a_service"}),
+    "funcoes_cpu": ("CPU de functions cobrada à parte", {"function_as_a_service"}),
+    "funcoes_requisicoes": ("Chamadas de functions", {"function_as_a_service"}),
+    "link_dedicado_1g": ("Link dedicado de 1 Gbps", {"dedicated_interconnect"}),
+    "link_dedicado_10g": ("Link dedicado de 10 Gbps", {"dedicated_interconnect"}),
+    "link_dedicado_100g": ("Link dedicado de 100 Gbps", {"dedicated_interconnect"}),
+    "link_dedicado_dados": ("Saída pelo link dedicado", {"dedicated_interconnect"}),
+    "link_dedicado_gateway": ("Gateway e anexo do link dedicado", {"dedicated_interconnect"}),
+    "endpoint_privado_horas": ("Endpoint privado (hora)", {"private_connectivity"}),
+    "endpoint_privado_dados": ("Dados do endpoint privado", {"private_connectivity"}),
 }
 
 
