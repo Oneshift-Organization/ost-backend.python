@@ -66,7 +66,9 @@ async def test_aws_separa_nat_balanceador_ip_e_egress() -> None:
     assert aux.load_balancer_data == Decimal("8")
     assert aux.public_ip == Decimal("3.65")
     assert aux.network_egress == Decimal("90")
-    assert aux.network_other == Decimal("7.30")
+    # Endpoint de interface tem categoria própria (§8 da conferência), fora da rede
+    assert aux.network_other == Decimal("0")
+    assert aux.por_uso["private_endpoint_hours"] == Decimal("7.30")
     # A quantidade vai para a região da linha (prefixo do UsageType)
     assert aux.quantidade_por_regiao["nat_gateway"] == {"sa-east-1": Decimal("730")}
     assert aux.medido_por_regiao["nat_gateway"] == {"sa-east-1": Decimal("67.89")}

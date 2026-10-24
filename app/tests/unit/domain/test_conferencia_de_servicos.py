@@ -23,6 +23,19 @@ from app.domain.services.categoria_por_uso import (
     API_REQUISICOES,
     ARQUIVOS,
     ARQUIVOS_CAPACIDADE,
+    ENDPOINT_DADOS,
+    ENDPOINT_HORAS,
+    ENDPOINT_OUTROS,
+    FUNCAO_COMPUTE,
+    FUNCAO_CPU,
+    FUNCAO_REQUISICOES,
+    FUNCOES_OUTROS,
+    LINK_1G,
+    LINK_10G,
+    LINK_100G,
+    LINK_DADOS,
+    LINK_GATEWAY,
+    LINK_OUTROS,
     OBJETO_ESCRITA,
     OBJETO_LEITURA,
     OBJETO_OUTROS,
@@ -426,7 +439,8 @@ async def test_app_service_vira_pool_estimado() -> None:
 
 
 CASOS_DO_LOTE_2 = [
-    # API Gateway: chamada da AWS contada uma a uma; a Azure em 10 mil; a OCI em 1 milhão
+    # API Gateway: chamada da AWS contada uma a uma; a Azure em 10 mil; a OCI já chega do
+    # parser em chamadas, com o número da unidade separado (§8)
     (
         ("api_gateway", "aws", "AmazonApiGateway", "USE1-ApiGatewayRequest", "20000", "Requests"),
         API_REQUISICOES,
@@ -450,7 +464,14 @@ CASOS_DO_LOTE_2 = [
         "300",
     ),
     (
-        ("api_gateway", "oci", "API_GATEWAY", "API Gateway  - 1,000,000 API Calls", "3", "x"),
+        (
+            "api_gateway",
+            "oci",
+            "API_GATEWAY",
+            "API Gateway  - 1,000,000 API Calls",
+            "3000000",
+            "API Calls Per Month",
+        ),
         API_REQUISICOES,
         "300",
     ),
@@ -608,3 +629,485 @@ def test_taxas_do_lote_2() -> None:
     for categoria in (API_REQUISICOES, OBJETO_ESCRITA, OBJETO_LEITURA, ARQUIVOS_CAPACIDADE):
         for prov in ("aws", "azure", "gcp", "oci"):
             assert taxas[(prov, categoria)].unit == UNIDADE[categoria], (prov, categoria)
+
+
+# ── Lote 3 (§8): Functions, link dedicado e endpoint privado ─────────────
+
+_GIB_HORA_DE = Decimal(1) / Decimal(3600)
+
+CASOS_DO_LOTE_3 = [
+    # Functions: memória vezes tempo em GiB-hora; a chamada em 10 mil
+    (
+        ("functions", "aws", "AWSLambda", "USE1-Lambda-GB-Second", "3600000", "Lambda-GB-Second"),
+        FUNCAO_COMPUTE,
+        "1000",
+    ),
+    (
+        ("functions", "aws", "AWSLambda", "EUC1-Lambda-GB-Second-ARM", "36000", None),
+        FUNCAO_COMPUTE,
+        "10",
+    ),
+    (
+        ("functions", "aws", "AWSLambda", "USE1-Request", "40000000", "Requests"),
+        FUNCAO_REQUISICOES,
+        "4000",
+    ),
+    (("functions", "aws", "AWSLambda", "Request-ARM", "10000", None), FUNCAO_REQUISICOES, "1"),
+    # Concorrência provisionada e Edge ficam ao custo atual
+    (
+        ("functions", "aws", "AWSLambda", "USE1-Lambda-Provisioned-GB-Second", "1", None),
+        FUNCOES_OUTROS,
+        None,
+    ),
+    (
+        ("functions", "aws", "AWSLambda", "USE1-Lambda-Edge-Request", "1", None),
+        FUNCOES_OUTROS,
+        None,
+    ),
+    # Azure: a quantidade vem na unidade da Retail Prices API (GB-segundo; execução em 10)
+    (
+        (
+            "functions",
+            "azure",
+            "Functions",
+            "Functions | Functions | Standard Execution Time",
+            "1800000",
+            "x",
+        ),
+        FUNCAO_COMPUTE,
+        "500",
+    ),
+    (
+        (
+            "functions",
+            "azure",
+            "Functions",
+            "Functions | Flex Consumption | On Demand Total Executions",
+            "50000",
+            "x",
+        ),
+        FUNCAO_REQUISICOES,
+        "50",
+    ),
+    (
+        (
+            "functions",
+            "azure",
+            "Functions",
+            "Functions | Premium Functions | Premium vCPU Duration",
+            "730",
+            "1 Hour",
+        ),
+        FUNCOES_OUTROS,
+        None,
+    ),
+    # GCP: CPU à parte (a zero no destino); instância mínima fica
+    (
+        (
+            "functions",
+            "gcp",
+            "Cloud Run Functions",
+            "Cloud Run functions Memory (Request-based billing) in us-central1",
+            "7200",
+            "gibibyte second",
+        ),
+        FUNCAO_COMPUTE,
+        "2",
+    ),
+    (
+        (
+            "functions",
+            "gcp",
+            "Cloud Run Functions",
+            "Cloud Run functions CPU (Request-based billing) in us-central1",
+            "3600",
+            "second",
+        ),
+        FUNCAO_CPU,
+        "1",
+    ),
+    (
+        (
+            "functions",
+            "gcp",
+            "Cloud Run Functions",
+            "Cloud Run Functions Invocations",
+            "20000",
+            "count",
+        ),
+        FUNCAO_REQUISICOES,
+        "2",
+    ),
+    (
+        (
+            "functions",
+            "gcp",
+            "Cloud Run Functions",
+            "Cloud Run functions Min-Instance Memory (Request-based billing) in us-central1",
+            "3600",
+            "gibibyte second",
+        ),
+        FUNCOES_OUTROS,
+        None,
+    ),
+    # Link dedicado: porta por velocidade e saída pelo link
+    (
+        ("dedicated_link", "aws", "AWSDirectConnect", "USE1-165HS-PortUsage:1G", "744", None),
+        LINK_1G,
+        "744",
+    ),
+    (
+        ("dedicated_link", "aws", "AWSDirectConnect", "USE1-165HS-HCPortUsage:10G", "744", None),
+        LINK_10G,
+        "744",
+    ),
+    (
+        ("dedicated_link", "aws", "AWSDirectConnect", "USE1-165HS-PortUsage:100G", "1", None),
+        LINK_100G,
+        "1",
+    ),
+    (
+        ("dedicated_link", "aws", "AWSDirectConnect", "USE1-165HS-DataXfer-Out:dc.3", "500", None),
+        LINK_DADOS,
+        "500",
+    ),
+    # Tarifa fixa, hospedada de 500 Mbps e o `:dxfr` (US$ 0) ficam
+    (
+        (
+            "dedicated_link",
+            "aws",
+            "AWSDirectConnect",
+            "USE1-165HS-FlatRatePortUsage:10G-Tier1",
+            "1",
+            None,
+        ),
+        LINK_OUTROS,
+        None,
+    ),
+    (
+        ("dedicated_link", "aws", "AWSDirectConnect", "USE1-165HS-HCPortUsage:500M", "1", None),
+        LINK_OUTROS,
+        None,
+    ),
+    (
+        ("dedicated_link", "aws", "AWSDirectConnect", "USE1-AEBTF-DataXfer-Out:dxfr", "1", None),
+        LINK_OUTROS,
+        None,
+    ),
+    # Azure: o circuito vem em mês
+    (
+        (
+            "dedicated_link",
+            "azure",
+            "ExpressRoute",
+            "ExpressRoute | ExpressRoute | Standard Metered Data 1 Gbps Circuit",
+            "1",
+            "1/Month",
+        ),
+        LINK_1G,
+        "730",
+    ),
+    (
+        (
+            "dedicated_link",
+            "azure",
+            "ExpressRoute",
+            "ExpressRoute | ExpressRoute Direct | Port 100 Gbps Port",
+            "0.5",
+            "1/Month",
+        ),
+        LINK_100G,
+        "365.0",
+    ),
+    (
+        (
+            "dedicated_link",
+            "azure",
+            "ExpressRoute",
+            "ExpressRoute | ExpressRoute | Metered Data - Data Transfer Out",
+            "200",
+            "1 GB",
+        ),
+        LINK_DADOS,
+        "200",
+    ),
+    (
+        (
+            "dedicated_link",
+            "azure",
+            "ExpressRoute",
+            "ExpressRoute | ExpressRoute Gateway | ErGw1AZ Gateway",
+            "730",
+            "1 Hour",
+        ),
+        LINK_GATEWAY,
+        "730",
+    ),
+    (
+        (
+            "dedicated_link",
+            "azure",
+            "ExpressRoute",
+            "ExpressRoute | ExpressRoute | Premium Metered Data 10 Gbps Circuit",
+            "1",
+            "1/Month",
+        ),
+        LINK_OUTROS,
+        None,
+    ),
+    (
+        (
+            "dedicated_link",
+            "azure",
+            "ExpressRoute",
+            "ExpressRoute | ExpressRoute | Standard Unlimited Data 10 Gbps Circuit",
+            "1",
+            "1/Month",
+        ),
+        LINK_OUTROS,
+        None,
+    ),
+    # GCP: anexo do Partner, circuito dedicado, anexo do Dedicated (a zero) e saída
+    (
+        (
+            "dedicated_link",
+            "gcp",
+            "Networking",
+            "Cloud Interconnect - 1Gbps VLAN attachment via Google partner",
+            "744",
+            "hour",
+        ),
+        LINK_1G,
+        "744",
+    ),
+    (
+        (
+            "dedicated_link",
+            "gcp",
+            "Networking",
+            "Cloud Interconnect - 10Gbps Dedicated circuit",
+            "744",
+            "hour",
+        ),
+        LINK_10G,
+        "744",
+    ),
+    (
+        (
+            "dedicated_link",
+            "gcp",
+            "Networking",
+            "Cloud Interconnect - 10Gbps VLAN attachment via Dedicated Interconnect",
+            "744",
+            "hour",
+        ),
+        LINK_GATEWAY,
+        "744",
+    ),
+    (
+        (
+            "dedicated_link",
+            "gcp",
+            "Networking",
+            "Cloud Interconnect - Local Data Transfer in UnitedStates",
+            "300",
+            "gibibyte",
+        ),
+        LINK_DADOS,
+        "300",
+    ),
+    (
+        (
+            "dedicated_link",
+            "gcp",
+            "Networking",
+            "Cloud Interconnect for MPS - 10Gbps Dedicated circuit",
+            "744",
+            "hour",
+        ),
+        LINK_OUTROS,
+        None,
+    ),
+    (
+        ("dedicated_link", "oci", "NETWORK", "OCI - FastConnect 10 Gbps", "744", "hours"),
+        LINK_10G,
+        "744",
+    ),
+    (
+        ("dedicated_link", "oci", "NETWORK", "OCI - FastConnect 400 Gbps", "744", "hours"),
+        LINK_OUTROS,
+        None,
+    ),
+    # Endpoint privado por hora e GB
+    (
+        ("private_endpoint", "aws", "AmazonVPC", "USE1-VpcEndpoint-Hours", "2200", None),
+        ENDPOINT_HORAS,
+        "2200",
+    ),
+    (
+        ("private_endpoint", "aws", "AmazonVPC", "USE1-VpcEndpoint-Bytes", "600", None),
+        ENDPOINT_DADOS,
+        "600",
+    ),
+    (
+        (
+            "private_endpoint",
+            "azure",
+            "Virtual Network",
+            "Virtual Network | Virtual Network Private Link | Standard Private Endpoint",
+            "730",
+            "1 Hour",
+        ),
+        ENDPOINT_HORAS,
+        "730",
+    ),
+    (
+        (
+            "private_endpoint",
+            "azure",
+            "Virtual Network",
+            "Virtual Network | Virtual Network Private Link | Standard Data Processed - Egress",
+            "50",
+            "1 GB",
+        ),
+        ENDPOINT_DADOS,
+        "50",
+    ),
+    (
+        (
+            "private_endpoint",
+            "gcp",
+            "Networking",
+            "Networking Private Service Connect Consumer End Point",
+            "744",
+            "hour",
+        ),
+        ENDPOINT_HORAS,
+        "744",
+    ),
+    (
+        (
+            "private_endpoint",
+            "gcp",
+            "Networking",
+            "Networking Private Service Connect Consumer Data Processing",
+            "80",
+            "gibibyte",
+        ),
+        ENDPOINT_DADOS,
+        "80",
+    ),
+    (
+        (
+            "private_endpoint",
+            "gcp",
+            "Networking",
+            "Network Private Service Connect Google Managed Service GKE"
+            " Consumer Data Processing Primary",
+            "80",
+            "gibibyte",
+        ),
+        ENDPOINT_OUTROS,
+        None,
+    ),
+]
+
+
+@pytest.mark.parametrize(("linha", "categoria", "medida"), CASOS_DO_LOTE_3)
+def test_lote_3_categoria_e_quantidade(linha, categoria, medida) -> None:
+    balde, provedor, servico, uso, quantidade, unidade = linha
+    tipo = tipo_por_uso(balde, provedor, servico, uso)
+    assert tipo.categoria == categoria
+    valor = quantidade_por_uso(provedor, tipo, Decimal(quantidade), unidade)
+    assert valor == (Decimal(medida) if medida else None)
+
+
+@pytest.mark.parametrize(
+    ("provedor", "servico", "uso", "esperado"),
+    [
+        ("aws", "AWSLambda", "USE1-Lambda-GB-Second", "functions"),
+        ("aws", "AWSDirectConnect", "USE1-165HS-DataXfer-Out", "dedicated_link"),
+        ("aws", "AmazonVPC", "USE1-VpcEndpoint-Bytes", "private_endpoint"),
+        # Vizinhos: VPN e Transit Gateway seguem na rede; a requisição do SQS não é do S3
+        ("aws", "AmazonVPC", "USE1-VPN-Usage-Hours:ipsec.1", "network_egress"),
+        ("aws", "AmazonVPC", "USE1-TransitGateway-Hours", "network_egress"),
+        ("aws", "AWSQueueService", "USE1-Requests-Tier1", "unclassified"),
+        ("azure", "Functions", "Functions | Functions | Standard Execution Time", "functions"),
+        (
+            "azure",
+            "ExpressRoute",
+            "ExpressRoute | ExpressRoute | Standard Metered Data 1 Gbps Circuit",
+            "dedicated_link",
+        ),
+        (
+            "azure",
+            "Azure Container Apps",
+            "Azure Container Apps | Standard | Standard Requests",
+            "serverless",
+        ),
+        ("gcp", "Cloud Run Functions", "Cloud Run Functions Invocations", "functions"),
+        ("gcp", "Cloud Run", "Services CPU (Request-based billing)", "serverless"),
+        (
+            "gcp",
+            "Compute Engine",
+            "Cloud Interconnect - 10Gbps Dedicated circuit",
+            "dedicated_link",
+        ),
+        ("oci", "FUNCTIONS", "Oracle Functions - Invocations", "functions"),
+        ("oci", "NETWORK", "OCI - FastConnect 1 Gbps", "dedicated_link"),
+    ],
+)
+def test_lote_3_reclassificacao(provedor, servico, uso, esperado) -> None:
+    antes = {
+        "USE1-VPN-Usage-Hours:ipsec.1": "network_egress",
+        "USE1-TransitGateway-Hours": "network_egress",
+    }
+    assert reclassificar(provedor, servico, uso, antes.get(uso, "unclassified")) == esperado
+
+
+@pytest.mark.parametrize(
+    ("provedor", "servico", "uso", "unidade"),
+    [
+        # A escrita da classe fria custa de 2 a 7 vezes a da padrão: fica ao custo atual (§8)
+        ("aws", "AmazonS3", "USE1-Requests-SIA-Tier1", None),
+        ("aws", "AmazonS3", "USE1-Requests-GLACIER-Tier1", None),
+        ("aws", "AmazonS3", "USE1-Requests-BACKUP-Tier1", None),
+        ("azure", "Storage", "Storage | Blob Storage | Archive GRS Write Operations", "10K"),
+        ("azure", "Storage", "Storage | General Block Blob v2 | Cool LRS Read Operations", "10K"),
+        (
+            "gcp",
+            "Cloud Storage",
+            "Multi-Region Durable Reduced Availability Class A Operations",
+            "count",
+        ),
+        ("gcp", "Cloud Storage", "Coldline Storage Class B Operations", "count"),
+    ],
+)
+def test_requisicao_da_classe_fria_fica_ao_custo_atual(provedor, servico, uso, unidade) -> None:
+    tipo = tipo_por_uso("object_requests", provedor, servico, uso)
+    assert tipo.categoria == OBJETO_OUTROS
+    assert quantidade_por_uso(provedor, tipo, Decimal(1000), unidade) is None
+
+
+def test_taxas_do_lote_3() -> None:
+    taxas = {(p.provider, p.service_type): p for p in category_rate_points()}
+    cotadas = (
+        FUNCAO_COMPUTE,
+        FUNCAO_CPU,
+        FUNCAO_REQUISICOES,
+        LINK_1G,
+        LINK_10G,
+        LINK_100G,
+        LINK_DADOS,
+        LINK_GATEWAY,
+        ENDPOINT_HORAS,
+        ENDPOINT_DADOS,
+    )
+    for categoria in cotadas:
+        for prov in ("aws", "azure", "gcp", "oci"):
+            assert taxas[(prov, categoria)].unit == UNIDADE[categoria], (prov, categoria)
+    # O que o GB-segundo do destino ou a porta já cobrem entra a zero em todos
+    for categoria in (FUNCAO_CPU, LINK_GATEWAY):
+        assert {taxas[(p, categoria)].price for p in ("aws", "azure", "gcp", "oci")} == {Decimal(0)}
+    # A taxa do GB-segundo é o preço publicado por GiB-segundo vezes 3.600
+    assert taxas[("aws", FUNCAO_COMPUTE)].price == Decimal("0.06")

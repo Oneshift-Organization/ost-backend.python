@@ -314,6 +314,65 @@ _RATES: tuple[tuple[str, str, str, str], ...] = (
     ("azure", "file_storage_capacity", "gb_month", "0.16"),
     ("gcp", "file_storage_capacity", "gb_month", "0.30"),
     ("oci", "file_storage_capacity", "gb_month", "0.30"),
+    # Lote 3 (PLANO_CONFERENCIA_DE_SERVICOS §8), conferidos em 24/10/2026: AWS Price List
+    # bulk us-east-1 (AWSLambda, AWSDirectConnect, AmazonVPC); Azure Retail Prices
+    # (Functions e Private Link em eastus e global, ExpressRoute na Zone 1); catálogo do
+    # GCP (Cloud Run Functions, Cloud Interconnect, Private Service Connect); OCI cetools
+    # (B90617, B90618, B88325, B88326, B93126).
+    # Function por GiB-hora (GB-segundo x 3.600): Lambda x86, Consumption da Azure, Oracle
+    # Functions. O GCP cobra CPU à parte: função de 1 GiB com a CPU padrão (0,583 vCPU),
+    # 0,0000025 + 0,583 x 0,000024 por GiB-segundo
+    ("aws", "function_compute", "gib_hour", "0.06"),
+    ("azure", "function_compute", "gib_hour", "0.0576"),
+    ("gcp", "function_compute", "gib_hour", "0.0594"),
+    ("oci", "function_compute", "gib_hour", "0.051"),
+    # Chamada, por 10 mil (US$ 0,20 por milhão; GCP 0,40)
+    ("aws", "function_requests", "10k", "0.002"),
+    ("azure", "function_requests", "10k", "0.002"),
+    ("gcp", "function_requests", "10k", "0.004"),
+    ("oci", "function_requests", "10k", "0.002"),
+    # CPU cobrada à parte (só o GCP): o GB-segundo de cada destino já a inclui
+    ("aws", "function_cpu", "hour", "0"),
+    ("azure", "function_cpu", "hour", "0"),
+    ("gcp", "function_cpu", "hour", "0"),
+    ("oci", "function_cpu", "hour", "0"),
+    # Link dedicado por hora, sem a taxa do parceiro. AWS: porta dedicada. Azure: circuito
+    # Standard Metered (1 e 10 Gbps: 436 e 3.400 por mês) ou porta do ExpressRoute Direct
+    # (100 Gbps: 50.000 por mês), mais o gateway (Standard 0,19/h para 1 Gbps; Ultra
+    # Performance 1,87/h para os outros). GCP: anexo do Partner (1 Gbps) ou circuito
+    # dedicado mais anexo VLAN (2,328 + 0,10 e 23,28 + 1,00). OCI: porta do FastConnect
+    ("aws", "dedicated_link_1g", "hour", "0.30"),
+    ("azure", "dedicated_link_1g", "hour", "0.7873"),
+    ("gcp", "dedicated_link_1g", "hour", "0.2778"),
+    ("oci", "dedicated_link_1g", "hour", "0.2125"),
+    ("aws", "dedicated_link_10g", "hour", "2.25"),
+    ("azure", "dedicated_link_10g", "hour", "6.5275"),
+    ("gcp", "dedicated_link_10g", "hour", "2.428"),
+    ("oci", "dedicated_link_10g", "hour", "1.275"),
+    ("aws", "dedicated_link_100g", "hour", "22.50"),
+    ("azure", "dedicated_link_100g", "hour", "70.3632"),
+    ("gcp", "dedicated_link_100g", "hour", "24.28"),
+    ("oci", "dedicated_link_100g", "hour", "10.75"),
+    # Saída pelo link, por GB, América do Norte. A OCI não cobra o dado do FastConnect
+    ("aws", "dedicated_link_data", "gb", "0.02"),
+    ("azure", "dedicated_link_data", "gb", "0.025"),
+    ("gcp", "dedicated_link_data", "gb", "0.02"),
+    ("oci", "dedicated_link_data", "gb", "0"),
+    # Gateway do ExpressRoute e anexo do Dedicated Interconnect, como origem: a taxa da
+    # porta de cada destino já cobre o que o link precisa
+    ("aws", "dedicated_link_gateway", "hour", "0"),
+    ("azure", "dedicated_link_gateway", "hour", "0"),
+    ("gcp", "dedicated_link_gateway", "hour", "0"),
+    ("oci", "dedicated_link_gateway", "hour", "0"),
+    # Endpoint privado por hora e dado processado. A lista de preços da Oracle não tem item
+    ("aws", "private_endpoint_hours", "hour", "0.01"),
+    ("azure", "private_endpoint_hours", "hour", "0.01"),
+    ("gcp", "private_endpoint_hours", "hour", "0.01"),
+    ("oci", "private_endpoint_hours", "hour", "0"),
+    ("aws", "private_endpoint_data", "gb", "0.01"),
+    ("azure", "private_endpoint_data", "gb", "0.01"),
+    ("gcp", "private_endpoint_data", "gb", "0.01"),
+    ("oci", "private_endpoint_data", "gb", "0"),
 )
 
 
@@ -346,6 +405,12 @@ _CONFERIDO_EM: dict[tuple[str, str], date] = {
            "serverless_vcpu_active", "serverless_vcpu_idle", "serverless_memory_active",
            "serverless_memory_idle", "serverless_requests", "api_requests",
            "object_requests_write", "object_requests_read", "file_storage_capacity",
+       )},
+    **{(p, c): date(2026, 10, 24) for p in ("aws", "gcp", "azure", "oci")
+       for c in (
+           "function_compute", "function_requests", "function_cpu", "dedicated_link_1g",
+           "dedicated_link_10g", "dedicated_link_100g", "dedicated_link_data",
+           "dedicated_link_gateway", "private_endpoint_hours", "private_endpoint_data",
        )},
 }
 _REDE_CONFERIDA_EM = date(2026, 10, 16)
