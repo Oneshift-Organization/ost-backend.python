@@ -500,6 +500,10 @@ def _diagnostico_de_entrada(
     return DiagnosticoDeEntradaOut.de(d) if d.problemas else None
 
 
+# A análise compartilhada numa instituição mostra o mesmo diagnóstico
+diagnostico_da_analise = _diagnostico_de_entrada
+
+
 def _erro(
     status_code: int,
     codigo: str,

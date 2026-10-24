@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import Any, Protocol
 from uuid import UUID
 
-from app.domain.entities.institution import InstitutionProfile, InstitutionRole
+from app.domain.entities.institution import (
+    InstitutionRole,
+    InstitutionView,
+    SharedAnalysisAccess,
+)
 
 
 class IInstitutionRepository(Protocol):
@@ -23,7 +27,7 @@ class IInstitutionRepository(Protocol):
         target: UUID,
         *,
         role: InstitutionRole,
-        profile: InstitutionProfile,
+        views: frozenset[InstitutionView],
         can_publish: bool,
     ) -> None: ...
     async def remove_member(self, actor: UUID, institution_id: UUID, target: UUID) -> None: ...
@@ -39,4 +43,11 @@ class IInstitutionRepository(Protocol):
     async def publication(
         self, actor: UUID, institution_id: UUID, publication_id: UUID
     ) -> dict[str, Any]: ...
+    async def shared_analysis(
+        self,
+        actor: UUID,
+        institution_id: UUID,
+        publication_id: UUID,
+        requested: frozenset[InstitutionView] | None = None,
+    ) -> SharedAnalysisAccess: ...
     async def unpublish(self, actor: UUID, institution_id: UUID, publication_id: UUID) -> None: ...

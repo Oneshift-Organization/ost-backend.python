@@ -19,11 +19,39 @@
   brutas, IDs de inventário, fingerprint ou comandos. Nomes de workloads e os textos
   dos pareceres fazem parte do conteúdo explicitamente compartilhado.
 - Publicações `institution-summary-v1` continuam imutáveis e legíveis. Não há backfill
-  nem leitura da análise pessoal ao consultar o painel. Para incluir os novos detalhes,
+  do resumo. (Desde 24/10/2026 a análise publicada é lida para a tela completa:
+  ver "Análise completa e visões combináveis".) Para incluir os novos detalhes,
   o autor retira e publica novamente, com confirmação do escopo ampliado. Repetir POST
   sem retirar a publicação continua retornando a mesma cópia.
 - Esta evolução só amplia o JSONB publicado; não exige nova migration nem chamada de IA.
 - Nenhuma soma de publicações: diferentes análises podem cobrir a mesma fatura.
+
+### Análise completa e visões combináveis (24/10/2026)
+
+Mudança de decisão, a pedido do usuário: quem abre a análise de outro membro vê
+**a mesma tela de 5 abas** do autor, não o resumo. Três rotas leem a análise
+publicada, autorizadas pela publicação, com o mesmo formato das rotas pessoais:
+`…/analysis` (como `/analyses/{job_id}/result`), `…/service-couplings` e
+`…/applications`. Continua não havendo acesso à fatura, ao inventário ou às ações
+do autor (reanálise, inventário, Terraform). O `snapshot` segue servindo à lista
+da instituição e é o que aparece se a análise original deixar de existir (404 em
+`…/analysis`).
+
+Cada membro tem **visões** combináveis (`views`): `financial`, `technical`,
+`strategic`. O recorte é feito no backend (`domain/entities/institution_views.py`),
+então o que a visão não mostra não sai da API:
+
+| Sem a visão | Sai da resposta |
+|---|---|
+| Financeira | Todo número em campo de custo, economia, preço ou payback vira `null` (inclusive em `service-couplings` e `applications`); valores citados nos textos viram `[valor restrito]`; saem `billing_baseline`, `savings_by_source`, `pricing_reconciliation`, `comparison_basis`, `corporate_benefits`, `pricing_evidence` e o parecer `finops`; do payload só sai a nuvem de origem |
+| Técnica | `cross_cloud_equivalents`, `workload_strategies` e o parecer `cloud_engineering`; `applications` responde 403 |
+| Estratégica | Racional, notas, plano de ação, `selection_reason` e o parecer `risk_migration` |
+
+`service-couplings` abre com a visão financeira (aba Ambiente atual) ou a técnica
+(Portabilidade); sem nenhuma das duas, 403. Score e recomendação são de todos, como
+na lista. Administradores e o autor veem tudo. `?views=` restringe (o "Ver como"
+do administrador), nunca amplia. Fica no recorte a fração de cada serviço no gasto
+(`servicos[].fracao`), que a tela só mostra com a visão financeira.
 
 ## Acesso
 
@@ -42,9 +70,10 @@ permissão para usar o ID de outro usuário nas APIs existentes.
 | Renomear/excluir instituição; remover membros | Sim | Não |
 | Sair da instituição | Se outro administrador permanecer | Sim |
 
-`profile` é apenas o foco de apresentação: `administrative`, `financial`,
-`strategic`, `economist`, `technical`. Não concede permissões. Um administrador
-pode pré-visualizar qualquer foco. Não há visões personalizadas por IA.
+`views` é o recorte da análise compartilhada (acima); não concede ações. `profile`
+(o perfil único de antes) continua na resposta e no banco, derivado das visões
+(uma visão é ela mesma; mais de uma, `administrative`), para clientes anteriores.
+Não há visões personalizadas por IA.
 
 ## Contratos
 
@@ -59,12 +88,15 @@ nome de exibição a 80. O nome é informado pelo usuário e não é identidade 
 | POST `/institutions/memberships` | `{code, display_name}` | 201, associação de consulta |
 | GET/PATCH/DELETE `/institutions/{id}` | PATCH: `{name}` | detalhe / 204 / 204 |
 | GET `/institutions/{id}/members` | — | membros, sem e-mails nem tokens |
-| PATCH `/institutions/{id}/members/{user_id}` | `{role, profile, can_publish}` | 204 |
+| PATCH `/institutions/{id}/members/{user_id}` | `{role, views, can_publish}` (`profile` no lugar de `views` ainda aceito) | 204 |
 | DELETE `/institutions/{id}/members/{user_id}` | — | 204 |
 | GET/POST `/institutions/{id}/invites` | — | lista / 201 com código uma única vez |
 | DELETE `/institutions/{id}/invites/{invite_id}` | — | 204, revoga convite |
 | GET/POST `/institutions/{id}/publications` | POST: `{job_id}` | lista / 201 com cópia |
 | GET/DELETE `/institutions/{id}/publications/{publication_id}` | — | cópia / 204 |
+| GET `/institutions/{id}/publications/{publication_id}/analysis` | `?views=` | análise recortada, ou 404 sem a original |
+| GET `/institutions/{id}/publications/{publication_id}/service-couplings` | `?views=` | serviços e acoplamento; 403 sem financeira nem técnica |
+| GET `/institutions/{id}/publications/{publication_id}/applications` | `?views=` | aplicações; 403 sem a técnica |
 
 Campos extras em requisições são recusados. O cliente não fornece `user_id`,
 snapshot ou permissão ao entrar. Convites usam 192 bits aleatórios, validade
@@ -102,6 +134,11 @@ transacional por usuário para não criar associações durante a limpeza.
    criar → convidar → entrar → publicar → consultar → revogar → receber 404.
 5. Verificar preservação das análises pessoais e exclusão bloqueada do último admin.
 
+Visões (24/10/2026): aplicar a migration `c0d1e2f3a4b5` **antes** da imagem nova
+(o deploy não roda migration). Ela cria `institution_members.views`, preenchida a
+partir de `profile`. Rollback: `alembic downgrade b9c0d1e2f3a4` antes de voltar a
+imagem; o `profile` continua gravado e a versão anterior segue lendo.
+
 Rollback da aplicação: voltar imagens anteriores e manter as tabelas.
 **Não executar downgrade depois de haver dados sem plano de preservação**:
 ele apaga as instituições e suas cópias. Não altera análises pessoais.
@@ -109,8 +146,10 @@ ele apaga as instituições e suas cópias. Não altera análises pessoais.
 ## Testes
 
 - Unitários: separação perfil/permissão, projeção/imutabilidade, ausência de
-  score, validação de payload, paginação, no-store e mapeamento de erros.
-- Integração PostgreSQL: isolamento entre usuários/instituições, convite
+  score, validação de payload, paginação, no-store e mapeamento de erros; o recorte
+  de cada uma das 7 combinações de visões (`test_institution_views.py`).
+- Integração PostgreSQL: visões gravadas, "Ver como" que não amplia, rota da
+  análise completa recortada e 404 depois de retirada; isolamento entre usuários/instituições, convite
   expirado/revogado/usado, publicação de análise alheia/em andamento, retirada,
   exclusão/limpeza e concorrência de convite e último administrador.
 - UI: cadastro continua com OAuth; a escolha institucional vem imediatamente

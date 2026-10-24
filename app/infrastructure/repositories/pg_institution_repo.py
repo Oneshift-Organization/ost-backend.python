@@ -11,10 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.domain.entities.institution import (
+    ALL_VIEWS,
     InstitutionProfile,
     InstitutionRole,
+    InstitutionView,
     Membership,
     PublicationSource,
+    SharedAnalysisAccess,
+    profile_of_views,
     protect_last_admin,
     publication_snapshot,
 )
@@ -43,11 +47,12 @@ def _membership(row: Member) -> Membership:
         InstitutionProfile(row.profile),
         row.can_publish,
         row.joined_at,
+        frozenset(InstitutionView(view) for view in row.views or ()),
     )
 
 
 def _member_dict(row: Member) -> dict[str, Any]:
-    return {
+    member = {
         key: getattr(row, key)
         for key in (
             "institution_id",
@@ -59,6 +64,13 @@ def _member_dict(row: Member) -> dict[str, Any]:
             "joined_at",
         )
     }
+    # O que o membro vê de fato: administrador, a análise inteira
+    member["views"] = sorted(_membership(row).visible_views())
+    return member
+
+
+def _stored(views: frozenset[InstitutionView]) -> list[str]:
+    return sorted(view.value for view in views)
 
 
 def _invite_dict(row: Invite) -> dict[str, Any]:
@@ -124,6 +136,7 @@ class PgInstitutionRepository:
                 display_name=display_name,
                 role="admin",
                 profile="administrative",
+                views=_stored(ALL_VIEWS),
                 can_publish=True,
                 joined_at=now,
             )
@@ -207,7 +220,7 @@ class PgInstitutionRepository:
         target: UUID,
         *,
         role: InstitutionRole,
-        profile: InstitutionProfile,
+        views: frozenset[InstitutionView],
         can_publish: bool,
     ) -> None:
         _, caller = await self._access(actor, institution_id)
@@ -224,7 +237,8 @@ class PgInstitutionRepository:
                 )
                 .values(revoked_at=datetime.now(UTC))
             )
-        member.role, member.profile, member.can_publish = role.value, profile.value, can_publish
+        member.role, member.can_publish = role.value, can_publish
+        member.views, member.profile = _stored(views), profile_of_views(views).value
         await self._s.flush()
 
     async def remove_member(self, actor: UUID, institution_id: UUID, target: UUID) -> None:
@@ -323,6 +337,7 @@ class PgInstitutionRepository:
                 display_name=display_name,
                 role="member",
                 profile="strategic",
+                views=[InstitutionView.STRATEGIC.value],
                 can_publish=False,
                 joined_at=now,
             )
@@ -407,6 +422,23 @@ class PgInstitutionRepository:
     ) -> dict[str, Any]:
         await self._access(actor, institution_id)
         return _publication_dict(await self._publication(institution_id, publication_id))
+
+    async def shared_analysis(
+        self,
+        actor: UUID,
+        institution_id: UUID,
+        publication_id: UUID,
+        requested: frozenset[InstitutionView] | None = None,
+    ) -> SharedAnalysisAccess:
+        """Quem é membro abre a análise publicada, recortada pelas suas visões.
+
+        `requested` restringe (o "Ver como"), nunca amplia. O autor vê a própria inteira.
+        """
+        _, member = await self._access(actor, institution_id)
+        row = await self._publication(institution_id, publication_id)
+        allowed = ALL_VIEWS if row.published_by == actor else _membership(member).visible_views()
+        views = allowed & requested if requested is not None else allowed
+        return SharedAnalysisAccess(row.published_by, row.source_job_id, views)
 
     async def unpublish(self, actor: UUID, institution_id: UUID, publication_id: UUID) -> None:
         _, member = await self._access(actor, institution_id)
