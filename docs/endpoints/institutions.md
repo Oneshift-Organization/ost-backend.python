@@ -52,11 +52,12 @@ todos, cada uma na profundidade das visões de quem abre. Score e recomendação
 todos, como na lista. Administradores e o autor veem tudo. `?views=` restringe (o
 "Ver como" do administrador), nunca amplia.
 
-**Uma página, na ordem da análise (26/10/2026).** A tela de 5 abas com cadeados
-ficou carregada. A análise de outro membro virou uma página só, com as 5 etapas na
-ordem (Ambiente atual → Portabilidade → Recomendação → Análise detalhada →
-Migração), sem cadeado: cada etapa mostra o que as visões de quem abre permitem, e
-toda etapa aparece para todos. A análise do próprio usuário continua em abas.
+**Todas as abas abertas, sem cadeado (26/10/2026).** As abas com cadeado ficaram
+carregadas. A análise de outro membro segue nas 5 abas da análise própria
+(Ambiente atual → Portabilidade → Recomendação → Análise detalhada → Migração),
+mas toda aba abre para todos: cada uma mostra o que as visões de quem abre
+permitem, e o que falta não aparece. Uma versão em página única foi testada e
+trocada de volta pelas abas no mesmo dia.
 
 ## Acesso
 
@@ -144,9 +145,9 @@ Visões (24/10/2026): aplicar a migration `c0d1e2f3a4b5` **antes** da imagem nov
 partir de `profile`. Rollback: `alembic downgrade b9c0d1e2f3a4` antes de voltar a
 imagem; o `profile` continua gravado e a versão anterior segue lendo.
 
-Uma página (26/10/2026): sem migration. Publicar o backend antes do frontend.
-Com o backend anterior, quem só tem a visão Estratégica recebe 403 em
-`service-couplings` e a página mostra Ambiente atual e Portabilidade sem a lista.
+Abas abertas a todos (26/10/2026): sem migration. Publicar o backend antes do
+frontend. Com o backend anterior, quem só tem a visão Estratégica recebe 403 em
+`service-couplings` e vê Ambiente atual e Portabilidade sem a lista.
 
 Rollback da aplicação: voltar imagens anteriores e manter as tabelas.
 **Não executar downgrade depois de haver dados sem plano de preservação**:
