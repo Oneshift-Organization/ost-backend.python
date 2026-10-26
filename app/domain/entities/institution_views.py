@@ -2,7 +2,8 @@
 
 O corte é aqui, não na tela: o que a visão não mostra não sai da API.
 - Sem a financeira: nenhum valor em dinheiro, nem nos números nem nos textos.
-- Sem a técnica: sem recursos, equivalentes, estratégias por recurso e o parecer do arquiteto.
+- Sem a técnica: os recursos só com nome, categoria e portabilidade; sem equivalentes,
+  estratégias por recurso, aplicações e o parecer do arquiteto.
 - Sem a estratégica: sem racional, notas, plano de ação e o parecer do estrategista.
 """
 
@@ -40,6 +41,22 @@ _AGENT_VIEW = {
 _FINANCIAL_ONLY = ("billing_baseline", "savings_by_source", "pricing_reconciliation")
 # De `resumo_executivo.por_provedor`, o que a tela lê da economia de cada destino
 _BY_PROVIDER = ("provedor", "economia_por_fonte", "itens_gratis")
+# De cada serviço, sem a visão técnica: o que ele é e o quanto dá para levar
+_SERVICE_OVERVIEW = (
+    "id",
+    "nome",
+    "categoria",
+    "service_type",
+    "tipo_inferido",
+    "custo",
+    "fracao",
+    "nivel",
+    "fonte",
+    "nivel_sugerido",
+    "entra_no_score",
+)
+# De cada grupo de instâncias, sem a visão técnica: a região, que o Ambiente atual mostra
+_POOL_OVERVIEW = ("regiao", "custo")
 
 
 def _is_number(value: Any) -> bool:
@@ -127,6 +144,52 @@ def shared_payload(payload: Any, views: frozenset[InstitutionView]) -> dict[str,
     if isinstance(premises, dict):
         out["premissas"] = {key: deepcopy(premises.get(key)) for key in ("moeda_origem", "fx")}
     return out
+
+
+def _service_overview(service: dict[str, Any]) -> dict[str, Any]:
+    pools = service.get("pools")
+    return {
+        **{key: service.get(key) for key in _SERVICE_OVERVIEW},
+        "sugestoes": [],
+        "por_destino": {},
+        "alertas": [],
+        "dependencias": None,
+        "pools": [_pool_overview(pool) for pool in pools if isinstance(pool, dict)]
+        if isinstance(pools, list)
+        else [],
+    }
+
+
+def _pool_overview(pool: dict[str, Any]) -> dict[str, Any]:
+    return {key: pool.get(key) for key in _POOL_OVERVIEW}
+
+
+def shared_couplings(data: dict[str, Any], views: frozenset[InstitutionView]) -> dict[str, Any]:
+    """Os serviços da análise, para toda visão: cada etapa mostra o que existe hoje e o quanto
+    dá para levar. Sem a técnica, cada serviço fica com o nome, a categoria e o nível (sem
+    equivalentes, sugestões, dependências e instâncias); sem a financeira, sem dinheiro nem a
+    parte de cada um no gasto."""
+    out = deepcopy(data)
+    if TECHNICAL not in views:
+        services = out.get("servicos")
+        out["servicos"] = [
+            _service_overview(service)
+            for service in (services if isinstance(services, list) else [])
+            if isinstance(service, dict)
+        ]
+        loose = out.get("pools_sem_servico")
+        out["pools_sem_servico"] = [
+            _pool_overview(pool)
+            for pool in (loose if isinstance(loose, list) else [])
+            if isinstance(pool, dict)
+        ]
+    if FINANCIAL in views:
+        return out
+    for service in out.get("servicos") or []:
+        if isinstance(service, dict):
+            service["fracao"] = None
+    cleaned: dict[str, Any] = without_money(out)
+    return cleaned
 
 
 def shared_detail(data: Any, views: frozenset[InstitutionView]) -> Any:

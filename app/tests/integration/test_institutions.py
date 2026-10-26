@@ -294,7 +294,10 @@ async def test_member_opens_the_full_analysis_cut_by_the_views(workspace):
             "moeda": "USD",
             "resumo_executivo": {"provedor_atual": "aws"},
         }
-        assert (await client.get(f"{path}/service-couplings")).status_code == 403
+        # A lista de serviços é de toda visão: passa da instituição e para no job de teste,
+        # que não tem os serviços (403 seria a visão barrando)
+        couplings = await client.get(f"{path}/service-couplings")
+        assert couplings.json()["detail"]["codigo"] == "ANALISE_SEM_SERVICOS"
 
         await repo.update_member(
             owner,

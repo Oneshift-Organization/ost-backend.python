@@ -43,15 +43,20 @@ então o que a visão não mostra não sai da API:
 
 | Sem a visão | Sai da resposta |
 |---|---|
-| Financeira | Todo número em campo de custo, economia, preço ou payback vira `null` (inclusive em `service-couplings` e `applications`); valores citados nos textos viram `[valor restrito]`; saem `billing_baseline`, `savings_by_source`, `pricing_reconciliation`, `comparison_basis`, `corporate_benefits`, `pricing_evidence` e o parecer `finops`; do payload só sai a nuvem de origem |
-| Técnica | `cross_cloud_equivalents`, `workload_strategies` e o parecer `cloud_engineering`; `applications` responde 403 |
+| Financeira | Todo número em campo de custo, economia, preço ou payback vira `null` (inclusive em `service-couplings` e `applications`), e também a parte de cada serviço no gasto (`servicos[].fracao`); valores citados nos textos viram `[valor restrito]`; saem `billing_baseline`, `savings_by_source`, `pricing_reconciliation`, `comparison_basis`, `corporate_benefits`, `pricing_evidence` e o parecer `finops`; do payload só sai a nuvem de origem |
+| Técnica | `cross_cloud_equivalents`, `workload_strategies` e o parecer `cloud_engineering`; em `service-couplings`, cada serviço fica só com nome, categoria, tipo e nível (sem sugestões, alertas, dependências, equivalentes e opções por destino; das instâncias, só região e custo); `applications` responde 403 |
 | Estratégica | Racional, notas, plano de ação, `selection_reason` e o parecer `risk_migration` |
 
-`service-couplings` abre com a visão financeira (aba Ambiente atual) ou a técnica
-(Portabilidade); sem nenhuma das duas, 403. Score e recomendação são de todos, como
-na lista. Administradores e o autor veem tudo. `?views=` restringe (o "Ver como"
-do administrador), nunca amplia. Fica no recorte a fração de cada serviço no gasto
-(`servicos[].fracao`), que a tela só mostra com a visão financeira.
+`service-couplings` abre para toda visão (26/10/2026): a tela mostra as 5 etapas a
+todos, cada uma na profundidade das visões de quem abre. Score e recomendação são de
+todos, como na lista. Administradores e o autor veem tudo. `?views=` restringe (o
+"Ver como" do administrador), nunca amplia.
+
+**Uma página, na ordem da análise (26/10/2026).** A tela de 5 abas com cadeados
+ficou carregada. A análise de outro membro virou uma página só, com as 5 etapas na
+ordem (Ambiente atual → Portabilidade → Recomendação → Análise detalhada →
+Migração), sem cadeado: cada etapa mostra o que as visões de quem abre permitem, e
+toda etapa aparece para todos. A análise do próprio usuário continua em abas.
 
 ## Acesso
 
@@ -95,7 +100,7 @@ nome de exibição a 80. O nome é informado pelo usuário e não é identidade 
 | GET/POST `/institutions/{id}/publications` | POST: `{job_id}` | lista / 201 com cópia |
 | GET/DELETE `/institutions/{id}/publications/{publication_id}` | — | cópia / 204 |
 | GET `/institutions/{id}/publications/{publication_id}/analysis` | `?views=` | análise recortada, ou 404 sem a original |
-| GET `/institutions/{id}/publications/{publication_id}/service-couplings` | `?views=` | serviços e acoplamento; 403 sem financeira nem técnica |
+| GET `/institutions/{id}/publications/{publication_id}/service-couplings` | `?views=` | serviços e acoplamento, para toda visão; sem a técnica, só nome, categoria e nível |
 | GET `/institutions/{id}/publications/{publication_id}/applications` | `?views=` | aplicações; 403 sem a técnica |
 
 Campos extras em requisições são recusados. O cliente não fornece `user_id`,
@@ -139,6 +144,10 @@ Visões (24/10/2026): aplicar a migration `c0d1e2f3a4b5` **antes** da imagem nov
 partir de `profile`. Rollback: `alembic downgrade b9c0d1e2f3a4` antes de voltar a
 imagem; o `profile` continua gravado e a versão anterior segue lendo.
 
+Uma página (26/10/2026): sem migration. Publicar o backend antes do frontend.
+Com o backend anterior, quem só tem a visão Estratégica recebe 403 em
+`service-couplings` e a página mostra Ambiente atual e Portabilidade sem a lista.
+
 Rollback da aplicação: voltar imagens anteriores e manter as tabelas.
 **Não executar downgrade depois de haver dados sem plano de preservação**:
 ele apaga as instituições e suas cópias. Não altera análises pessoais.
@@ -147,7 +156,8 @@ ele apaga as instituições e suas cópias. Não altera análises pessoais.
 
 - Unitários: separação perfil/permissão, projeção/imutabilidade, ausência de
   score, validação de payload, paginação, no-store e mapeamento de erros; o recorte
-  de cada uma das 7 combinações de visões (`test_institution_views.py`).
+  de cada uma das 7 combinações de visões, no resultado e na lista de serviços
+  (`test_institution_views.py`).
 - Integração PostgreSQL: visões gravadas, "Ver como" que não amplia, rota da
   análise completa recortada e 404 depois de retirada; isolamento entre usuários/instituições, convite
   expirado/revogado/usado, publicação de análise alheia/em andamento, retirada,

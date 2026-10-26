@@ -27,6 +27,7 @@ from app.domain.entities.institution import (
 from app.domain.entities.institution_views import (
     RESTRICTED,
     parse_views,
+    shared_couplings,
     shared_detail,
     shared_payload,
     shared_result,
@@ -269,12 +270,73 @@ def test_patch_member_saves_the_chosen_views(api):
     )
 
 
-@pytest.mark.parametrize(
-    "detail,views",
-    [("service-couplings", {S}), ("applications", {S}), ("applications", {F})],
-)
+def couplings():
+    return {
+        "provedor_origem": "gcp",
+        "custo_atual": 4890.22,
+        "resumo": {"servicos": 2, "low": 0, "medium": 1, "high": 1, "a_confirmar": 0},
+        "servicos": [
+            {
+                "id": "s1",
+                "nome": "Compute Engine",
+                "categoria": "compute",
+                "service_type": "vm",
+                "tipo_inferido": False,
+                "custo": 1972.78,
+                "fracao": 0.4,
+                "nivel": "medium",
+                "fonte": "catalogo",
+                "nivel_sugerido": None,
+                "entra_no_score": True,
+                "sugestoes": [{"nivel": "high", "motivo": "x86"}],
+                "por_destino": {"oci": "medium"},
+                "alertas": ["Licença do Windows"],
+                "dependencias": {"nivel": "medium", "migra_junto_com": [{"servico": "VPC"}]},
+                "equivalente_por_destino": {"oci": "Compute"},
+                "opcoes_por_destino": {"oci": [{"servico": "Compute", "custo_estimado": 900.0}]},
+                "pools": [{"familia": "n2", "regiao": "us-east1", "custo": 1972.78}],
+            }
+        ],
+        "pools_sem_servico": [{"familia": "e2", "regiao": "us-central1", "custo": 12.0}],
+        "reconciliacao": {"soma_linhas": 4900.0, "fora_do_escopo": 10.0, "status": "fecha"},
+    }
+
+
+@pytest.mark.parametrize("views", EVERY_COMBINATION, ids=lambda v: "+".join(sorted(v)))
+def test_every_view_sees_the_services_with_its_depth(views):
+    # Ambiente atual e Portabilidade aparecem para todos; o detalhe técnico e o dinheiro, não
+    raw = couplings()
+    out = shared_couplings(raw, views)
+    assert raw == couplings(), "a leitura do autor não muda"
+    service = out["servicos"][0]
+    assert (service["nome"], service["categoria"], service["nivel"]) == (
+        "Compute Engine",
+        "compute",
+        "medium",
+    )
+    assert out["resumo"]["medium"] == 1
+    assert service["pools"][0]["regiao"] == "us-east1"
+    if T in views:
+        assert service["opcoes_por_destino"]["oci"][0]["servico"] == "Compute"
+        assert service["dependencias"]["migra_junto_com"] == [{"servico": "VPC"}]
+        assert service["pools"][0]["familia"] == "n2"
+    else:
+        assert service["sugestoes"] == [] and service["alertas"] == []
+        assert service["dependencias"] is None and service["por_destino"] == {}
+        assert "opcoes_por_destino" not in service and "equivalente_por_destino" not in service
+        assert set(service["pools"][0]) == {"regiao", "custo"}
+        assert set(out["pools_sem_servico"][0]) == {"regiao", "custo"}
+    if F in views:
+        assert service["custo"] == 1972.78 and service["fracao"] == 0.4
+        assert out["custo_atual"] == 4890.22
+        return
+    assert service["fracao"] is None
+    assert [path for path in numbers(out) if not path.startswith(".resumo.")] == []
+
+
+@pytest.mark.parametrize("detail,views", [("applications", {S}), ("applications", {F})])
 def test_details_need_their_view(api, detail, views):
-    # Serviços: financeira (Ambiente atual) ou técnica (Portabilidade); aplicações: técnica
+    # Aplicações: só a técnica (a lista de serviços é de todos)
     client, repo, actor = api
     institution, publication = uuid4(), uuid4()
     repo.shared_analysis.return_value = SharedAnalysisAccess(uuid4(), uuid4(), frozenset(views))
