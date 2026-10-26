@@ -19,6 +19,7 @@ from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.domain.entities.institution import InstitutionView, SharedAnalysisAccess
 from app.domain.entities.institution_views import (
     parse_views,
+    shared_couplings,
     shared_detail,
     shared_payload,
     shared_result,
@@ -280,10 +281,10 @@ async def get_shared_couplings(
     views: Views = None,
 ) -> dict[str, Any]:
     """Os serviços da fatura e o acoplamento de cada um, no formato de
-    `GET /analyses/{job_id}/service-couplings`. Lê a aba Ambiente atual (visão financeira) e a
-    Portabilidade (técnica); sem a visão financeira, sem valores."""
+    `GET /analyses/{job_id}/service-couplings`. Toda visão lê: o Ambiente atual e a Portabilidade
+    aparecem para todos. Sem a visão técnica, só nome, categoria e nível de cada serviço; sem a
+    financeira, sem valores."""
     access = await _shared(repo, user, institution_id, publication_id, views)
-    access.require(InstitutionView.TECHNICAL, InstitutionView.FINANCIAL)
     try:
         visao = await consultar_acoplamento_uc(session).da_analise(access.owner_id, access.job_id)
     except AnaliseSemServicosError as e:
@@ -291,7 +292,7 @@ async def get_shared_couplings(
     except ERROS_DO_ESCOPO as e:
         raise traduzir_erro_do_escopo(e) from e
     data = ServiceCouplingsResponse.de(visao).model_dump(mode="json")
-    return dict(shared_detail(data, access.views))
+    return shared_couplings(data, access.views)
 
 
 @router.get("/{institution_id}/publications/{publication_id}/applications")
