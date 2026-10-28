@@ -55,10 +55,10 @@ Workflow em [`.github/workflows/devsecops.yml`](.github/workflows/devsecops.yml)
 | 2 | SAST | Semgrep (`p/default`, `p/owasp-top-ten`) | Falhas no código-fonte, com SARIF na aba Security | Bloqueia | `relatorio-02-semgrep` |
 | 3 | Build | pip, ruff, pytest, pipdeptree, pip-audit | Lint, testes unitários e de integração (Postgres + seeds), árvore de dependências e artefato `ost-api-<sha>.tar.gz` | Bloqueia (lint e testes) | `relatorio-03-build` |
 | 4 | SCA | Trivy fs | CVEs, misconfig e segredos no repositório | Bloqueia HIGH/CRITICAL | `relatorio-04-trivy-sca` |
-| 5 | Imagem | Docker Buildx + GHCR | Imagem `ost-api:<sha>` multi-stage, sem root | Bloqueia (build/push) | `relatorio-05-docker-build` |
-| 6 | Scan da imagem | Trivy image | CVEs do sistema base e das bibliotecas da imagem | Bloqueia HIGH/CRITICAL com correção | `relatorio-06-trivy-image` |
+| 5 | Imagem | Docker Buildx + GHCR + Cosign | Imagem `ost-api:<sha>` multi-stage, sem root, assinada (keyless) | Bloqueia (build/push/assinatura) | `relatorio-05-docker-build` |
+| 6 | Scan da imagem | Trivy image + Cosign | CVEs da imagem; SBOM CycloneDX publicado como atestado assinado | Bloqueia HIGH/CRITICAL com correção | `relatorio-06-trivy-image` |
 | 7 | Staging + DAST | OWASP ZAP Baseline | A imagem sobe no runner com um Postgres descartável e o ZAP testa de fora | Informativo | `relatorio-07-homologacao-zap` |
-| 8 | Produção | GitHub Environments | Aprovação no environment `production` e promoção da imagem | Aprovação manual | `relatorio-08-producao` |
+| 8 | Produção | GitHub Environments + Cosign | Aprovação no environment `production`, verificação da assinatura e do SBOM e promoção da imagem | Aprovação manual | `relatorio-08-producao` |
 
 Os relatórios ficam nos artifacts de cada [execução](https://github.com/Oneshift-Organization/ost-backend.python/actions/workflows/devsecops.yml).
 
@@ -148,3 +148,5 @@ https://api.oneshift.com.br
 - [OWASP ZAP Baseline Scan](https://www.zaproxy.org/docs/docker/baseline-scan/)
 - [OWASP Top 10](https://owasp.org/Top10/)
 - [Flux ImagePolicy](https://fluxcd.io/flux/components/image/imagepolicies/)
+- [Cosign: assinatura de contêineres](https://docs.sigstore.dev/cosign/signing/signing_with_containers/)
+- [Trivy: SBOM](https://trivy.dev/latest/docs/supply-chain/sbom/)
