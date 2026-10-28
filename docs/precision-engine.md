@@ -297,7 +297,7 @@ DE-PARA e `migracao`), `premissas`, `resumo_executivo`, `confianca_classificacao
 
 `app/tests/integration/` roda a pipeline inteira sobre os 2 CSVs reais
 versionados e trava cada invariante acima. Pula graciosamente sem Postgres;
-no CI (`.github/workflows/tests.yml`) um skip é **falha** de ambiente.
+no CI (etapa 3 de `.github/workflows/devsecops.yml`) um skip é **falha** de ambiente.
 
 `scripts/measure_request_quality.py` mede a qualidade de conteúdo do request
 (DE-PARA por custo, divergência vs catálogo, cobertura de expectativa).

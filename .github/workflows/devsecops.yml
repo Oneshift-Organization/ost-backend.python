@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+# Push novo na mesma branch cancela a execução anterior. Na main não: um deploy
+# aguardando aprovação não pode ser derrubado por outro push.
+concurrency:
+  group: devsecops-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   IMAGE: ghcr.io/oneshift-organization/ost-backend.python/ost-api
   TRIVY_VERSION: v0.76.1
@@ -83,6 +89,26 @@ jobs:
     name: 3. Build + dependências
     needs: sast
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ost
+          POSTGRES_PASSWORD: ost # banco descartável do runner
+          POSTGRES_DB: ost_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ost -d ost_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://ost:ost@localhost:5432/ost_test
+      APP_ENV: development
+      AUTH_ENABLED: "false"
+      PYTHONPATH: . # `scripts/` importa `app.*`
+      TF_PLUGIN_CACHE_DIR: /home/runner/.terraform.d/plugin-cache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -99,9 +125,60 @@ jobs:
           pipdeptree > arvore-dependencias.txt
           pip-audit -r requirements.txt -f json -o pip-audit.json || true
 
+      - name: Ruff (bloqueante nas áreas já limpas)
+        # Gatear o repo inteiro deixaria a esteira vermelha: há lints antigos em
+        # infrastructure/api/scripts. Bloqueia onde já está limpo, impedindo
+        # dívida NOVA ali.
+        run: ruff check app/domain app/services app/schemas app/tests
+
+      - name: Ruff (informativo, dívida a queimar)
+        continue-on-error: true
+        run: ruff check app/infrastructure app/api app/use_cases scripts
+
+      - name: Terraform (validate e fmt dos pacotes gerados)
+        # Sem o wrapper: os testes leem o stdout do `validate -json`.
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: "1.17.0"
+          terraform_wrapper: false
+
+      - name: Cache dos providers do Terraform
+        # Os quatro providers somam perto de 1 GB por execução sem cache.
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: /home/runner/.terraform.d/plugin-cache
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles('app/infrastructure/terraform/renderers/*.py') }}
+          restore-keys: tf-plugins-${{ runner.os }}-
+
+      - name: Diretório do cache de providers
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
       - name: Testes unitários
-        # Os de integração (Postgres + seeds) rodam no workflow Tests.
         run: pytest -m "not integration" --no-cov -q
+
+      - name: Migrations e seeds de referência
+        # ORDEM IMPORTA: `seed_from_csv` é a fonte autoritativa do DE-PARA e
+        # recarrega a tabela que `seed_service_metadata` também grava; por isso
+        # vem por último (detalhes em docs/dev-setup.md).
+        run: |
+          alembic upgrade head
+          python -m app.infrastructure.database.seed_refactor
+          python -m app.infrastructure.database.seed_service_metadata
+          python -m app.infrastructure.database.seed_catalog_pareto
+          python -m app.infrastructure.database.seed_classification_rules
+          python -m app.infrastructure.database.seed_from_csv
+          python scripts/sync_prices.py --providers categories
+
+      - name: Testes de integração (gates)
+        # O conftest pula quando falta banco ou seed; aqui um skip é falha de
+        # ambiente, não teste ignorável.
+        run: |
+          set -o pipefail
+          pytest -m integration --no-cov -q -rs --strict-markers | tee gates.txt
+          if grep -qE "integração pulada" gates.txt; then
+            echo "::error::Gates pulados: Postgres ou seeds ausentes."
+            exit 1
+          fi
 
       - name: Empacotar artefato
         run: git archive --format=tar.gz -o "ost-api-$GITHUB_SHA.tar.gz" HEAD

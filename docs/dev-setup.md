@@ -200,7 +200,7 @@ pytest -m integration           # só os gates da pipeline (precisa de Postgres 
 ```
 
 Os gates de integração **pulam graciosamente** sem Postgres ou sem seed,
-declarando o motivo. No CI (`.github/workflows/tests.yml`) um skip é tratado
+declarando o motivo. No CI (etapa 3 de `.github/workflows/devsecops.yml`) um skip é tratado
 como **falha de ambiente** — skip silencioso esconderia a rede de segurança caída.
 
 ### Testes de Terraform (`validate` e `fmt`)
