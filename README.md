@@ -47,7 +47,7 @@ O repositório também é a entrega do **CP 03 de DevSecOps**: a API chega à pr
 
 ## Esteira DevSecOps
 
-Workflow em [`.github/workflows/devsecops.yml`](.github/workflows/devsecops.yml). As etapas são sequenciais: cada uma só roda se a anterior passou. O **Resumo da Esteira** roda sempre, mesmo quando uma etapa falha.
+Workflow em [`.github/workflows/devsecops.yml`](.github/workflows/devsecops.yml), detalhado em [`docs/pipeline.md`](docs/pipeline.md). Os achados de cada ferramenta e como foram tratados estão em [`docs/observacoes.md`](docs/observacoes.md). As etapas são sequenciais: cada uma só roda se a anterior passou. O **Resumo da Esteira** roda sempre, mesmo quando uma etapa falha.
 
 | # | Etapa | Ferramenta | Objetivo | Quality gate | Relatório |
 |---|---|---|---|---|---|
@@ -115,3 +115,15 @@ API em `http://localhost:8000` e documentação em `http://localhost:8000/docs`.
 ## Produção
 
 https://api.oneshift.com.br
+
+## Referências
+
+- [GitHub Actions: deployments e environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)
+- [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+- [Hardening do GitHub Actions](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)
+- [Gitleaks](https://github.com/gitleaks/gitleaks)
+- [Semgrep](https://semgrep.dev/docs/)
+- [Trivy](https://trivy.dev/latest/docs/)
+- [OWASP ZAP Baseline Scan](https://www.zaproxy.org/docs/docker/baseline-scan/)
+- [OWASP Top 10](https://owasp.org/Top10/)
+- [Flux ImagePolicy](https://fluxcd.io/flux/components/image/imagepolicies/)
