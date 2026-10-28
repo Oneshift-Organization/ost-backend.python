@@ -77,7 +77,7 @@ def _chamar(
     )
     try:
         # Esquema validado em main(): só http(s) chega aqui.
-        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310  # nosemgrep:python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             return resp.status, json.loads(resp.read() or b"{}")
     except urllib.error.HTTPError as e:
         corpo_erro = e.read().decode("utf-8", "ignore")

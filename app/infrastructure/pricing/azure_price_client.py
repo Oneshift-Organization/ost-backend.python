@@ -62,7 +62,7 @@ def get_json_com_espera(url: str, *, timeout: float, retries: int = 6) -> dict[s
     for attempt in range(retries):
         ultima = attempt == retries - 1
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - host fixo
+            with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - host fixo  # nosemgrep:python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
                 data: dict[str, Any] = json.loads(resp.read())
                 return data
         except urllib.error.HTTPError as e:

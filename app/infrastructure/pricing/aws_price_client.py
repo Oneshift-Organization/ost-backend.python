@@ -94,7 +94,7 @@ def get_json(url: str, *, timeout: float) -> dict[str, Any]:
     req = urllib.request.Request(  # noqa: S310 - host fixo (awsstatic.com)
         url, headers={"User-Agent": "oneshift-pricing/1.0", "Accept-Encoding": "gzip"}
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - host fixo
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - host fixo  # nosemgrep:python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         bruto = resp.read()
 
     if bruto[:2] == b"\x1f\x8b":  # magic number do gzip

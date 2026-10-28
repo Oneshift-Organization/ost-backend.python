@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 #
 # Nome totalmente qualificado: runtimes com `short-name resolution` estrito
 # (podman) falham no nome curto, e o build tem que funcionar fora do CI também.
-FROM docker.io/hashicorp/terraform:1.9.8 AS terraform
+FROM docker.io/hashicorp/terraform:1.17.0 AS terraform
 
 WORKDIR /warm
 # Os quatro providers: o cliente escolhe a nuvem de destino, e validar o pacote
@@ -75,6 +75,10 @@ RUN printf '%s\n' \
 # Copy application source
 COPY app/ ./app/
 COPY alembic.ini .
+
+# Usuário sem privilégio: um RCE na API não vira root no contêiner.
+RUN useradd --create-home --uid 10001 app
+USER 10001
 
 EXPOSE 8000
 

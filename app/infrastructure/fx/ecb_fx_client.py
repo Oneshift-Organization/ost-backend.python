@@ -73,7 +73,7 @@ def fetch_fx_rates(
         url, headers={"User-Agent": "oneshift-pricing/1.0"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310  # nosemgrep:python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             bruto = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
         return []
