@@ -44,7 +44,7 @@ def _fetch(timeout: float) -> list[dict[str, Any]]:
     req = urllib.request.Request(  # noqa: S310 - host fixo (apexapps.oracle.com)
         _URL, headers={"User-Agent": "oneshift-pricing/1.0"}
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - host fixo
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - host fixo  # nosemgrep:python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         data: dict[str, Any] = json.loads(resp.read())
     return data.get("items") or []
 

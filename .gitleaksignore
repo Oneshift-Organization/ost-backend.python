@@ -1,0 +1,5 @@
+# Falso positivo (justificativa em docs/observacoes.md): a regra generic-api-key
+# casou com o NOME do atributo `gcp_billing_api_key`, lido da configuração.
+# Não há valor de chave no arquivo.
+e2047cf39840c714917d54c99bcc492c0deb32ff:scripts/sync_prices.py:generic-api-key:55
+d3cf694b224e2d494fe96330c686b2ad31190cc6:scripts/sync_prices.py:generic-api-key:55
