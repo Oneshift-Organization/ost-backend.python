@@ -2,10 +2,11 @@ name: DevSecOps
 
 # Esteira sequencial: cada etapa só roda se a anterior passou. O deploy em
 # produção (etapa 8) só acontece em push na main, depois da aprovação no
-# environment `production`.
+# environment `production`. Na develop a esteira roda só nos PRs: o push do
+# merge repetiria o mesmo código.
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
@@ -94,25 +95,7 @@ jobs:
     name: 3. Build + dependências
     needs: sast
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: ost
-          POSTGRES_PASSWORD: ost # banco descartável do runner
-          POSTGRES_DB: ost_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U ost -d ost_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     env:
-      DATABASE_URL: postgresql+asyncpg://ost:ost@localhost:5432/ost_test
-      APP_ENV: development
-      AUTH_ENABLED: "false"
-      PYTHONPATH: . # `scripts/` importa `app.*`
       TF_PLUGIN_CACHE_DIR: /home/runner/.terraform.d/plugin-cache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -161,6 +144,78 @@ jobs:
       - name: Testes unitários
         run: pytest -m "not integration" --no-cov -q
 
+      - name: Empacotar artefato
+        run: git archive --format=tar.gz -o "ost-api-$GITHUB_SHA.tar.gz" HEAD
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: relatorio-03-build
+          path: |
+            arvore-dependencias.txt
+            pip-audit.json
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: artefato-aplicacao
+          path: ost-api-${{ github.sha }}.tar.gz
+
+  # ── 3b. Testes de integração ────────────────────────────────────────────────
+  # Rodam em paralelo com as etapas 3 a 7 (são o passo mais lento). Continuam
+  # bloqueando: a etapa 8 depende deste job.
+  integration:
+    name: 3b. Testes de integração
+    needs: sast
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ost
+          POSTGRES_PASSWORD: ost # banco descartável do runner
+          POSTGRES_DB: ost_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ost -d ost_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://ost:ost@localhost:5432/ost_test
+      APP_ENV: development
+      AUTH_ENABLED: "false"
+      PYTHONPATH: . # `scripts/` importa `app.*`
+      TF_PLUGIN_CACHE_DIR: /home/runner/.terraform.d/plugin-cache
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements-dev.txt
+
+      - name: Terraform (validate e fmt dos pacotes gerados)
+        # Sem o wrapper: os testes leem o stdout do `validate -json`.
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: "1.17.0"
+          terraform_wrapper: false
+
+      - name: Cache dos providers do Terraform
+        # Os quatro providers somam perto de 1 GB por execução sem cache.
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: /home/runner/.terraform.d/plugin-cache
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles('app/infrastructure/terraform/renderers/*.py') }}
+          restore-keys: tf-plugins-${{ runner.os }}-
+
+      - name: Diretório do cache de providers
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
       - name: Migrations e seeds de referência
         # ORDEM IMPORTA: `seed_from_csv` é a fonte autoritativa do DE-PARA e
         # recarrega a tabela que `seed_service_metadata` também grava; por isso
@@ -185,21 +240,6 @@ jobs:
             exit 1
           fi
 
-      - name: Empacotar artefato
-        run: git archive --format=tar.gz -o "ost-api-$GITHUB_SHA.tar.gz" HEAD
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: relatorio-03-build
-          path: |
-            arvore-dependencias.txt
-            pip-audit.json
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: artefato-aplicacao
-          path: ost-api-${{ github.sha }}.tar.gz
 
   # ── 4. SCA ──────────────────────────────────────────────────────────────────
   sca:
@@ -437,7 +477,7 @@ jobs:
   # ── 8. Aprovação + produção ─────────────────────────────────────────────────
   deploy-prod:
     name: 8. Aprovação + produção
-    needs: [docker-build, dast-staging]
+    needs: [docker-build, dast-staging, integration]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
@@ -513,7 +553,7 @@ jobs:
   # ── Resumo ──────────────────────────────────────────────────────────────────
   pipeline-summary:
     name: Resumo da Esteira
-    needs: [secrets-scan, sast, build, sca, docker-build, image-scan, dast-staging, deploy-prod]
+    needs: [secrets-scan, sast, build, integration, sca, docker-build, image-scan, dast-staging, deploy-prod]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -526,6 +566,7 @@ jobs:
           R1: ${{ needs.secrets-scan.result }}
           R2: ${{ needs.sast.result }}
           R3: ${{ needs.build.result }}
+          R3B: ${{ needs.integration.result }}
           R4: ${{ needs.sca.result }}
           R5: ${{ needs.docker-build.result }}
           R6: ${{ needs.image-scan.result }}
@@ -552,6 +593,7 @@ jobs:
             echo "| 1 | Secrets (Gitleaks) | $R1 | $A1 |"
             echo "| 2 | SAST (Semgrep) | $R2 | $A2 |"
             echo "| 3 | Build + dependências | $R3 | $A3 |"
+            echo "| 3b | Testes de integração | $R3B | - |"
             echo "| 4 | SCA (Trivy fs) | $R4 | $A4 |"
             echo "| 5 | Docker build + GHCR | $R5 | - |"
             echo "| 6 | Scan da imagem (Trivy) | $R6 | $A6 |"

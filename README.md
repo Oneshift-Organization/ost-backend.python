@@ -53,7 +53,7 @@ Workflow em [`.github/workflows/devsecops.yml`](.github/workflows/devsecops.yml)
 |---|---|---|---|---|---|
 | 1 | Secrets | Gitleaks 8.30.1 | Credenciais no histórico completo do Git | Bloqueia | `relatorio-01-gitleaks` |
 | 2 | SAST | Semgrep (`p/default`, `p/owasp-top-ten`) | Falhas no código-fonte, com SARIF na aba Security | Bloqueia | `relatorio-02-semgrep` |
-| 3 | Build | pip, ruff, pytest, pipdeptree, pip-audit | Lint, testes unitários e de integração (Postgres + seeds), árvore de dependências e artefato `ost-api-<sha>.tar.gz` | Bloqueia (lint e testes) | `relatorio-03-build` |
+| 3 | Build | pip, ruff, pytest, pipdeptree, pip-audit | Lint, testes unitários, árvore de dependências e artefato `ost-api-<sha>.tar.gz`. Testes de integração (Postgres + seeds) no job 3b, em paralelo | Bloqueia (lint e testes) | `relatorio-03-build` |
 | 4 | SCA | Trivy fs | CVEs, misconfig e segredos no repositório | Bloqueia HIGH/CRITICAL | `relatorio-04-trivy-sca` |
 | 5 | Imagem | Docker Buildx + GHCR + Cosign | Imagem `ost-api:<sha>` multi-stage, sem root, assinada (keyless) | Bloqueia (build/push/assinatura) | `relatorio-05-docker-build` |
 | 6 | Scan da imagem | Trivy image + Cosign | CVEs da imagem; SBOM CycloneDX publicado como atestado assinado | Bloqueia HIGH/CRITICAL com correção | `relatorio-06-trivy-image` |
@@ -64,7 +64,7 @@ Os relatórios ficam nos artifacts de cada [execução](https://github.com/Onesh
 
 ### Branches
 
-- `develop` e `main`, em push e pull request: etapas 1 a 7 e o resumo.
+- Pull request para `develop` ou `main`: etapas 1 a 7 e o resumo.
 - `main`, em push: também a etapa 8, que espera a aprovação de um revisor do environment `production`.
 
 ### Deploy sem rebuild
