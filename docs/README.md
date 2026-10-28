@@ -43,6 +43,8 @@ agentes de IA.
 
 ### Operação
 
+Colaboração institucional (opt-in): [`endpoints/institutions.md`](endpoints/institutions.md).
+
 | Arquivo | Para quê |
 |---|---|
 | [`api-conventions.md`](api-conventions.md) | Convenções transversais: paginação, envelopes, serialização Decimal/datetime, status codes, ordenação. **Leia antes de adicionar rota nova.** |

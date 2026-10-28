@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
-from app.core.exceptions import ExternalServiceError
+from app.core.exceptions import ConflictError, ExternalServiceError
 from app.core.logging import get_logger
 from app.infrastructure.auth.supabase_admin import SupabaseAuthAdmin
 from app.infrastructure.repositories.pg_account_repo import PgAccountRepository
@@ -29,6 +29,8 @@ async def apagar_conta(user: CurrentUser, session: DbSession) -> Response:
     )
     try:
         await use_case.execute(DeleteAccountInput(user_id=UUID(user.sub)))
+    except ConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ExternalServiceError as e:
         # Nada foi apagado: a exceção desfaz a transação da sessão.
         _log.error("account_deletion_failed", user_id=user.sub, error=str(e))

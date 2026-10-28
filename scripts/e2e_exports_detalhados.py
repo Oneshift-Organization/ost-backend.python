@@ -69,7 +69,7 @@ def _chamar(
         url, data=dados, headers=cabecalhos, method=metodo
     )
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=300) as resp:  # noqa: S310  # nosemgrep:python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             conteudo = resp.read()
             return resp.status, (conteudo if bruto else json.loads(conteudo or b"{}"))
     except urllib.error.HTTPError as e:

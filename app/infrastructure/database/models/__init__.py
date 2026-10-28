@@ -17,6 +17,12 @@ from app.infrastructure.database.models.cloud_services_metadata import (
 )
 from app.infrastructure.database.models.cloud_sku_catalog import CloudSkuCatalogModel
 from app.infrastructure.database.models.exchange_rate import ExchangeRateModel
+from app.infrastructure.database.models.institution import (
+    InstitutionInviteModel,
+    InstitutionMemberModel,
+    InstitutionModel,
+    InstitutionPublicationModel,
+)
 from app.infrastructure.database.models.inventory import (
     InventoryModel,
     InventoryRelationModel,
@@ -52,6 +58,10 @@ __all__ = [
     "CloudServiceMetadataModel",
     "CloudSkuCatalogModel",
     "ExchangeRateModel",
+    "InstitutionInviteModel",
+    "InstitutionMemberModel",
+    "InstitutionModel",
+    "InstitutionPublicationModel",
     "InventoryModel",
     "InventoryRelationModel",
     "InventoryResourceModel",

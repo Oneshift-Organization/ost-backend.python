@@ -9,6 +9,7 @@ from app.api.v1.routes import (
     billing_checks,
     curadoria,
     health,
+    institutions,
     inventory,
     migration_scope,
     reports,
@@ -28,3 +29,4 @@ api_router.include_router(reports.router, tags=["reports"])
 api_router.include_router(inventory.router)
 api_router.include_router(account.router)
 api_router.include_router(curadoria.router)
+api_router.include_router(institutions.router)

@@ -1,0 +1,5 @@
+# go-jose embutido no binário do Terraform 1.17.0 (última versão; a correção
+# ainda não saiu num release do Terraform). A API só roda `terraform fmt` e
+# `terraform validate` offline, sem backend remoto nem autenticação JOSE/JWT:
+# o código vulnerável não é alcançável. Rever a cada release do Terraform.
+CVE-2026-116587

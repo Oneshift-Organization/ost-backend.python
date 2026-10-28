@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from app.infrastructure.database.models.cloud_sku_catalog import CloudSkuCatalogModel
 from app.infrastructure.database.models.service_ontology import ServiceOntologyModel
@@ -151,15 +151,15 @@ async def main() -> None:
         print(f"Added {onto_count} new entries to service_ontology")
 
         # Verify
-        r = await session.execute(select(CloudSkuCatalogModel))
-        print(f"  cloud_sku_catalog total: {len(r.scalars().all())}")
+        total = await session.scalar(select(func.count()).select_from(CloudSkuCatalogModel))
+        print(f"  cloud_sku_catalog total: {total}")
 
-        r = await session.execute(
-            select(ServiceOntologyModel).where(
+        vms = await session.scalar(
+            select(func.count()).where(
                 ServiceOntologyModel.service_type == "virtual_machine",
             )
         )
-        print(f'  service_ontology "virtual_machine" entries: {len(r.scalars().all())}')
+        print(f'  service_ontology "virtual_machine" entries: {vms}')
 
 
 if __name__ == "__main__":
