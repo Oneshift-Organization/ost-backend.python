@@ -45,7 +45,9 @@ jobs:
           tar -xzf "gitleaks_${VERSION}_linux_x64.tar.gz" gitleaks
 
       - name: Gitleaks
-        run: ./gitleaks git . --redact --exit-code 1 --report-format json --report-path gitleaks.json
+        # Só o histórico do commit em análise. Sem `--log-opts`, o Gitleaks
+        # varre `--all` e acusaria segredos de outras branches.
+        run: ./gitleaks git . --log-opts="HEAD" --redact --exit-code 1 --report-format json --report-path gitleaks.json
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
