@@ -81,9 +81,9 @@ A etapa 8 não reconstrói a imagem. Ela cria a tag `main-<timestamp>-<sha>` apo
 
 ### Aprovação em produção
 
-| Data | Aprovado por | Base da decisão |
-|---|---|---|
-| | | |
+| Data | Aprovado por | Base da decisão | Execução |
+|---|---|---|---|
+| 2026-10-28 14:36 UTC | luizbrito7 | Etapas 1 a 7 verdes, sem achado HIGH/CRITICAL e sem alerta High no ZAP | [40704861009](https://github.com/Oneshift-Organization/ost-backend.python/actions/runs/40704861009) |
 
 ## Como executar
 

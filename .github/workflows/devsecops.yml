@@ -430,7 +430,7 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           aprovacao=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" \
-            --jq '.[0] | "\(.user.login) em \(.environments[0].updated_at): \(.comment)"') \
+            --jq '.[0] | "\(.user.login) (\(.state)): \(.comment)"') \
             || aprovacao="não disponível na API"
           {
             echo "# Deploy em produção"
