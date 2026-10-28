@@ -2,7 +2,7 @@ name: DevSecOps
 
 # Esteira sequencial: cada etapa só roda se a anterior passou. O deploy em
 # produção (etapa 8) só acontece em push na main, depois da aprovação no
-# environment `producao`.
+# environment `production`.
 on:
   push:
     branches: [main, develop]
@@ -259,7 +259,7 @@ jobs:
     name: 7. Homologação + ZAP
     needs: [docker-build, image-scan]
     runs-on: ubuntu-latest
-    environment: homologacao
+    environment: staging
     permissions:
       contents: read
       packages: read
@@ -317,7 +317,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
-      name: producao
+      name: production
       url: https://api.oneshift.com.br/v1/health
     permissions:
       contents: read
