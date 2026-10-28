@@ -79,11 +79,32 @@ A etapa 8 não reconstrói a imagem. Ela cria a tag `main-<timestamp>-<sha>` apo
 | [`.trivyignore`](.trivyignore) | CVE-2026-116587 (go-jose no binário do Terraform) | Sem correção num release do Terraform; a API só roda `fmt` e `validate` offline |
 | `nosemgrep` | `dynamic-urllib-use-detected` em 7 chamadas | URLs com host fixo das APIs de preço e câmbio, ou com esquema validado |
 
+### Resumo da Esteira
+
+Execução completa com aprovação e deploy ([40704861009](https://github.com/Oneshift-Organization/ost-backend.python/actions/runs/40704861009)):
+
+<p align="center">
+  <img src="docs/evidencias/02-resumo-esteira.png" alt="Resumo da Esteira com as 8 etapas em success" />
+</p>
+
+### Evidências
+
+| Print | O que mostra |
+|---|---|
+| [01-execucao-completa](docs/evidencias/01-execucao-completa.png) | Execução completa da esteira na `main`, todas as etapas verdes |
+| [02-resumo-esteira](docs/evidencias/02-resumo-esteira.png) | Resumo da Esteira da mesma execução |
+| [03-aprovacao-producao](docs/evidencias/03-aprovacao-producao.png) | Aprovação do environment `production` por luizbrito7 |
+| [04-execucao-bloqueada](docs/evidencias/04-execucao-bloqueada.png) | Execução bloqueada pelo Gitleaks: etapa 1 falha, demais puladas, resumo com 1 segredo |
+| [05-gitleaks-bloqueio-log](docs/evidencias/05-gitleaks-bloqueio-log.png) | Log do Gitleaks: `leaks found: 1` e saída com código 1 |
+| [06-environment-production](docs/evidencias/06-environment-production.png) | Configuração do environment `production` com revisor obrigatório |
+| [07-ghcr-imagem](docs/evidencias/07-ghcr-imagem.png) | Imagem no GHCR: a tag `main-*` e a tag do SHA no mesmo digest |
+| [08-producao](docs/evidencias/08-producao.png) | API em produção respondendo em `https://api.oneshift.com.br/v1/health` |
+
 ### Aprovação em produção
 
-| Data | Aprovado por | Base da decisão |
-|---|---|---|
-| | | |
+| Data | Aprovado por | Base da decisão | Execução |
+|---|---|---|---|
+| 2026-10-28 14:36 UTC | luizbrito7 | Etapas 1 a 7 verdes, sem achado HIGH/CRITICAL e sem alerta High no ZAP | [40704861009](https://github.com/Oneshift-Organization/ost-backend.python/actions/runs/40704861009) |
 
 ## Como executar
 
