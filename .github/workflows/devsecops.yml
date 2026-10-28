@@ -393,15 +393,16 @@ jobs:
           R8: ${{ needs.deploy-prod.result }}
         run: |
           # Conta com jq; "-" quando o relatório não existe (etapa não rodou).
-          conta() { [ -f "$1" ] && jq -r "$2" "$1" || echo "-"; }
+          # Busca pelo nome: com um único artifact, o download não cria subpasta.
+          conta() { f=$(find . -name "$1" -print -quit); [ -n "$f" ] && jq -r "$2" "$f" || echo "-"; }
           trivy='[.Results[]? | (.Vulnerabilities // []) + (.Misconfigurations // []) + (.Secrets // []) | .[]] | length'
 
-          A1="$(conta relatorio-01-gitleaks/gitleaks.json 'length') segredos"
-          A2="$(conta relatorio-02-semgrep/semgrep.json '.results | length') achados"
-          A3="$(conta relatorio-03-build/pip-audit.json '[.dependencies[].vulns[]] | length') vulns (pip-audit)"
-          A4="$(conta relatorio-04-trivy-sca/trivy-fs.json "$trivy") HIGH/CRITICAL"
-          A6="$(conta relatorio-06-trivy-image/trivy-image.json "$trivy") HIGH/CRITICAL"
-          A7="$(conta relatorio-07-homologacao-zap/report_json.json '[.site[].alerts[] | select(.riskcode == "3")] | length') alertas High"
+          A1="$(conta gitleaks.json 'length') segredos"
+          A2="$(conta semgrep.json '.results | length') achados"
+          A3="$(conta pip-audit.json '[.dependencies[].vulns[]] | length') vulns (pip-audit)"
+          A4="$(conta trivy-fs.json "$trivy") HIGH/CRITICAL"
+          A6="$(conta trivy-image.json "$trivy") HIGH/CRITICAL"
+          A7="$(conta report_json.json '[.site[].alerts[] | select(.riskcode == "3")] | length') alertas High"
 
           {
             echo "## Resumo da Esteira"
