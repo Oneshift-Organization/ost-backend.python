@@ -20,8 +20,9 @@ O workflow declara `contents: read` no topo. Cada job só ganha o que precisa ([
 | Job | Permissão extra | Para quê |
 |---|---|---|
 | `sast` | `security-events: write` | Enviar o SARIF para a aba Security |
-| `docker-build` | `packages: write` | Publicar a imagem no GHCR |
-| `image-scan`, `dast-staging` | `packages: read` | Baixar a imagem |
+| `docker-build` | `packages: write`, `id-token: write` | Publicar a imagem no GHCR e assiná-la com Cosign |
+| `image-scan` | `packages: write`, `id-token: write` | Baixar a imagem e publicar o atestado do SBOM |
+| `dast-staging` | `packages: read` | Baixar a imagem |
 | `deploy-prod` | `packages: write`, `actions: read` | Criar a tag de produção e ler quem aprovou |
 
 Todas as actions estão fixadas pelo SHA do commit, com a versão em comentário. Em março de 2026 as tags da `aquasecurity/trivy-action` foram sequestradas ([GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)); uma tag é mutável, o SHA não.
@@ -66,13 +67,17 @@ Gate: `--exit-code 1` com HIGH ou CRITICAL. Relatório: `relatorio-04-trivy-sca/
 
 Docker Buildx publica `ghcr.io/oneshift-organization/ost-backend.python/ost-api:<sha>` no [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry), autenticado com o `GITHUB_TOKEN`. O [Dockerfile](../Dockerfile) é [multi-stage](https://docs.docker.com/build/building/multi-stage/) sobre `python:3.12-slim`, sem segredo em `ENV`/`ARG`, e roda como o usuário `10001`. Não há tag `latest`: produção referencia a imagem pelo digest.
 
-Gate: falha no build ou no push. Relatório: `relatorio-05-docker-build/docker-build.md` (imagem, digest e manifesto).
+Depois do push, a imagem é assinada pelo digest com [Cosign](https://docs.sigstore.dev/cosign/signing/signing_with_containers/) no modo keyless: o certificado vem do [OIDC do GitHub Actions](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/about-security-hardening-with-openid-connect), não há chave guardada, e a assinatura fica no log de transparência público do Sigstore.
+
+Gate: falha no build, no push ou na assinatura. Relatório: `relatorio-05-docker-build/docker-build.md` (imagem, digest, identidade da assinatura e manifesto).
 
 ### 6. Scan da imagem: Trivy image
 
 Trivy sobre a imagem publicada na etapa 5. As credenciais do registry vão por variável de ambiente (`TRIVY_USERNAME`, `TRIVY_PASSWORD`), nunca na linha de comando.
 
-Gate: `--exit-code 1` com HIGH ou CRITICAL **que já tenham correção** (`--ignore-unfixed`). Relatório: `relatorio-06-trivy-image/trivy-image.{txt,json}`.
+A etapa também gera o [SBOM da imagem](https://trivy.dev/latest/docs/supply-chain/sbom/) em [CycloneDX](https://cyclonedx.org/specification/overview/). Depois do gate, o SBOM é publicado como [atestado assinado](https://docs.sigstore.dev/cosign/verifying/attestation/) ao lado da imagem (`cosign attest --type cyclonedx`): só imagens aprovadas no scan recebem o atestado.
+
+Gate: `--exit-code 1` com HIGH ou CRITICAL **que já tenham correção** (`--ignore-unfixed`). Relatório: `relatorio-06-trivy-image/` (`trivy-image.{txt,json}` e `sbom.cdx.json`).
 
 **Etapa 4 x etapa 6.** A etapa 4 enxerga o que está no repositório: as bibliotecas Python declaradas e o Dockerfile. A etapa 6 enxerga o que de fato vai para produção: os pacotes do Debian da imagem base e tudo o que foi copiado para dentro dela. Aqui a diferença apareceu na prática: o repositório estava limpo depois da etapa 4, mas a imagem levava o binário do Terraform 1.9.8, com mais de 30 CVEs HIGH/CRITICAL nas bibliotecas Go, invisíveis para o scan do repositório. Detalhes em [observacoes.md](observacoes.md).
 
@@ -85,6 +90,8 @@ Gate: informativo (`fail_action: false`); a decisão de seguir para produção �
 ### 8. Aprovação e produção
 
 Job no environment `production`, que tem revisor obrigatório e só aceita a branch `main` ([environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)). O job fica parado até a aprovação; uma rejeição interrompe o deploy.
+
+Antes de promover, o job [verifica](https://docs.sigstore.dev/cosign/verifying/verify/) a assinatura e o atestado do SBOM, exigindo que tenham sido emitidos por este workflow na `main` (`--certificate-identity`) pelo OIDC do GitHub (`--certificate-oidc-issuer`). Uma imagem enviada ao GHCR por fora da esteira não passa.
 
 O deploy não reconstrói a imagem: cria a tag `main-<timestamp>-<sha>` no **mesmo digest** testado nas etapas 5 a 7. O Flux do cluster OKE acompanha essas tags ([ImagePolicy](https://fluxcd.io/flux/components/image/imagepolicies/), em `ost-iac.terraform/fluxcd/production/api/image-policy.yaml`) e atualiza o deployment. Assim a esteira não guarda credencial de nuvem nenhuma.
 
