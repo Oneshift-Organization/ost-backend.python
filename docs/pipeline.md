@@ -7,11 +7,10 @@ Workflow: [`.github/workflows/devsecops.yml`](../.github/workflows/devsecops.yml
 | Evento | Branches | Etapas |
 |---|---|---|
 | `pull_request` | para `develop` ou `main` | 1 a 7 e resumo |
-| `push` | `develop` | 1 a 7 e resumo |
 | `push` | `main` | 1 a 8 e resumo (a 8 espera aprovação) |
 | `workflow_dispatch` | qualquer | 1 a 7 e resumo |
 
-As etapas são sequenciais (`needs`): uma falha interrompe as seguintes. Um push novo na mesma branch cancela a execução anterior ([concurrency](https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs)), exceto na `main`, onde um deploy pode estar aguardando aprovação.
+Na `develop` a esteira roda só nos PRs: o push do merge repetiria o mesmo código e disputaria os runners. As etapas são sequenciais (`needs`): uma falha interrompe as seguintes. A exceção são os testes de integração (3b), que rodam em paralelo para não atrasar as etapas 3 a 7. Um push novo na mesma branch cancela a execução anterior ([concurrency](https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs)), exceto na `main`, onde um deploy pode estar aguardando aprovação.
 
 ## Permissões
 
@@ -53,9 +52,9 @@ O PDF usa Node.js como exemplo; a adaptação para Python:
 | `npm audit --json` | [`pip-audit`](https://github.com/pypa/pip-audit) `-f json` |
 | `npm test` | `ruff` + `pytest` unitário + `pytest -m integration` |
 
-Os testes de integração rodam contra um Postgres descartável (service container), depois das migrations e dos seeds de referência. Um teste de integração pulado é tratado como falha: significa banco ou seed ausente. O artefato é `ost-api-<sha>.tar.gz` (`git archive` do commit).
+Os testes de integração ficam no job **3b**, que começa junto com a etapa 3 e roda em paralelo com as etapas 4 a 7: é o passo mais lento (cerca de 4 minutos). Rodam contra um Postgres descartável (service container), depois das migrations e dos seeds de referência, e um teste pulado é tratado como falha: significa banco ou seed ausente. O 3b continua bloqueando: a etapa 8 só roda se ele passar. O artefato é `ost-api-<sha>.tar.gz` (`git archive` do commit).
 
-Gate: falha no lint das áreas já limpas ou em qualquer teste. A auditoria é informativa; o bloqueio de dependências é na etapa 4. Relatório: `relatorio-03-build` (`arvore-dependencias.txt`, `pip-audit.json`) e artifact `artefato-aplicacao`.
+Gate: falha no lint das áreas já limpas ou em qualquer teste (unitário na etapa 3, integração no 3b). A auditoria é informativa; o bloqueio de dependências é na etapa 4. Relatório: `relatorio-03-build` (`arvore-dependencias.txt`, `pip-audit.json`) e artifact `artefato-aplicacao`.
 
 ### 4. SCA: Trivy fs
 
