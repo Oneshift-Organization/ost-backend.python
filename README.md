@@ -28,7 +28,11 @@ O repositório também é a entrega do **CP 03 de DevSecOps**: a API chega à pr
 
 | Nome | RM |
 |---|---|
-| | |
+| Anderson Huang | 565920 |
+| Bruno Henrique | 566277 |
+| Guylherme Miguel | 562374 |
+| Luiz Brito | 562192 |
+| Ronaldo Attamah | 564630 |
 
 ## Arquitetura
 
