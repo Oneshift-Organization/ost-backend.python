@@ -53,7 +53,7 @@ Workflow em [`.github/workflows/devsecops.yml`](.github/workflows/devsecops.yml)
 |---|---|---|---|---|---|
 | 1 | Secrets | Gitleaks 8.30.1 | Credenciais no histórico completo do Git | Bloqueia | `relatorio-01-gitleaks` |
 | 2 | SAST | Semgrep (`p/default`, `p/owasp-top-ten`) | Falhas no código-fonte, com SARIF na aba Security | Bloqueia | `relatorio-02-semgrep` |
-| 3 | Build | pip, pytest, pipdeptree, pip-audit | Testes, árvore de dependências e artefato `ost-api-<sha>.tar.gz` | Bloqueia (testes) | `relatorio-03-build` |
+| 3 | Build | pip, ruff, pytest, pipdeptree, pip-audit | Lint, testes unitários e de integração (Postgres + seeds), árvore de dependências e artefato `ost-api-<sha>.tar.gz` | Bloqueia (lint e testes) | `relatorio-03-build` |
 | 4 | SCA | Trivy fs | CVEs, misconfig e segredos no repositório | Bloqueia HIGH/CRITICAL | `relatorio-04-trivy-sca` |
 | 5 | Imagem | Docker Buildx + GHCR | Imagem `ost-api:<sha>` multi-stage, sem root | Bloqueia (build/push) | `relatorio-05-docker-build` |
 | 6 | Scan da imagem | Trivy image | CVEs do sistema base e das bibliotecas da imagem | Bloqueia HIGH/CRITICAL com correção | `relatorio-06-trivy-image` |
